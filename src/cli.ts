@@ -8,6 +8,8 @@ import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
 import { runDecide } from "./commands/decide.js";
 import { runBet } from "./commands/bet.js";
+import { runShow } from "./commands/show.js";
+import { runDecisions } from "./commands/decisions.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -19,6 +21,8 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   state: runState,
   decide: runDecide,
   bet: runBet,
+  show: runShow,
+  decisions: runDecisions,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -32,6 +36,8 @@ Commands:
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
   verify [id]      Run a story's scenarios (or all of them)
+  show <id>        Summarise a story: feature, status, plan, bets, decisions
+  decisions "<q>"  Quote the decisions.md entries that mention a topic or story
   next             Print the next story to build
   state set <id> <status>  Move a story; done only if its scenarios pass
   decide "<title>" Append a decision to decisions.md
