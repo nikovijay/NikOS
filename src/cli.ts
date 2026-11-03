@@ -2,11 +2,13 @@
 import { runValidate } from "./commands/validate.js";
 import { runPlan } from "./commands/plan.js";
 import { runInit } from "./commands/init.js";
+import { runClear } from "./commands/clear.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
   validate: runValidate,
   plan: runPlan,
+  clear: runClear,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -17,6 +19,7 @@ Commands:
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   plan new <id>    Start the next version of a story's plan
+  clear <id>       Check a story is Lean and Executable before building
 
 Docs: https://nikos.tools`;
 
