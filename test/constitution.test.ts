@@ -11,6 +11,7 @@ const errors = (text: string) => lintConstitution(text).filter((i) => i.level ==
 describe("constitution lint", () => {
   it("accepts the example and extra sections after the five", () => {
     expect(errors(example)).toEqual([]);
+    expect(errors(`${example}\n## Validation\n### 2026-11-03, freelancer forum\nReached 20, 6 replied.\n`)).toEqual([]);
     expect(errors(`${example}\n## Jobs to be done\nWhen I plan my day, I want to see three things.\n\n## Founding hypothesis\nWe believe…\n`)).toEqual([]);
   });
 
@@ -45,5 +46,28 @@ describe("idea-to-blueprint playbook", () => {
     }
     const rows = [...index.matchAll(/^\| ([\w-]+) \| `/gm)].map((m) => m[1]);
     expect(rows[0]).toBe("idea-to-blueprint");
+  });
+});
+
+describe("validate playbook", () => {
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/validate.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
+
+  it("drafts outreach and records results back into the constitution", () => {
+    expect(steps).toHaveLength(9);
+    for (const part of ["intent/constitution.md", "signal that counts as proof", "intent/outreach/", "demo or reel script", "## Validation", "nikos decide", "nikos validate"]) {
+      expect(steps.some((s) => s.includes(part)), part).toBe(true);
+    }
+    expect(index).toMatch(/^\| validate \| `validate\.md` \|.*outreach/m);
+  });
+
+  it("stops for sign-off before anything is sent, and never sends itself", () => {
+    const stop = steps.findIndex((s) => s.startsWith("STOP."));
+    expect(stop).toBeGreaterThan(steps.findIndex((s) => s.includes("Draft the outreach")));
+    expect(stop).toBeLessThan(steps.findIndex((s) => s.includes("the person sends it")));
+    expect(steps[stop]).toContain("explicit yes per draft");
+    expect(steps[stop]).toContain("Needs your sign-off");
+    expect(playbook).toMatch(/You never send,\s+post, email, message or schedule anything/);
   });
 });

@@ -17,6 +17,8 @@ intent/
     <story-id>.v<N>.md   versioned implementation plans
   decisions.md           append-only decision log
   state.yaml             status, blockers and the run queue
+  outreach/              optional, drafts from the validate playbook
+    <date>-<channel>.md
   bets/                  optional, time-boxed bets (see Bets)
     <bet-id>.md
 ```
@@ -67,7 +69,9 @@ How you'll know it's working.
 
 Further `##` sections may follow the five required ones. The
 idea-to-blueprint playbook writes `## Jobs to be done` and
-`## Founding hypothesis`; the Validate playbook writes `## Validation`.
+`## Founding hypothesis`; the validate playbook writes `## Validation`, one entry per round of
+outreach, and keeps its drafts in `intent/outreach/`. A draft is marked
+`Status: draft, not sent` until the founder signs it off; the founder sends it.
 `nikos validate` checks the front matter has `name` and `idea`, and that the
 five vision sections come first, in order, and aren't empty.
 
@@ -222,6 +226,21 @@ run:                        # optional, an ordered build queue
 Status moves `todo → in_progress → done`, or `in_progress → needs_rework →
 in_progress`. Only a passing verification can set `done` (see the
 build-a-story playbook).
+
+---
+
+## outreach/&lt;date&gt;-&lt;channel&gt;.md (optional)
+
+**Purpose:** outreach drafted to test the idea with real people, kept so the
+founder can review it and the results can be traced back to it.
+
+**Path:** `intent/outreach/<yyyy-mm-dd>-<channel>.md`
+
+**Format:** Markdown. The first line is the status: `Status: draft, not sent`
+until the founder signs it off, then `Status: signed off <date>, for the
+person to send`. Then who it's for, the message, the questions to ask and,
+optionally, a demo or reel script. Written by the validate playbook; the
+founder sends it, never the agent.
 
 ---
 

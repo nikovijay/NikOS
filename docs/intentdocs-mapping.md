@@ -102,6 +102,7 @@ Fields that exist only in intentdocs are listed at the end.
 
 | Local | intentdocs | Notes |
 |---|---|---|
+| `outreach/*.md`, `## Validation` | **local-only** | intentdocs keeps the vision answers, not outreach drafts or results |
 | `bets/*.md` | **local-only** | intentdocs has no bet object yet |
 
 ## intentdocs-only (not pulled into files)
