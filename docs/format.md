@@ -65,8 +65,11 @@ The smallest first version that proves it.
 How you'll know it's working.
 ```
 
-Further `##` sections (for example `## Validation`, written by the Validate
-playbook) may follow the five required ones.
+Further `##` sections may follow the five required ones. The
+idea-to-blueprint playbook writes `## Jobs to be done` and
+`## Founding hypothesis`; the Validate playbook writes `## Validation`.
+`nikos validate` checks the front matter has `name` and `idea`, and that the
+five vision sections come first, in order, and aren't empty.
 
 ---
 
