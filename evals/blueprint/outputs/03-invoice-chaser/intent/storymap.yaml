@@ -1,0 +1,12 @@
+format_version: 1
+project: nudge
+key: NUD
+activities:
+  - id: invoices
+    title: Track invoices
+  - id: reminders
+    title: Chase late invoices
+releases:
+  - number: 1
+    title: MVP
+    stories: [NUD-1, NUD-2, NUD-3]

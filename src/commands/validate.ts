@@ -5,6 +5,7 @@ import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
+import { lintConstitution } from "../lint/constitution.js";
 import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -112,6 +113,13 @@ export function validate(start: string): ValidationResult {
     const sorted = [...numbers].filter((n) => typeof n === "number").sort((a, b) => a - b);
     if (sorted.some((n, i) => n !== i + 1)) {
       errors.push({ file: "storymap.yaml", message: `release numbers must start at 1 with no gaps (found ${sorted.join(", ")})` });
+    }
+  }
+
+  const constitutionPath = join(dir, "constitution.md");
+  if (existsSync(constitutionPath)) {
+    for (const issue of lintConstitution(read(constitutionPath))) {
+      (issue.level === "error" ? errors : warnings).push({ file: "constitution.md", message: issue.message, hint: issue.hint });
     }
   }
 

@@ -1,0 +1,12 @@
+format_version: 1
+project: standin
+key: STA
+activities:
+  - id: post
+    title: Post my standup
+  - id: review
+    title: Review the team's standups
+releases:
+  - number: 1
+    title: MVP
+    stories: [STA-1, STA-2, STA-3]
