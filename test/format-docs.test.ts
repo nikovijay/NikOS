@@ -23,6 +23,7 @@ const documented: { heading: string; pattern: RegExp }[] = [
   { heading: "plans/&lt;story-id&gt;.v&lt;N&gt;.md", pattern: /^plans\/[A-Z]+-\d+\.v\d+\.md$/ },
   { heading: "decisions.md", pattern: /^decisions\.md$/ },
   { heading: "state.yaml", pattern: /^state\.yaml$/ },
+  { heading: "outreach/&lt;date&gt;-&lt;channel&gt;.md (optional)", pattern: /^outreach\/\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/ },
   { heading: "bets/&lt;bet-id&gt;.md (optional)", pattern: /^bets\/[a-z0-9-]+\.md$/ },
 ];
 
