@@ -248,12 +248,44 @@ founder sends it, never the agent.
 
 **Purpose:** a time-boxed bet that a set of stories will move a measure.
 
-**Path:** `intent/bets/<bet-id>.md`
+**Path:** `intent/bets/<bet-id>.md`, where `<bet-id>` is lowercase words
+joined by hyphens.
 
-**Format:** Markdown with front matter: `id`, `hypothesis`, `key_result`,
-`expected_uplift`, `time_box` (end date), `blockers`, `stories` (ids),
-`status` (`open | won | lost | killed`), then free-form notes. Defined fully
-by the Bet playbook.
+**Format:** Markdown with YAML front matter, then free-form notes. Create one
+with `nikos bet new`; the bet playbook frames and closes it.
+
+```markdown
+---
+id: faster-reorder
+hypothesis: We believe drag to reorder will make people plan their day in the app because they reorder on paper today.
+key_result: Share of daily users who reorder at least once
+expected_uplift: from 10% to 30%
+time_box: 2026-12-01
+blockers: []
+stories: [HT-3]
+status: open
+---
+
+## Why we think so
+The evidence behind the hypothesis.
+
+## Outcome
+Filled in when the time box ends.
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | yes | Matches the file name |
+| `hypothesis` | yes | What you believe and why |
+| `key_result` | yes | The one measure that says whether it worked |
+| `expected_uplift` | yes | How far you expect it to move, from what to what |
+| `time_box` | yes | End date, `YYYY-MM-DD` |
+| `blockers` | yes | What stands in the way; `[]` if nothing |
+| `stories` | yes | At least one story id; each must be in `storymap.yaml` |
+| `status` | yes | `open \| won \| lost \| killed` |
+
+`nikos validate` checks every field against `schemas/bet.schema.json`, that
+the id matches the file name, and that every linked story exists.
 
 ---
 

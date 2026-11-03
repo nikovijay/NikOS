@@ -7,6 +7,7 @@ import { runVerify } from "./commands/verify.js";
 import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
 import { runDecide } from "./commands/decide.js";
+import { runBet } from "./commands/bet.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -17,6 +18,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   next: runNext,
   state: runState,
   decide: runDecide,
+  bet: runBet,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -34,6 +36,8 @@ Commands:
   state set <id> <status>  Move a story; done only if its scenarios pass
   decide "<title>" Append a decision to decisions.md
                    (--why, --story, --category, --supersedes)
+  bet new <bet-id> Write a time-boxed bet card linked to its stories
+                   (--hypothesis, --kr, --uplift, --time-box, --story, --blocker)
 
 Docs: https://nikos.tools`;
 

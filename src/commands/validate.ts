@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
+import { parseBet } from "./bet.js";
 import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -28,6 +29,7 @@ const schemaDir = [join(here, "../../schemas"), join(here, "../schemas")].find((
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const checkStorymap = ajv.compile(JSON.parse(read(join(schemaDir, "storymap.schema.json"))));
 const checkState = ajv.compile(JSON.parse(read(join(schemaDir, "state.schema.json"))));
+const checkBet = ajv.compile(JSON.parse(read(join(schemaDir, "bet.schema.json"))));
 
 function pointer(e: ErrorObject): string {
   return e.instancePath.replace(/^\//, "").split("/").filter(Boolean).join(".") || "(root)";
@@ -170,6 +172,34 @@ export function validate(start: string): ValidationResult {
     }
     for (const id of state.run?.queue ?? []) {
       if (!mapStories.has(id)) errors.push({ file: "state.yaml", message: `run.queue has unknown story id ${id}` });
+    }
+  }
+
+  // Bets: schema, id matches the file name, and every linked story is in the story map.
+  for (const path of walk(join(dir, "bets"), ".md")) {
+    const file = rel(dir, path);
+    let bet;
+    try {
+      bet = parseBet(read(path));
+    } catch (err) {
+      errors.push({ file, message: `front matter isn't valid YAML: ${(err as Error).message.split("\n")[0]}` });
+      continue;
+    }
+    if (!bet) {
+      errors.push({ file, message: "has no front matter", hint: "create bets with `nikos bet new`" });
+      continue;
+    }
+    if (!checkBet(bet.meta)) {
+      for (const e of checkBet.errors ?? []) errors.push({ file, message: describe(e, bet.meta) });
+      continue;
+    }
+    if (bet.meta.id !== basename(path, ".md")) {
+      errors.push({ file, message: `id '${bet.meta.id}' doesn't match the file name`, hint: `rename the file to bets/${bet.meta.id}.md` });
+    }
+    if (storymap) {
+      for (const id of bet.meta.stories) {
+        if (!mapStories.has(id)) errors.push({ file, message: `links ${id}, which is not in storymap.yaml` });
+      }
     }
   }
 
