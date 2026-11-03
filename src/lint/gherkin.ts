@@ -66,7 +66,9 @@ export function lintFeature(text: string): LintIssue[] {
   }
 
   const desc = feature.description ?? "";
-  const missing = ["As a", "I want", "So that"].filter((p) => !new RegExp(`^\\s*${p}\\b`, "im").test(desc));
+  // "As a", "As an" and "As the" all name a role; I want and So that are fixed.
+  const parts: [string, RegExp][] = [["As a", /^\s*As (?:an?|the)\s+\S/im], ["I want", /^\s*I want\b/im], ["So that", /^\s*So that\b/im]];
+  const missing = parts.filter(([, re]) => !re.test(desc)).map(([label]) => label);
   if (missing.length) {
     issues.push({
       level: "error",

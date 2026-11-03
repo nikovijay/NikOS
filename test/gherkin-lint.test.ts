@@ -24,6 +24,12 @@ describe("gherkin lint", () => {
     expect(errors(text)).toContain('user story is missing "As a", "So that"');
   });
 
+  it("accepts As an and As the as the role line", () => {
+    expect(errors(example.replace("As a busy person", "As an admin"))).toEqual([]);
+    expect(errors(example.replace("As a busy person", "As the person holding the bill"))).toEqual([]);
+    expect(errors(example.replace("As a busy person", "Asa busy person"))).toContain('user story is missing "As a"');
+  });
+
   it("requires each scenario to carry an AC label", () => {
     expect(errors(example.replace("@AC2 @should", "@should"))).toContain('scenario "AC2 — Blank tasks are ignored" has no @AC<n> tag');
     expect(errors(example.replace("@AC2", "@AC1"))).toContain("@AC1 is used by more than one scenario");
