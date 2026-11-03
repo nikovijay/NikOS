@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import { lintFeature } from "../lint/gherkin.js";
 import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -118,7 +119,11 @@ export function validate(start: string): ValidationResult {
   const featureIds = new Map<string, string>();
   for (const path of walk(join(dir, "features"), ".feature")) {
     const file = rel(dir, path);
-    const ids = featureStoryIds(read(path));
+    const text = read(path);
+    for (const issue of lintFeature(text)) {
+      (issue.level === "error" ? errors : warnings).push({ file, message: issue.message, hint: issue.hint });
+    }
+    const ids = featureStoryIds(text);
     if (ids.length === 0) {
       errors.push({ file, message: "has no story id tag", hint: "add a tag like @HT-1 above `Feature:`" });
       continue;

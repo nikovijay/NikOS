@@ -66,4 +66,15 @@ describe("validate", () => {
     expect(out.some((m) => m.includes("release numbers must start at 1 with no gaps"))).toBe(true);
     expect(out).toContain("storymap.yaml: HT-1 appears in more than one release");
   });
+
+  it("runs the Gherkin lint on every feature", () => {
+    const dir = copyExample();
+    edit(join(dir, "features/tasks/reorder-tasks.feature"), (s) => s.replace("@HT-3 ", "@HT-3 @wip "));
+    const r = validate(dir);
+    expect(r.errors).toContainEqual({
+      file: "features/tasks/reorder-tasks.feature",
+      message: "uses status tag @wip",
+      hint: "status lives in state.yaml, not in the feature",
+    });
+  });
 });
