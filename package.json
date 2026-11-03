@@ -7,7 +7,7 @@
   "homepage": "https://nikos.tools",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nikovijay/nikos"
+    "url": "git+https://github.com/nikovijay/NikOS.git"
   },
   "type": "module",
   "bin": {
@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
