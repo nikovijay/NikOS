@@ -1,0 +1,9 @@
+# Playbooks
+
+nikos-mode matches the request against "Use when", top to bottom, and runs the
+first match. Packs add rows here as they ship new playbooks.
+
+| Playbook | File | Use when |
+| --- | --- | --- |
+| answer | `answer.md` | The person asks a question about the product, a story, a plan or a decision, and nothing in the repo needs to change. |
+| change | `change.md` | The person asks to add, fix, change or remove something in the repo: code, tests, docs or specs. |
