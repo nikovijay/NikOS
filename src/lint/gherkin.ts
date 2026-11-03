@@ -18,6 +18,18 @@ function parser() {
   return new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher());
 }
 
+/** Parse a feature file. Throws on invalid Gherkin. */
+export function parseFeature(text: string) {
+  return parser().parse(text).feature;
+}
+
+type Feature = NonNullable<ReturnType<typeof parseFeature>>;
+
+/** Every scenario in a feature, including those inside Rules. */
+export function scenariosOf(feature: Feature) {
+  return feature.children.flatMap((c) => (c.scenario ? [c.scenario] : c.rule ? c.rule.children.flatMap((rc) => (rc.scenario ? [rc.scenario] : [])) : []));
+}
+
 export function lintFeature(text: string): LintIssue[] {
   const issues: LintIssue[] = [];
   const featureLines = text.split("\n").filter((l) => /^\s*Feature:/.test(l)).length;
@@ -63,7 +75,7 @@ export function lintFeature(text: string): LintIssue[] {
     });
   }
 
-  const scenarios = feature.children.flatMap((c) => (c.scenario ? [c.scenario] : c.rule ? c.rule.children.flatMap((rc) => (rc.scenario ? [rc.scenario] : [])) : []));
+  const scenarios = scenariosOf(feature);
   if (scenarios.length === 0) {
     issues.push({ level: "warning", message: "has no scenarios yet", hint: "add one Scenario per acceptance criterion" });
   }
