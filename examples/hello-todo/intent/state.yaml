@@ -1,0 +1,16 @@
+format_version: 1
+stories:
+  HT-1:
+    status: done
+    plan_version: 2
+    updated: 2026-11-03
+  HT-2:
+    status: in_progress
+    claimed_by: claude-code
+    plan_version: 1
+    blockers: []
+    updated: 2026-11-03
+  HT-3:
+    status: todo
+run:
+  queue: [HT-2, HT-3]

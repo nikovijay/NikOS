@@ -1,0 +1,39 @@
+{
+  "name": "nikos",
+  "version": "0.0.1",
+  "description": "nikOS — an open-source agent skill stack for spec-driven development. Specs, plans and Cucumber features live in your repo.",
+  "license": "MIT",
+  "author": "Niko Vijay",
+  "homepage": "https://nikos.tools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nikovijay/nikos"
+  },
+  "type": "module",
+  "bin": {
+    "nikos": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "templates",
+    "skills",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1"
+  }
+}
