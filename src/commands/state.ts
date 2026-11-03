@@ -78,7 +78,8 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
   doc.setIn(["stories", story, "status"], to);
   if (opts.by && to === "in_progress") doc.setIn(["stories", story, "claimed_by"], opts.by);
   doc.setIn(["stories", story, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
-  writeFileSync(path, doc.toString());
+  // No padding keeps "[A-1, A-2]" as written instead of "[ A-1, A-2 ]".
+  writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
   return result;
 }
 

@@ -36,8 +36,11 @@ export function setupVerify(root: string): SetupResult {
   const src = join(templateDir, stack === "python" ? "python" : stack);
   const created: string[] = [];
   const skipped: string[] = [];
+  // Step stubs are for the example story `nikos init` creates; skip them once it's gone.
+  const hasExample = existsSync(join(root, "intent/features/getting-started/first-story.feature"));
   for (const file of walk(src)) {
     const rel = relative(src, file);
+    if (!hasExample && /first[-_]story/.test(rel)) continue;
     const dest = join(root, rel);
     if (existsSync(dest)) {
       skipped.push(rel);
