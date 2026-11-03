@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -98,6 +98,12 @@ describe("verify", () => {
     expect(passed.output).toContain("1 scenario passed, 0 failed");
     expect(passed.status).toBe(0);
   }, 30_000);
+
+  it("skips the example step stubs once the example story is gone", () => {
+    const root = fixture({ "package.json": "{}" });
+    rmSync(join(root, "intent/features/getting-started"), { recursive: true });
+    expect(setupVerify(root).created).toEqual(["cucumber.mjs"]);
+  });
 
   it("never overwrites existing runner files", () => {
     const root = fixture({ "package.json": "{}", "cucumber.mjs": "// mine\n" });

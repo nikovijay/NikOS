@@ -102,6 +102,7 @@ describe("build loop", () => {
     expect(after.startsWith("# kept\n")).toBe(true);
     expect(after).toMatch(/HT-1:\n\s+status: done\n\s+plan_version: 2/);
     expect(after).toMatch(/HT-3:\n\s+status: in_progress\n\s+updated: 2026-11-04/);
+    expect(after).toContain("queue: [HT-2, HT-3]");
   });
 
   it("appends each decision to decisions.md", () => {

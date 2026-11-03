@@ -32,7 +32,8 @@ Commands:
   verify [id]      Run a story's scenarios (or all of them)
   next             Print the next story to build
   state set <id> <status>  Move a story; done only if its scenarios pass
-  decide "<title>" Append a decision to decisions.md (--why, --story)
+  decide "<title>" Append a decision to decisions.md
+                   (--why, --story, --category, --supersedes)
 
 Docs: https://nikos.tools`;
 
