@@ -4,6 +4,9 @@ import { runPlan } from "./commands/plan.js";
 import { runInit } from "./commands/init.js";
 import { runClear } from "./commands/clear.js";
 import { runVerify } from "./commands/verify.js";
+import { runNext } from "./commands/next.js";
+import { runState } from "./commands/state.js";
+import { runDecide } from "./commands/decide.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -11,6 +14,9 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   plan: runPlan,
   clear: runClear,
   verify: runVerify,
+  next: runNext,
+  state: runState,
+  decide: runDecide,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -24,6 +30,9 @@ Commands:
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
   verify [id]      Run a story's scenarios (or all of them)
+  next             Print the next story to build
+  state set <id> <status>  Move a story; done only if its scenarios pass
+  decide "<title>" Append a decision to decisions.md (--why, --story)
 
 Docs: https://nikos.tools`;
 
