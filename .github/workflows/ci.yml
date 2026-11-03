@@ -40,3 +40,18 @@ jobs:
         with:
           report_paths: reports/junit.xml
           check_name: Tests (Node ${{ matrix.node }})
+      - name: Report test results to IntentDocs
+        # Set up by `npx intentdocs ci`. Report once per run, and only where the secret is available.
+        if: ${{ !cancelled() && matrix.node == 22 && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        continue-on-error: true
+        env:
+          INTENTDOCS_CI_KEY: ${{ secrets.INTENTDOCS_CI_KEY }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          curl -sS --fail-with-body -X POST "https://www.intentdocs.com/api/ci/43dbe934-a30d-45fa-8f69-3f33f7870842/report" \
+            -H "Authorization: Bearer $INTENTDOCS_CI_KEY" \
+            -H "X-Commit-SHA: $COMMIT_SHA" \
+            -H "X-Branch: $BRANCH" \
+            -H "Content-Type: application/xml" \
+            --data-binary @reports/junit.xml
