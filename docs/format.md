@@ -163,6 +163,10 @@ Notes for the agent.
 
 These fields match intentdocs plans one to one (see the mapping doc).
 
+Start a new version with `nikos plan new <story-id>`. It writes the next
+`v<N>` from a template, sets `supersedes`, and refuses to overwrite an
+existing file.
+
 ---
 
 ## decisions.md

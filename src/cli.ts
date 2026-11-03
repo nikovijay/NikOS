@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { runValidate } from "./commands/validate.js";
+import { runPlan } from "./commands/plan.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   validate: runValidate,
+  plan: runPlan,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -11,6 +13,7 @@ Usage: nikos <command> [options]
 
 Commands:
   validate [dir]   Check the intent/ folder is well formed
+  plan new <id>    Start the next version of a story's plan
 
 Docs: https://nikos.tools`;
 
