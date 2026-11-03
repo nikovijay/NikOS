@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+      # behave runs the Python fixture in test/verify.test.ts.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install behave
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test:ci

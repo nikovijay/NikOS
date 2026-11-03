@@ -3,12 +3,14 @@ import { runValidate } from "./commands/validate.js";
 import { runPlan } from "./commands/plan.js";
 import { runInit } from "./commands/init.js";
 import { runClear } from "./commands/clear.js";
+import { runVerify } from "./commands/verify.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
   validate: runValidate,
   plan: runPlan,
   clear: runClear,
+  verify: runVerify,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -20,6 +22,8 @@ Commands:
   validate [dir]   Check the intent/ folder is well formed
   plan new <id>    Start the next version of a story's plan
   clear <id>       Check a story is Lean and Executable before building
+  verify setup     Set up a Cucumber runner for this repo's stack
+  verify [id]      Run a story's scenarios (or all of them)
 
 Docs: https://nikos.tools`;
 
