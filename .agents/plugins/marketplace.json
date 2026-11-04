@@ -7,6 +7,12 @@
       "source": { "source": "local", "path": "./" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Productivity"
+    },
+    {
+      "name": "nikos-video",
+      "source": { "source": "local", "path": "./tools/video" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
     }
   ]
 }

@@ -40,18 +40,20 @@ describe("install manifests", () => {
     if (m.skills) expect(existsSync(join(root, m.skills))).toBe(true);
   });
 
-  it("each marketplace lists the plugin at the repo root", () => {
+  it("each marketplace lists the plugin at the repo root first", () => {
     const claude = json(".claude-plugin/marketplace.json");
-    expect(claude.plugins).toEqual([expect.objectContaining({ name: pkg.name, source: "./" })]);
+    expect(claude.plugins[0]).toEqual(expect.objectContaining({ name: pkg.name, source: "./" }));
     const codex = json(".agents/plugins/marketplace.json");
-    expect(codex.plugins).toEqual([
+    expect(codex.plugins[0]).toEqual(
       expect.objectContaining({ name: pkg.name, source: { source: "local", path: "./" }, policy: expect.objectContaining({ installation: "AVAILABLE" }) }),
-    ]);
+    );
   });
 
-  it("ships the one skills folder, with no skill copied anywhere else", () => {
+  it("ships the one skills folder, with no skill copied anywhere else outside a pack", () => {
     expect(skillDirs).toContain("nikos-mode");
-    const skillFiles = allSkillFiles(root).map((p) => p.slice(root.length + 1));
+    const skillFiles = allSkillFiles(root)
+      .map((p) => p.slice(root.length + 1))
+      .filter((p) => !/^tools\/[^/]+\/skills\//.test(p));
     expect(skillFiles.sort()).toEqual(skillDirs.map((d) => `skills/${d}/SKILL.md`).sort());
   });
 

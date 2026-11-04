@@ -50,6 +50,20 @@ then Add Marketplace, then Import from Repo), and install nikOS from it.
 To try it without a marketplace, copy the repo to
 `~/.cursor/plugins/local/nikos` and run "Developer: Reload Window".
 
+## Packs
+
+Packs are extra tools that install on their own, next to nikOS or without it.
+Each lives in `tools/<pack>/` with its own manifests and skills, and both
+marketplaces list it.
+
+| Pack | Folder | Claude Code |
+| --- | --- | --- |
+| Video | `tools/video/` | `/plugin install nikos-video@nikos` |
+
+In Codex and Cursor, install the pack from the same marketplace as nikOS.
+nikOS's router hands requests to an installed pack's skill, and gives the
+install command when the pack is missing.
+
 ## The command-line tool
 
 The skills run the `nikos` command. When it isn't installed, they run it

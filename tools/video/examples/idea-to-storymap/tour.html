@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- "From idea to story map": the Video pack's example, made from brief.md with the
+     product-tour-video skill. Every frame is a pure function of time: window.renderAt(seconds)
+     draws it, window.TOTAL is the length. Commands, output and files are real, from running
+     nikOS on the Sprout idea. -->
+<meta charset="utf-8">
+<title>From idea to story map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=Instrument+Serif:ital@1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=block">
+<style>
+/* nikos.tools tokens. */
+:root { --ground: #F2F3EF; --surface: #FFFFFF; --ink: #111411; --ink-2: #3F453F; --muted: #5C625C; --faint: #9AA19A;
+  --line: #DCDFD8; --line-2: #B9BEB6; --accent: #14823E; --accent-soft: #E2EFE5; --screen: #070A08;
+  --glyph: #3CFF7A; --term: #D7DDD7; --term-dim: #7E877F; --you: #F2F5F2; --sel: #E2EFE5; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: 'Schibsted Grotesk', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(17,20,17,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(17,20,17,.05) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#win { position: absolute; width: 1240px; height: 680px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17,20,17,.06), 0 18px 48px rgba(17,20,17,.10); }
+#hdr { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+.dots { display: flex; gap: 7px; margin-right: 8px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+#pill { margin-left: auto; font: 600 12px 'JetBrains Mono', monospace; letter-spacing: .04em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; border: 1px solid rgba(20,130,62,.35); color: var(--accent); background: var(--accent-soft); }
+
+#tree { position: absolute; left: 0; top: 44px; width: 210px; bottom: 0; background: #F6F7F3; border-right: 1px solid var(--line); padding: 12px 0; font: 400 12.5px/25px 'JetBrains Mono', monospace; color: var(--ink-2); }
+#tree .head { padding: 0 14px 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: var(--muted); }
+#tree .it { padding-right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tree .it.on { background: var(--accent-soft); color: var(--ink); }
+#tree .dir { color: var(--muted); }
+
+#editor { position: absolute; left: 210px; top: 44px; width: 430px; bottom: 0; background: #FBFBF9; border-right: 1px solid var(--line); }
+.tabbar { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-bottom: 1px solid var(--line); }
+.tab { position: absolute; left: 0; top: 0; height: 36px; display: flex; align-items: center; padding: 0 14px; font: 500 12.5px 'JetBrains Mono', monospace; color: var(--ink-2); background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--surface); }
+#code { position: absolute; left: 0; right: 0; top: 50px; font: 400 13px/21px 'JetBrains Mono', monospace; }
+.ln { display: flex; padding-right: 14px; }
+.ln > .n { width: 40px; text-align: right; padding-right: 14px; color: var(--line-2); flex: none; }
+.ln > .x { white-space: pre-wrap; min-width: 0; }
+.ln.flash { background: rgba(20,130,62,.09); }
+.k { color: #7A3E9D; } .h { color: #1F5FA8; font-weight: 600; } .s { color: var(--accent); } .tg { color: var(--muted); } .ph { color: var(--faint); font-style: italic; }
+#empty { position: absolute; left: 0; right: 0; top: 46%; text-align: center; font: 400 12.5px 'JetBrains Mono', monospace; color: var(--faint); }
+
+#term { position: absolute; left: 640px; top: 44px; right: 0; bottom: 0; background: var(--screen); padding: 18px 22px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
+  font: 400 13.5px/22px 'JetBrains Mono', monospace; color: var(--term); }
+#term .l { white-space: pre-wrap; padding: 1px 0; }
+#term .you { color: var(--you); background: rgba(255,255,255,.06); border-left: 2px solid var(--glyph); padding: 6px 10px; margin: 8px 0 6px; border-radius: 0 4px 4px 0; }
+#term .you b { color: var(--glyph); font-weight: 500; margin-right: 8px; }
+#term .ag { margin: 4px 0; }
+#term .cmd { color: var(--term-dim); margin-top: 6px; }
+#term .cmd b { color: var(--glyph); font-weight: 400; }
+#term .out { color: var(--term); padding-left: 14px; }
+.ok { color: var(--glyph); } .dim { color: var(--term-dim); } .st { color: #FFFFFF; font-weight: 600; }
+#tcaret { display: inline-block; width: 8px; height: 16px; background: var(--you); vertical-align: -3px; margin-left: 1px; }
+
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--screen); color: #FFF;
+  background-image: linear-gradient(rgba(60,255,122,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(60,255,122,.06) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+#label { position: absolute; right: 154px; top: 978px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: rgba(242,243,239,.94); padding: 8px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(17,20,17,.08); }
+#label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+#mark { position: absolute; left: 154px; top: 972px; z-index: 75; width: 46px; height: 46px; border-radius: 8px; background: rgba(242,243,239,.94); box-shadow: 0 1px 2px rgba(17,20,17,.08); display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<div id="cam">
+  <div id="win">
+    <div id="hdr"><span class="dots"><i></i><i></i><i></i></span><span>sprout</span><span class="mono" style="font-size:12px;font-weight:500;color:var(--muted)">· an empty repo</span><span id="pill"></span></div>
+    <div id="tree"></div>
+    <div id="editor"><div class="tabbar"></div><div class="tab" id="tab"></div><div id="code"></div><div id="empty">No file open</div></div>
+    <div id="term"></div>
+  </div>
+</div>
+
+<div id="end">
+  <span class="e0" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:96px;letter-spacing:-.01em">From idea to story map, in your repo.</span>
+  <span class="mono e1" style="font-size:30px;color:var(--glyph)">nikos.tools</span>
+  <span class="mono e2" style="font-size:22px;color:rgba(255,255,255,.7)">/plugin install nikos --marketplace nikovijay/NikOS</span>
+</div>
+<div id="label"></div>
+<!-- The author's N mark, from assets/icon.svg. -->
+<div id="mark"><svg width="30" height="30" viewBox="170 245 340 245" aria-hidden="true"><path fill="#111411" d="M287 252 L179 483 L180 485 L253 484 L324 331 Z"/><path fill="#111411" d="M504 251 L431 251 L360 404 L396 483 L398 482 L501 261 Z"/></svg></div>
+
+<script>
+// ── Time helpers (from the starter) ─────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1);
+const dec = bezier(0, 0, 0.2, 1);
+const back = (x) => { x = clamp(x); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => Object.assign(n.style, s);
+const typeOut = (text, t, from, dur) => text.slice(0, Math.round(text.length * clamp((t - from) / dur)));
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+// ── The timeline ────────────────────────────────────────────────────────
+const CPS = 34; // the person's typing speed, characters a second
+const ADD = [29.8, 30.6, 31.4, 32.2]; // the four `story add` calls
+const P = { init: 12.6, initOut: 13.0, open: 14.5, map: 28.8, feature: 34.5, clear: 37.2, validate: 41.4, valid: 41.8, next: 42.8, end: 47.4 };
+window.TOTAL = 54;
+const LABELS = [
+  [0.6, 5.4, "01", "Install nikOS in your agent"],
+  [5.6, 12.2, "02", "Tell it your idea"],
+  [12.4, 17.0, "03", "nikOS sets up intent/ in your repo"],
+  [17.2, 27.5, "04", "Five questions shape the constitution"],
+  [27.7, 34.0, "05", "Activities and releases become the story map"],
+  [34.2, 41.0, "06", "Every story gets criteria you can test"],
+  [41.2, 47.0, "07", "Checked, and ready to build"],
+];
+
+// The agent session. you: typed by the person (or shown whole with `whole`); ag: the agent's
+// reply, streamed; cmd: a command the agent runs, shown whole; out: its output.
+const ADDS = [
+  ['"Add a plant" --activity plants --release 1 --priority must', "Added SP-1 to release 1"],
+  ['"Get a reminder on watering day" --activity reminders --release 1 --priority must', "Added SP-2 to release 1"],
+  ['"Mark a plant as watered" --activity reminders --release 1 --priority should', "Added SP-3 to release 1"],
+  ['"See which plants are thirsty this week" --activity plants --release 2 --priority could', "Added SP-4 to release 2"],
+];
+const TERM = [
+  ["you", 1.0, "/plugin install nikos --marketplace nikovijay/NikOS"],
+  ["you", 5.8, "I want an app that reminds me when each of my houseplants needs water."],
+  ["ag", 8.6, "Playbook: idea-to-blueprint (playbooks/idea-to-blueprint.md), because you have a new product idea and there's no story map yet."],
+  ["ag", 10.1, "What's the product called?"],
+  ["you", 10.8, "Sprout"],
+  ["cmd", P.init, 'npx -y nikos init --name "Sprout" --key SP'],
+  ["out", P.initOut, "Created intent/ (6 files)"],
+  ["out", P.initOut + 0.15, `<span class="ok">✓ intent/ is valid — 1 story, 1 release</span>`],
+  ["ag", 17.4, "Who is it for?"],
+  ["you", 17.9, "People with three to ten houseplants who keep forgetting which one needs water.", { cps: 46 }],
+  ["ag", 21.0, "What hurts today, in their words?"],
+  ["you", 21.3, "“I water them all on Sunday, and half of them die anyway.”", { whole: true }],
+  ["ag", 22.0, "What makes them switch now?"],
+  ["you", 22.3, "A plant they cared about just died.", { whole: true }],
+  ["ag", 23.0, "What's the smallest first version?"],
+  ["you", 23.3, "Add a plant, get one reminder on the right day.", { whole: true }],
+  ["ag", 24.0, "How will you know it's working?"],
+  ["you", 24.3, "Half of new users still have every plant alive after four weeks.", { whole: true }],
+  ["ag", 27.9, "Two activities, Keep track of plants and Get reminded, and two releases. Release 1 is your First answer. OK?"],
+  ["you", 28.4, "Yes"],
+  ...ADDS.flatMap(([args, out], i) => [["cmd", ADD[i], `npx -y nikos story add ${args}`], ["out", ADD[i] + 0.3, out]]),
+  ["cmd", P.clear, "npx -y nikos clear SP-1"],
+  ["out", P.clear + 0.4, `CLEAR SP-1 (intent/features/plants/add-a-plant.feature)`],
+  ["out", P.clear + 0.5, `<span class="dim">? Clear       needs a reader: one reading, no ambiguity</span>`],
+  ["out", P.clear + 0.6, `<span class="ok">✓ Lean        no implementation detail found</span>`],
+  ["out", P.clear + 0.7, `<span class="ok">✓ Executable  1 scenario, each with When and Then</span>`],
+  ["out", P.clear + 0.8, `<span class="dim">? Accurate    needs a reader: matches constitution.md and decisions.md</span>`],
+  ["out", P.clear + 0.9, `<span class="dim">? Responsible needs a reader: privacy, safety and accessibility considered</span>`],
+  ["cmd", P.validate, "npx -y nikos validate"],
+  ["out", P.valid, `<span class="ok">✓ intent/ is valid — 4 stories, 2 releases</span>`],
+  ["cmd", P.next, "npx -y nikos next"],
+  ["out", P.next + 0.4, `<span class="st">SP-1</span>`],
+];
+const typedFor = ([kind, from, text, o = {}]) => (kind === "you" && !o.whole ? text.length / (o.cps ?? CPS) : 0);
+
+// Files. Each line is a list of [time, html]: shown from the first time, as the latest version.
+const ph = (s) => `<span class="ph">${s}</span>`, hd = (s) => `<span class="h">${s}</span>`, tg = (s) => `<span class="tg">${s}</span>`, kw = (s) => `<span class="k">${s}</span>`;
+const O = P.open;
+const CONSTITUTION = [
+  [[O, "---"]], [[O, "name: Sprout"]],
+  [[O, `idea: ${ph("One sentence on what this is and who it's for.")}`], [19.4, "idea: Reminds people with a few houseplants when each one needs water."]],
+  [[O, "---"]], [[O, ""]],
+  [[O, hd("## Users")]], [[O, ph("Who it's for. Be specific: a role, a situation, a moment.")], [20.4, "People with three to ten houseplants who keep forgetting which one needs water."]], [[O, ""]],
+  [[O, hd("## Problem")]], [[O, ph("What hurts today, in their words.")], [21.6, "“I water them all on Sunday, and half of them die anyway.”"]], [[O, ""]],
+  [[O, hd("## Switch")]], [[O, ph("What makes them switch now, and from what.")], [22.6, "A plant they cared about just died; today they rely on memory and a calendar note."]], [[O, ""]],
+  [[O, hd("## First")]], [[O, ph("The smallest first version that proves it.")], [23.6, "Add a plant with how often it needs water, and get one reminder on the right day."]], [[O, ""]],
+  [[O, hd("## Proof")]], [[O, ph("How you'll know it's working.")], [24.6, "Half of new users still have every plant alive after four weeks."]],
+];
+const M0 = P.map, A = ADD.map((a) => a + 0.3);
+const STORYMAP = [
+  "format_version: 1", "project: sprout", "key: SP", `${kw("activities")}:`, "  - id: plants", "    title: Keep track of plants", "  - id: reminders", "    title: Get reminded",
+  `${kw("releases")}:`, "  - number: 1", "    title: First reminder",
+].map((s, i) => [[M0 + i * 0.05, s]]).concat([
+  [[M0 + 0.55, "    stories: []"], [A[0], `    stories: [<span class="s">SP-1</span>]`], [A[1], `    stories: [<span class="s">SP-1, SP-2</span>]`], [A[2], `    stories: [<span class="s">SP-1, SP-2, SP-3</span>]`]],
+  [[M0 + 0.6, "  - number: 2"]], [[M0 + 0.65, "    title: Habits"]],
+  [[M0 + 0.7, "    stories: []"], [A[3], `    stories: [<span class="s">SP-4</span>]`]],
+]);
+const F0 = P.feature;
+const FEATURE = [
+  tg("@SP-1 @release-1 @must @activity-plants"), `${kw("Feature:")} Add a plant`, "",
+  "  As a person with a few houseplants", "  I want to add a plant and how often it needs water", "  So that Sprout knows when to remind me", "",
+  `  ${tg("@AC1 @must")}`, `  ${kw("Scenario:")} AC1 — A new plant shows its next watering day`,
+  `    ${kw("Given")} today is Monday`, `    ${kw("When")} I add <span class="s">"Fern"</span> watered every 3 days`, `    ${kw("Then")} <span class="s">"Fern"</span> is next watered on Thursday`,
+].map((s, i) => [[F0 + 0.2 + i * 0.13, s]]);
+const OPEN = [[P.open, "constitution.md", CONSTITUTION], [P.map, "storymap.yaml", STORYMAP], [P.feature, "add-a-plant.feature", FEATURE]];
+
+// The file tree: [name, depth, from, to?, file it opens].
+const I = P.initOut;
+const TREE = [
+  ["intent/", 0, I], ["constitution.md", 1, I + 0.1, 99, "constitution.md"], ["decisions.md", 1, I + 0.15], ["features/", 1, I + 0.2],
+  ["getting-started/", 2, I + 0.25, M0], ["first-story.feature", 3, I + 0.3, M0],
+  ["plants/", 2, A[0]], ["add-a-plant.feature", 3, A[0], 99, "add-a-plant.feature"], ["see-which-plants-are-thirsty-this-week.feature", 3, A[3]],
+  ["reminders/", 2, A[1]], ["get-a-reminder-on-watering-day.feature", 3, A[1]], ["mark-a-plant-as-watered.feature", 3, A[2]],
+  ["plans/", 1, I + 0.35], ["state.yaml", 1, I + 0.4], ["storymap.yaml", 1, I + 0.45, 99, "storymap.yaml"],
+];
+
+const S = 1.3, W = 1240, H = 680, CX = 960, CY = 56 + (H * S) / 2;
+let M = null;
+function measure() {
+  put($("win"), { left: `${CX - W / 2}px`, top: `${CY - H / 2}px`, transform: `scale(${S})`, transformOrigin: "50% 50%" });
+  $("pill").textContent = "✓ valid · 4 stories · 2 releases";
+  const term = $("term").getBoundingClientRect(), ed = $("editor").getBoundingClientRect(), pill = $("pill").getBoundingClientRect();
+  M = { termB: { x: term.left + term.width / 2, y: term.bottom - 150 * S }, ed: { x: ed.left + ed.width / 2 + 40, y: ed.top + 230 * S },
+    edTop: { x: ed.left + ed.width / 2 + 40, y: ed.top + 170 * S }, mid: { x: ed.right, y: ed.top + 200 * S }, pill: { x: pill.left + pill.width / 2, y: pill.top + pill.height / 2 } };
+  // Scripts read these: music.mjs scores clicks and beats from them.
+  window.CLICK_TIMES = TERM.filter(([k]) => k === "you" || k === "cmd").map((e) => e[1] + typedFor(e)).filter((x) => x < P.end);
+  window.LABEL_TIMES = LABELS.map(([a]) => a);
+  window.END_AT = P.end;
+  window.MUSIC = { arpIn: 0.6, bassIn: 12.4, drums: [[27.7, P.end - 0.2]], end: P.end };
+}
+
+// Camera keys [t, scale, focus x, focus y]: push in where the reading happens.
+const C0 = [960, 540];
+const CAM = () => [
+  [0, 1, ...C0], [6.2, 1, ...C0], [7.0, 1.3, M.termB.x, M.termB.y], [11.8, 1.3, M.termB.x, M.termB.y], [12.6, 1, ...C0],
+  [17.2, 1, ...C0], [17.8, 1.3, M.termB.x, M.termB.y], [19.0, 1.3, M.termB.x, M.termB.y], [19.8, 1.3, M.ed.x, M.ed.y], [26.6, 1.3, M.ed.x, M.ed.y], [27.4, 1, ...C0],
+  [28.6, 1, ...C0], [29.4, 1.2, M.mid.x, M.mid.y], [33.4, 1.2, M.mid.x, M.mid.y], [34.2, 1, ...C0],
+  [34.5, 1, ...C0], [35.1, 1.3, M.edTop.x, M.edTop.y], [36.8, 1.3, M.edTop.x, M.edTop.y], [37.5, 1.3, M.termB.x, M.termB.y], [46.4, 1.3, M.termB.x, M.termB.y], [47.2, 1, ...C0],
+];
+const along = (K, t) => {
+  if (t <= K[0][0]) return K[0].slice(1);
+  for (let i = 0; i < K.length - 1; i++) { const [t0, ...a] = K[i], [t1, ...b] = K[i + 1]; if (t < t1) { const p = std(span(t, t0, t1 - t0)); return a.map((v, j) => lerp(v, b[j], p)); } }
+  return K[K.length - 1].slice(1);
+};
+const latest = (versions, t) => { let v = null; for (const x of versions) if (t >= x[0]) v = x; return v; };
+
+window.renderAt = (t) => {
+  if (!M) measure();
+  put($("win"), { opacity: span(t, 0, 0.6) });
+  put($("mark"), { opacity: span(t, 0, 0.6) });
+  const [cs, fx, fy] = along(CAM(), t);
+  put($("cam"), { transform: `translate(${960 - cs * fx}px, ${540 - cs * fy}px) scale(${cs})` });
+
+  // Agent session: everything that has started, newest at the bottom.
+  const typing = TERM.find((e) => e[0] === "you" && t >= e[1] && t < e[1] + typedFor(e) + 0.25);
+  $("term").innerHTML = TERM.filter((e) => t >= e[1]).map((e) => {
+    const [kind, from, text] = e;
+    if (kind === "you") return `<div class="l you"><b>›</b>${esc(typedFor(e) ? typeOut(text, t, from, typedFor(e)) : text)}${e === typing ? `<span id="tcaret"></span>` : ""}</div>`;
+    if (kind === "ag") { const words = text.split(" "); return `<div class="l ag">${esc(words.slice(0, Math.ceil(words.length * clamp((t - from) / Math.max(0.4, words.length / 14)))).join(" "))}</div>`; }
+    if (kind === "cmd") return `<div class="l cmd"><b>$</b> ${esc(text)}</div>`;
+    return `<div class="l out">${text}</div>`;
+  }).join("") + (typing || t < 1.0 ? "" : `<div class="l you" style="opacity:.55"><b>›</b><span id="tcaret" style="opacity:${Math.floor(t * 2) % 2 ? 0.3 : 1}"></span></div>`);
+
+  // Editor: the open file, each line at its latest version; changed lines flash.
+  const open = latest(OPEN, t);
+  put($("empty"), { display: open ? "none" : "block" });
+  put($("tab"), { display: open ? "flex" : "none" });
+  if (open) {
+    $("tab").textContent = open[1];
+    $("code").innerHTML = open[2].map((versions, i) => {
+      const v = latest(versions, t);
+      if (!v) return "";
+      const flash = versions.length > 1 && v !== versions[0] && t - v[0] < 1.0;
+      return `<div class="ln${flash ? " flash" : ""}"><span class="n">${i + 1}</span><span class="x">${v[1] || " "}</span></div>`;
+    }).join("");
+  } else $("code").innerHTML = "";
+
+  // File tree.
+  const items = TREE.filter(([, , from, to = 99]) => t >= from && t < to);
+  $("tree").innerHTML = `<div class="head">SPROUT</div>` + items.map(([name, depth, , , file]) =>
+    `<div class="it${open && file === open[1] ? " on" : ""}${name.endsWith("/") ? " dir" : ""}" style="padding-left:${14 + depth * 14}px">${esc(name)}</div>`).join("");
+
+  // Status: appears with a bump once validate passes.
+  put($("pill"), { opacity: t >= P.valid ? 1 : 0, transform: `scale(${t >= P.valid ? lerp(0.9, 1, back(span(t, P.valid, 0.35))) : 1})` });
+
+  // Close: the plate opens as a circle from the status.
+  const er = std(span(t, P.end, 0.9));
+  put($("end"), { visibility: t >= P.end ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 2300, er)}px at ${M.pill.x}px ${M.pill.y}px)` });
+  [".e0", ".e1", ".e2"].forEach((sel, i) => { const s0 = P.end + 1.0 + i * 0.35; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+
+  // One label per beat, set whole.
+  const L = LABELS.find(([a, b]) => t >= a && t < b), lab = $("label");
+  if (L) { lab.innerHTML = `<b>${L[2]}</b>${L[3]}`; put(lab, { opacity: Math.min(span(t, L[0], 0.2), 1 - span(t, L[1] - 0.2, 0.2)) }); }
+  else put(lab, { opacity: 0 });
+};
+</script>
+</body>
+</html>

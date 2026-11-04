@@ -6,6 +6,7 @@ first match. Packs add rows here as they ship new playbooks.
 | Playbook | File | Use when |
 | --- | --- | --- |
 | idea-to-blueprint | `idea-to-blueprint.md` | The person has a new product idea, or wants to start a project from scratch and there is no story map yet. |
+| video | `video.md` | The person asks for a video: an explainer, product tour, demo, launch or social clip, or to edit or re-render one. Needs the Video pack. |
 | validate | `validate.md` | The person wants to test or validate an idea with real people, or draft outreach, a post or a demo script for it. |
 | bet | `bet.md` | The person wants to frame work as a bet, set a key result or time box for some stories, or close a bet and call its outcome. |
 | build-a-story | `build-a-story.md` | The person asks to build, do or pick up the next story, or a story by its id. |
