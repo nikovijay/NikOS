@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { STORY_ID, findIntentDir, read } from "../lib/project.js";
 import { formatResult, validate } from "./validate.js";
 
-const CATEGORIES = ["product", "architecture", "design", "process"];
+const CATEGORIES = ["product", "architecture", "design", "interface", "process"];
 
 export interface DecisionInput {
   title: string;
@@ -47,7 +47,7 @@ export function runDecide(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   if (!title || title.startsWith("--")) {
-    console.error('Usage: nikos decide "<title>" --why "<why>" [--story <id>] [--category product|architecture|design|process] [--supersedes "<title>"]');
+    console.error('Usage: nikos decide "<title>" --why "<why>" [--story <id>] [--category product|architecture|design|interface|process] [--supersedes "<title>"]');
     return 1;
   }
   const dir = opt("dir") ?? process.cwd();
