@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- "Done means the checks pass": the Video pack's example, made from brief.md with the
+     product-tour-video skill. Every frame is a pure function of time: window.renderAt(seconds)
+     draws it, window.TOTAL is the length. The commands and output are real, from replaying TC-1. -->
+<meta charset="utf-8">
+<title>Done means the checks pass</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500;600&display=block">
+<style>
+/* nikos.tools tokens. */
+:root { --ground: #F2F3EF; --surface: #FFFFFF; --ink: #111411; --ink-2: #3F453F; --muted: #5C625C;
+  --line: #DCDFD8; --line-2: #B9BEB6; --accent: #14823E; --accent-soft: #E2EFE5; --screen: #070A08;
+  --glyph: #3CFF7A; --term: #D7DDD7; --term-dim: #7E877F; --bad: #FF6B6B; --warn: #B7791F; --warn-soft: #FBF1DE; --sel: #CFE6D6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: 'Schibsted Grotesk', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(17,20,17,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(17,20,17,.05) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#win { position: absolute; width: 1240px; height: 680px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17,20,17,.06), 0 18px 48px rgba(17,20,17,.10); }
+#hdr { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+.dots { display: flex; gap: 7px; margin-right: 8px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+#pill { margin-left: auto; font: 600 12px 'JetBrains Mono', monospace; letter-spacing: .04em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; border: 1px solid; }
+
+#editor { position: absolute; left: 0; top: 44px; width: 640px; bottom: 0; background: #FBFBF9; border-right: 1px solid var(--line); }
+.tab { position: absolute; left: 0; top: 0; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font: 500 13px 'JetBrains Mono', monospace; color: var(--ink-2); background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--surface); }
+.tabbar { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-bottom: 1px solid var(--line); }
+#mod { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.code { position: absolute; left: 0; right: 0; font: 400 15px/26px 'JetBrains Mono', monospace; }
+.ln { display: flex; padding-right: 16px; white-space: pre; }
+.ln > .n { width: 48px; text-align: right; padding-right: 18px; color: var(--line-2); flex: none; }
+.k { color: #7A3E9D; } .f { color: #1F5FA8; } .s { color: var(--accent); } .c { color: var(--muted); }
+#sel { background: var(--sel); border-radius: 2px; }
+#caret { display: inline-block; width: 2px; height: 19px; background: var(--ink); vertical-align: -4px; }
+.fname { position: absolute; left: 0; right: 0; height: 30px; display: flex; align-items: center; padding: 0 16px; font: 500 12px 'JetBrains Mono', monospace; color: var(--muted); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
+
+#term { position: absolute; left: 640px; top: 44px; right: 0; bottom: 0; background: var(--screen); padding: 20px 22px; font: 400 14.5px/24px 'JetBrains Mono', monospace; color: var(--term); }
+#term .line { white-space: pre; min-height: 24px; }
+.pr { color: var(--glyph); } .dim { color: var(--term-dim); } .bad { color: var(--bad); } .ok { color: var(--glyph); }
+#tcaret { display: inline-block; width: 9px; height: 18px; background: var(--term); vertical-align: -3px; }
+
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--screen); color: #FFF;
+  background-image: linear-gradient(rgba(60,255,122,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(60,255,122,.06) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+#label { position: absolute; right: 154px; top: 978px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: rgba(242,243,239,.94); padding: 8px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(17,20,17,.08); }
+#label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+</style>
+</head>
+<body>
+
+<div id="cam">
+  <div id="win">
+    <div id="hdr"><span class="dots"><i></i><i></i><i></i></span><span>tip-calculator</span><span class="mono" style="font-size:12px;font-weight:500;color:var(--muted)">· Add a tip to the bill</span><span id="pill"></span></div>
+    <div id="editor">
+      <div class="tabbar"></div>
+      <div class="tab">tip.js <span id="mod"></span></div>
+      <div class="code" style="top:52px">
+        <div class="ln"><span class="n">1</span><span><span class="k">export function</span> <span class="f">totalWithTip</span>(bill, percent) {</span></div>
+        <div class="ln"><span class="n">2</span><span>  <span class="k">const</span> total = bill * (1 + percent / 100);</span></div>
+        <div class="ln" id="l3"><span class="n">3</span><span>  <span class="k">return</span> (Math.<span id="word"><span id="sel">floor</span></span>(total * 100) / 100).<span class="f">toFixed</span>(2);</span></div>
+        <div class="ln"><span class="n">4</span><span>}</span></div>
+      </div>
+      <div class="fname" style="top:200px">intent/features/getting-started/first-story.feature</div>
+      <div class="code" id="feat" style="top:240px">
+        <div class="ln"><span class="n">14</span><span class="c">  @AC2 @must</span></div>
+        <div class="ln"><span class="n">15</span><span>  <span class="k">Scenario:</span> AC2 — The total rounds to the nearest cent</span></div>
+        <div class="ln"><span class="n">16</span><span>    <span class="k">Given</span> a bill of <span class="s">33.33</span></span></div>
+        <div class="ln"><span class="n">17</span><span>    <span class="k">When</span> I add a <span class="s">15%</span> tip</span></div>
+        <div class="ln"><span class="n">18</span><span>    <span class="k">Then</span> the total is <span class="s">38.33</span></span></div>
+      </div>
+    </div>
+    <div id="term"></div>
+  </div>
+</div>
+
+<div id="end">
+  <span class="e0" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:96px;letter-spacing:-.01em">Done means the checks pass.</span>
+  <span class="mono e1" style="font-size:30px;color:var(--glyph)">nikos.tools</span>
+  <span class="mono e2" style="font-size:22px;color:rgba(255,255,255,.7)">npx nikos init</span>
+</div>
+<div id="label"></div>
+
+<script>
+// ── Time helpers (from the starter) ─────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1);
+const dec = bezier(0, 0, 0.2, 1);
+const back = (x) => { x = clamp(x); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => Object.assign(n.style, s);
+const typeOut = (text, t, from, dur) => text.slice(0, Math.round(text.length * clamp((t - from) / dur)));
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+// ── The timeline ────────────────────────────────────────────────────────
+const CPS = 30; // typing speed, characters a second
+const CMD1 = "npx nikos state set TC-1 done", CMD2 = "npx nikos verify TC-1", CMD3 = CMD1;
+const P = {
+  cmd1: 1.0, out1: 1.0 + CMD1.length / CPS + 0.35,
+  sel: 8.3, type: 9.0, saved: 9.6,
+  cmd2: 11.8, out2: 11.8 + CMD2.length / CPS + 0.35,
+  cmd3: 13.9, out3: 13.9 + CMD3.length / CPS + 0.35,
+  end: 17.6,
+};
+window.TOTAL = 24;
+const LABELS = [
+  [0.6, 6.6, "01", "nikOS won't mark it done while a check fails"],
+  [6.9, 11.2, "02", "The agent fixes the code, not the check"],
+  [11.5, 17.4, "03", "Every check passes. Now it's done"],
+];
+// Terminal: [from, html]. Commands type out; output lines appear whole.
+const TERM = [
+  ["cmd", P.cmd1, CMD1],
+  ["out", P.out1, `<span class="bad">✗ TC-1 stays in_progress: its scenarios don't all pass:</span>`],
+  ["out", P.out1 + 0.25, `<span class="bad">  ✗ AC2 — The total rounds to the nearest cent</span>`],
+  ["out", P.out1 + 0.25, ``],
+  ["cmd", P.cmd2, CMD2],
+  ["out", P.out2, `<span class="dim">......</span>`],
+  ["out", P.out2 + 0.35, `<span class="ok">2 scenarios (2 passed)</span>`],
+  ["out", P.out2 + 0.5, `<span class="dim">6 steps (6 passed)</span>`],
+  ["out", P.out2 + 0.5, ``],
+  ["cmd", P.cmd3, CMD3],
+  ["out", P.out3, `<span class="ok">TC-1: in_progress → done</span>`],
+];
+const S = 1.3, W = 1240, H = 680, CX = 960, CY = 56 + (H * S) / 2;
+
+let M = null;
+function measure() {
+  put($("win"), { left: `${CX - W / 2}px`, top: `${CY - H / 2}px`, transform: `scale(${S})`, transformOrigin: "50% 50%" });
+  $("pill").textContent = "TC-1 · in progress";
+  $("term").innerHTML = TERM.map((_, i) => `<div class="line" id="t${i}"></div>`).join("");
+  const c = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  const term = $("term").getBoundingClientRect();
+  const lineY = (i) => term.top + (20 + 24 * i + 12) * S;
+  M = { refusal: { x: term.left + term.width / 2, y: lineY(1.5) }, code: { x: c($("l3")).x - 40, y: c($("l3")).y + 70 },
+    pass: { x: term.left + term.width / 2, y: lineY(8) }, pill: c($("pill")) };
+  // Scripts read these: music.mjs scores clicks and beats from them.
+  window.CLICK_TIMES = [P.out1 - 0.35, P.sel, P.out2 - 0.35, P.out3 - 0.35]; // each Enter, and the selection
+  window.LABEL_TIMES = LABELS.map(([a]) => a);
+  window.END_AT = P.end;
+  window.MUSIC = { arpIn: 0.6, bassIn: 6.9, drums: [[11.5, P.end - 0.2]], end: P.end };
+}
+
+// Camera keys [t, scale, focus x, focus y]: push in where the reading happens.
+const CAM = () => [
+  [0, 1, 960, 540], [P.out1 + 0.2, 1, 960, 540], [P.out1 + 1.0, 1.3, M.refusal.x, M.refusal.y], [6.2, 1.3, M.refusal.x, M.refusal.y],
+  [7.2, 1.3, M.code.x, M.code.y], [10.8, 1.3, M.code.x, M.code.y], [11.6, 1, 960, 540],
+  [P.out2, 1, 960, 540], [P.out2 + 0.8, 1.25, M.pass.x, M.pass.y], [16.4, 1.25, M.pass.x, M.pass.y], [17.2, 1, 960, 540],
+];
+const along = (K, t) => {
+  if (t <= K[0][0]) return K[0].slice(1);
+  for (let i = 0; i < K.length - 1; i++) { const [t0, ...a] = K[i], [t1, ...b] = K[i + 1]; if (t < t1) { const p = std(span(t, t0, t1 - t0)); return a.map((v, j) => lerp(v, b[j], p)); } }
+  return K[K.length - 1].slice(1);
+};
+
+window.renderAt = (t) => {
+  if (!M) measure();
+  put($("win"), { opacity: span(t, 0, 0.6) });
+
+  // Camera.
+  const [cs, fx, fy] = along(CAM(), t);
+  put($("cam"), { transform: `translate(${960 - cs * fx}px, ${540 - cs * fy}px) scale(${cs})` });
+
+  // Terminal: the line being typed gets the caret; every later line waits.
+  const typing = TERM.findIndex(([k, from, text]) => k === "cmd" && t >= from - 0.6 && t < from + text.length / CPS + 0.35);
+  TERM.forEach(([kind, from, text], i) => {
+    const el = $(`t${i}`);
+    if (kind === "cmd") {
+      const shownText = t >= from - 0.6 ? typeOut(text, t, from, text.length / CPS) : null;
+      el.innerHTML = shownText === null ? "" : `<span class="pr">$</span> ${esc(shownText)}${i === typing ? `<span id="tcaret"></span>` : ""}`;
+    } else el.innerHTML = t >= from ? text : "";
+  });
+  if (typing < 0 && t < P.end) {
+    // An idle prompt under the last output, once a command has finished.
+    const last = [...TERM.keys()].filter((i) => TERM[i][0] === "cmd" && t >= TERM[i][1]).pop();
+    const next = TERM.findIndex(([k, from], i) => i > (last ?? -1) && k === "cmd");
+    const idle = next < 0 ? TERM.length : next;
+    if (last !== undefined && idle < TERM.length && $(`t${idle}`).innerHTML === "") $(`t${idle}`).innerHTML = `<span class="pr">$</span> <span id="tcaret" style="opacity:${Math.floor(t * 2) % 2 ? 0.25 : 1}"></span>`;
+  }
+
+  // Editor: select "floor", type "round" over it, save.
+  const word = $("word");
+  if (t < P.type) {
+    const on = t >= P.sel;
+    word.innerHTML = `<span id="sel" style="background:${on ? "var(--sel)" : "transparent"}">floor</span>`;
+  } else {
+    const typed = typeOut("round", t, P.type, 5 / 12);
+    word.innerHTML = `${typed}${t < P.saved ? `<span id="caret"></span>` : ""}`;
+  }
+  const flash = t >= P.saved ? 1 - span(t, P.saved + 0.4, 1.2) : 0;
+  put($("l3"), { background: `rgba(20,130,62,${0.1 * flash})` });
+  put($("mod"), { opacity: t >= P.type && t < P.saved ? 1 : 0 });
+
+  // Status: in progress until the last command lands, then done, with a bump.
+  const done = t >= P.out3;
+  const pill = $("pill");
+  pill.textContent = done ? "TC-1 · done" : "TC-1 · in progress";
+  put(pill, done ? { color: "var(--accent)", background: "var(--accent-soft)", borderColor: "rgba(20,130,62,.35)" } : { color: "var(--warn)", background: "var(--warn-soft)", borderColor: "rgba(183,121,31,.35)" });
+  put(pill, { transform: `scale(${done ? lerp(0.9, 1, back(span(t, P.out3, 0.35))) : 1})` });
+
+  // Close: the plate opens as a circle from the status.
+  const er = std(span(t, P.end, 0.9));
+  put($("end"), { visibility: t >= P.end ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 2300, er)}px at ${M.pill.x}px ${M.pill.y}px)` });
+  [".e0", ".e1", ".e2"].forEach((sel, i) => { const s0 = P.end + 1.0 + i * 0.35; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+
+  // One label per beat, set whole.
+  const L = LABELS.find(([a, b]) => t >= a && t < b), lab = $("label");
+  if (L) { lab.innerHTML = `<b>${L[2]}</b>${L[3]}`; put(lab, { opacity: Math.min(span(t, L[0], 0.2), 1 - span(t, L[1] - 0.2, 0.2)) }); }
+  else put(lab, { opacity: 0 });
+};
+</script>
+</body>
+</html>

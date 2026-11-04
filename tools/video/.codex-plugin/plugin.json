@@ -1,0 +1,11 @@
+{
+  "name": "nikos-video",
+  "version": "0.0.6",
+  "description": "The nikOS Video pack: make short product explainer videos from a brief, rendered frame by frame with Playwright and ffmpeg.",
+  "author": { "name": "Niko Vijay" },
+  "homepage": "https://nikos.tools",
+  "repository": "https://github.com/nikovijay/NikOS",
+  "license": "MIT",
+  "keywords": ["video", "explainer", "product-tour", "playwright", "ffmpeg", "skills"],
+  "skills": "./skills/"
+}

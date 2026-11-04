@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Starter for a product tour video (product-tour-video skill). Every frame is a pure function of time:
+     window.renderAt(seconds) draws it, window.TOTAL is the length. Replace the demo screens with the
+     product's real ones, rebuilt from its own components and copy. Render with scripts/render.mjs. -->
+<meta charset="utf-8">
+<title>Product tour</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500&display=block">
+<style>
+/* Tokens: replace with the product's design system (read its DESIGN.md / globals.css first). */
+:root { --ground: #F2F0E9; --paper: #FAFAF7; --surface: #FFFFFF; --ink: #1A1A18; --ink-2: #57534E; --muted: #6E695F;
+  --line: #E8E6DF; --line-2: #D6D3C8; --accent: #1B4FD8; --accent-soft: rgba(27,79,216,.07); --plate: #0F2D7A; --ok: #1E9E5C; --bad: #D64545; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(26,26,24,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(26,26,24,.05) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.eyebrow { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+/* Desktop: the app is laid out at its true size (W×H) and scaled by S for 1080p, inside a camera. */
+#desk { position: absolute; inset: 0; z-index: 2; }
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#win { position: absolute; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(60,50,30,.06), 0 18px 48px rgba(60,50,30,.10); }
+#app { position: absolute; width: 1240px; height: 680px; }
+#hdr { position: absolute; left: 0; right: 0; top: 0; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 13.5px; font-weight: 600; }
+.btn { background: var(--accent); color: #FFF; font-size: 13px; font-weight: 500; height: 34px; padding: 0 16px; border-radius: 4px; display: inline-flex; align-items: center; }
+.row { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-size: 13.5px; display: flex; justify-content: space-between; align-items: center; }
+#ripple { position: absolute; border-radius: 50%; background: rgba(27,79,216,.28); }
+#cursor { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform-origin: 3px 3px; z-index: 50; }
+
+/* Phone: a 390×844 screen in a 12px bezel, at 1:1 on the frame. */
+.phone { position: absolute; top: 70px; width: 414px; height: 868px; border-radius: 64px; background: #0B0B0C; padding: 12px; box-shadow: 0 30px 60px -20px rgba(26,26,24,.45), inset 0 0 0 2px #2A2A2C; z-index: 3; }
+.pscr { position: relative; width: 390px; height: 844px; border-radius: 52px; overflow: hidden; background: var(--paper); }
+.island { position: absolute; left: 50%; top: 11px; width: 124px; height: 36px; margin-left: -62px; border-radius: 20px; background: #000; z-index: 40; }
+.sb { position: absolute; left: 0; right: 0; top: 0; height: 54px; display: flex; justify-content: space-between; align-items: center; padding: 6px 30px 0 44px; font: 600 17px Inter, system-ui; z-index: 30; }
+.homebar { position: absolute; left: 50%; bottom: 8px; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: #000; z-index: 30; }
+.prow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+
+#touch { position: absolute; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(255,255,255,.5); border: 2px solid rgba(26,26,24,.38); box-shadow: 0 4px 14px rgba(26,26,24,.25); z-index: 60; }
+#morph { position: absolute; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 18px 48px rgba(60,50,30,.12); z-index: 1; }
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--plate); color: #FFF;
+  background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+#label { position: absolute; right: 154px; top: 978px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+#label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+</style>
+</head>
+<body>
+
+<div id="morph"></div>
+
+<!-- DESKTOP -->
+<div id="desk"><div id="cam">
+  <div id="win"><div id="app">
+    <div id="hdr"><span>Demo project</span><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted)">OVERVIEW · ACTIVITY · SETTINGS</span></div>
+    <div style="position:absolute;left:28px;right:28px;top:72px;display:grid;grid-template-columns:1fr 1fr;gap:28px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <span class="eyebrow">Items</span>
+        <div class="row">First item<span class="mono" style="font-size:11px;color:var(--muted)">DEMO-1</span></div>
+        <div class="row">Second item<span class="mono" style="font-size:11px;color:var(--muted)">DEMO-2</span></div>
+        <div class="row">Third item<span class="mono" style="font-size:11px;color:var(--muted)">DEMO-3</span></div>
+        <span class="btn" id="runBtn" style="align-self:flex-start;margin-top:8px">Run checks</span>
+      </div>
+      <div id="result" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:9px;min-height:260px">
+        <span class="eyebrow">Result</span>
+        <span id="resLine" style="font-size:15px"></span>
+        <div id="resRows" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+    </div>
+  </div></div>
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 30 30" aria-hidden="true"><path d="M3 2 L3 23 L8.5 17.8 L12.2 26.2 L15.8 24.6 L12.2 16.4 L19.6 16.4 Z" fill="#1A1A18" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div></div>
+
+<!-- PHONE -->
+<div class="phone" id="phone" style="left:753px"><div class="pscr" id="scr">
+  <div class="island"></div>
+  <div class="sb" data-sb="#000000"></div>
+  <div style="position:absolute;left:20px;right:20px;top:72px;display:flex;flex-direction:column;gap:10px" id="plist">
+    <span style="font-size:27px;font-weight:700;letter-spacing:-.02em">Demo project</span>
+    <div class="prow"><span class="mono" style="font-size:11px;color:var(--muted)">DEMO-1</span><span style="font-size:15px;font-weight:600">First item</span></div>
+    <div class="prow" id="pTarget"><span class="mono" style="font-size:11px;color:var(--muted)">DEMO-2</span><span style="font-size:15px;font-weight:600">Second item</span></div>
+    <div class="prow"><span class="mono" style="font-size:11px;color:var(--muted)">DEMO-3</span><span style="font-size:15px;font-weight:600">Third item</span></div>
+  </div>
+  <!-- The tapped row grows into its detail page (a container transform) -->
+  <div id="pGhost" style="position:absolute;background:var(--surface);border:1px solid var(--line);overflow:hidden;z-index:20"></div>
+  <div id="pDetail" style="position:absolute;inset:0;padding:72px 20px 0;display:flex;flex-direction:column;gap:12px;z-index:21">
+    <span style="font-size:14px;color:var(--ink-2)">← Back</span>
+    <span style="font-size:24px;font-weight:700">Second item</span>
+    <span style="font-size:15px;line-height:1.5;color:var(--ink-2)">Replace this with the product's real detail screen.</span>
+  </div>
+  <div class="homebar"></div>
+</div></div>
+
+<div id="touch"></div>
+<div id="end">
+  <span style="font-family:'Source Serif 4',Georgia,serif;font-weight:500;font-size:88px;letter-spacing:-.025em" class="e0">Your tagline here.</span>
+  <span class="mono e1" style="font-size:28px;color:rgba(255,255,255,.85)">example.com</span>
+</div>
+<div id="label"></div>
+
+<script>
+// ── Time helpers ────────────────────────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1); // Material standard: most moves
+const dec = bezier(0, 0, 0.2, 1);   // Material decelerate: things arriving
+const back = (x) => { x = clamp(x); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => Object.assign(n.style, s);
+const shown = (t, a, b, d = 0.3) => Math.min(span(t, a, d), 1 - span(t, b, d));
+const typeOut = (text, t, from, dur) => text.slice(0, Math.round(text.length * clamp((t - from) / dur)));
+const rectOf = (id) => $(id).getBoundingClientRect();
+
+document.querySelectorAll("[data-sb]").forEach((el) => { el.innerHTML = `<span>9:41</span><span>●●●</span>`; el.style.color = el.dataset.sb; });
+
+// ── The timeline: every time in one place ──────────────────────────────
+const P = {
+  phoneIn: 0, tapRow: 2.4, expand: 2.5, morph: [4.6, 5.8], deskIn: 5.6,
+  click: 7.4, push: [7.6, 0.8, 1.3], result: 7.7, pull: 10.0, end: 11.2,
+};
+window.TOTAL = 15;
+const LABELS = [
+  [0.8, 4.4, "01", "Start on your phone"],
+  [5.0, 7.2, "02", "Pick it up on your desktop"],
+  [7.4, 11.0, "03", "One click, and it checks the work"],
+];
+const TAPS = [[P.tapRow, "pTarget"]];
+const S = 1.3, W = 1240, H = 680, CX = 960, CY = 56 + (H * S) / 2;
+const WIN_R = { x: CX - (W * S) / 2, y: 56, w: W * S, h: H * S, r: 10 };
+const PHONE_SCR = { x: 765, y: 82, w: 390, h: 844, r: 52 };
+const ROWS = ["First item passes", "Second item passes", "Third item needs you"];
+
+// Measure once, after fonts load, with everything at rest (no transforms yet).
+let M = null;
+function measure() {
+  put($("win"), { width: `${W}px`, height: `${H}px`, left: `${CX - W / 2}px`, top: `${CY - H / 2}px`, transform: `scale(${S})`, transformOrigin: "50% 50%" });
+  const c = (id) => { const r = rectOf(id); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r }; };
+  const scr = rectOf("scr");
+  M = { run: c("runBtn"), result: c("result"), row: rectOf("pTarget"), scr };
+  M.rowL = { x: M.row.left - scr.left, y: M.row.top - scr.top, w: M.row.width, h: M.row.height };
+  $("resRows").innerHTML = ROWS.map((r, i) => `<div class="row" style="opacity:0">${r}<span style="color:${i < 2 ? "var(--ok)" : "var(--bad)"}">${i < 2 ? "✓" : "✕"}</span></div>`).join("");
+  // Scripts read these: music.mjs scores clicks and beats from them.
+  window.CLICK_TIMES = [...TAPS.map(([t]) => t), P.click];
+  window.LABEL_TIMES = LABELS.map(([a]) => a);
+  window.END_AT = P.end;
+  window.MUSIC = { arpIn: 0.6, bassIn: 2.4, drums: [[P.deskIn, P.end - 0.2]], end: P.end };
+}
+
+// Keyframes [t, x, y]: the cursor arrives, holds, then clicks.
+const along = (K, t) => {
+  if (t <= K[0][0]) return K[0].slice(1);
+  for (let i = 0; i < K.length - 1; i++) { const [t0, ...a] = K[i], [t1, ...b] = K[i + 1]; if (t < t1) { const p = std(span(t, t0, t1 - t0)); return a.map((v, j) => lerp(v, b[j], p)); } }
+  return K[K.length - 1].slice(1);
+};
+
+window.renderAt = (t) => {
+  if (!M) measure();
+
+  // Phone in, tap a row, the row grows into its detail page.
+  const pin = dec(span(t, P.phoneIn, 1.0)), pout = span(t, P.morph[0], 0.3);
+  put($("phone"), { opacity: span(t, 0, 0.6) * (1 - pout), visibility: pout < 1 ? "visible" : "hidden", transform: `translateY(${lerp(140, 0, pin)}px)` });
+  const ex = std(span(t, P.expand, 0.5)), R = M.rowL;
+  put($("pGhost"), { display: t >= P.expand && t < P.expand + 0.6 ? "block" : "none", left: `${lerp(R.x, 0, ex)}px`, top: `${lerp(R.y, 0, ex)}px`, width: `${lerp(R.w, 390, ex)}px`, height: `${lerp(R.h, 844, ex)}px`, borderRadius: `${lerp(10, 0, ex)}px` });
+  put($("pDetail"), { opacity: span(t, P.expand + 0.45, 0.25), background: "var(--paper)", visibility: t >= P.expand + 0.45 ? "visible" : "hidden" });
+
+  // Morph: the phone screen becomes the desktop window (container transform).
+  const mp = std(span(t, P.morph[0], P.morph[1] - P.morph[0]));
+  const on = t >= P.morph[0] && t < P.deskIn + 0.45;
+  const MR = Object.fromEntries(Object.keys(WIN_R).map((k) => [k, lerp(PHONE_SCR[k], WIN_R[k], mp)]));
+  put($("morph"), on ? { display: "block", left: `${MR.x}px`, top: `${MR.y}px`, width: `${MR.w}px`, height: `${MR.h}px`, borderRadius: `${MR.r}px` } : { display: "none" });
+  const dv = span(t, P.deskIn, 0.4);
+  put($("desk"), { opacity: dv, visibility: dv > 0 ? "visible" : "hidden" });
+
+  // Desktop: cursor to the button, click, push in on the result, pull back.
+  const K = [[P.deskIn, 1400, 820], [6.6, 1400, 820], [7.1, M.run.x, M.run.y], [8.2, M.run.x, M.run.y], [8.9, M.run.x + 200, M.run.y + 140]];
+  const [cx, cy] = along(K, t);
+  const pressed = t >= P.click && t < P.click + 0.12;
+  put($("cursor"), { transform: `translate(${cx - 3}px, ${cy - 3}px) scale(${pressed ? 0.86 : 1})` });
+  put($("runBtn"), { transform: `scale(${pressed ? 0.95 : 1})` });
+  if (t >= P.click && t < P.click + 0.45) {
+    const p = dec(span(t, P.click, 0.45)), r = lerp(6, 34, p);
+    put($("ripple"), { display: "block", left: `${M.run.x - r}px`, top: `${M.run.y - r}px`, width: `${2 * r}px`, height: `${2 * r}px`, opacity: 1 - p });
+  } else put($("ripple"), { display: "none" });
+  const [p0, pd, ps] = P.push;
+  const zin = std(span(t, p0, pd)), zout = std(span(t, P.pull, 0.7));
+  const cs = lerp(1, ps, zin * (1 - zout));
+  const fx = lerp(960, M.result.x, zin * (1 - zout)), fy = lerp(540, M.result.y, zin * (1 - zout));
+  put($("cam"), { transform: `translate(${960 - cs * fx}px, ${540 - cs * fy}px) scale(${cs})` });
+  $("resLine").textContent = t >= P.result ? typeOut("3 checks · 2 pass · 1 needs you", t, P.result, 0.9) : "";
+  [...$("resRows").children].forEach((r, i) => { const s0 = P.result + 1.0 + i * 0.35; put(r, { opacity: span(t, s0, 0.25), transform: `translateY(${lerp(8, 0, dec(span(t, s0, 0.35)))}px)` }); });
+
+  // A finger on glass for phone taps.
+  const tap = TAPS.find(([ct]) => t >= ct - 0.28 && t < ct + 0.32);
+  if (tap) { const r = rectOf(tap[1]); put($("touch"), { display: "block", left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px`, opacity: Math.min(span(t, tap[0] - 0.28, 0.15), 1 - span(t, tap[0] + 0.12, 0.2)), transform: `scale(${t >= tap[0] && t < tap[0] + 0.12 ? 0.82 : 1})` }); }
+  else put($("touch"), { display: "none" });
+
+  // Close: the brand plate opens as a circle from the last click.
+  const er = std(span(t, P.end, 0.9));
+  put($("end"), { visibility: t >= P.end ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 2300, er)}px at ${M.run.x}px ${M.run.y}px)` });
+  [".e0", ".e1"].forEach((sel, i) => { const s0 = P.end + 1.0 + i * 0.35; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+
+  // One label per beat, set whole.
+  const L = LABELS.find(([a, b]) => t >= a && t < b), lab = $("label");
+  if (L) { lab.innerHTML = `<b>${L[2]}</b>${L[3]}`; put(lab, { opacity: Math.min(span(t, L[0], 0.2), 1 - span(t, L[1] - 0.2, 0.2)) }); }
+  else put(lab, { opacity: 0 });
+};
+</script>
+</body>
+</html>
