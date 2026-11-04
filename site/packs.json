@@ -1,0 +1,10 @@
+[
+  {
+    "id": "spec-driven",
+    "name": "Spec-driven development",
+    "summary": "Story maps, plans and acceptance criteria in your repo. Every criterion runs as a Cucumber test, and a story can't be marked done until it passes.",
+    "install": "/plugin install nikos --marketplace nikovijay/NikOS",
+    "page": "https://github.com/nikovijay/NikOS#readme",
+    "tags": ["Claude Code", "Codex", "Cursor"]
+  }
+]
