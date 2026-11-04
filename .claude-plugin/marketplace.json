@@ -1,0 +1,14 @@
+{
+  "name": "nikos",
+  "owner": {
+    "name": "Niko Vijay"
+  },
+  "description": "nikOS: spec-driven development skills for AI coding agents.",
+  "plugins": [
+    {
+      "name": "nikos",
+      "source": "./",
+      "description": "Spec-driven development for AI coding agents: story map, plans and Cucumber acceptance criteria live in your repo."
+    }
+  ]
+}
