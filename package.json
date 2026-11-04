@@ -1,6 +1,6 @@
 {
   "name": "nikos",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "nikOS \u2014 an open-source agent skill stack for spec-driven development. Specs, plans and Cucumber features live in your repo.",
   "license": "MIT",
   "author": "Niko Vijay",
