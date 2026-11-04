@@ -199,7 +199,9 @@ Why this, and what we rejected.
 
 The heading is `date — title (story id)`; the story id is optional for
 project-wide decisions. Category is one of `product`, `architecture`,
-`design`, `process`.
+`design`, `interface`, `process`. Use `interface` for a choice other stories
+must keep to: a command's syntax, an output format, an API's shape. The
+build-a-story playbook reads these before planning.
 
 ---
 

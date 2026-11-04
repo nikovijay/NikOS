@@ -38,7 +38,7 @@ add what the git history of `intent/` shows (`git log -p -- intent/`), marked
 clearly as history, not a recorded decision. Then offer to log one:
 
 ```
-nikos decide "<title>" --why "<why>" --category <product|architecture|design|process>
+nikos decide "<title>" --why "<why>" --category <product|architecture|design|interface|process>
 ```
 
 Log it only once the person tells you the reason. Don't write a reason for
