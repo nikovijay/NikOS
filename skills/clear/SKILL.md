@@ -31,9 +31,23 @@ Read the story's `.feature` file, `intent/constitution.md` and
 - **Accurate:** it agrees with the constitution (who it's for, the problem,
   the proof) and with every decision in `decisions.md`. Name the line it
   contradicts.
-- **Responsible:** where the story touches personal data, money, safety,
-  outreach to real people or accessibility, a scenario or the description
-  covers it. A story that touches none of these passes and says so.
+- **Responsible:** for each area below that the story touches, every item
+  in its row is covered by a scenario (or, where the row says so, stated in
+  the description). Any missing item fails Responsible: name the item and give
+  the scenario to add. A story that touches none of these areas passes and
+  says so.
+
+  | Area | The story must cover |
+  | --- | --- |
+  | Money | A scenario for invalid amounts (zero, negative, more decimals than the currency has); a scenario for how amounts round; the currency, in the description or a scenario |
+  | Personal data | Who can see it, in the description or a scenario; a scenario for deleting it |
+  | Safety (health, physical harm, locks, children) | A scenario for what happens when it fails, and what the user sees then |
+  | Outreach to real people | A scenario for consent or opting out; nothing is sent without the person's sign-off |
+  | A screen people use | A scenario or description line saying it works by keyboard and with a screen reader |
+
+  For example, a story that charges a card but has no scenario for a zero or
+  negative amount reports:
+  `Responsible: fail. Money: no scenario for invalid amounts. Fix: add "AC3 — A zero or negative amount is refused".`
 
 ## 3. Fill small gaps, ask about big ones
 
