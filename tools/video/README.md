@@ -34,9 +34,24 @@ The agent writes the brief down, checks which screens are real, and gives you a
 storyboard to approve. It then renders a 12–15 second style test for you to
 approve before it builds, scores and renders the whole video to `final.mp4`.
 
+## From your story map
+
+If you use nikOS, your spec already knows what's built. In the repo, ask for a
+video, or run:
+
+```
+npx -y nikos video --out marketing/launch
+```
+
+It drafts `brief.md` and `storyboard.js` from your constitution and the stories
+marked done, one beat per activity, and leaves out anything not built yet. Once
+you approve the beats, the agent renders them with the pack's storyboard
+template.
+
 ## What's in it
 
 - `skills/product-tour-video/SKILL.md`: the workflow, style and honesty rules.
 - `skills/product-tour-video/assets/starter/tour.html`: a working tour to start from.
+- `skills/product-tour-video/assets/storyboard/tour.html`: renders a storyboard drafted by `nikos video`.
 - `skills/product-tour-video/scripts/`: `render.mjs`, `music.mjs`, `mix.mjs` and `contact.mjs`.
 - `skills/product-tour-video/references/`: motion recipes, device and app details, and known pitfalls.
