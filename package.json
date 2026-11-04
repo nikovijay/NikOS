@@ -1,7 +1,7 @@
 {
   "name": "nikos",
-  "version": "0.0.3",
-  "description": "nikOS \u2014 an open-source agent skill stack for spec-driven development. Specs, plans and Cucumber features live in your repo.",
+  "version": "0.0.4",
+  "description": "Spec-driven development for AI coding agents: story maps, Gherkin acceptance criteria and a done gate for Claude Code, Codex and Cursor",
   "license": "MIT",
   "author": "Niko Vijay",
   "homepage": "https://nikos.tools",
@@ -42,5 +42,19 @@
     "@cucumber/messages": "^26.0.1",
     "ajv": "^8.17.1",
     "yaml": "^2.6.1"
-  }
+  },
+  "keywords": [
+    "spec-driven-development",
+    "ai-coding-agents",
+    "agentic-coding",
+    "claude-code",
+    "codex",
+    "cursor",
+    "bdd",
+    "gherkin",
+    "cucumber",
+    "acceptance-criteria",
+    "user-story-mapping",
+    "agent-skills"
+  ]
 }

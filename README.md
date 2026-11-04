@@ -4,12 +4,25 @@
 
 <p align="center"><b>Spec-driven development for AI coding agents</b></p>
 
+I'm [@nikovijay](https://x.com/nikovijay), a Product Director with 20 years
+of experience in software delivery. nikOS is my personal framework for
+building products with AI coding agents. I'm sharing it to help others get
+started with agentic programming practices. For where I think this is going,
+see my thoughts on
+[the software factory of the near future](https://www.nikovijay.com/software-factory).
+
+## What it does
+
 AI coding agents are quick to say "done". nikOS makes them prove it. Your
 story map, plans and acceptance criteria live in your repo as plain files,
 each criterion is a Cucumber scenario that runs as a test, and a story can't
 be marked done until its scenarios pass. Your agent follows a named playbook
 for each request instead of improvising, and every decision is written down
 where the next person (or agent) can find it.
+
+It works with Claude Code, Codex and Cursor, and brings spec-driven
+development, behaviour-driven development (BDD) with Gherkin and Cucumber,
+user story mapping and acceptance criteria to agentic coding.
 
 > Early work in progress. Open source, MIT licensed.
 
