@@ -1,6 +1,6 @@
 {
   "name": "nikos",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Spec-driven development for AI coding agents: story maps, Gherkin acceptance criteria and a done gate for Claude Code, Codex and Cursor",
   "license": "MIT",
   "author": "Niko Vijay",
@@ -38,8 +38,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@cucumber/gherkin": "^30.0.4",
-    "@cucumber/messages": "^26.0.1",
+    "@cucumber/gherkin": "^42.0.1",
+    "@cucumber/messages": "^34.2.1",
     "ajv": "^8.17.1",
     "yaml": "^2.6.1"
   },
