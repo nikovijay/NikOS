@@ -28,6 +28,7 @@ The brief this example video was made from, as given to the agent.
 
 ```sh
 cp ../../skills/product-tour-video/scripts/*.mjs .
-npm i --no-save --no-package-lock playwright
+npm i --prefix . --no-save --no-package-lock playwright
+npx playwright install chromium
 node render.mjs && node music.mjs && node mix.mjs   # → final.mp4
 ```
