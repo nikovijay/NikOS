@@ -8,6 +8,10 @@ description: Entry point for nikOS spec-driven work. Use at the start of any req
 You follow a named playbook for every request instead of improvising. Run
 these five steps in order, every time.
 
+The playbooks run the `nikos` command. When it isn't installed (`nikos
+--version` fails), run it as `npx -y nikos` instead: `npx -y nikos validate`
+for `nikos validate`, and so on.
+
 ## 1. Read the principles
 
 Read `principles/index.md` next to this file. Keep each principle in mind for
