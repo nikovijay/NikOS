@@ -1,8 +1,16 @@
-# nikOS
+```text
+           _   _        ___    ____
+   _ __   (_) | | __   / _ \  / ___|
+  | '_ \  | | | |/ /  | | | | \___ \
+  | | | | | | |   <   | |_| |  ___) |
+  |_| |_| |_| |_|\_\   \___/  |____/
 
-Spec-driven development for AI coding agents. Your story map, plans and
-acceptance criteria live in your repo as plain files and executable Cucumber
-features, and the agent can't call a story done until its scenarios pass.
+  spec-driven development for AI coding agents
+```
+
+Your story map, plans and acceptance criteria live in your repo as plain
+files and executable Cucumber features, and the agent can't call a story done
+until its scenarios pass.
 
 > Early work in progress. Start with [the intent/ format](docs/format.md).
 
