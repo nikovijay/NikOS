@@ -1,12 +1,8 @@
-```text
-           _   _        ___    ____
-   _ __   (_) | | __   / _ \  / ___|
-  | '_ \  | | | |/ /  | | | | \___ \
-  | | | | | | |   <   | |_| |  ___) |
-  |_| |_| |_| |_|\_\   \___/  |____/
+<p align="center">
+  <img src="https://raw.githubusercontent.com/nikovijay/NikOS/main/assets/header.svg" alt="nikOS" width="840">
+</p>
 
-  spec-driven development for AI coding agents
-```
+<p align="center"><b>Spec-driven development for AI coding agents</b></p>
 
 AI coding agents are quick to say "done". nikOS makes them prove it. Your
 story map, plans and acceptance criteria live in your repo as plain files,
