@@ -77,4 +77,19 @@ describe("clear skill", () => {
     expect(skill).toMatch(/If any check fails, don't plan or build the story/);
     expect(skill).toMatch(/^name: clear$/m);
   });
+
+  it("tells the agent to decide small unstated rules and record them with nikos decide", () => {
+    const decide = skill.slice(skill.indexOf("**Decide it**"), skill.indexOf("**Stop and ask**"));
+    expect(decide).toMatch(/how a tip rounds/);
+    expect(decide).toMatch(/record it with\s+`nikos decide "<the rule>" --story <story-id>/);
+    expect(skill).toMatch(/`Decided: <rule>`/);
+  });
+
+  it("tells the agent to stop and ask when a gap touches money, data or access", () => {
+    const ask = skill.slice(skill.indexOf("**Stop and ask**"), skill.indexOf("## 4."));
+    for (const area of ["money", "personal data", "access"]) expect(ask).toContain(area);
+    expect(ask).toMatch(/Clear fails until the person answers/);
+    expect(ask).toMatch(/If you're not sure which it is, ask/);
+    expect(skill).toMatch(/`Ask: <question>`/);
+  });
 });
