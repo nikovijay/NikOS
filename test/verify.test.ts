@@ -105,6 +105,13 @@ describe("verify", () => {
     expect(setupVerify(root).created).toEqual(["cucumber.mjs"]);
   });
 
+  it("skips the example step stubs once the example story is rewritten into a real one", () => {
+    const root = fixture({ "package.json": "{}" });
+    const path = join(root, "intent/features/getting-started/first-story.feature");
+    writeFileSync(path, readFileSync(path, "utf8").replace(/Scenario:[\s\S]*$/, "Scenario: AC1 — A tip\n    Given a bill of 50\n    When I add a 20% tip\n    Then the total is 60.00\n"));
+    expect(setupVerify(root).created).toEqual(["cucumber.mjs"]);
+  });
+
   it("never overwrites existing runner files", () => {
     const root = fixture({ "package.json": "{}", "cucumber.mjs": "// mine\n" });
     const r = setupVerify(root);

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,9 @@ const INSTALL: Record<Stack, string> = {
   ts: "npm install --save-dev @cucumber/cucumber@^12 tsx",
   python: "pip install behave",
 };
+
+/** A step only the untouched example story has. */
+const EXAMPLE_STEP = "When I do the one thing this product is for";
 
 const CONFIG: Record<Stack, string> = { js: "cucumber.mjs", ts: "cucumber.mjs", python: "behave.ini" };
 
@@ -36,8 +39,10 @@ export function setupVerify(root: string): SetupResult {
   const src = join(templateDir, stack === "python" ? "python" : stack);
   const created: string[] = [];
   const skipped: string[] = [];
-  // Step stubs are for the example story `nikos init` creates; skip them once it's gone.
-  const hasExample = existsSync(join(root, "intent/features/getting-started/first-story.feature"));
+  // Step stubs are for the example story `nikos init` creates; skip them once
+  // it's gone or rewritten into a real story, whose steps they wouldn't match.
+  const example = join(root, "intent/features/getting-started/first-story.feature");
+  const hasExample = existsSync(example) && readFileSync(example, "utf8").includes(EXAMPLE_STEP);
   for (const file of walk(src)) {
     const rel = relative(src, file);
     if (!hasExample && /first[-_]story/.test(rel)) continue;
