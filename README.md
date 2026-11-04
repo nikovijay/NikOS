@@ -80,20 +80,6 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |
 | `nikos bet new <id>` | Write a time-boxed bet card linked to its stories |
 
-## Working with a team: intentdocs
-
-When you want a visual story map, reviews and a team around the same specs,
-[intentdocs](https://www.intentdocs.com) reads the same `intent/` folder:
-
-```bash
-npx intentdocs push    # upload intent/ and link this repo
-npx intentdocs pull    # bring web edits back, shown as diffs first
-```
-
-The repo stays the source of truth for specs and plans; intentdocs runs the
-build and acceptance steps. What maps to what:
-[docs/intentdocs-mapping.md](docs/intentdocs-mapping.md).
-
 ## Links
 
 - Home: https://nikos.tools
