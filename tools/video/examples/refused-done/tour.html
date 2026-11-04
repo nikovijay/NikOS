@@ -48,6 +48,7 @@ body { background-color: var(--ground);
   background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
 #label { position: absolute; right: 154px; top: 978px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: rgba(242,243,239,.94); padding: 8px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(17,20,17,.08); }
 #label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+#mark { position: absolute; left: 154px; top: 972px; z-index: 75; width: 46px; height: 46px; border-radius: 8px; background: rgba(242,243,239,.94); box-shadow: 0 1px 2px rgba(17,20,17,.08); display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
@@ -83,6 +84,8 @@ body { background-color: var(--ground);
   <span class="mono e2" style="font-size:22px;color:rgba(255,255,255,.7)">npx nikos init</span>
 </div>
 <div id="label"></div>
+<!-- The author's N mark, from assets/icon.svg. -->
+<div id="mark"><svg width="30" height="30" viewBox="170 245 340 245" aria-hidden="true"><path fill="#111411" d="M287 252 L179 483 L180 485 L253 484 L324 331 Z"/><path fill="#111411" d="M504 251 L431 251 L360 404 L396 483 L398 482 L501 261 Z"/></svg></div>
 
 <script>
 // ── Time helpers (from the starter) ─────────────────────────────────────
@@ -173,6 +176,7 @@ const along = (K, t) => {
 window.renderAt = (t) => {
   if (!M) measure();
   put($("win"), { opacity: span(t, 0, 0.6) });
+  put($("mark"), { opacity: span(t, 0, 0.6) });
 
   // Camera.
   const [cs, fx, fy] = along(CAM(), t);
