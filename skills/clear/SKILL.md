@@ -35,7 +35,22 @@ Read the story's `.feature` file, `intent/constitution.md` and
   outreach to real people or accessibility, a scenario or the description
   covers it. A story that touches none of these passes and says so.
 
-## 3. Report all five, in this order
+## 3. Fill small gaps, ask about big ones
+
+Every spec leaves some rules unstated. Sort each gap you find:
+
+- **Decide it** when it's a small rule any reasonable person would accept
+  and it's cheap to change later: how a tip rounds, the order a list sorts
+  in, the wording of a message. Pick the obvious choice, record it with
+  `nikos decide "<the rule>" --story <story-id> --why "<why this choice>"`,
+  and list it in the report. Recorded, it doesn't fail Clear.
+- **Stop and ask** when the gap affects users' money, personal data, access
+  (who can see or change what), safety, or messages to real people. These are
+  product decisions, not yours. Clear fails until the person answers; record
+  their answer with `nikos decide`.
+- **If you're not sure which it is, ask.**
+
+## 4. Report all five, in this order
 
 One line per check, every time, even when it passes:
 
@@ -47,9 +62,11 @@ Accurate: pass. <why>
 Responsible: pass. <why>
 ```
 
-Every fail names what's missing and the fix.
+Every fail names what's missing and the fix. After the five lines, list
+any rules you decided (`Decided: <rule>`) and any questions that block
+building (`Ask: <question>`).
 
-## 4. Stop on a fail
+## 5. Stop on a fail
 
 If any check fails, don't plan or build the story. Report the failures and
 the fixes, and wait for the spec to change.
