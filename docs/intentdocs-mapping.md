@@ -86,12 +86,17 @@ Fields that exist only in intentdocs are listed at the end.
 
 ## State
 
+Status isn't pushed: intentdocs sets it. New stories start as To do,
+existing ones keep theirs, and they move through build and acceptance in
+intentdocs. `intentdocs push` still sends the local status, and says how
+many it ignored.
+
 | Local | intentdocs | Notes |
 |---|---|---|
-| `status: todo` | `todo` | |
-| `status: in_progress` | `in_progress` | |
-| `status: needs_rework` | `needs_rework` | |
-| `status: done` | `dev_complete` | intentdocs adds human approval on top |
+| `status: todo` | **not pushed** | intentdocs sets status |
+| `status: in_progress` | **not pushed** | intentdocs sets status |
+| `status: needs_rework` | **not pushed** | intentdocs sets status |
+| `status: done` | **not pushed** | intentdocs sets status; its own done needs acceptance after build |
 | `blockers` | raised blockers | |
 | `plan_version` | current plan version | |
 | `claimed_by` | story claim | |
