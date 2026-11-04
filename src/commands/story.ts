@@ -1,0 +1,108 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { parseDocument, YAMLSeq } from "yaml";
+import { findIntentDir, read } from "../lib/project.js";
+import { slugify } from "./init.js";
+import { validate, type ValidationResult } from "./validate.js";
+
+const PRIORITIES = ["must", "should", "could"] as const;
+
+export interface StoryInput {
+  title: string;
+  activity: string;
+  /** Release number; defaults to the last release. */
+  release?: number;
+  priority?: (typeof PRIORITIES)[number];
+}
+
+export interface StoryResult {
+  id: string;
+  release: number;
+  feature: string;
+  validation: ValidationResult;
+}
+
+const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
+
+/** Add a story to storymap.yaml and state.yaml, and write its starter feature file. */
+export function newStory(input: StoryInput, dir: string): StoryResult {
+  const title = input.title?.trim();
+  if (!title) throw new Error("A story needs a title");
+  const priority = input.priority ?? "must";
+  if (!PRIORITIES.includes(priority)) throw new Error(`'${priority}' is not a priority (must, should, could)`);
+
+  const intentDir = findIntentDir(dir);
+  const mapPath = join(intentDir, "storymap.yaml");
+  const statePath = join(intentDir, "state.yaml");
+  // Documents keep comments and the order of everything we don't touch.
+  const map = parseDocument(read(mapPath));
+  const state = parseDocument(read(statePath));
+  const plain = map.toJS();
+
+  const activities: string[] = (plain.activities ?? []).map((a: any) => a?.id);
+  if (!activities.includes(input.activity)) {
+    throw new Error(`'${input.activity}' is not an activity in storymap.yaml. Activities: ${activities.join(", ") || "none"}`);
+  }
+  const releases: any[] = plain.releases ?? [];
+  if (!releases.length) throw new Error("storymap.yaml has no releases to add the story to");
+  const index = input.release === undefined ? releases.length - 1 : releases.findIndex((r) => r?.number === input.release);
+  if (index < 0) throw new Error(`There is no release ${input.release}. Releases: ${releases.map((r) => r?.number).join(", ")}`);
+  const release = releases[index].number as number;
+
+  const key = plain.key as string;
+  const taken = releases.flatMap((r) => r?.stories ?? []).map((s: string) => Number(s.slice(key.length + 1)) || 0);
+  const id = `${key}-${Math.max(0, ...taken) + 1}`;
+
+  const feature = join(intentDir, "features", input.activity, `${slugify(title)}.feature`);
+  if (existsSync(feature)) throw new Error(`${feature} already exists; give the story a different title`);
+
+  const stories = map.getIn(["releases", index, "stories"], true);
+  if (stories instanceof YAMLSeq) stories.add(id);
+  else map.setIn(["releases", index, "stories"], map.createNode([id], { flow: true }));
+  state.setIn(["stories", id], state.createNode({ status: "todo" }));
+
+  const text = `@${id} @release-${release} @${priority} @activity-${input.activity}
+Feature: ${title}
+
+  As a <who it's for>
+  I want <what they can do>
+  So that <why it matters to them>
+
+  @AC1 @${priority}
+  Scenario: AC1 — <the first acceptance criterion>
+    Given <the starting situation>
+    When <the one action>
+    Then <what they see>
+`;
+
+  mkdirSync(dirname(feature), { recursive: true });
+  writeFileSync(feature, text, { flag: "wx" });
+  writeFileSync(mapPath, map.toString(yamlOpts));
+  writeFileSync(statePath, state.toString(yamlOpts));
+  return { id, release, feature, validation: validate(intentDir) };
+}
+
+export function runStory(args: string[]): number {
+  const [sub, title, ...rest] = args;
+  const opt = (n: string) => {
+    const i = rest.indexOf(`--${n}`);
+    return i >= 0 ? rest[i + 1] : undefined;
+  };
+  if (sub !== "add" || !title || title.startsWith("--") || !opt("activity")) {
+    console.error('Usage: nikos story add "<title>" --activity <id> [--release <n>] [--priority must|should|could]');
+    return 1;
+  }
+  try {
+    const release = opt("release");
+    const r = newStory(
+      { title, activity: opt("activity")!, release: release === undefined ? undefined : Number(release), priority: opt("priority") as StoryInput["priority"] },
+      opt("dir") ?? process.cwd(),
+    );
+    console.log(`Added ${r.id} to release ${r.release}\nCreated ${r.feature}`);
+    console.log(`\nNext: write the user story and its scenarios in the feature file, then run nikos clear ${r.id}.`);
+    return 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}

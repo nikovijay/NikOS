@@ -10,6 +10,7 @@ import { runDecide } from "./commands/decide.js";
 import { runBet } from "./commands/bet.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
+import { runStory } from "./commands/story.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -23,6 +24,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   bet: runBet,
   show: runShow,
   decisions: runDecisions,
+  story: runStory,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -32,6 +34,8 @@ Usage: nikos <command> [options]
 Commands:
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
+  story add "<title>"  Add a story to the map, state and a starter feature
+                   (--activity, --release, --priority)
   plan new <id>    Start the next version of a story's plan
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack

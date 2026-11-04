@@ -109,6 +109,10 @@ Rules:
 - Every story id has exactly one feature file and one `state.yaml` entry.
 - Release numbers start at 1 and have no gaps.
 
+Add a story with `nikos story add "<title>" --activity <id>`. It takes the
+next free id, adds it to the last release (or `--release <n>`), gives it a
+`todo` entry in `state.yaml` and writes a starter feature file to fill in.
+
 ---
 
 ## features/&lt;activity&gt;/&lt;story-slug&gt;.feature

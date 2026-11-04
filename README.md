@@ -68,6 +68,7 @@ Every file is plain text you can read, review and diff. The full format:
 | --- | --- |
 | `nikos init` | Create `intent/` in this repo |
 | `nikos validate` | Check `intent/` is well formed |
+| `nikos story add "<title>"` | Add a story to the map, state and a starter feature |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
