@@ -2,9 +2,18 @@
   "name": "nikos",
   "version": "0.0.1",
   "description": "Spec-driven development for AI coding agents: story map, plans and Cucumber acceptance criteria live in your repo.",
-  "author": { "name": "Niko Vijay" },
+  "author": {
+    "name": "Niko Vijay"
+  },
   "homepage": "https://nikos.tools",
   "repository": "https://github.com/nikovijay/NikOS",
   "license": "MIT",
-  "keywords": ["spec-driven", "cucumber", "gherkin", "story-map", "skills"]
+  "keywords": [
+    "spec-driven",
+    "cucumber",
+    "gherkin",
+    "story-map",
+    "skills"
+  ],
+  "icon": "./assets/icon.png"
 }

@@ -72,6 +72,13 @@ describe("install manifests", () => {
     }
   });
 
+  it("the Claude Code manifest's icon is a square PNG in the repo", () => {
+    const icon = json(".claude-plugin/plugin.json").icon as string;
+    const png = readFileSync(join(root, icon));
+    expect(png.subarray(1, 4).toString()).toBe("PNG");
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1024, 1024]);
+  });
+
   it("the npm package carries the manifests' skills", () => {
     expect(pkg.files).toContain("skills");
   });

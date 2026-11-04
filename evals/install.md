@@ -9,8 +9,9 @@ Each documented install, run on a clean profile, then checked for the
 | Codex | not installed here | not run | not checked | 2026-11-04 |
 | Cursor | not installed here | not run | not checked | 2026-11-04 |
 
-`claude plugin validate ./ --strict` passes. The only remaining note is the
-plugin directory's advice to add an icon.
+`claude plugin validate ./ --strict` passes with nothing to report. The icon
+is Niko's logo, black on white, at `assets/icon.png` (1024 px square; source
+`assets/icon.svg`).
 
 Codex and Cursor manifests are checked against their documented formats
 (docs/install.md) by `test/install.test.ts`, but no install was run, because
