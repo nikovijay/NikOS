@@ -11,6 +11,7 @@ import { runBet } from "./commands/bet.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
 import { runStory } from "./commands/story.js";
+import { runVideo } from "./commands/video.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -25,6 +26,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   show: runShow,
   decisions: runDecisions,
   story: runStory,
+  video: runVideo,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -48,6 +50,8 @@ Commands:
                    (--why, --story, --category, --supersedes)
   bet new <bet-id> Write a time-boxed bet card linked to its stories
                    (--hypothesis, --kr, --uplift, --time-box, --story, --blocker)
+  video            Draft a video brief and storyboard from the done stories
+                   (--out, default marketing/storymap-video)
 
 Docs: https://nikos.tools`;
 

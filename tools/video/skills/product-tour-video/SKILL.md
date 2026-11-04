@@ -54,6 +54,26 @@ Each step exists because skipping it cost a rebuild once.
    - **Deliver.** Send the person the file, or its path if your tool can't send files.
    - **Commit the sources only.** Outputs stay gitignored. Follow the repo's branch and PR rules.
 
+## From a nikOS story map
+
+In a repo with an `intent/` folder, the video can come straight from the spec,
+with no screens to rebuild. `npx -y nikos video --out marketing/<name>` writes:
+- `brief.md`: the product, users and problem from the constitution, and one beat per activity with done stories. Only stories marked done are in; the rest are listed as left out. Show the beats to the person and wait for their yes before rendering.
+- `storyboard.js`: the same beats as data, timed.
+
+Then render it with the storyboard template, which shows each done story and the outcomes its passing scenarios check:
+
+```sh
+cp <skill>/assets/storyboard/tour.html <skill>/scripts/*.mjs marketing/<name>/
+cd marketing/<name>
+npm i --prefix . --no-save --no-package-lock playwright
+node contact.mjs sheet.png 2 6 10                 # look before rendering
+node render.mjs && node music.mjs && node mix.mjs # → final.mp4
+```
+
+Replace the template's tokens with the product's own colours and type first.
+Re-run `nikos video` whenever more stories are done; it never shows one that isn't.
+
 ## Style rules
 
 - **Real screens, true size.** Build the app at its real CSS size and scale the window for 1080p: 1240×680 at ×1.3 becomes 1612×884 at (154, 56). Phones are 390×844 at 1:1. Use the product's own tokens, type and copy; read its design doc first.

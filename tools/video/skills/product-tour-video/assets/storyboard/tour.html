@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Storyboard template (product-tour-video skill). Renders the storyboard.js that `nikos video` writes
+     next to this file: a title card, one beat per activity with its done stories and the outcomes their
+     passing scenarios check, then a close. Every frame is a pure function of time: window.renderAt(t). -->
+<meta charset="utf-8">
+<title>Storyboard video</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500&display=block">
+<style>
+/* Tokens: replace with the product's design system. */
+:root { --ground: #F2F0E9; --surface: #FFFFFF; --ink: #1A1A18; --ink-2: #57534E; --muted: #6E695F;
+  --line: #E8E6DF; --accent: #1B4FD8; --accent-soft: rgba(27,79,216,.08); --plate: #0F2D7A; --ok: #1E9E5C; --ok-soft: rgba(30,158,92,.12); }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(26,26,24,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(26,26,24,.05) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.serif { font-family: 'Source Serif 4', Georgia, serif; }
+
+#cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+#intro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; text-align: center; padding: 0 240px; }
+#intro .name { font-size: 132px; font-weight: 500; letter-spacing: -.03em; }
+#intro .idea { font-size: 36px; line-height: 1.35; color: var(--ink-2); max-width: 1200px; }
+
+.beat { position: absolute; left: 154px; right: 154px; top: 90px; bottom: 140px; display: grid; grid-template-columns: 560px 1fr; gap: 80px; align-items: center; }
+.beat .num { font: 600 22px 'JetBrains Mono', monospace; color: var(--accent); letter-spacing: .08em; }
+.beat h2 { margin: 18px 0 0; font-size: 76px; line-height: 1.05; letter-spacing: -.03em; font-weight: 600; }
+.beat .sub { margin-top: 22px; font-size: 24px; color: var(--muted); }
+.cards { display: flex; flex-direction: column; gap: 22px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px; box-shadow: 0 1px 2px rgba(60,50,30,.06), 0 14px 36px rgba(60,50,30,.08); }
+.card .id { font: 500 15px 'JetBrains Mono', monospace; color: var(--muted); letter-spacing: .04em; }
+.card .title { margin-top: 6px; font-size: 32px; font-weight: 600; letter-spacing: -.015em; }
+.card .out { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 22px; color: var(--ink-2); }
+.tick { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; font-weight: 700; color: #FFF; background: var(--ok); }
+
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--plate); color: #FFF;
+  background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; text-align: center; padding: 0 240px; }
+#label { position: absolute; right: 154px; top: 978px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+#label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+</style>
+<script src="storyboard.js"></script>
+</head>
+<body>
+<div id="cam">
+  <div id="intro"><div class="name serif"></div><div class="idea"></div></div>
+  <div id="beats"></div>
+</div>
+<div id="end"><span class="serif e0" style="font-size:110px;font-weight:500;letter-spacing:-.025em"></span><span class="e1" style="font-size:34px;color:rgba(255,255,255,.85);max-width:1200px;line-height:1.35"></span></div>
+<div id="label"></div>
+
+<script>
+// ── Time helpers (from the starter) ─────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1);
+const dec = bezier(0, 0, 0.2, 1);
+const back = (x) => { x = clamp(x); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => Object.assign(n.style, s);
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+// In for `a`, out for `b`, with a shared-axis slide.
+const shown = (t, a, b, d = 0.4) => Math.min(span(t, a, d), 1 - span(t, b - d, d));
+
+// ── The storyboard (from storyboard.js) ─────────────────────────────────
+const SB = window.STORYBOARD;
+const MAX = 4; // stories shown per beat
+window.TOTAL = SB.total;
+const CARD = (b, k) => b.from + 0.8 + k * 1.8; // when a story's card lands
+const TICK = (b, k, j) => CARD(b, k) + 0.55 + j * 0.3; // when each of its outcomes ticks
+
+$("intro").querySelector(".name").textContent = SB.product.name;
+$("intro").querySelector(".idea").textContent = SB.product.idea;
+document.querySelector(".e0").textContent = SB.product.name;
+document.querySelector(".e1").textContent = SB.product.idea;
+$("beats").innerHTML = SB.beats.map((b, i) => `<section class="beat" id="b${i}">
+  <div><div class="num">${String(i + 1).padStart(2, "0")}</div><h2>${esc(b.activity)}</h2>
+    <div class="sub">${b.stories.length} ${b.stories.length === 1 ? "story" : "stories"} built and checked</div></div>
+  <div class="cards">${b.stories.slice(0, MAX).map((s, k) => `<div class="card" id="c${i}_${k}"><div class="id">${esc(s.id)}</div><div class="title">${esc(s.title)}</div>
+    ${s.outcomes.slice(0, 3).map((o, j) => `<div class="out"><span class="tick" id="t${i}_${k}_${j}">✓</span>${esc(o)}</div>`).join("")}</div>`).join("")}</div>
+</section>`).join("");
+
+// Scripts read these: music.mjs scores clicks and beats from them.
+window.CLICK_TIMES = SB.beats.flatMap((b) => b.stories.slice(0, MAX).map((_, k) => CARD(b, k)));
+window.LABEL_TIMES = SB.beats.map((b) => b.from);
+window.END_AT = SB.close[0];
+window.MUSIC = { arpIn: 0.6, bassIn: SB.intro[1], drums: [[SB.intro[1], SB.close[0] - 0.2]], end: SB.close[0] };
+
+window.renderAt = (t) => {
+  // Title card.
+  const io = shown(t, 0.3, SB.intro[1], 0.6);
+  put($("intro"), { opacity: io, transform: `translateY(${lerp(16, 0, dec(span(t, 0.3, 0.8)))}px)` });
+
+  // One beat per activity: slides in, its cards land, each outcome ticks, then it slides out.
+  SB.beats.forEach((b, i) => {
+    const o = shown(t, b.from, b.to);
+    put($(`b${i}`), { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `translateX(${lerp(28, 0, std(span(t, b.from, 0.5))) - 28 * std(span(t, b.to - 0.4, 0.4))}px)` });
+    b.stories.slice(0, MAX).forEach((s, k) => {
+      const c0 = CARD(b, k);
+      put($(`c${i}_${k}`), { opacity: span(t, c0, 0.3), transform: `translateY(${lerp(18, 0, dec(span(t, c0, 0.45)))}px)` });
+      s.outcomes.slice(0, 3).forEach((_, j) => {
+        const k0 = TICK(b, k, j), el = $(`t${i}_${k}_${j}`);
+        put(el, { opacity: span(t, k0, 0.15), transform: `scale(${t >= k0 ? lerp(0.6, 1, back(span(t, k0, 0.35))) : 0.6})` });
+      });
+    });
+  });
+
+  // A slow push-in across the whole piece.
+  put($("cam"), { transform: `scale(${lerp(1, 1.04, span(t, 0, SB.close[0]))})` });
+
+  // Close: the plate opens as a circle from the centre.
+  const [e0] = SB.close, er = std(span(t, e0, 0.9));
+  put($("end"), { visibility: t >= e0 ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 2300, er)}px at 960px 540px)` });
+  [".e0", ".e1"].forEach((sel, i) => { const s0 = e0 + 1.0 + i * 0.35; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+
+  // One label per beat, set whole.
+  const i = SB.beats.findIndex((b) => t >= b.from && t < b.to), lab = $("label");
+  if (i >= 0) { const b = SB.beats[i]; lab.innerHTML = `<b>${String(i + 1).padStart(2, "0")}</b>${esc(b.activity)}`; put(lab, { opacity: shown(t, b.from, b.to, 0.2) }); }
+  else put(lab, { opacity: 0 });
+};
+</script>
+</body>
+</html>
