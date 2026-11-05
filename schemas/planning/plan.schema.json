@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/planning/plan.schema.json",
+  "title": "nikOS Planning context",
+  "type": "object",
+  "required": ["period", "level", "pillars"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "period": { "type": "string", "minLength": 1 },
+    "level": { "enum": ["company", "department", "group", "team"] },
+    "pillars": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string" },
+          "aligns_to": { "type": "string" }
+        }
+      }
+    }
+  }
+}
