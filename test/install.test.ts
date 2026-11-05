@@ -40,6 +40,16 @@ describe("install manifests", () => {
     if (m.skills) expect(existsSync(join(root, m.skills))).toBe(true);
   });
 
+  it("listings show nikOS and the install id stays nikos", () => {
+    expect(json(".cursor-plugin/plugin.json").displayName).toBe("nikOS");
+    expect(json(".claude-plugin/plugin.json").displayName).toBe("nikOS");
+    expect(json(".codex-plugin/plugin.json").interface.displayName).toBe("nikOS");
+    expect(json(".claude-plugin/marketplace.json").plugins[0]).toEqual(
+      expect.objectContaining({ name: "nikos", displayName: "nikOS" }),
+    );
+    for (const path of Object.values(manifests)) expect(json(path).name).toBe("nikos");
+  });
+
   it("each marketplace lists the plugin at the repo root first", () => {
     const claude = json(".claude-plugin/marketplace.json");
     expect(claude.plugins[0]).toEqual(expect.objectContaining({ name: pkg.name, source: "./" }));

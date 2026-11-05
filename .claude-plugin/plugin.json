@@ -1,5 +1,6 @@
 {
   "name": "nikos",
+  "displayName": "nikOS",
   "version": "0.0.7",
   "description": "Spec-driven development for AI coding agents: story map, plans and Cucumber acceptance criteria live in your repo.",
   "author": {
