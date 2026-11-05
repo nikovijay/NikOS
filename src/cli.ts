@@ -7,11 +7,12 @@ import { runVerify } from "./commands/verify.js";
 import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
 import { runDecide } from "./commands/decide.js";
-import { runBet } from "./commands/bet.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
 import { runStory } from "./commands/story.js";
 import { runVideo } from "./commands/video.js";
+import { runMap } from "./commands/map.js";
+import { runPlanning } from "./planning/cli.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -22,11 +23,12 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   next: runNext,
   state: runState,
   decide: runDecide,
-  bet: runBet,
   show: runShow,
   decisions: runDecisions,
   story: runStory,
   video: runVideo,
+  map: runMap,
+  planning: runPlanning,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -48,10 +50,11 @@ Commands:
   state set <id> <status>  Move a story; done only if its scenarios pass
   decide "<title>" Append a decision to decisions.md
                    (--why, --story, --category, --supersedes)
-  bet new <bet-id> Write a time-boxed bet card linked to its stories
-                   (--hypothesis, --kr, --uplift, --time-box, --story, --blocker)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
+  map              Write a read-only story map page (--out, default storymap.html)
+  planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
+                   run \`nikos planning help\`)
 
 Docs: https://nikos.tools`;
 
