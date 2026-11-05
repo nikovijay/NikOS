@@ -72,14 +72,20 @@ it anyway: `npm install -g nikos`.
 
 ## Formats checked
 
-Plugin formats change often. These were read on 2026-11-04 (no page showed a
-version):
+Plugin formats change often. These were read on 2026-11-04, and the display
+name fields again on 2026-11-05 (no page showed a version):
 
 - Claude Code: https://code.claude.com/docs/en/plugins-reference and
   https://code.claude.com/docs/en/plugins/marketplace-reference. Checked with
-  `claude plugin validate .` on Claude Code 2.1.318.
-- Cursor: https://cursor.com/docs/reference/plugins
-- Codex: https://developers.openai.com/plugins/build/plugins
+  `claude plugin validate .` on Claude Code 2.1.318. `displayName` is the
+  name shown in the UI. A marketplace entry's `displayName` wins over the
+  plugin's. The marketplace `name` stays the install id (`nikos@nikos`).
+- Cursor: https://cursor.com/docs/reference/plugins. That page does not list
+  `displayName`. `.cursor-plugin/plugin.json` still sets it so a listing can
+  show nikOS, and `name` stays the kebab-case id.
+- Codex: https://developers.openai.com/plugins/build/plugins. The plugin
+  title is `interface.displayName` in `.codex-plugin/plugin.json`. The
+  marketplace title is the same field on `.agents/plugins/marketplace.json`.
 
 All three find skills as `skills/<name>/SKILL.md` at the plugin root.
 `test/install.test.ts` checks the manifests agree with each other and with

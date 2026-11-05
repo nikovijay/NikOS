@@ -7,11 +7,13 @@
   "plugins": [
     {
       "name": "nikos",
+      "displayName": "nikOS",
       "source": "./",
       "description": "Spec-driven development for AI coding agents: story map, plans and Cucumber acceptance criteria live in your repo."
     },
     {
       "name": "nikos-video",
+      "displayName": "nikOS Video",
       "source": "./tools/video",
       "description": "The nikOS Video pack: make short product explainer videos from a brief."
     }

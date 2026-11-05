@@ -30,6 +30,14 @@ describe("Video pack", () => {
     expect(existsSync(join(pack, m.skills))).toBe(true);
   });
 
+  it("lists as nikOS Video while the install id stays nikos-video", () => {
+    expect(json("tools/video/.cursor-plugin/plugin.json").displayName).toBe("nikOS Video");
+    expect(json("tools/video/.claude-plugin/plugin.json").displayName).toBe("nikOS Video");
+    expect(json("tools/video/.codex-plugin/plugin.json").interface.displayName).toBe("nikOS Video");
+    const entry = json(".claude-plugin/marketplace.json").plugins.find((p: { name?: string }) => p.name === "nikos-video");
+    expect(entry).toEqual(expect.objectContaining({ name: "nikos-video", displayName: "nikOS Video" }));
+  });
+
   it("both marketplaces list it from its own folder", () => {
     expect(json(".claude-plugin/marketplace.json").plugins).toContainEqual(expect.objectContaining({ name: "nikos-video", source: "./tools/video" }));
     expect(json(".agents/plugins/marketplace.json").plugins).toContainEqual(
