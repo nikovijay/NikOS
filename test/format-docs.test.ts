@@ -24,7 +24,6 @@ const documented: { heading: string; pattern: RegExp }[] = [
   { heading: "decisions.md", pattern: /^decisions\.md$/ },
   { heading: "state.yaml", pattern: /^state\.yaml$/ },
   { heading: "outreach/&lt;date&gt;-&lt;channel&gt;.md (optional)", pattern: /^outreach\/\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/ },
-  { heading: "bets/&lt;bet-id&gt;.md (optional)", pattern: /^bets\/[a-z0-9-]+\.md$/ },
 ];
 
 function section(heading: string): string {
@@ -74,8 +73,8 @@ describe("intentdocs mapping", () => {
       ...Object.keys(state.stories["HT-2"]).map((k) => `\`${k}\``),
       "`run.queue`",
       ...["todo", "in_progress", "needs_rework", "done"].map((s) => `\`status: ${s}\``),
-      // bets
-      "`bets/*.md`",
+      // bet links
+      "`releases[].bets`", "`story_bets`",
     ]);
     fields.delete("`status`"); // covered by the status: <value> rows
     fields.delete("`activities`"); // covered by activities[] rows

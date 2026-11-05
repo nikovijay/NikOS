@@ -108,7 +108,7 @@ many it ignored.
 | Local | intentdocs | Notes |
 |---|---|---|
 | `outreach/*.md`, `## Validation` | **local-only** | intentdocs keeps the vision answers, not outreach drafts or results |
-| `bets/*.md` | **local-only** | intentdocs has no bet object yet |
+| `releases[].bets`, `story_bets` | **local-only** | links to bets in `planning/`, which intentdocs doesn't have yet |
 
 ## intentdocs-only (not pulled into files)
 

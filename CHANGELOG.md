@@ -1,0 +1,24 @@
+# Changelog
+
+## Unreleased (next: 0.1.0)
+
+### Breaking
+
+- **Bets have moved out of core nikOS into the Planning pack.** `nikos bet`,
+  `intent/bets/`, `schemas/bet.schema.json`, the bet checks in
+  `nikos validate`, the bet playbook and the two bet principles are gone.
+  Install the Planning pack (`/plugin install nikos-planning@nikos`) and
+  use `nikos planning bet new`: bets now live in `planning/bets/`, and the
+  story map names the bets each release delivers (`bets:` on a release,
+  `story_bets:` for one story) instead of each bet listing its stories. See
+  [docs/planning.md](docs/planning.md) and [tools/planning](tools/planning).
+
+### Added
+
+- The Planning pack (`tools/planning/`, `nikos-planning`): key results with
+  check-ins, bet cards with review decisions, delivery status worked out
+  from the story map, upstream plans from other repos, a local dashboard
+  with safe edits, custom views and read-only snapshots.
+- `bets:` on releases and `story_bets:` in `storymap.yaml`, checked by
+  `nikos validate`; `nikos show` lists a story's bets and where they came from.
+- `nikos map`: a read-only story map page.

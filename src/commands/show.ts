@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { STORY_ID, findIntentDir, read, rel, walk } from "../lib/project.js";
+import { STORY_ID, findIntentDir, read, rel } from "../lib/project.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
-import { parseBet } from "./bet.js";
+import { parseFrontMatter } from "../lib/frontmatter.js";
+import { BET_ID, betsFor } from "../lib/bets.js";
 import { decisionEntries } from "./decisions.js";
 
 const yamlFile = (path: string) => (existsSync(path) ? parse(read(path)) : undefined);
@@ -48,16 +49,15 @@ export function show(story: string, dir: string): string {
   out.push("");
   if (versions.length) {
     const v = versions.at(-1)!;
-    const plan = parseBet(read(join(intentDir, "plans", `${story}.v${v}.md`)));
+    const plan = parseFrontMatter(read(join(intentDir, "plans", `${story}.v${v}.md`)));
     out.push(`Plan: v${v} (intent/plans/${story}.v${v}.md)${plan?.meta?.summary ? ` — ${plan.meta.summary}` : ""}`);
   } else {
     out.push("Plan: none yet");
   }
 
-  const bets = walk(join(intentDir, "bets"), ".md")
-    .map((p) => parseBet(read(p))?.meta)
-    .filter((m) => Array.isArray(m?.stories) && m.stories.includes(story));
-  out.push(bets.length ? `Bets: ${bets.map((b) => `${b.id} (${b.status}, ends ${b.time_box}, intent/bets/${b.id}.md)`).join(", ")}` : "Bets: none");
+  const { bets, from, release: rn } = betsFor(map, story);
+  const where = (b: string) => (BET_ID.test(b) ? `${b} (planning/bets/${b}.md)` : b);
+  out.push(bets.length ? `Bets: ${bets.map(where).join(", ")} — from ${from === "story" ? "the story" : `release ${rn}`}` : "Bets: none");
 
   const decisions = decisionEntries(dir).filter((e) => e.title.includes(`(${story})`));
   out.push(decisions.length ? "Decisions:" : "Decisions: none recorded for this story");
