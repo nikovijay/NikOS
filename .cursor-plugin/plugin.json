@@ -6,5 +6,7 @@
   "homepage": "https://nikos.tools",
   "repository": "https://github.com/nikovijay/NikOS",
   "license": "MIT",
+  "keywords": ["spec-driven", "cucumber", "gherkin", "story-map", "skills"],
+  "logo": "assets/icon.svg",
   "skills": "./skills/"
 }
