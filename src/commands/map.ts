@@ -15,6 +15,8 @@ export interface MapStory {
   id: string;
   title: string;
   activity: string;
+  /** The step within the activity, or "" when the story has none. */
+  step: string;
   status: string;
   blocked: boolean;
   priority: string;
@@ -26,12 +28,13 @@ export interface MapStory {
 export interface MapRelease {
   number: number;
   title: string;
+  goal: string;
   bets: string[];
   stories: MapStory[];
 }
 export interface StoryMap {
   project: string;
-  activities: { id: string; title: string }[];
+  activities: { id: string; title: string; steps: { id: string; title: string }[] }[];
   releases: MapRelease[];
   /** Stories with a feature file that no release names. */
   unreleased: MapStory[];
@@ -67,6 +70,7 @@ function featureStory(text: string, id: string): Omit<MapStory, "status" | "bloc
     id,
     title: lines[0]?.trim() || id,
     activity: /@activity-([a-z0-9-]+)/.exec(head)?.[1] ?? "",
+    step: /@step-([a-z0-9-]+)/.exec(head)?.[1] ?? "",
     priority: PRIORITY.exec(head)?.[1] ?? "",
     effort: /@effort-([A-Za-z0-9]+)/.exec(head)?.[1] ?? "",
     narrative: narrative.map((l, i) => (i ? l.replace(/^So that\b/, "so that") : l)).join(", "),
@@ -88,17 +92,22 @@ export function storyMapOf(dir: string): StoryMap {
     features.set(id, { ...featureStory(text, id), ...stateOf(id) });
   }
   const story = (id: string): MapStory =>
-    features.get(id) ?? { id, title: id, activity: "", priority: "", effort: "", narrative: "", criteria: [], ...stateOf(id) };
+    features.get(id) ?? { id, title: id, activity: "", step: "", priority: "", effort: "", narrative: "", criteria: [], ...stateOf(id) };
   const releases: MapRelease[] = (Array.isArray(map.releases) ? map.releases : []).map((r: any) => ({
     number: Number(r.number),
     title: String(r.title ?? `Release ${r.number}`),
+    goal: String(r.goal ?? ""),
     bets: Array.isArray(r.bets) ? r.bets.map(String) : [],
     stories: (Array.isArray(r.stories) ? r.stories : []).map((s: unknown) => story(String(s))),
   }));
   const placed = new Set(releases.flatMap((r) => r.stories.map((s) => s.id)));
   return {
     project: String(map.project ?? ""),
-    activities: (Array.isArray(map.activities) ? map.activities : []).map((a: any) => ({ id: String(a.id), title: String(a.title ?? a.id) })),
+    activities: (Array.isArray(map.activities) ? map.activities : []).map((a: any) => ({
+      id: String(a.id),
+      title: String(a.title ?? a.id),
+      steps: (Array.isArray(a.steps) ? a.steps : []).map((st: any) => ({ id: String(st.id), title: String(st.title ?? st.id) })),
+    })),
     releases,
     unreleased: [...features.values()].filter((s) => !placed.has(s.id)),
   };
@@ -117,11 +126,19 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** The whole story map as one standalone HTML page. */
 export function renderMap(dir: string): string {
   const m = storyMapOf(dir);
+  // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
   const known = new Set(m.activities.map((a) => a.id));
   const everything = [...m.releases.flatMap((r) => r.stories), ...m.unreleased];
-  // Stories whose activity isn't on the map share one "Other" column.
-  const columns = [...m.activities, ...(everything.some((s) => !known.has(s.activity)) ? [{ id: "", title: "Other" }] : [])];
-  const columnOf = (s: MapStory) => (known.has(s.activity) ? s.activity : "");
+  const groups = [
+    ...m.activities,
+    ...(everything.some((s) => !known.has(s.activity)) ? [{ id: "", title: "Other", steps: [] as { id: string; title: string }[] }] : []),
+  ].map((a) => ({ ...a, columns: a.steps.length ? a.steps.map((st) => ({ key: `${a.id}/${st.id}`, label: `${a.title} · ${st.title}` })) : [{ key: `${a.id}/`, label: a.title }] }));
+  const columns = groups.flatMap((g) => g.columns);
+  const columnOf = (s: MapStory) => {
+    const g = groups.find((x) => x.id === (known.has(s.activity) ? s.activity : ""))!;
+    return g.columns.find((c) => c.key === `${g.id}/${s.step}`)?.key ?? g.columns[0].key;
+  };
+  const hasSteps = m.activities.some((a) => a.steps.length);
   const card = (s: MapStory) => {
     const st = statusOf(s);
     const musts = s.criteria.filter((c) => c.priority === "must").length;
@@ -136,21 +153,27 @@ export function renderMap(dir: string): string {
     const blocked = n((s) => s.blocked);
     return parts.join(" · ") + (blocked ? ` · <span class="warn">${blocked} blocked</span>` : "");
   };
-  const band = (id: string, code: string, heading: string, bets: string[], stories: MapStory[]) => {
+  const band = (id: string, code: string, heading: string, goal: string, bets: string[], stories: MapStory[]) => {
     const shipped = stories.length > 0 && stories.every((s) => s.status === "done");
     const chips = bets.map((b) => `<span class="bet">${esc(b)}</span>`).join("");
     const cells = columns
-      .map((c) => `<div class="cell" data-activity="${esc(c.title)}">${stories.filter((s) => columnOf(s) === c.id).map(card).join("")}</div>`)
+      .map((c) => `<div class="cell" data-activity="${esc(c.label)}">${stories.filter((s) => columnOf(s) === c.key).map(card).join("")}</div>`)
       .join("");
     return `<section class="band" id="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
       shipped ? `<span class="stamp">Shipped</span>` : ""
     }<span class="tally">${stories.length ? tally(stories) : "no stories"}</span><span class="rule"></span></div>${
+      goal ? `<p class="goal">${esc(goal)}</p>` : ""
+    }${
       chips ? `<div class="bets"><span class="eyebrow">Delivers</span>${chips}</div>` : ""
     }${stories.length ? `<div class="lane">${cells}</div>` : `<p class="empty">No stories yet.</p>`}</section>`;
   };
-  const bands = m.releases.map((r) => band(`release-${r.number}`, pad(r.number), `Release ${r.number} · ${r.title}`, r.bets, r.stories)).join("");
-  const unreleased = m.unreleased.length ? band("unreleased", "--", "Not in a release", [], m.unreleased) : "";
-  const spine = `<div class="spine">${columns.map((c) => `<div class="activity"><span class="eyebrow">Activity</span><strong>${esc(c.title)}</strong></div>`).join("")}</div>`;
+  const bands = m.releases.map((r) => band(`release-${r.number}`, pad(r.number), `Release ${r.number} · ${r.title}`, r.goal, r.bets, r.stories)).join("");
+  const unreleased = m.unreleased.length ? band("unreleased", "--", "Not in a release", "", [], m.unreleased) : "";
+  const spine = `<div class="spine"><div class="activities">${groups
+    .map((g) => `<div class="activity" style="--span:${g.columns.length}"><span class="eyebrow">Activity</span><strong>${esc(g.title)}</strong></div>`)
+    .join("")}</div>${
+    hasSteps ? `<div class="steps">${groups.map((g) => (g.steps.length ? g.steps.map((st) => `<div class="step">${esc(st.title)}</div>`).join("") : `<div class="step none"></div>`)).join("")}</div>` : ""
+  }</div>`;
   const jumps = [
     ...m.releases.map((r) => `<a class="jump" href="#release-${r.number}"><span class="rcode">R${r.number}</span>${esc(r.title)}<span class="count">${r.stories.length}</span></a>`),
     ...(m.unreleased.length ? [`<a class="jump" href="#unreleased">Not in a release<span class="count">${m.unreleased.length}</span></a>`] : []),
@@ -204,8 +227,12 @@ h1 { font-size: 15px; margin: 0; }
 .rcode, .count { font-size: 11px; color: var(--muted); }
 main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); background-image: linear-gradient(rgba(26,26,24,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(26,26,24,.06) 1px, transparent 1px); background-size: 24px 24px; background-attachment: local; }
 .board { width: max-content; min-width: 100%; padding: 0 24px 48px; }
-.spine { position: sticky; top: 0; z-index: 3; display: flex; gap: var(--gap); padding: 24px 0 4px; background: var(--paper); }
-.activity { width: var(--col); display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-top: 2px solid var(--brand); border-radius: 4px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(60,50,30,.06); }
+.spine { position: sticky; top: 0; z-index: 3; padding: 24px 0 4px; background: var(--paper); }
+.activities, .steps { display: flex; gap: var(--gap); }
+.steps { margin-top: 8px; }
+.step { width: var(--col); min-height: 32px; border-radius: 4px; background: var(--brand-subtle); padding: 7px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.step.none { background: none; }
+.activity { width: calc(var(--span, 1) * var(--col) + (var(--span, 1) - 1) * var(--gap)); display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-top: 2px solid var(--brand); border-radius: 4px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(60,50,30,.06); }
 .activity strong { font-size: 13px; }
 .band { scroll-margin-top: 90px; }
 .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 10px; }
@@ -214,6 +241,7 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 .tally { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .rule { flex: 1; border-top: 1px solid var(--line); min-width: 24px; }
 .stamp { display: inline-block; transform: rotate(-3deg); color: var(--stamp); border: 2px solid var(--stamp); box-shadow: inset 0 0 0 1px rgba(220,38,38,.45); padding: .15rem .5rem; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .85; mix-blend-mode: multiply; }
+.goal { margin: -4px 0 10px; color: var(--ink-2); max-width: 720px; }
 .bets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 10px; }
 .bet { font-size: 12px; padding: 2px 9px; border-radius: 99px; background: var(--brand-subtle); color: var(--brand); }
 .lane { display: flex; gap: var(--gap); }

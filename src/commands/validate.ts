@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
-import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
+import { featureStoryIds, featureTag, findIntentDir, read, rel, walk } from "../lib/project.js";
 
 export interface Issue {
   file: string;
@@ -96,8 +96,18 @@ export function validate(start: string): ValidationResult {
   // Cross-file checks only when both files parsed into objects.
   const mapStories = new Map<string, number>();
   const activityIds = new Set<string>();
+  // Each step id names its activity; ids are unique across the map so a @step tag is enough.
+  const stepActivity = new Map<string, string>();
   if (storymap && typeof storymap === "object") {
-    for (const a of storymap.activities ?? []) activityIds.add(a?.id);
+    for (const a of storymap.activities ?? []) {
+      activityIds.add(a?.id);
+      for (const st of a?.steps ?? []) {
+        if (stepActivity.has(st?.id)) {
+          errors.push({ file: "storymap.yaml", message: `step '${st.id}' appears more than once`, hint: "give each step an id of its own across the map" });
+        }
+        stepActivity.set(st?.id, a?.id);
+      }
+    }
     const numbers: number[] = [];
     for (const r of storymap.releases ?? []) {
       numbers.push(r?.number);
@@ -151,6 +161,16 @@ export function validate(start: string): ValidationResult {
     }
     if (storymap && !mapStories.has(id)) {
       errors.push({ file, message: `${id} is not in any release in storymap.yaml` });
+    }
+    const step = featureTag(text, "step");
+    if (step && storymap) {
+      const owner = stepActivity.get(step);
+      if (!owner) errors.push({ file, message: `@step-${step} is not a step in storymap.yaml`, hint: "add it under the activity's steps, or fix the tag" });
+      else if (owner !== activity) errors.push({ file, message: `@step-${step} belongs to activity '${owner}', not '${activity}'` });
+    }
+    const release = featureTag(text, "release");
+    if (release && mapStories.has(id) && Number(release) !== mapStories.get(id)) {
+      warnings.push({ file, message: `is tagged @release-${release} but storymap.yaml puts ${id} in release ${mapStories.get(id)}`, hint: `move it with nikos release move ${id} <n>, which keeps both in step` });
     }
   }
 

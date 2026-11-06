@@ -62,7 +62,7 @@ it"); the playbooks run these steps and stop at each point that needs you.
 ```text
 intent/
 ├── constitution.md      who it's for, the problem, what proves it works
-├── storymap.yaml        activities, releases, and the order to build stories in
+├── storymap.yaml        activities and steps, releases, and the order to build stories in
 ├── state.yaml           each story's status: todo, in_progress, needs_rework, done
 ├── decisions.md         why things are the way they are, append-only
 ├── features/            one .feature file per story; its scenarios are the criteria
@@ -81,6 +81,8 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos init` | Create `intent/` in this repo |
 | `nikos validate` | Check `intent/` is well formed |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature |
+| `nikos step add "<title>"` | Add a step under an activity |
+| `nikos release add\|rename\|move\|reorder` | Define releases and move stories between them, keeping feature tags in step |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
