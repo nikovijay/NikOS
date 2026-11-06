@@ -268,7 +268,7 @@ async function route(root: string, token: string, port: number, req: IncomingMes
 function serveGet(root: string, token: string, path: string, res: ServerResponse) {
   if (path === "/") return send(res, 200, renderDashboard({ data: planningData(root), token, readOnly: false }), HTML);
   if (path === "/api/data") return send(res, 200, planningData(root));
-  if (path === "/map") return send(res, 200, renderMap(root), HTML);
+  if (path === "/map") return send(res, 200, renderMap(root, { live: true }), HTML);
   if (path === "/nikos-view.js") return send(res, 200, VIEW_SCRIPT, JS);
   const m = /^\/views\/([^/]+)$/.exec(path);
   if (m && VIEW_NAME.test(m[1])) {
