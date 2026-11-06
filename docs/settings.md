@@ -62,6 +62,9 @@ a README with the line each department or team runs to join. Ask your agent to
 settings, the tracker, this period's objectives, creating the repo (only on
 your yes), and the join line to share.
 
+To see which departments and teams have joined, and how they're doing, run
+`nikos planning rollout` in the company repo ([planning.md](planning.md)).
+
 ## Joining a company or department plan
 
 ```

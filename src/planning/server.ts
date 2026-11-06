@@ -13,6 +13,7 @@ import { editBet, reviewBet } from "./bets.js";
 import { delivery, describeDelivery } from "./delivery.js";
 import { checkIn, isStale, latest, progress } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
+import { rollout } from "./rollout.js";
 import { loadUpstream } from "./upstream.js";
 import { renderDashboard } from "./ui.js";
 
@@ -175,6 +176,8 @@ export function planningData(root: string) {
     bets,
     story: { activities: story.activities, releases: story.releases, unreleased: story.unreleased },
     upstream,
+    // The plans below this one, from the copies the last rollout fetched: loading never fetches.
+    downstream: existsSync(join(root, "planning", "downstream.yaml")) ? rollout(root, { offline: true }) : null,
     views,
     problems,
   };
@@ -183,13 +186,13 @@ export function planningData(root: string) {
 /** Write the whole dashboard as one offline HTML file. Warns first when other repos' plans are inside. */
 export function exportSnapshot(root: string, file: string): { wrote: string; warned: boolean } {
   const out = resolve(file);
-  const upstream = loadUpstream(root);
-  const warned = upstream.length > 0;
+  const data = planningData(root);
+  const names = [...loadUpstream(root).map((u) => u.repo), ...(data.downstream?.plans ?? []).filter((p) => p.repo && p.state !== "unreachable").map((p) => p.repo!)];
+  const warned = names.length > 0;
   if (warned) {
-    const names = upstream.map((u) => u.repo).join(", ");
-    process.stderr.write(`! This snapshot includes plans from other repos (${names}); share it only with people allowed to see them.\n`);
+    process.stderr.write(`! This snapshot includes plans from other repos (${names.join(", ")}); share it only with people allowed to see them.\n`);
   }
-  writeFileSync(out, renderDashboard({ data: planningData(root), readOnly: true }));
+  writeFileSync(out, renderDashboard({ data, readOnly: true }));
   return { wrote: out, warned };
 }
 

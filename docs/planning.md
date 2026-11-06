@@ -12,6 +12,7 @@ planning/
   bets/<bet-id>.md       bet cards
   upstream.yaml          optional: plans in other repos this one works toward
   upstream.lock          written by `nikos planning sync`
+  downstream.yaml        optional: departments and teams that plan against this one
   views/<name>.html      optional: custom dashboard views
 ```
 
@@ -128,6 +129,39 @@ carries on. `nikos planning sync --check` says whether an upstream has moved
 past its locked commit. This repo only stores references like
 `acme/company-plan#kr-2` or `acme/product/payments-plan#faster-checkout`, never
 upstream content.
+
+## downstream.yaml and the rollout
+
+**Purpose:** the departments and teams that plan against this one, so a
+company or department can see how the rollout is going.
+
+```yaml
+- name: Payments
+  repo: acme/payments-plan
+- name: Growth                        # no repo yet
+- name: Checkout
+  repo: acme/product/checkout
+  host: gitlab.com
+```
+
+Entries take the same `repo`, `ref`, `host` and `url` as `upstream.yaml`.
+`nikos company init --departments` writes the names; `nikos planning
+downstream add "<name>" --repo <path>` adds one or gives it its repo.
+
+`nikos planning rollout` clones each listed repo read-only into
+`.nikos/downstream/<repo>/` (gitignored), follows the plans each one lists in
+its own `downstream.yaml`, and reports for each:
+
+- **joined**: whether its `upstream.yaml` names this plan (this repo's path comes
+  from its origin remote, or `--as <path>`)
+- **synced**: when it last ran `nikos planning sync`, and whether it read this
+  repo's current commit
+- **delivery**: stories done, approved and in progress, from its story map
+- its key results and bets, and what each one points at
+
+`--json` gives the same as data, and `--offline` reads the copies already
+fetched. The dashboard's Rollout tab shows the last fetch and never fetches on
+its own. A repo it can't reach is reported as unreachable and the rest carry on.
 
 ## views/&lt;name&gt;.html
 

@@ -131,6 +131,7 @@ function render() {
   else if (p[0] === 'bets') html = betsView();
   else if (p[0] === 'timeline') html = timelineView();
   else if (p[0] === 'guide') html = guideView();
+  else if (p[0] === 'rollout') html = rolloutView();
   else html = krsView();
   main.innerHTML = (D.problems && D.problems.length ? '<div class="notice">Some planning files could not be read: ' + esc(D.problems.join('; ')) + '</div>' : '') + html;
 }
@@ -176,6 +177,30 @@ function guideView() {
     '<div class="panel"><h3>One plan per level, each in its own repo</h3><div class="alts">' + stack + '</div></div>' +
     '<div class="panel"><h3>The loop</h3><ol class="steps">' + steps + '</ol></div>' +
     '<h2 style="margin:20px 0 10px">What nikOS adds</h2><div class="cards">' + value + '</div>';
+}
+
+function rolloutView() {
+  var r = D.downstream;
+  if (!r || !r.plans.length) return '<h1>Rollout</h1><p class="muted">No plans below this one yet. List departments and teams in planning/downstream.yaml.</p>';
+  var joined = r.plans.filter(function (p) { return p.state === 'joined'; }).length;
+  var cls = { 'joined': 'green', 'not joined': 'amber', 'unreachable': '', 'no repo yet': '' };
+  var cards = r.plans.map(function (p) {
+    var rows = [];
+    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + (p.synced.current === false ? ', behind this plan' : ''));
+    else if (p.state === 'joined') rows.push('Not synced yet');
+    if (p.delivery) {
+      var pct = p.delivery.stories ? Math.round(p.delivery.done / p.delivery.stories * 100) : 0;
+      rows.push(esc(p.delivery.done) + ' of ' + esc(p.delivery.stories) + ' stories done' + (p.delivery.approved ? ', ' + esc(p.delivery.approved) + ' approved' : '') + '<div class="progress"><div style="width:' + pct + '%"></div></div>');
+    }
+    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (k.stale ? ' ' + chip('Stale', 'amber') : '') + (k.aligns_to ? ' <span class="muted">→ ' + esc(k.aligns_to) + '</span>' : '') + '</li>'; })
+      .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + '</li>'; }));
+    return '<div class="card"><div class="row"><strong>' + esc(p.name) + '</strong>' + chip(p.state, cls[p.state] || '') + '</div>' +
+      '<div class="muted">' + esc(p.repo || 'no repo yet') + (p.via ? ' · below ' + esc(p.via) : '') + (p.fetched ? ' · read ' + esc(p.fetched) : '') + '</div>' +
+      (p.reason ? '<div class="muted" style="margin-top:6px">' + esc(p.reason) + '</div>' : '') +
+      rows.map(function (x) { return '<div style="margin-top:8px">' + x + '</div>'; }).join('') +
+      (refs.length ? '<ul class="checkins" style="margin-top:8px">' + refs.join('') + '</ul>' : '') + '</div>';
+  }).join('');
+  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p><div class="cards">' + cards + '</div>';
 }
 
 function krCard(k) {
@@ -414,7 +439,7 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
   const live = !readOnly;
   const json = JSON.stringify(data).replace(/[<\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const nav =
-    `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a><a data-nav="guide" href="#/guide">How it works</a>`;
+    `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a>${data.downstream ? `<a data-nav="rollout" href="#/rollout">Rollout</a>` : ""}<a data-nav="guide" href="#/guide">How it works</a>`;
   // The link out appears only in the served dashboard: an export is a closed file with no outside links.
   const links = live
     ? `<div class="links"><a href="https://www.nikovijay.com/connect?from=nikos-planning" target="_blank" rel="noopener">Made by Niko Vijay</a></div>\n`
