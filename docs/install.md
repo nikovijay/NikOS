@@ -32,6 +32,10 @@ add the marketplace first, then install:
 From a terminal, the same commands are `claude plugin marketplace add
 nikovijay/NikOS` and `claude plugin install nikos@nikos`.
 
+At the start of each session in a repo with a story map, the plugin's hook
+(`hooks/hooks.json`) tells the agent where things stand and what to suggest
+next.
+
 ## Codex
 
 ```
@@ -41,6 +45,14 @@ codex plugin marketplace add nikovijay/NikOS
 Then install nikOS from the Plugins directory. Update it later with `codex
 plugin marketplace upgrade`.
 
+The plugin ships the same session-start hook as Claude Code
+(`hooks/hooks.json`). Codex runs a plugin's hooks only after you review and
+trust them, and asks again when they change. Until you trust it, nikOS works
+without it: the agent runs `nikos suggest` itself after each request. Codex's
+docs say plugin hooks run for plugins installed manually in the Codex desktop
+app, and that plugins with hooks can't be listed in its public plugin
+directory.
+
 ## Cursor
 
 Cursor installs plugins from a marketplace in its settings rather than a
@@ -49,6 +61,11 @@ then Add Marketplace, then Import from Repo), and install nikOS from it.
 
 To try it without a marketplace, copy the repo to
 `~/.cursor/plugins/local/nikos` and run "Developer: Reload Window".
+
+The plugin's `sessionStart` hook (`hooks/cursor-hooks.json`) adds where things
+stand and what to suggest next to each new conversation, in a repo with a story
+map. Cursor runs it without waiting, so on a slow first run (while `npx` fetches
+nikos) it can land after your first message. It doesn't run in cloud agents.
 
 ## Packs
 
@@ -126,6 +143,12 @@ name fields again on 2026-11-05 (no page showed a version):
 - Codex: https://developers.openai.com/plugins/build/plugins. The plugin
   title is `interface.displayName` in `.codex-plugin/plugin.json`. The
   marketplace title is the same field on `.agents/plugins/marketplace.json`.
+- Hooks, read on 2026-11-06: Cursor's https://cursor.com/docs/agent/hooks
+  (`sessionStart`, JSON output with `additional_context`, `timeout` in seconds;
+  a plugin points at its hooks with `hooks` in `.cursor-plugin/plugin.json`),
+  and Codex's plugin page above and https://learn.chatgpt.com/docs/hooks
+  (`SessionStart`, the same format as Claude Code, plain stdout added as
+  context, hooks run only once trusted).
 
 All three find skills as `skills/<name>/SKILL.md` at the plugin root.
 `test/install.test.ts` checks the manifests agree with each other and with

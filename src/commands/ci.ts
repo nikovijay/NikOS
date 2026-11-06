@@ -1,6 +1,10 @@
 // `nikos ci setup`: run nikOS's checks on every pull request (GitHub) or merge request (GitLab).
 // The pipeline runs `nikos validate` and every story's scenarios with `nikos verify`, using the
 // nikos version that wrote it, so a red pipeline means the specs or the code broke, not nikos.
+// A second, run-on-demand pipeline checks a release is ready to ship (nikos release check <n>
+// --run): it fails while a story isn't done, its spec changed, or (when approval.policy is
+// required-for-release) a story isn't approved. It's started by hand, with the release number,
+// rather than on every change, because a release in progress is never ready.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,13 +27,46 @@ export function detectHost(root: string): Host | undefined {
   return undefined;
 }
 
+/** The shell steps that install the project and its scenario runner, for a stack. */
+const install = (stack: Stack, root: string): string[] =>
+  stack === "python"
+    ? [existsSync(join(root, "requirements.txt")) ? "pip install -r requirements.txt" : "", "pip install behave"].filter(Boolean)
+    : [existsSync(join(root, "package-lock.json")) ? "npm ci" : "npm install"];
+
 /** The shell steps that install the runner and run the checks, for a stack. */
 function steps(stack: Stack, root: string, nikos: string): string[] {
-  const install =
-    stack === "python"
-      ? [existsSync(join(root, "requirements.txt")) ? "pip install -r requirements.txt" : "", "pip install behave"].filter(Boolean)
-      : [existsSync(join(root, "package-lock.json")) ? "npm ci" : "npm install"];
-  return [...install, `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
+  return [...install(stack, root), `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
+}
+
+/** The release check, run by hand with the release number. RELEASE comes in as an env var, never pasted into the script. */
+const releaseSteps = (stack: Stack, root: string, nikos: string, variable: string) => [...install(stack, root), `npx -y ${nikos} release check "$${variable}" --run`];
+
+export function githubReleaseWorkflow(stack: Stack, root: string): string {
+  const nikos = `nikos@${version()}`;
+  const python = stack === "python" ? `      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.12"\n` : "";
+  return `# Written by nikos ci setup: checks a release is ready to ship. Run it from the Actions tab
+# (Run workflow) with the release number. It fails while a story isn't done, a spec changed
+# after done, or a story needs an approval it doesn't have.
+name: nikos release check
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: The release number to check
+        required: true
+        type: number
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE: \${{ inputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+${python}${releaseSteps(stack, root, nikos, "RELEASE").map((s) => `      - run: ${s}`).join("\n")}
+`;
 }
 
 export function githubWorkflow(stack: Stack, root: string): string {
@@ -66,6 +103,15 @@ nikos:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
 ${[...setup, ...steps(stack, root, nikos)].map((s) => `    - ${s}`).join("\n")}
+
+# Checks a release is ready to ship. Run a pipeline by hand (Build > Pipelines > New pipeline)
+# with the variable NIKOS_RELEASE set to the release number.
+nikos-release:
+  image: ${image}
+  rules:
+    - if: $NIKOS_RELEASE
+  script:
+${[...setup, ...releaseSteps(stack, root, nikos, "NIKOS_RELEASE")].map((s) => `    - ${s}`).join("\n")}
 `;
 }
 
@@ -97,17 +143,22 @@ export function setupCi(root: string, opts: { host?: Host } = {}): CiResult {
   };
   if (host === "github") {
     write(".github/workflows/nikos.yml", githubWorkflow(stack, root));
+    write(".github/workflows/nikos-release.yml", githubReleaseWorkflow(stack, root));
     return { host, created, skipped };
   }
   // GitLab reads one .gitlab-ci.yml, so the job lives in its own file and is included from it.
   write(GITLAB_JOB, gitlabJob(stack, root));
+  // A job file from before the release check: say what to add rather than rewrite it.
+  const old = skipped.includes(GITLAB_JOB) && !readFileSync(join(root, GITLAB_JOB), "utf8").includes("nikos-release:");
+  const releaseTodo = old ? `Add the release check job to ${GITLAB_JOB}:\n${gitlabJob(stack, root).slice(gitlabJob(stack, root).indexOf("# Checks a release"))}` : undefined;
   const main = join(root, ".gitlab-ci.yml");
   if (!existsSync(main)) {
     write(".gitlab-ci.yml", INCLUDE);
-    return { host, created, skipped };
+    return { host, created, skipped, ...(releaseTodo ? { todo: releaseTodo } : {}) };
   }
   const included = readFileSync(main, "utf8").includes(GITLAB_JOB);
-  return { host, created, skipped, todo: included ? undefined : `Add this to .gitlab-ci.yml:\n${INCLUDE}` };
+  const todo = [included ? "" : `Add this to .gitlab-ci.yml:\n${INCLUDE}`, releaseTodo ?? ""].filter(Boolean).join("\n");
+  return { host, created, skipped, ...(todo ? { todo } : {}) };
 }
 
 export function runCi(args: string[]): number {
@@ -125,6 +176,11 @@ export function runCi(args: string[]): number {
     if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
     if (r.todo) console.log(`\n${r.todo}`);
     console.log(`\nEvery ${r.host === "github" ? "pull request" : "merge request"} now runs nikos validate and every story's scenarios.`);
+    console.log(
+      r.host === "github"
+        ? "To check a release is ready to ship, run the \"nikos release check\" workflow from the Actions tab with its number."
+        : "To check a release is ready to ship, run a pipeline by hand with NIKOS_RELEASE set to its number.",
+    );
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

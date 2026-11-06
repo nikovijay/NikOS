@@ -48,6 +48,7 @@ install. More in [docs/install.md](docs/install.md).
 
 You don't need to learn the commands. Your agent runs them and, after each
 request, says where things stand and offers a short menu of what to do next.
+In Claude Code, Codex and Cursor, it also does this when a session starts.
 Things you can say:
 
 - "Set up nikOS here", or "Map what this repo already does"
@@ -113,7 +114,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
-| `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI) |
+| `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |

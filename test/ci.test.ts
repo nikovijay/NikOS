@@ -27,11 +27,37 @@ describe("ci setup", () => {
 
   it("writes a GitHub workflow that runs validate and every scenario with this nikos version", () => {
     const root = repo({ "package.json": "{}", "package-lock.json": "{}" }, "git@github.com:acme/app.git");
-    expect(setupCi(root)).toEqual({ host: "github", created: [".github/workflows/nikos.yml"], skipped: [] });
+    expect(setupCi(root)).toEqual({ host: "github", created: [".github/workflows/nikos.yml", ".github/workflows/nikos-release.yml"], skipped: [] });
     const wf = parse(read(root, ".github/workflows/nikos.yml"));
     expect(Object.keys(wf.on)).toEqual(["pull_request", "push"]);
     expect(wf.jobs.nikos.steps.map((s: any) => s.run).filter(Boolean)).toEqual(["npm ci", `npx -y nikos@${version} validate`, `npx -y nikos@${version} verify`]);
-    expect(setupCi(root).skipped).toEqual([".github/workflows/nikos.yml"]);
+    expect(setupCi(root).skipped).toEqual([".github/workflows/nikos.yml", ".github/workflows/nikos-release.yml"]);
+  });
+
+  it("adds a release check that's run by hand with the release number, never pasted into the script", () => {
+    const root = repo({ "package.json": "{}" }, "git@github.com:acme/app.git");
+    setupCi(root);
+    const wf = parse(read(root, ".github/workflows/nikos-release.yml"));
+    expect(Object.keys(wf.on)).toEqual(["workflow_dispatch"]);
+    expect(wf.on.workflow_dispatch.inputs.release).toMatchObject({ required: true, type: "number" });
+    expect(wf.jobs["release-check"].env).toEqual({ RELEASE: "${{ inputs.release }}" });
+    expect(wf.jobs["release-check"].steps.map((s: any) => s.run).filter(Boolean)).toEqual(["npm install", `npx -y nikos@${version} release check "$RELEASE" --run`]);
+
+    const lab = repo({ "package.json": "{}" }, "https://gitlab.com/acme/app.git");
+    setupCi(lab);
+    const job = parse(read(lab, ".gitlab/ci/nikos.yml"))["nikos-release"];
+    expect(job.rules).toEqual([{ if: "$NIKOS_RELEASE" }]);
+    expect(job.script).toEqual(["npm install", `npx -y nikos@${version} release check "$NIKOS_RELEASE" --run`]);
+  });
+
+  it("says what to add to a GitLab job file written before the release check", () => {
+    const root = repo({ "package.json": "{}" }, "https://gitlab.com/acme/app.git");
+    setupCi(root);
+    const file = join(root, ".gitlab/ci/nikos.yml");
+    writeFileSync(file, read(root, ".gitlab/ci/nikos.yml").slice(0, read(root, ".gitlab/ci/nikos.yml").indexOf("\n# Checks a release")));
+    const r = setupCi(root);
+    expect(r.todo).toMatch(/^Add the release check job to \.gitlab\/ci\/nikos\.yml:\n# Checks a release/);
+    expect(r.todo).toContain("nikos-release:");
   });
 
   it("writes a GitLab job for merge requests and includes it, for a Python repo", () => {
