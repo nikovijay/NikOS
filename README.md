@@ -117,6 +117,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
+| `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |

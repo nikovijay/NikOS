@@ -13,6 +13,7 @@ import { runSuggest } from "./commands/suggest.js";
 import { runMcp } from "./mcp/server.js";
 import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
+import { runTracker } from "./commands/tracker.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -39,6 +40,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   join: runJoin,
   settings: runSettings,
   doctor: runDoctor,
+  tracker: runTracker,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -86,6 +88,8 @@ Commands:
   settings [set <key> <value>]  See the settings that apply here and where each comes
                    from, or change one this repo is allowed to
   doctor           Check this repo is set up well, and say what to do next (--offline)
+  tracker link|record|sync|import  Keep the story map and a Jira, Linear, GitHub or GitLab
+                   tracker in step; the agent reads tickets through the tracker's MCP
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and
                    other apps (--dir <repo>)
   decide "<title>" Append a decision to decisions.md

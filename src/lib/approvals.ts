@@ -10,7 +10,7 @@ export interface Approval {
   by: string;
   on: string;
   /** How it was given: typed in a terminal, answered in a chat with an agent, or asked by nikos mcp through the person's app. */
-  via?: "terminal" | "chat" | "app";
+  via?: "terminal" | "chat" | "app" | "tracker";
   /** The feature fingerprint that was approved. */
   spec_hash: string;
   /** Which time the story reached done: going through done again needs a new approval. */
