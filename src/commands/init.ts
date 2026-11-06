@@ -60,10 +60,16 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   return { intentDir, created, skipped, validation: validate(intentDir) };
 }
 
+const EXAMPLES: Record<string, string> = { name: '"Hello Todo"', key: "HT", dir: "." };
+
 export function runInit(args: string[]): number {
   const opt = (n: string) => {
     const i = args.indexOf(`--${n}`);
-    return i >= 0 ? args[i + 1] : undefined;
+    if (i < 0) return undefined;
+    const value = args[i + 1];
+    // Without this, a bare --name falls back to the folder name and the key changes silently.
+    if (value === undefined || value.startsWith("--") || !value.trim()) throw new Error(`--${n} needs a value, e.g. --${n} ${EXAMPLES[n] ?? "<value>"}`);
+    return value;
   };
   try {
     const r = init(opt("dir") ?? process.cwd(), { name: opt("name"), key: opt("key") });
