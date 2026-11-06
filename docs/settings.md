@@ -52,6 +52,16 @@ mcp` asks you directly), in chat (you answered your agent), or in a terminal.
 To make approvals need the right reviewer, protect the main branch and add a
 `CODEOWNERS` rule for `intent/approvals.yaml`. `nikos doctor` checks for it.
 
+## Starting a company plan
+
+`nikos company init --name "Acme" --period "Q1 2027" --departments "Payments, Growth"`
+writes a company plan repo: `planning/plan.yaml`, the `nikos.settings.yaml`
+every level inherits, `planning/downstream.yaml` listing the departments, and
+a README with the line each department or team runs to join. Ask your agent to
+"set nikOS up for our company" and the company playbook walks through it:
+settings, the tracker, this period's objectives, creating the repo (only on
+your yes), and the join line to share.
+
 ## Joining a company or department plan
 
 ```
