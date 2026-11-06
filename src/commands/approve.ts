@@ -4,6 +4,8 @@
 //   without a terminal, so it can't take this route.
 // - chat: the agent asked "Do you want to approve …?" and the person answered Approve. The
 //   playbooks only allow it after that answer; `via: chat` shows it was given that way.
+// - app: nikos mcp asked the person through their app (MCP elicitation), so the model never
+//   saw the question or gave the answer.
 // A repo can go further and protect approvals.yaml with CODEOWNERS, so every approval also
 // needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
@@ -38,7 +40,7 @@ export interface ApproveResult {
 }
 
 /** Check a story can be approved, rerun its scenarios, then record the approval. The terminal check lives in runApprove. */
-export type Via = "terminal" | "chat";
+export type Via = "terminal" | "chat" | "app";
 
 export function approve(story: string, opts: { dir?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
