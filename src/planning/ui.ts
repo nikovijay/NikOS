@@ -78,6 +78,13 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .tbar.awaiting { background: var(--amber); }
 .tbar.closed { background: #7C827B; }
 .today { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--ink); opacity: .45; }
+.alts { display: flex; flex-direction: column; }
+.alt { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.alt.here { border-color: var(--accent); background: var(--accent-soft); }
+.alt.delivery { background: #F6F7F3; }
+.alt .row { margin-bottom: 2px; }
+.alt-arrow { font-size: 12px; color: var(--muted); padding: 4px 12px; }
+.steps { margin: 0; padding-left: 20px; font-size: 14px; color: var(--ink-2); display: grid; gap: 8px; }
 .notice { background: var(--amber-soft); color: var(--amber); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; }
 .toast { position: fixed; right: 20px; bottom: 20px; max-width: 360px; background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; font-size: 14px; }
 .toast.show { opacity: 1; }
@@ -123,11 +130,53 @@ function render() {
   if (p[0] === 'kr' && p[1]) html = krDetail(p[1]);
   else if (p[0] === 'bets') html = betsView();
   else if (p[0] === 'timeline') html = timelineView();
+  else if (p[0] === 'guide') html = guideView();
   else html = krsView();
   main.innerHTML = (D.problems && D.problems.length ? '<div class="notice">Some planning files could not be read: ' + esc(D.problems.join('; ')) + '</div>' : '') + html;
 }
 
 window.addEventListener('hashchange', render);
+
+var LEVELS = [
+  ['company', 'Company', 'Sets the few outcomes that matter most this period, as key results.'],
+  ['department', 'Department', 'Picks key results that move the company ones, and links each one up.'],
+  ['group', 'Group', 'Does the same for its area, aligned to the department.'],
+  ['team', 'Team', 'Makes bets on what will move its key results, and builds them as stories.']
+];
+
+function guideView() {
+  var level = D.plan && D.plan.level ? String(D.plan.level) : '';
+  var ups = (D.upstream || []).map(function (u) { return u.repo; });
+  var here = level
+    ? 'This is a ' + esc(level) + ' plan' + (D.plan.period ? ' for ' + esc(D.plan.period) : '') + (ups.length ? ', working toward ' + ups.map(esc).join(', ') : '') + '.'
+    : 'This repo has no plan.yaml yet. Ask your agent to plan the period and it will set the level.';
+  var stack = LEVELS.map(function (l, i) {
+    return (i ? '<div class="alt-arrow" aria-hidden="true">↑ aligns to, read-only</div>' : '') +
+      '<div class="alt' + (l[0] === level ? ' here' : '') + '"><div class="row"><strong>' + l[1] + '</strong>' + (l[0] === level ? chip('This plan', 'green') : '') +
+      '<span class="muted">its own repo, planning/</span></div><div class="muted">' + l[2] + '</div></div>';
+  }).join('') +
+    '<div class="alt-arrow" aria-hidden="true">↑ delivers bets</div>' +
+    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ in the team repo</span></div><div class="muted">Releases name the bets they deliver. Story status comes from the work itself.</div></div>';
+  var steps = [
+    ['Plan the period', 'Ask your agent to plan the quarter. It asks for the level, pillars, objectives and key results, and shows a draft. Nothing is written until you approve.'],
+    ['Align upward', 'List the plans above you in planning/upstream.yaml. nikos planning sync keeps a read-only copy, so a key result can align to the company one by reference without ever writing to that repo.'],
+    ['Frame bets', 'A bet says what you believe will move a key result, and why, with the evidence. It has a review date, not a deadline.'],
+    ['Deliver through the story map', 'A release in intent/storymap.yaml names the bets it delivers. Delivery status (Not started, Building, Shipped) is worked out from its stories.'],
+    ['Check in', 'Record the key result value as it moves, by chat or here. A key result with no recent check-in is flagged stale.'],
+    ['Review and call the outcome', 'On the review date, continue, change, stop or complete the bet, with the reason. The outcome (won, lost) comes only from key result evidence: shipped is not won.']
+  ].map(function (s, i) { return '<li><strong>' + esc(s[0]) + '.</strong> ' + esc(s[1]) + '</li>'; }).join('');
+  var value = [
+    ['Plans live next to the work', 'Objectives, key results and bets are plain files in the repo, reviewed in pull requests and versioned with the code.'],
+    ['Delivery is never self-reported', 'Whether a bet is building or shipped comes from the story map and its stories, not from a status someone typed.'],
+    ['Outcomes are kept honest', 'A bet is only won when its key result moves. A revised target keeps the original one.'],
+    ['Every level lines up, and nobody loses control', 'Teams align to the plans above by reference. Repo access is the permission model, and no plan writes to another.'],
+    ['Your agent runs the rituals', 'Planning, check-ins and reviews are conversations with your coding agent, with the same checks as the commands.']
+  ].map(function (v) { return '<div class="panel"><h3>' + esc(v[0]) + '</h3><div class="muted">' + esc(v[1]) + '</div></div>'; }).join('');
+  return '<h1>How it works</h1><p class="muted">' + here + '</p>' +
+    '<div class="panel"><h3>One plan per level, each in its own repo</h3><div class="alts">' + stack + '</div></div>' +
+    '<div class="panel"><h3>The loop</h3><ol class="steps">' + steps + '</ol></div>' +
+    '<h2 style="margin:20px 0 10px">What nikOS adds</h2><div class="cards">' + value + '</div>';
+}
 
 function krCard(k) {
   var chips = '';
@@ -365,7 +414,7 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
   const live = !readOnly;
   const json = JSON.stringify(data).replace(/[<\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const nav =
-    `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a>`;
+    `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a><a data-nav="guide" href="#/guide">How it works</a>`;
   // The link out appears only in the served dashboard: an export is a closed file with no outside links.
   const links = live
     ? `<div class="links"><a href="https://www.nikovijay.com/connect?from=nikos-planning" target="_blank" rel="noopener">Made by Niko Vijay</a></div>\n`

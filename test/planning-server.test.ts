@@ -159,6 +159,13 @@ describe("dashboard copy", () => {
     expect(prose("## Why we think so\n\nSeven of ten testers said so.\nAnd more.")).toBe("<h4>Why we think so</h4>Seven of ten testers said so.\nAnd more.");
   });
 
+  test("a How it works page explains the levels and marks this plan's", async () => {
+    const html = await (await fetch(`${base(await start(setup()))}/`)).text();
+    expect(html).toContain('<a data-nav="guide" href="#/guide">How it works</a>');
+    for (const text of ["'Company'", "'Department'", "'Group'", "'Team'", "What nikOS adds", "shipped is not won"]) expect(html).toContain(text);
+    expect(html).toContain("l[0] === level ? chip('This plan', 'green')");
+  });
+
   test("the sidebar ends with one quiet link to Niko's site", async () => {
     const html = await (await fetch(`${base(await start(setup()))}/`)).text();
     const links = html.match(/<div class="links">([\s\S]*?)<\/div>/)?.[1] ?? "";
