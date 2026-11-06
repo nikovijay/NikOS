@@ -89,6 +89,10 @@ themselves live in feature files.
 format_version: 1
 project: hello-todo
 key: HT                     # story id prefix: HT-1, HT-2 …
+personas:                   # optional: who the product is for; a story tags them @persona-<id>
+  - id: busy
+    title: Busy person
+    description: Juggles work and home; opens the app for seconds at a time.   # optional
 activities:
   - id: tasks               # slug, matches the features/<activity>/ folder
     title: Manage tasks
@@ -117,6 +121,11 @@ Rules:
   step on the map.
 - A story's `@release-N` tag should match the release that lists it;
   `nikos validate` warns when they differ.
+- Persona ids are unique, and a story's `@persona-<id>` must name one.
+- A story's `@depends-<id>` must name another story, and dependencies can't
+  form a loop. `nikos validate` warns when a story depends on one in a later
+  release, or on a cancelled one. `nikos next` won't pick a story until
+  everything it depends on is done.
 
 ### Bet links (optional)
 
@@ -155,6 +164,13 @@ keeps comments and leaves the rest of the file as it was:
 | `nikos release move <story-id> <n>` | Move a story to the end of another release and retag its feature |
 | `nikos release reorder <n> <position>` | Move a release, renumber them all from 1 and retag every moved story |
 | `nikos release remove <n>` | Remove a release with no stories or bets, renumber the rest and retag their stories |
+| `nikos release check <n> [--run]` | Say whether a release is ready to ship and list what's in the way (`--run` reruns each done story's scenarios); exits 1 when it isn't |
+
+`nikos export --format prd|linear|jira` writes the map in another tool's shape:
+a PRD in Markdown, Linear issues (releases become milestones), or the body of
+Jira's bulk create (`POST /rest/api/2/issue/bulk`). `--release <n>` exports one
+release; `--project-key` sets Jira's project (default: the map's key). The
+exports are copies: keep editing `intent/`.
 
 ---
 
@@ -259,7 +275,9 @@ blockers, and the run queue. Kept apart so specs stay clean.
 format_version: 1
 stories:
   HT-1:
-    status: done            # todo | in_progress | needs_rework | done
+    status: done            # todo | in_progress | needs_rework | done | cancelled
+    spec_hash: 3f9a1c2b7d4e # set at done: a fingerprint of the feature from Feature: on
+    done_at: 2026-11-03T14:02:11Z  # set at done
     claimed_by: claude-code # optional
     plan_version: 2         # optional, the plan in use
     blockers: []            # optional, plain sentences
@@ -273,6 +291,60 @@ run:                        # optional, an ordered build queue
 Status moves `todo → in_progress → done`, or `in_progress → needs_rework →
 in_progress`. Only a passing verification can set `done` (see the
 build-a-story playbook).
+
+- **Approval** isn't a status. It's a person's sign-off, kept in
+  [approvals.yaml](#approvalsyaml) so a repo can protect it.
+- **Cancelled** keeps a story you've decided not to build, with a reason:
+  `nikos state set <id> cancelled --reason "<why>"` from todo, in_progress or
+  needs_rework. It's saved as `cancelled_reason`. `cancelled → todo` brings it back.
+  Cancelled stories don't count towards a release or a bet, and `nikos next` skips them.
+- **Spec changed:** `spec_hash` records what the scenarios proved. If the feature
+  changes after done or approved, `nikos validate` warns, the map shows the
+  story as "spec changed", and `nikos release check` counts it as a gap. Tags
+  above `Feature:` aren't part of the fingerprint, so moving a story between
+  releases doesn't count as a change.
+
+## approvals.yaml
+
+**Purpose:** people's sign-offs on done stories. It's kept apart from
+`state.yaml`, which agents write all the time, so it can be protected.
+
+**Path:** `intent/approvals.yaml` (optional; the first approval creates it)
+
+**Format:** YAML.
+
+```yaml
+format_version: 1
+approvals:
+  HT-1:
+    by: Niko Vijay              # git's user.name
+    on: 2026-11-06
+    spec_hash: 3f9a1c2b7d4e     # the feature that was approved
+    done_at: 2026-11-03T14:02:11Z   # the done that was approved
+```
+
+`nikos approve <id>` writes an entry. It only runs in an interactive terminal
+and asks for the id to be typed back, so a coding agent can't approve its own
+work. It approves only a done story whose feature hasn't changed since, and
+reruns its scenarios first.
+
+An approval holds while the story stays done, since that same done, with the
+same feature. Move it to needs_rework, take it through done again, or change its
+feature, and the approval lapses: `nikos validate` warns, and the map shows the
+story as done rather than approved. A person then approves it again.
+
+On the map, in exports and in `nikos release check`, a story with an approval
+that holds shows as **approved**, and counts as done.
+
+**Make approvals need a review.** Protect the default branch and add a
+`CODEOWNERS` rule for the file, so a change to it only merges when that person
+approves the pull request (GitHub) or merge request (GitLab):
+
+```
+/intent/approvals.yaml  @your-product-lead
+```
+
+On GitLab, requiring code-owner approval needs a paid tier.
 
 ---
 

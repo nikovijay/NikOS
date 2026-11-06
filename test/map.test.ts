@@ -22,7 +22,7 @@ describe("story map view", () => {
     const html = renderMap(root);
     const release1 = html.slice(html.indexOf('id="release-1"'), html.indexOf('id="release-2"'));
     expect(release1).toContain('<span class="rnum">01</span>');
-    expect(release1).toContain("1 done · 1 in progress · 0 to do");
+    expect(release1).toContain("1 of 2 done · 1 in progress · 0 to do");
     expect(release1).not.toContain('class="stamp"');
     edit(join(root, "intent", "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     const shipped = renderMap(root);
@@ -42,6 +42,23 @@ describe("story map view", () => {
     expect(panel).toContain("As a busy person, I want to add a task in one step, so that capturing it is faster than forgetting it");
     expect(panel).toMatch(/<span class="sid">AC1<\/span>Adding a task shows it at the top <span class="prio">must<\/span>/);
     expect(html).toMatch(/data-story="HT-1"[^>]*>.*?2 criteria · 1 must/);
+  });
+
+  test("the live dashboard map adds filters; the exported page stays without them", () => {
+    const intent = copyExample();
+    edit(join(intent, "storymap.yaml"), (s) => s.replace("activities:", "personas:\n  - id: planner\n    title: Weekly planner\nactivities:"));
+    edit(join(intent, "features/tasks/reorder-tasks.feature"), (s) => s.replace("@HT-3", "@HT-3 @type-bug-risk @persona-planner"));
+    const live = renderMap(dirname(intent), { live: true });
+    expect(live).toContain('<input type="search" id="f-q"');
+    expect(live).toContain('<option value="release-2">R2 · Enhancements</option>');
+    expect(live).toContain('<option value="bug_risk">Bug risk</option>');
+    expect(live).toContain('<option value="planner">Weekly planner</option>');
+    expect(live.match(/name="status" value="(\w+)"/g)).toEqual(['name="status" value="done"', 'name="status" value="doing"', 'name="status" value="todo"']);
+    expect(live).toContain('id="f-rows" checked');
+    expect(live).toContain("<script>");
+    const exported = renderMap(dirname(intent));
+    expect(exported).not.toContain('class="filters"');
+    expect(exported).not.toContain("<script");
   });
 
   test("has nothing to edit", () => {

@@ -82,17 +82,20 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos validate` | Check `intent/` is well formed |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature |
 | `nikos step add "<title>"` | Add a step under an activity |
-| `nikos release add\|rename\|move\|reorder` | Define releases and move stories between them, keeping feature tags in step |
+| `nikos release add\|rename\|move\|reorder\|remove` | Define releases and move stories between them, keeping feature tags in step |
+| `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
-| `nikos state set <id> <status>` | Move a story; done only if its scenarios pass |
+| `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
+| `nikos approve <id>` | Sign off a done story yourself, in your terminal (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |
 | `nikos map` | Write a read-only story map page |
+| `nikos export --format prd\|linear\|jira` | Write the story map as a PRD or a Linear or Jira import |
 
 ## Links
 

@@ -1,7 +1,10 @@
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
-import { featureStoryIds, findIntentDir, read, setFeatureTag, walk } from "../lib/project.js";
+import { featureStoryIds, findIntentDir, isDone, read, setFeatureTag, walk } from "../lib/project.js";
+import { storyMapOf } from "./map.js";
+import { failingScenarios } from "./state.js";
+import { verify } from "./verify.js";
 import { validate, type ValidationResult } from "./validate.js";
 
 const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
@@ -149,12 +152,71 @@ export function reorderRelease(input: { number: number; to: number }, dir: strin
   return { order: items.map((i) => ({ number: numberOf(i), title: String(i.get("title")) })), validation: save(o) };
 }
 
+export interface ReleaseCheck {
+  number: number;
+  title: string;
+  ready: boolean;
+  /** "4 of 6 done · 2 approved · 1 cancelled" */
+  summary: string;
+  /** What stands between the release and shipping, one line per problem. */
+  gaps: string[];
+}
+
+const STATUS_WORD: Record<string, string> = { todo: "to do", in_progress: "in progress", needs_rework: "in rework" };
+
+/**
+ * Is a release ready to ship? Every story that isn't cancelled must be done (or approved), not
+ * blocked, have scenarios, and still match the feature it was done against; its dependencies
+ * outside the release must be done too. With run, each done story's scenarios run again.
+ */
+export function checkRelease(input: { number: number; run?: boolean }, dir: string): ReleaseCheck {
+  const map = storyMapOf(dir);
+  const release = map.releases.find((r) => r.number === input.number);
+  if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
+  const inRelease = new Set(release.stories.map((s) => s.id));
+  const live = release.stories.filter((s) => s.status !== "cancelled");
+  const gaps: string[] = [];
+  for (const s of live) {
+    if (!isDone(s.status)) gaps.push(`${s.id} is ${STATUS_WORD[s.status] ?? s.status}`);
+    if (s.blocked) gaps.push(`${s.id} is blocked`);
+    if (!s.criteria.length) gaps.push(`${s.id} has no scenarios`);
+    if (s.specChanged) gaps.push(`${s.id}'s feature changed after it was ${s.status}`);
+    const outside = s.waitingOn.filter((d) => !inRelease.has(d));
+    if (outside.length) gaps.push(`${s.id} depends on ${outside.join(", ")}, which ${outside.length === 1 ? "isn't" : "aren't"} done`);
+  }
+  if (input.run) {
+    const root = dirname(findIntentDir(dir));
+    for (const s of live.filter((x) => isDone(x.status) && x.criteria.length)) {
+      let run;
+      try {
+        run = verify(root, s.id);
+      } catch (err) {
+        gaps.push(`${s.id}'s scenarios couldn't run: ${(err as Error).message}`);
+        continue;
+      }
+      if (run.status !== 0) {
+        const failing = failingScenarios(run.output);
+        gaps.push(`${s.id}'s scenarios fail${failing.length ? `: ${failing.join(", ")}` : ""}`);
+      }
+    }
+  }
+  const n = (f: (s: (typeof live)[number]) => boolean) => live.filter(f).length;
+  const cancelled = release.stories.length - live.length;
+  const summary = [
+    `${n((s) => isDone(s.status))} of ${live.length} done`,
+    ...(n((s) => s.status === "approved") ? [`${n((s) => s.status === "approved")} approved`] : []),
+    ...(cancelled ? [`${cancelled} cancelled`] : []),
+  ].join(" · ");
+  return { number: release.number, title: release.title, ready: live.length > 0 && gaps.length === 0, summary, gaps: live.length ? gaps : ["it has no stories"] };
+}
+
 const USAGE = `Usage:
   nikos release add "<title>" [--goal "<goal>"]
   nikos release rename <n> ["<title>"] [--goal "<goal>"]   (--goal "" removes it)
   nikos release move <story-id> <n>
   nikos release reorder <n> <position>
-  nikos release remove <n>   (only an empty release)`;
+  nikos release remove <n>   (only an empty release)
+  nikos release check <n> [--run]   (--run reruns each done story's scenarios)`;
 
 function report(v: ValidationResult) {
   if (v.errors.length) console.log(`\n! intent/ now has ${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"}; run nikos validate to see them.`);
@@ -185,6 +247,11 @@ export function runRelease(args: string[]): number {
       const r = reorderRelease({ number: Number(positional[0]), to: Number(positional[1]) }, dir);
       console.log(`Releases are now:\n${r.order.map((x) => `  ${x.number}. ${x.title}`).join("\n")}`);
       report(r.validation);
+    } else if (sub === "check" && positional[0]) {
+      const r = checkRelease({ number: Number(positional[0]), run: rest.includes("--run") }, dir);
+      console.log(`Release ${r.number} · ${r.title}: ${r.ready ? "ready" : "not ready"} — ${r.summary}`);
+      for (const g of r.gaps) console.log(`  ✗ ${g}`);
+      return r.ready ? 0 : 1;
     } else if (sub === "remove" && positional[0]) {
       const r = removeRelease({ number: Number(positional[0]) }, dir);
       console.log(`Removed release ${r.number}: ${r.title}`);

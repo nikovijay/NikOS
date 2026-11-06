@@ -1,10 +1,12 @@
 // The story map: activities as columns, releases as numbered bands, stories as cards tinted
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
+// Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
 import { existsSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
-import { featureStoryIds, findIntentDir, read, walk } from "../lib/project.js";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
+import { featureStoryIds, featureTags, findIntentDir, isDone, read, specHash, walk } from "../lib/project.js";
 
 export interface MapCriterion {
   id: string;
@@ -24,6 +26,16 @@ export interface MapStory {
   /** The user story sentence: As a…, I want…, So that…. */
   narrative: string;
   criteria: MapCriterion[];
+  /** user_story (the default), technical or bug_risk, from a @type- tag. */
+  type: string;
+  personas: string[];
+  dependsOn: string[];
+  /** Dependencies that aren't done or approved yet. */
+  waitingOn: string[];
+  /** The feature changed after the story was done or approved. */
+  specChanged: boolean;
+  approvedBy: string;
+  cancelledReason: string;
 }
 export interface MapRelease {
   number: number;
@@ -34,6 +46,8 @@ export interface MapRelease {
 }
 export interface StoryMap {
   project: string;
+  key: string;
+  personas: { id: string; title: string; description: string }[];
   activities: { id: string; title: string; steps: { id: string; title: string }[] }[];
   releases: MapRelease[];
   /** Stories with a feature file that no release names. */
@@ -45,8 +59,10 @@ export const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&
 const yamlAt = (path: string) => (existsSync(path) ? parse(read(path)) : undefined);
 const PRIORITY = /@(must|should|could|wont)\b/;
 
+type StateFields = "status" | "blocked" | "waitingOn" | "specChanged" | "approvedBy" | "cancelledReason";
+
 /** One story's details from its feature file: title, tags, narrative and criteria. */
-function featureStory(text: string, id: string): Omit<MapStory, "status" | "blocked"> {
+function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
   const [head, body = ""] = text.split(/^\s*Feature:/m);
   const lines = body.split("\n");
   const narrative: string[] = [];
@@ -75,6 +91,9 @@ function featureStory(text: string, id: string): Omit<MapStory, "status" | "bloc
     effort: /@effort-([A-Za-z0-9]+)/.exec(head)?.[1] ?? "",
     narrative: narrative.map((l, i) => (i ? l.replace(/^So that\b/, "so that") : l)).join(", "),
     criteria,
+    type: { technical: "technical", "bug-risk": "bug_risk" }[featureTags(text, "type")[0] ?? ""] ?? "user_story",
+    personas: featureTags(text, "persona"),
+    dependsOn: featureTags(text, "depends"),
   };
 }
 
@@ -82,17 +101,39 @@ function featureStory(text: string, id: string): Omit<MapStory, "status" | "bloc
 export function storyMapOf(dir: string): StoryMap {
   const intent = findIntentDir(dir);
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
-  const states: Record<string, { status?: string; blockers?: string[] }> = yamlAt(join(intent, "state.yaml"))?.stories ?? {};
-  const stateOf = (id: string) => ({ status: states[id]?.status ?? "todo", blocked: (states[id]?.blockers ?? []).length > 0 });
+  const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
+    yamlAt(join(intent, "state.yaml"))?.stories ?? {};
+  const approvals = loadApprovals(intent);
+  // Approved is shown as a status: done, plus an approval that still holds.
+  const approvedBy = (id: string, hash?: string) => {
+    const a = approvals[id];
+    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
+  };
+  const stateOf = (id: string, deps: string[], hash?: string) => {
+    const st = states[id] ?? {};
+    const by = approvedBy(id, hash);
+    const status = by ? "approved" : st.status ?? "todo";
+    return {
+      status,
+      blocked: (st.blockers ?? []).length > 0,
+      waitingOn: isDone(status) || status === "cancelled" ? [] : deps.filter((d) => !isDone(states[d]?.status)),
+      approvedBy: by,
+      specChanged: isDone(status) && !!st.spec_hash && !!hash && st.spec_hash !== hash,
+      cancelledReason: String(st.cancelled_reason ?? ""),
+    };
+  };
   const features = new Map<string, MapStory>();
   for (const file of walk(join(intent, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
     if (!id) continue;
-    features.set(id, { ...featureStory(text, id), ...stateOf(id) });
+    const f = featureStory(text, id);
+    features.set(id, { ...f, ...stateOf(id, f.dependsOn, specHash(text)) });
   }
   const story = (id: string): MapStory =>
-    features.get(id) ?? { id, title: id, activity: "", step: "", priority: "", effort: "", narrative: "", criteria: [], ...stateOf(id) };
+    features.get(id) ?? {
+      id, title: id, activity: "", step: "", priority: "", effort: "", narrative: "", criteria: [], type: "user_story", personas: [], dependsOn: [], ...stateOf(id, []),
+    };
   const releases: MapRelease[] = (Array.isArray(map.releases) ? map.releases : []).map((r: any) => ({
     number: Number(r.number),
     title: String(r.title ?? `Release ${r.number}`),
@@ -103,6 +144,8 @@ export function storyMapOf(dir: string): StoryMap {
   const placed = new Set(releases.flatMap((r) => r.stories.map((s) => s.id)));
   return {
     project: String(map.project ?? ""),
+    key: String(map.key ?? ""),
+    personas: (Array.isArray(map.personas) ? map.personas : []).map((p: any) => ({ id: String(p.id), title: String(p.title ?? p.id), description: String(p.description ?? "") })),
     activities: (Array.isArray(map.activities) ? map.activities : []).map((a: any) => ({
       id: String(a.id),
       title: String(a.title ?? a.id),
@@ -113,18 +156,25 @@ export function storyMapOf(dir: string): StoryMap {
   };
 }
 
-/** Each status's tint class and the word shown on its card. Blocked wins over the status. */
+/**
+ * Each status's tint class and the word shown on its card. Blocked wins over the status, and a
+ * changed spec wins over done or approved: what was proved is no longer what the feature says.
+ */
 const STATUS: Record<string, { cls: string; word: string }> = {
   todo: { cls: "todo", word: "to do" },
   in_progress: { cls: "doing", word: "in progress" },
   needs_rework: { cls: "rework", word: "rework" },
   done: { cls: "done", word: "done" },
+  approved: { cls: "approved", word: "approved" },
+  cancelled: { cls: "cancelled", word: "cancelled" },
 };
-const statusOf = (s: MapStory) => (s.blocked ? { cls: "blocked", word: "blocked" } : STATUS[s.status] ?? STATUS.todo);
+const statusOf = (s: MapStory) =>
+  s.blocked ? { cls: "blocked", word: "blocked" } : s.specChanged ? { cls: "changed", word: "spec changed" } : STATUS[s.status] ?? STATUS.todo;
+const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The whole story map as one standalone HTML page. */
-export function renderMap(dir: string): string {
+/** The whole story map as one standalone HTML page. live adds the dashboard's filter bar and its script. */
+export function renderMap(dir: string, opts: { live?: boolean } = {}): string {
   const m = storyMapOf(dir);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
   const known = new Set(m.activities.map((a) => a.id));
@@ -142,24 +192,37 @@ export function renderMap(dir: string): string {
   const card = (s: MapStory) => {
     const st = statusOf(s);
     const musts = s.criteria.filter((c) => c.priority === "must").length;
-    const foot = s.criteria.length
-      ? `<span>${s.criteria.length} ${s.criteria.length === 1 ? "criterion" : "criteria"}${musts ? ` · ${musts} must` : ""}</span>`
-      : `<span class="warn">No criteria</span>`;
-    return `<a class="card ${st.cls}" data-story="${esc(s.id)}" href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span><span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span><span class="cfoot">${foot}</span></a>`;
+    const foot = s.waitingOn.length
+      ? `<span class="wait">Waits on ${esc(s.waitingOn.join(", "))}</span>`
+      : s.criteria.length
+        ? `<span>${s.criteria.length} ${s.criteria.length === 1 ? "criterion" : "criteria"}${musts ? ` · ${musts} must` : ""}</span>`
+        : `<span class="warn">No criteria</span>`;
+    const type = TYPE_WORD[s.type] ? `<span class="stype">${TYPE_WORD[s.type]}</span>` : "";
+    // data- attributes let the live dashboard filter cards; the exported page ignores them.
+    const data = `data-story="${esc(s.id)}" data-status="${esc(st.cls)}" data-type="${esc(s.type)}" data-personas="${esc(s.personas.join(" "))}" data-search="${esc(`${s.id} ${s.title} ${s.narrative}`.toLowerCase())}"`;
+    return `<a class="card ${st.cls}" ${data} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span><span class="cfoot">${foot}</span></a>`;
   };
   const tally = (stories: MapStory[]) => {
-    const n = (f: (s: MapStory) => boolean) => stories.filter(f).length;
-    const parts = [`${n((s) => s.status === "done")} done`, `${n((s) => s.status === "in_progress")} in progress`, `${n((s) => s.status === "todo")} to do`];
-    const blocked = n((s) => s.blocked);
-    return parts.join(" · ") + (blocked ? ` · <span class="warn">${blocked} blocked</span>` : "");
+    const live = stories.filter((s) => s.status !== "cancelled");
+    const n = (f: (s: MapStory) => boolean) => live.filter(f).length;
+    const approved = n((s) => s.status === "approved");
+    const parts = [
+      `${n((s) => isDone(s.status))} of ${live.length} done`,
+      ...(approved ? [`${approved} approved`] : []),
+      `${n((s) => s.status === "in_progress")} in progress`,
+      `${n((s) => s.status === "todo")} to do`,
+    ];
+    const warn = [[n((s) => s.blocked), "blocked"], [n((s) => s.specChanged), "spec changed"]] as const;
+    return parts.join(" · ") + warn.map(([k, w]) => (k ? ` · <span class="warn">${k} ${w}</span>` : "")).join("");
   };
   const band = (id: string, code: string, heading: string, goal: string, bets: string[], stories: MapStory[]) => {
-    const shipped = stories.length > 0 && stories.every((s) => s.status === "done");
+    const live = stories.filter((s) => s.status !== "cancelled");
+    const shipped = live.length > 0 && live.every((s) => isDone(s.status) && !s.specChanged);
     const chips = bets.map((b) => `<span class="bet">${esc(b)}</span>`).join("");
     const cells = columns
       .map((c) => `<div class="cell" data-activity="${esc(c.label)}">${stories.filter((s) => columnOf(s) === c.key).map(card).join("")}</div>`)
       .join("");
-    return `<section class="band" id="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
+    return `<section class="band" id="${esc(id)}" data-release="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
       shipped ? `<span class="stamp">Shipped</span>` : ""
     }<span class="tally">${stories.length ? tally(stories) : "no stories"}</span><span class="rule"></span></div>${
       goal ? `<p class="goal">${esc(goal)}</p>` : ""
@@ -180,15 +243,24 @@ export function renderMap(dir: string): string {
   ].join("");
   const panel = (s: MapStory) => {
     const st = statusOf(s);
-    const facts = [s.id, s.priority, s.effort && `effort ${s.effort}`].filter(Boolean).map((f) => esc(f)).join(" · ");
+    const facts = [s.id, TYPE_WORD[s.type], s.priority, s.effort && `effort ${s.effort}`].filter(Boolean).map((f) => esc(f)).join(" · ");
+    const persona = (id: string) => m.personas.find((p) => p.id === id)?.title ?? id;
+    const notes = [
+      s.personas.length && `For ${s.personas.map(persona).join(", ")}`,
+      s.dependsOn.length && `Depends on ${s.dependsOn.map((d) => (s.waitingOn.includes(d) ? `${d} (not done)` : d)).join(", ")}`,
+      s.status === "approved" && `Approved by ${s.approvedBy || "someone"}`,
+      s.status === "cancelled" && `Cancelled: ${s.cancelledReason}`,
+      s.specChanged && "The feature changed after it was done, so its scenarios no longer prove it",
+    ].filter(Boolean).map((n) => `<li>${esc(n)}</li>`).join("");
     const criteria = s.criteria.length
       ? `<ol class="criteria">${s.criteria.map((c) => `<li><span class="sid">${esc(c.id)}</span>${esc(c.title)}${c.priority ? ` <span class="prio">${esc(c.priority)}</span>` : ""}</li>`).join("")}</ol>`
       : `<p class="warn">No criteria yet.</p>`;
     return `<div class="sheet-wrap" id="story-${esc(s.id)}"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="${esc(s.id)}"><div class="sheet-head"><span class="sid">${esc(s.id)}</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card ${st.cls}"><span class="sword">${esc(st.word)}</span><div class="sc-title">${esc(s.title)}</div><div class="facts">${facts}</div>${
       s.narrative ? `<p class="narrative">${esc(s.narrative)}</p>` : ""
-    }</div><div class="eyebrow">Acceptance criteria</div>${criteria}</aside></div>`;
+    }${notes ? `<ul class="notes">${notes}</ul>` : ""}</div><div class="eyebrow">Acceptance criteria</div>${criteria}</aside></div>`;
   };
   const title = m.project ? `${m.project} · Story map` : "Story map";
+  const filters = opts.live ? filterBar(m, everything) : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -199,7 +271,7 @@ export function renderMap(dir: string): string {
 </head>
 <body>
 <header class="top"><h1>${esc(title)}</h1><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
-<main>
+${filters}<main>
 <div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
 ${bands}
@@ -207,10 +279,111 @@ ${unreleased}
 </div>
 </main>
 ${everything.map(panel).join("\n")}
+${opts.live ? `<script>${FILTER_JS}</script>` : ""}
 </body>
 </html>
 `;
 }
+
+/** Search, release, status, type and persona filters, and the release-rows switch. Live page only. */
+function filterBar(m: StoryMap, stories: MapStory[]): string {
+  const option = (value: string, text: string) => `<option value="${esc(value)}">${esc(text)}</option>`;
+  const statuses = [...new Set(stories.map((s) => statusOf(s)))].map((st) => st.cls);
+  const words = Object.fromEntries([...Object.values(STATUS), { cls: "blocked", word: "blocked" }, { cls: "changed", word: "spec changed" }].map((x) => [x.cls, x.word]));
+  const chips = [...new Set(statuses)]
+    .map((cls) => `<label class="chip ${esc(cls)}"><input type="checkbox" name="status" value="${esc(cls)}">${esc(words[cls] ?? cls)}</label>`)
+    .join("");
+  const types = [...new Set(stories.map((s) => s.type))].filter((t) => t !== "user_story");
+  return `<div class="filters" role="search">
+<input type="search" id="f-q" placeholder="Search stories" aria-label="Search stories">
+<select id="f-release" aria-label="Release">${option("", "All releases")}${m.releases.map((r) => option(`release-${r.number}`, `R${r.number} · ${r.title}`)).join("")}${
+    m.unreleased.length ? option("unreleased", "Not in a release") : ""
+  }</select>
+${types.length ? `<select id="f-type" aria-label="Story type">${option("", "All types")}${option("user_story", "User stories")}${types.map((t) => option(t, TYPE_WORD[t] ?? t)).join("")}</select>` : ""}
+${m.personas.length ? `<select id="f-persona" aria-label="Persona">${option("", "Everyone")}${m.personas.map((p) => option(p.id, p.title)).join("")}</select>` : ""}
+<fieldset class="chips"><legend>Status</legend>${chips}</fieldset>
+<label class="switch"><input type="checkbox" id="f-rows" checked>Release rows</label>
+<span id="f-count" class="count" aria-live="polite"></span>
+</div>
+`;
+}
+
+// Runs only on the dashboard's live map. Filters hide cards; with release rows off, every
+// release's cards are shown together in one band, column by column.
+const FILTER_JS = `
+(function () {
+  var board = document.querySelector('.board');
+  var bands = Array.prototype.slice.call(board.querySelectorAll('.band'));
+  var $ = function (id) { return document.getElementById(id); };
+  var merged = document.createElement('section');
+  merged.className = 'band';
+  merged.hidden = true;
+  merged.setAttribute('data-release', 'all');
+  var lane = document.createElement('div');
+  lane.className = 'lane';
+  var first = board.querySelector('.lane');
+  if (first) {
+    Array.prototype.forEach.call(first.children, function (cell, i) {
+      var c = document.createElement('div');
+      c.className = 'cell';
+      c.setAttribute('data-activity', cell.getAttribute('data-activity'));
+      bands.forEach(function (b) {
+        var cells = b.querySelectorAll('.lane > .cell');
+        if (cells[i]) Array.prototype.forEach.call(cells[i].children, function (card) { c.appendChild(card.cloneNode(true)); });
+      });
+      lane.appendChild(c);
+    });
+  }
+  merged.appendChild(lane);
+  board.appendChild(merged);
+
+  function value(id) { var el = $(id); return el ? el.value : ''; }
+  function apply() {
+    var q = value('f-q').trim().toLowerCase();
+    var release = value('f-release');
+    var type = value('f-type');
+    var persona = value('f-persona');
+    var rows = $('f-rows').checked;
+    var statuses = Array.prototype.map.call(document.querySelectorAll('input[name=status]:checked'), function (i) { return i.value; });
+    var filtering = q || type || persona || statuses.length;
+    var shown = 0, total = 0;
+    var match = function (card) {
+      return (!release || rows ? true : card.getAttribute('data-release-of') === release) &&
+        (!q || card.getAttribute('data-search').indexOf(q) >= 0) &&
+        (!type || card.getAttribute('data-type') === type) &&
+        (!persona || (' ' + card.getAttribute('data-personas') + ' ').indexOf(' ' + persona + ' ') >= 0) &&
+        (!statuses.length || statuses.indexOf(card.getAttribute('data-status')) >= 0);
+    };
+    bands.forEach(function (b) {
+      b.hidden = !rows || (release && b.getAttribute('data-release') !== release);
+    });
+    merged.hidden = rows;
+    var active = rows ? bands.filter(function (b) { return !b.hidden; }) : [merged];
+    active.forEach(function (b) {
+      var visible = 0;
+      Array.prototype.forEach.call(b.querySelectorAll('.card'), function (card) {
+        var ok = match(card);
+        card.hidden = !ok;
+        total++;
+        if (ok) { shown++; visible++; }
+      });
+      if (rows && filtering && !visible) b.hidden = true;
+    });
+    $('f-count').textContent = filtering || release ? shown + ' of ' + total + ' stories' : '';
+  }
+  // Remember which release each card came from, so the release filter works with rows off.
+  bands.forEach(function (b) {
+    Array.prototype.forEach.call(b.querySelectorAll('.card'), function (card) {
+      Array.prototype.forEach.call(merged.querySelectorAll('.card[data-story="' + card.getAttribute('data-story') + '"]'), function (copy) {
+        copy.setAttribute('data-release-of', b.getAttribute('data-release'));
+      });
+    });
+  });
+  document.querySelector('.filters').addEventListener('input', apply);
+  document.querySelector('.filters').addEventListener('change', apply);
+  apply();
+})();
+`;
 
 const CSS = `
 :root { --paper: #FAFAF7; --surface: #FFFFFF; --elevated: #F2F0E9; --line: #E8E6DF; --line-2: #D6D3C8; --ink: #1A1A18; --ink-2: #57534E; --muted: #6E695F; --brand: #1B4FD8; --brand-subtle: rgba(27,79,216,.07); --stamp: #DC2626; --warn: #B45309; --col: 240px; --gap: 16px; }
@@ -262,8 +435,28 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 .card.rework { border-left: 4px solid #E8892B; }
 .done { --fill: #F1EEFB; --edge: #DCD5F3; --word: #6D5BB8; }
 .card.done .stitle { text-decoration: line-through; text-decoration-color: rgba(26,26,24,.35); }
+.approved { --fill: #EAF6EE; --edge: #C7E6D2; --word: #1E7A50; }
+.card.approved .stitle { text-decoration: line-through; text-decoration-color: rgba(26,26,24,.35); }
+.changed { --fill: #FFF6E5; --edge: #F2D9A6; --word: #B45309; }
+.card.changed { border-left: 4px solid #D97706; }
+.cancelled { --fill: transparent; --edge: #E3E1D9; --word: #7D786E; }
+.card.cancelled { border-style: dashed; box-shadow: none; opacity: .7; }
+.card.cancelled .stitle { text-decoration: line-through; }
+.stype { font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--elevated); color: var(--ink-2); }
+.wait { color: var(--warn); }
+.notes { margin: 10px 0 0; padding-left: 18px; color: var(--ink-2); }
 .blocked { --fill: #FDECEC; --edge: #F3C2C2; --word: #B83232; }
 .card.blocked { border-left: 4px solid #D64545; }
+[hidden] { display: none !important; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 24px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.filters input[type=search], .filters select { height: 30px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; padding: 0 10px; }
+.filters input[type=search] { width: 220px; max-width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; border: 0; margin: 0; padding: 0; }
+.chips legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid var(--edge, var(--line)); border-radius: 99px; background: var(--fill, var(--surface)); color: var(--word, var(--ink)); font-size: 12px; cursor: pointer; }
+.chip input { margin: 0; accent-color: var(--brand); }
+.chip:has(input:checked) { outline: 2px solid var(--brand); outline-offset: -1px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .sheet-wrap { display: none; }
 .sheet-wrap:target { display: block; position: fixed; inset: 0; z-index: 10; }
 .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
@@ -284,6 +477,8 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 @media (max-width: 767px) {
   body { height: auto; display: block; }
   .top { padding: 12px 16px; }
+  .filters { padding: 10px 16px; }
+  .filters input[type=search] { width: 100%; }
   main { background-image: none; }
   .board { width: auto; padding: 0 16px 32px; }
   .spine { display: none; }

@@ -1,18 +1,23 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseDocument } from "yaml";
-import { STORY_ID, findIntentDir, read } from "../lib/project.js";
+import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
+import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
 import { verify } from "./verify.js";
 
-export type Status = "todo" | "in_progress" | "needs_rework" | "done";
+export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancelled";
 
-/** The moves docs/format.md allows. `done` also needs the story's scenarios to pass. */
+/**
+ * The moves docs/format.md allows. `done` also needs the story's scenarios to pass; `cancelled`
+ * needs a reason. Approval isn't a status: it's a person's entry in approvals.yaml.
+ */
 const MOVES: Record<Status, Status[]> = {
-  todo: ["in_progress"],
-  in_progress: ["needs_rework", "done"],
-  needs_rework: ["in_progress"],
+  todo: ["in_progress", "cancelled"],
+  in_progress: ["needs_rework", "done", "cancelled"],
+  needs_rework: ["in_progress", "cancelled"],
   done: ["needs_rework"],
+  cancelled: ["todo"],
 };
 
 export interface StateResult {
@@ -45,9 +50,21 @@ export class StateError extends Error {
   }
 }
 
-export function setState(story: string, to: Status, opts: { dir?: string; by?: string; date?: string } = {}): StateResult {
+export interface StateOptions {
+  dir?: string;
+  by?: string;
+  date?: string;
+  /** Why the story is cancelled; required for a move to cancelled. */
+  reason?: string;
+  /** The time recorded as done_at; tests pin it. */
+  now?: string;
+}
+
+export function setState(story: string, to: Status, opts: StateOptions = {}): StateResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
-  if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (todo, in_progress, needs_rework, done)`);
+  if ((to as string) === "approved") throw new StateError(`Approval isn't a status: a person approves ${story} with nikos approve, or by reviewing a change to intent/approvals.yaml`);
+  if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (${Object.keys(MOVES).join(", ")})`);
+  if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
   const intentDir = findIntentDir(opts.dir ?? process.cwd());
   const path = join(intentDir, "state.yaml");
   // A Document keeps comments and the order of everything we don't touch.
@@ -77,6 +94,16 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
 
   doc.setIn(["stories", story, "status"], to);
   if (opts.by && to === "in_progress") doc.setIn(["stories", story, "claimed_by"], opts.by);
+  const entry = ["stories", story];
+  const feature = featureFor(story, dirname(intentDir));
+  if (to === "done") {
+    // What the scenarios proved: validate warns if the feature changes afterwards. done_at
+    // marks this done, so an approval of an earlier done doesn't carry over.
+    if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
+    doc.setIn([...entry, "done_at"], opts.now ?? new Date().toISOString());
+  }
+  if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
+  else doc.deleteIn([...entry, "cancelled_reason"]);
   doc.setIn(["stories", story, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
   // No padding keeps "[A-1, A-2]" as written instead of "[ A-1, A-2 ]".
   writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
@@ -86,7 +113,7 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
 export function runState(args: string[]): number {
   const [sub, story, to, ...rest] = args;
   if (sub !== "set" || !story || !to) {
-    console.error("Usage: nikos state set <story-id> <todo|in_progress|needs_rework|done> [--by <name>] [--dir <path>]");
+    console.error("Usage: nikos state set <story-id> <todo|in_progress|needs_rework|done|cancelled> [--by <name>] [--reason <why>] [--dir <path>]");
     return 1;
   }
   const opt = (n: string) => {
@@ -94,7 +121,7 @@ export function runState(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   try {
-    const r = setState(story, to as Status, { dir: opt("dir"), by: opt("by") });
+    const r = setState(story, to as Status, { dir: opt("dir"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
   } catch (err) {
     const e = err as StateError;

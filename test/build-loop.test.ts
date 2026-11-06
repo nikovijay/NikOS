@@ -35,7 +35,7 @@ describe("build loop", () => {
   it("picks the next todo story", () => {
     const intent = copyExample();
     // hello-todo: HT-1 done, HT-2 in progress, HT-3 todo; queue [HT-2, HT-3].
-    expect(next(intent)).toEqual({ story: "HT-3", open: [{ id: "HT-2", status: "in_progress" }] });
+    expect(next(intent)).toEqual({ story: "HT-3", open: [{ id: "HT-2", status: "in_progress" }], waiting: [] });
     edit(join(intent, "state.yaml"), (s) => s.replace(/HT-3:\n    status: todo/, "HT-3:\n    status: done"));
     expect(next(intent).story).toBeUndefined();
   });

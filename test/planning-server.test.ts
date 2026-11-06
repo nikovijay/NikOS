@@ -132,6 +132,7 @@ describe("dashboard", () => {
     expect(await (await fetch(srv.url)).text()).toContain("/map#release-1");
     const map = await (await fetch(`${base(srv)}/map`)).text();
     expect(map).toContain('id="release-1"');
+    expect(map).toContain('<div class="filters" role="search">');
   });
 
   test("a bet edit and a review save through the same checks", async () => {

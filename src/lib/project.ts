@@ -1,7 +1,22 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 export const STORY_ID = /^[A-Z][A-Z0-9]{0,9}-[0-9]+$/;
+
+/** Statuses that count as built. approved is how the map shows done plus a sign-off that holds. */
+export const DONE = new Set(["done", "approved"]);
+export const isDone = (status: string | undefined) => DONE.has(status ?? "");
+
+/**
+ * A short fingerprint of what a story promises: the feature from `Feature:` on. The tags above
+ * it are left out, so moving a story between releases or adding a @depends tag isn't a change.
+ */
+export function specHash(text: string): string {
+  const at = text.search(/^\s*Feature:/m);
+  const spec = (at < 0 ? text : text.slice(at)).replace(/\r\n/g, "\n").split("\n").map((l) => l.trimEnd()).join("\n").trim();
+  return createHash("sha256").update(spec).digest("hex").slice(0, 12);
+}
 
 /** Resolve the intent/ folder from a repo root or the folder itself. */
 export function findIntentDir(start: string): string {
@@ -26,11 +41,16 @@ export function rel(dir: string, path: string): string {
   return relative(dir, path) || path;
 }
 
-/** Story id tags on the lines above `Feature:`. */
 /** The value of a `@<name>-<value>` tag above `Feature:`, e.g. featureTag(text, "step"). */
 export function featureTag(text: string, name: string): string | undefined {
   const head = text.split(/^\s*Feature:/m)[0];
   return new RegExp(`(?:^|\\s)@${name}-([A-Za-z0-9-]+)`).exec(head)?.[1];
+}
+
+/** Every value of a repeatable `@<name>-<value>` tag above `Feature:`, e.g. featureTags(text, "depends"). */
+export function featureTags(text: string, name: string): string[] {
+  const head = text.split(/^\s*Feature:/m)[0];
+  return [...head.matchAll(new RegExp(`(?:^|\\s)@${name}-([A-Za-z0-9-]+)`, "g"))].map((m) => m[1]);
 }
 
 /**
@@ -64,6 +84,7 @@ export function setFeatureTag(text: string, name: string, value: string | undefi
   return lines.join("\n");
 }
 
+/** Story id tags on the lines above `Feature:`. */
 export function featureStoryIds(text: string): string[] {
   const ids: string[] = [];
   for (const line of text.split("\n")) {
