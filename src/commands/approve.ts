@@ -6,6 +6,8 @@
 //   playbooks only allow it after that answer; `via: chat` shows it was given that way.
 // - app: nikos mcp asked the person through their app (MCP elicitation), so the model never
 //   saw the question or gave the answer.
+// - tracker: a person moved the story's ticket to a status mapped to approved (nikos tracker
+//   record), when tracker.approvals is on.
 // A repo can go further and protect approvals.yaml with CODEOWNERS, so every approval also
 // needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
@@ -41,7 +43,7 @@ export interface ApproveResult {
 }
 
 /** Check a story can be approved, rerun its scenarios, then record the approval. The terminal check lives in runApprove. */
-export type Via = "terminal" | "chat" | "app";
+export type Via = "terminal" | "chat" | "app" | "tracker";
 
 export function approve(story: string, opts: { dir?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
@@ -51,7 +53,9 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
   const via = opts.via ?? "terminal";
   const routes = settings["approval.routes"];
-  if (!(routes.value as ApprovalRoute[]).includes(via)) {
+  // A tracker approval counts when tracker.approvals is on; the other routes by approval.routes.
+  if (via === "tracker" && !settings["tracker.approvals"].value) throw new StateError("Tracker approvals don't count here (tracker.approvals is off)");
+  if (via !== "tracker" && !(routes.value as ApprovalRoute[]).includes(via)) {
     throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
   }
   const entry = parse(read(join(intentDir, "state.yaml")))?.stories?.[story];

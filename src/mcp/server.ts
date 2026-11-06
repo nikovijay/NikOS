@@ -29,6 +29,7 @@ import { read } from "../lib/project.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { joinPlan } from "../commands/join.js";
+import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
@@ -121,6 +122,26 @@ export function createServer(repo: string): McpServer {
     return text(
       `${r.added ? `Joined ${r.repo}` : `Already joined to ${r.repo}`}.\n${r.sync.synced.map((s) => `✓ ${s.repo}${s.via ? ` (above ${s.via})` : ""}`).join("\n")}${r.sync.unresolved.map((u) => `\n? ${u.repo}: ${u.reason}`).join("")}\n\nSettings here now:\n${formatSettings(r.settings)}`,
     );
+  });
+  tool("link_ticket", "Link a story to its tracker ticket (e.g. PAY-123, ENG-42, #57).", { id: z.string(), ticket: z.string() }, (a) => {
+    const r = linkTicket(a, root);
+    return text(`${r.id} ↔ ${r.ticket}`);
+  });
+  tool("record_ticket", "Record a linked ticket's status, as you read it through the tracker's MCP. An approved status approves the story (when tracker approvals count); cancelled cancels it; anything else is compared, never copied: done comes from the scenarios. by: who moved the ticket, from its history.", {
+    id: z.string(), status: z.string(), by: z.string().optional(), on: z.string().optional(),
+  }, (a) => {
+    const r = recordTicket(a, root);
+    return text(r.message, r as unknown as Record<string, unknown>);
+  });
+  tool("ticket_moves", "For each linked story, the tracker status its ticket should be in. Move the tickets with the tracker's MCP.", {}, () => {
+    const moves = ticketMoves(root);
+    return text(moves.map((m) => `${m.ticket} → ${m.status}  (${m.id} is ${m.nikos})`).join("\n") || "No linked tickets.", { moves });
+  }, true);
+  tool("import_tickets", "Bring a tracker's backlog in: each ticket becomes a linked todo story, its group (epic, project or label) its activity.", {
+    tickets: z.array(z.object({ key: z.string(), title: z.string(), group: z.string().optional() })).min(1), release: z.number().int().optional(),
+  }, (a) => {
+    const r = importTickets(a.tickets, root, { release: a.release });
+    return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
   });
   tool("init", "Set up nikOS in this repo: intent/ with a starter story.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });

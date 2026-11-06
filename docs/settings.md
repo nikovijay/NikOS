@@ -79,3 +79,21 @@ set it.
 tracker and the upstream plans. For each one it says what it found, and the
 next thing to do when something's missing. Your agent runs it when something
 seems off. `--offline` skips asking upstream repos whether they've moved on.
+
+## Keeping a tracker in step
+
+nikOS never calls Jira, Linear, GitHub or GitLab itself. Your agent reads and
+writes tickets through the tracker's own MCP, which you connect and sign in to
+in your app, and hands what it read to `nikos tracker`. The tracker playbook
+walks through it: connect, map the statuses, import or link, keep in step.
+
+| Command | What it does |
+| --- | --- |
+| `nikos tracker link <story> <ticket>` | Link a story to its ticket (`PAY-123`, `ENG-42`, `#57`), in `state.yaml` |
+| `nikos tracker record <story> --status "<status>" --by "<who>"` | Record what a ticket says. A status mapped to `approved` approves the story when `tracker.approvals` is on (recorded as `via: tracker`, with who moved it); `cancelled` cancels it; anything else is only compared |
+| `nikos tracker sync [--json]` | For each linked story, the status its ticket should be in. Your agent moves the tickets |
+| `nikos tracker import <tickets.json>` | Bring a backlog in: `[{ "key", "title", "group" }]` become linked todo stories, each group an activity |
+
+A ticket can never move a story to done. Done means the story's scenarios
+pass, so when a ticket says Done and nikOS doesn't agree, nikOS keeps its own
+status and lists the ticket to move back.
