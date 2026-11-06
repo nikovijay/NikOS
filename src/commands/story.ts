@@ -1,7 +1,8 @@
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { findIntentDir, read } from "../lib/project.js";
 import { store } from "../lib/store.js";
+import { createStoryState } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -35,10 +36,8 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
 
   const intentDir = findIntentDir(dir);
   const mapPath = join(intentDir, "storymap.yaml");
-  const statePath = join(intentDir, "state.yaml");
   // Documents keep comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
-  const state = parseDocument(read(statePath));
   const plain = map.toJS();
 
   const activities: string[] = (plain.activities ?? []).map((a: any) => a?.id);
@@ -67,7 +66,6 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const stories = map.getIn(["releases", index, "stories"], true);
   if (stories instanceof YAMLSeq) stories.add(id);
   else map.setIn(["releases", index, "stories"], map.createNode([id], { flow: true }));
-  state.setIn(["stories", id], state.createNode({ status: "todo" }));
 
   const text = `@${id} @release-${release} @${priority} @activity-${input.activity}${input.step ? ` @step-${input.step}` : ""}
 Feature: ${title}
@@ -85,7 +83,7 @@ Feature: ${title}
 
   store().write(feature, text, { create: true });
   store().write(mapPath, map.toString(yamlOpts));
-  store().write(statePath, state.toString(yamlOpts));
+  createStoryState(intentDir, id, { status: "todo" });
   return { id, release, feature, validation: validate(intentDir) };
 }
 

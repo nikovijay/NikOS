@@ -9,6 +9,7 @@ import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
 import { featureStoryIds, featureTag, featureTags, findIntentDir, isDone, read, rel, specHash, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -191,22 +192,41 @@ export function validate(start: string): ValidationResult {
     }
   }
 
-  const stateStories: Record<string, unknown> = (state && typeof state === "object" && state.stories) || {};
-  if (storymap && state) {
+  const stateStories: Record<string, unknown> = { ...((state && typeof state === "object" && state.stories) || {}) };
+  // Where each story's state is: state.yaml, or its own file under state/.
+  const stateFile = (id: string) => (store().exists(join(stateDir(dir), `${id}.yaml`)) ? `state/${id}.yaml` : "state.yaml");
+  for (const f of storyFiles(stateDir(dir))) {
+    const file = `state/${f.id}.yaml`;
+    const entry = loadYaml(dir, file, errors);
+    if (entry === undefined) continue;
+    if (!/^[A-Z][A-Z0-9]{0,9}-[0-9]+$/.test(f.id)) {
+      errors.push({ file, message: `'${f.id}' is not a story id`, hint: "name each file after its story, e.g. state/HT-1.yaml" });
+      continue;
+    }
+    if (f.id in stateStories) errors.push({ file, message: `${f.id} is also in state.yaml`, hint: "keep one: nikos migrate per-story moves every story to its own file" });
+    const wrapped = { format_version: 1, stories: { [f.id]: entry } };
+    if (!checkState(wrapped)) for (const e of checkState.errors ?? []) errors.push({ file, message: describe(e, wrapped).replace(`stories.${f.id}`, f.id) });
+    stateStories[f.id] = entry;
+  }
+  if (storymap && (state || Object.keys(stateStories).length)) {
     for (const id of mapStories.keys()) {
       if (!featureIds.has(id)) {
         errors.push({ file: "storymap.yaml", message: `${id} has no feature file`, hint: `add intent/features/<activity>/<slug>.feature tagged @${id}` });
       }
       if (!(id in stateStories)) {
-        errors.push({ file: "state.yaml", message: `${id} is in storymap.yaml but has no entry under stories`, hint: `add "${id}: { status: todo }"` });
+        errors.push(
+          store().isDir(stateDir(dir))
+            ? { file: `state/${id}.yaml`, message: `${id} is in storymap.yaml but has no state file`, hint: `add intent/state/${id}.yaml with "status: todo"` }
+            : { file: "state.yaml", message: `${id} is in storymap.yaml but has no entry under stories`, hint: `add "${id}: { status: todo }"` },
+        );
       }
     }
     for (const id of Object.keys(stateStories)) {
       if (!mapStories.has(id)) {
-        errors.push({ file: "state.yaml", message: `stories.${id} is an unknown story id`, hint: "add it to a release in storymap.yaml or remove it" });
+        errors.push({ file: stateFile(id), message: stateFile(id) === "state.yaml" ? `stories.${id} is an unknown story id` : `${id} is an unknown story id`, hint: "add it to a release in storymap.yaml or remove it" });
       }
     }
-    for (const id of state.run?.queue ?? []) {
+    for (const id of state?.run?.queue ?? []) {
       if (!mapStories.has(id)) errors.push({ file: "state.yaml", message: `run.queue has unknown story id ${id}` });
     }
     for (const [id, entry] of Object.entries(stateStories) as [string, any][]) {
@@ -219,7 +239,8 @@ export function validate(start: string): ValidationResult {
     }
   }
 
-  // approvals.yaml is optional: it appears with the first sign-off.
+  // Approvals are optional: approvals.yaml (or approvals/<ID>.yaml) appears with the first sign-off.
+  const signoffs: { id: string; a: Approval; file: string; key: string }[] = [];
   if (store().exists(join(dir, "approvals.yaml"))) {
     const approvals = loadYaml(dir, "approvals.yaml", errors);
     if (approvals !== undefined && !checkApprovals(approvals)) {
@@ -228,15 +249,31 @@ export function validate(start: string): ValidationResult {
         errors.push({ file: "approvals.yaml", message: describe(e, approvals) });
       }
     } else if (approvals) {
-      for (const [id, a] of Object.entries(approvals.approvals ?? {}) as [string, Approval][]) {
-        if (!mapStories.has(id) && !featureIds.has(id)) {
-          errors.push({ file: "approvals.yaml", message: `approvals.${id} is an unknown story id` });
-          continue;
-        }
-        const lapse = approvalLapse(a, (stateStories as any)[id], hashes.get(id));
-        if (lapse) warnings.push({ file: "approvals.yaml", message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry` });
-      }
+      for (const [id, a] of Object.entries(approvals.approvals ?? {}) as [string, Approval][]) signoffs.push({ id, a, file: "approvals.yaml", key: `approvals.${id}` });
     }
+  }
+  for (const f of storyFiles(approvalsDir(dir))) {
+    const file = `approvals/${f.id}.yaml`;
+    const a = loadYaml(dir, file, errors);
+    if (a === undefined) continue;
+    const wrapped = { format_version: 1, approvals: { [f.id]: a } };
+    if (!checkApprovals(wrapped)) {
+      for (const e of checkApprovals.errors ?? []) {
+        if (e.keyword === "pattern" && e.propertyName) continue;
+        errors.push({ file, message: describe(e, wrapped).replace(`approvals.${f.id}`, f.id) });
+      }
+      continue;
+    }
+    if (signoffs.some((s) => s.id === f.id)) errors.push({ file, message: `${f.id} is also in approvals.yaml`, hint: "keep one: nikos migrate per-story moves every approval to its own file" });
+    signoffs.push({ id: f.id, a, file, key: f.id });
+  }
+  for (const { id, a, file, key } of signoffs) {
+    if (!mapStories.has(id) && !featureIds.has(id)) {
+      errors.push({ file, message: `${key} is an unknown story id` });
+      continue;
+    }
+    const lapse = approvalLapse(a, (stateStories as any)[id], hashes.get(id));
+    if (lapse) warnings.push({ file, message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry` });
   }
 
   // Dependencies: each @depends-<id> names a known story, never itself, never in a loop.

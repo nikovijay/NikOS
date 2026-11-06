@@ -22,6 +22,7 @@ const changes = withStore(repo, () => {
   return repo.changes(); // [{ path: "intent/storymap.yaml", text: "…" }, …]
 });
 // Commit `changes` as one commit, or open a pull or merge request with them.
+// repo.deletions() lists the files to delete in the same commit (nikos migrate removes some).
 ```
 
 Inside `withStore`, every nikOS function reads and writes the store instead of
@@ -41,9 +42,10 @@ plans (`nikos planning sync`) and the local dashboard.
 
 | Area | Functions |
 | --- | --- |
-| Storage | `MemoryStore`, `withStore`, `diskStore`, `store` |
+| Storage | `MemoryStore` (with `changes()` and `deletions()`), `withStore`, `diskStore`, `store` |
 | Checks | `validate`, `formatResult`, `clear`, `checkRelease` |
 | Story map | `init`, `newStory`, `newStep`, `addRelease`, `renameRelease`, `moveStory`, `removeRelease`, `reorderRelease`, `storyMapOf`, `renderMap`, `exportMap` |
+| State | `loadStates`, `storyState`, `perStory`, `migrate` |
 | Work | `setState`, `next`, `dependencies`, `suggest`, `show`, `newPlan`, `decide`, `findDecisions` |
 | Approvals | `loadApprovals`, `approvalLapse` |
 | Helpers | `STORY_ID`, `isDone`, `specHash`, `findIntentDir`, `featureFor` |

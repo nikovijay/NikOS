@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { findIntentDir } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
+import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { validate } from "./validate.js";
@@ -51,9 +52,9 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
   const settings = resolveSettings(root);
   const policy = settings["approval.policy"];
   const owners = codeowners(root);
-  const protectedApprovals = owners && /approvals\.yaml/.test(readFileSync(owners, "utf8"));
+  const protectedApprovals = owners && /approvals(\.yaml|\/)/.test(readFileSync(owners, "utf8"));
   if (policy.value === "off") add({ name: "approvals", status: "ok", found: `off (${policy.from})` });
-  else if (protectedApprovals) add({ name: "approvals", status: "ok", found: `${policy.value} (${policy.from}); intent/approvals.yaml needs a CODEOWNERS review` });
+  else if (protectedApprovals) add({ name: "approvals", status: "ok", found: `${policy.value} (${policy.from}); intent/approvals${perStory(intent) ? "/" : ".yaml"} needs a CODEOWNERS review` });
   else
     add({
       name: "approvals",

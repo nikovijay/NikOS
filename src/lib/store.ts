@@ -3,7 +3,7 @@
 // anywhere), run nikOS's commands against it, and take the changed files back to commit.
 // Running scenarios, cloning upstream plans and package assets (schemas, templates) always use
 // the disk: they need real files.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
 
 export interface Store {
@@ -15,6 +15,8 @@ export interface Store {
   /** Write a file, making its folders. With create, refuse to replace one that exists. */
   write(path: string, text: string, opts?: { create?: boolean }): void;
   append(path: string, text: string): void;
+  /** Delete a file, if it's there. */
+  remove(path: string): void;
 }
 
 export const diskStore: Store = {
@@ -28,12 +30,14 @@ export const diskStore: Store = {
     writeFileSync(path, text, opts?.create ? { flag: "wx" } : undefined);
   },
   append: (path, text) => appendFileSync(path, text),
+  remove: (path) => rmSync(path, { force: true }),
 };
 
 /** A repo held in memory: files by absolute path. changes() lists what nikOS wrote. */
 export class MemoryStore implements Store {
   private files = new Map<string, string>();
   private changed = new Set<string>();
+  private removed = new Set<string>();
 
   /** files: paths relative to root (e.g. "intent/storymap.yaml") and their text. */
   constructor(files: Record<string, string> = {}, readonly root = resolve(sep, "repo")) {
@@ -64,6 +68,17 @@ export class MemoryStore implements Store {
     if (opts?.create && this.files.has(abs)) throw Object.assign(new Error(`EEXIST: file already exists, open '${path}'`), { code: "EEXIST" });
     this.files.set(abs, text);
     this.changed.add(abs);
+    this.removed.delete(abs);
+  }
+  remove(path: string): void {
+    const abs = resolve(path);
+    if (!this.files.delete(abs)) return;
+    this.changed.delete(abs);
+    this.removed.add(abs);
+  }
+  /** The files nikOS deleted, relative to root. */
+  deletions(): string[] {
+    return [...this.removed].sort().map((abs) => abs.slice(this.root.length + 1).split(sep).join("/"));
   }
   append(path: string, text: string): void {
     this.write(path, (this.files.get(resolve(path)) ?? "") + text);

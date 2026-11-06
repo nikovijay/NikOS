@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { loadStates } from "../lib/state-files.js";
 import { parse } from "yaml";
 import { featureStoryIds, featureTags, findIntentDir, isDone, read, walk } from "../lib/project.js";
 
@@ -27,7 +28,7 @@ export function next(dir: string): NextResult {
   const intentDir = findIntentDir(dir);
   const map = parse(read(join(intentDir, "storymap.yaml")));
   const state = parse(read(join(intentDir, "state.yaml")));
-  const stories: Record<string, { status?: string }> = state?.stories ?? {};
+  const stories: Record<string, { status?: string }> = loadStates(intentDir);
   const mapOrder: string[] = (map?.releases ?? [])
     .slice()
     .sort((a: any, b: any) => a.number - b.number)

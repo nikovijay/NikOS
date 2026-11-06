@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { loadStates } from "../lib/state-files.js";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
 import { findIntentDir, featureStoryIds, isDone, read, walk } from "../lib/project.js";
@@ -36,7 +37,7 @@ export function storyboard(dir: string): Storyboard {
   const intentDir = findIntentDir(dir);
   const c = constitution(intentDir);
   const map = parse(read(join(intentDir, "storymap.yaml"))) as { activities?: { id: string; title?: string }[] };
-  const state = (parse(read(join(intentDir, "state.yaml"))) ?? {}) as { stories?: Record<string, { status?: string }> };
+  const state = { stories: loadStates(intentDir) };
 
   const stories = walk(join(intentDir, "features"), ".feature").flatMap((path) => {
     const text = read(path);

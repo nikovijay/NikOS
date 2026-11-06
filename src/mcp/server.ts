@@ -32,6 +32,7 @@ import { doctor } from "../commands/doctor.js";
 import { joinPlan } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
+import { migrate } from "../commands/migrate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
@@ -155,6 +156,10 @@ export function createServer(repo: string): McpServer {
   }, (a) => {
     const r = companyInit(root, a);
     return text(`Created ${r.created.join(", ") || "nothing new"}.\nEach department or team joins with: ${r.join}`);
+  });
+  tool("migrate", "Move every story's state and approval to its own file (per-story), so parallel branches never conflict, or back (single-file). Ask the person first; commit it on its own.", { to: z.enum(["per-story", "single-file"]) }, (a) => {
+    const r = migrate(root, a.to);
+    return text(`Moved ${r.states} stories${r.approvals ? ` and ${r.approvals} approvals` : ""} to the ${r.layout} layout${r.codeowners ? `, and added a matching approvals rule to ${r.codeowners}` : ""}.`);
   });
   tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
     const r = rollout(root, { offline: a.offline });

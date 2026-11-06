@@ -4,11 +4,11 @@
 // - a ticket can approve a story (when tracker.approvals is on) or cancel it, never mark it
 //   done: done still means the story's scenarios pass;
 // - for everything else, nikOS says which tickets should move, and the agent moves them.
-import { dirname, join } from "node:path";
-import { parseDocument } from "yaml";
-import { findIntentDir, read, STORY_ID } from "../lib/project.js";
+import { dirname } from "node:path";
+import { findIntentDir, STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
+import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { approve } from "./approve.js";
 import { storyMapOf } from "./map.js";
 import { setState, StateError } from "./state.js";
@@ -16,8 +16,6 @@ import { newStory } from "./story.js";
 import { newActivity } from "./step.js";
 
 export type NikosStatus = "todo" | "in_progress" | "needs_rework" | "done" | "approved" | "cancelled";
-
-const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 
 /** The tracker settings that apply here. */
 function trackerOf(root: string) {
@@ -36,11 +34,9 @@ export function linkTicket(input: { id: string; ticket: string }, dir: string) {
   if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1)`);
   const ticket = input.ticket.trim();
   if (!ticket) throw new Error("Give the ticket's key or number, e.g. PAY-123");
-  const path = join(findIntentDir(dir), "state.yaml");
-  const doc = parseDocument(read(path));
-  if (!doc.getIn(["stories", input.id])) throw new Error(`${input.id} has no entry in state.yaml`);
-  doc.setIn(["stories", input.id, "ticket"], ticket);
-  store().write(path, doc.toString(yamlOpts));
+  const intent = findIntentDir(dir);
+  if (!storyState(intent, input.id)) throw new Error(noEntry(intent, input.id));
+  updateStory(intent, input.id, (doc, at) => doc.setIn([...at, "ticket"], ticket));
   return { id: input.id, ticket };
 }
 
@@ -94,8 +90,7 @@ export function recordTicket(input: { id: string; status: string; by?: string; o
 }
 
 function storyTicket(root: string, id: string): string | undefined {
-  const path = join(findIntentDir(root), "state.yaml");
-  const v = parseDocument(read(path)).getIn(["stories", id, "ticket"]);
+  const v = storyState(findIntentDir(root), id)?.ticket;
   return typeof v === "string" ? v : undefined;
 }
 

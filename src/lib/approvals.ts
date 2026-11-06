@@ -1,10 +1,9 @@
-// Approvals live in intent/approvals.yaml, apart from state.yaml, so a repo can protect them:
-// a CODEOWNERS rule on the file means an approval only lands when the right person reviews the
-// PR or merge request. Agents write state.yaml all the time; approvals.yaml only changes on sign-off.
+// Approvals live in intent/approvals.yaml (or intent/approvals/<ID>.yaml, one per story), apart
+// from story state, so a repo can protect them: a CODEOWNERS rule on them means an approval only
+// lands when the right person reviews the PR or merge request. Agents write state all the time;
+// approvals only change on sign-off.
 import { join } from "node:path";
-import { parse } from "yaml";
-import { read } from "./project.js";
-import { store } from "./store.js";
+import { loadApprovalEntries } from "./state-files.js";
 
 export interface Approval {
   by: string;
@@ -20,9 +19,7 @@ export interface Approval {
 export const approvalsPath = (intentDir: string) => join(intentDir, "approvals.yaml");
 
 export function loadApprovals(intentDir: string): Record<string, Approval> {
-  const path = approvalsPath(intentDir);
-  if (!store().exists(path)) return {};
-  return parse(read(path))?.approvals ?? {};
+  return loadApprovalEntries<Approval>(intentDir);
 }
 
 /**
@@ -36,7 +33,7 @@ export const doneMark = (state: { done_at?: string; updated?: string } | undefin
  * since the same done, with the same feature. Returns undefined when it holds, or why not.
  */
 export function approvalLapse(approval: Approval, state: { status?: string; done_at?: string; updated?: string } | undefined, currentHash: string | undefined): string | undefined {
-  if (state?.status !== "done") return state ? `it's ${state.status} now` : "it has no entry in state.yaml";
+  if (state?.status !== "done") return state ? `it's ${state.status} now` : "it has no entry in state";
   if (approval.done_at !== doneMark(state)) return "it went through done again since";
   if (currentHash && approval.spec_hash !== currentHash) return "its feature changed since";
   return undefined;
