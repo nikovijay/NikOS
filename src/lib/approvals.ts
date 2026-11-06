@@ -9,6 +9,8 @@ import { read } from "./project.js";
 export interface Approval {
   by: string;
   on: string;
+  /** How it was given: typed in a terminal, or answered in a chat with an agent. */
+  via?: "terminal" | "chat";
   /** The feature fingerprint that was approved. */
   spec_hash: string;
   /** Which time the story reached done: going through done again needs a new approval. */

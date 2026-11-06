@@ -1,7 +1,11 @@
-// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml. It only
-// runs in an interactive terminal and asks for the story id to be typed back, so a coding agent
-// (which runs commands without a terminal) can't approve its own work. A repo can go further and
-// protect approvals.yaml with CODEOWNERS, so approvals need a review on GitHub or GitLab.
+// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml. Two
+// ways in, recorded as `via`:
+// - terminal: the person runs it and types the story id back. A coding agent runs commands
+//   without a terminal, so it can't take this route.
+// - chat: the agent asked "Do you want to approve …?" and the person answered Approve. The
+//   playbooks only allow it after that answer; `via: chat` shows it was given that way.
+// A repo can go further and protect approvals.yaml with CODEOWNERS, so every approval also
+// needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -34,7 +38,9 @@ export interface ApproveResult {
 }
 
 /** Check a story can be approved, rerun its scenarios, then record the approval. The terminal check lives in runApprove. */
-export function approve(story: string, opts: { dir?: string; by: string; date?: string }): ApproveResult {
+export type Via = "terminal" | "chat";
+
+export function approve(story: string, opts: { dir?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
   const intentDir = findIntentDir(opts.dir ?? process.cwd());
   const entry = parse(read(join(intentDir, "state.yaml")))?.stories?.[story];
@@ -64,40 +70,52 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
   // A Document keeps comments and the other approvals as they were.
   const doc = parseDocument(existsSync(path) ? read(path) : NEW_FILE);
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
-  doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, spec_hash: hash, done_at: doneMark(entry) }));
+  doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, via: opts.via ?? "terminal", spec_hash: hash, done_at: doneMark(entry) }));
   writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
   return { story, by: opts.by, on };
 }
 
 export async function runApprove(args: string[]): Promise<number> {
-  const [story, ...rest] = args;
-  if (!story) {
-    console.error("Usage: nikos approve <story-id> [--dir <path>]");
-    return 1;
-  }
-  const i = rest.indexOf("--dir");
-  const dir = i >= 0 ? rest[i + 1] : process.cwd();
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error("✗ nikos approve only runs in an interactive terminal. Approval is a person's sign-off, so an agent can't give it.");
+  const flag = (n: string) => {
+    const i = args.indexOf(`--${n}`);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const stories = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--")));
+  const dir = flag("dir") ?? process.cwd();
+  const via = flag("via") ?? "terminal";
+  if (!stories.length || (via !== "terminal" && via !== "chat")) {
+    console.error("Usage: nikos approve <story-id>... [--via chat] [--dir <path>]");
     return 1;
   }
   const by = approver(dir);
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const typed = (await rl.question(`Approving ${story} as ${by}. Its scenarios run again first.\nType ${story} to approve: `)).trim();
-    if (typed !== story) {
-      console.error("✗ Not approved: that wasn't the story id.");
+  if (via === "terminal") {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.error(
+        "✗ nikos approve only runs in an interactive terminal. In a chat with an agent, the agent asks \"Do you want to approve …?\" and records your answer with --via chat.",
+      );
       return 1;
     }
-  } finally {
-    rl.close();
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const want = stories.join(" ");
+      const typed = (await rl.question(`Approving ${want} as ${by}. Scenarios run again first.\nType ${want} to approve: `)).trim();
+      if (typed !== want) {
+        console.error("✗ Not approved: that wasn't the story id.");
+        return 1;
+      }
+    } finally {
+      rl.close();
+    }
   }
-  try {
-    approve(story, { dir, by });
-    console.log(`${story}: approved by ${by} (intent/approvals.yaml)`);
-    return 0;
-  } catch (err) {
-    console.error(`✗ ${(err as Error).message}`);
-    return 1;
+  let failed = 0;
+  for (const story of stories) {
+    try {
+      approve(story, { dir, by, via });
+      console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (intent/approvals.yaml)`);
+    } catch (err) {
+      console.error(`✗ ${(err as Error).message}`);
+      failed++;
+    }
   }
+  return failed ? 1 : 0;
 }

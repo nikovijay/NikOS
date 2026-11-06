@@ -39,9 +39,26 @@ scenario, with every command and the output you should see.
 | Codex | `codex plugin marketplace add nikovijay/NikOS` |
 | Cursor | Add `https://github.com/nikovijay/NikOS` as a plugin marketplace |
 
-Then ask your agent to plan or build a story: the `nikos-mode` skill takes it
-from there. The skills run the `nikos` command through `npx`, so there's
-nothing else to install. More in [docs/install.md](docs/install.md).
+Then talk to your agent: the `nikos-mode` skill takes it from there. The
+skills run the `nikos` command through `npx`, so there's nothing else to
+install. More in [docs/install.md](docs/install.md).
+
+## Talk to it
+
+You don't need to learn the commands. Your agent runs them and, after each
+request, says where things stand and offers a short menu of what to do next.
+Things you can say:
+
+- "Set up nikOS here", or "Map what this repo already does"
+- "What should we build next?"
+- "Add a story: people can share a list with one other person"
+- "Build HT-3"
+- "Is release 1 ready to ship?"
+- "Show me the story map"
+
+When a story is done, your agent asks "Do you want to approve HT-3: Reorder
+tasks?". Your answer is the sign-off. It's recorded in
+`intent/approvals.yaml`, and your agent never approves on its own.
 
 ## The loop
 
@@ -54,8 +71,9 @@ npx -y nikos verify TC-1              # run the story: it fails until it's built
 npx -y nikos state set TC-1 done      # refused unless its scenarios pass
 ```
 
-With an agent, you only write the request ("add a story for X and build
-it"); the playbooks run these steps and stop at each point that needs you.
+That's what runs underneath. With an agent, you only make the request ("add
+a story for X and build it"); the playbooks run these steps and stop at each
+point that needs you.
 
 ## What lives in your repo
 
@@ -63,7 +81,8 @@ it"); the playbooks run these steps and stop at each point that needs you.
 intent/
 ├── constitution.md      who it's for, the problem, what proves it works
 ├── storymap.yaml        activities and steps, releases, and the order to build stories in
-├── state.yaml           each story's status: todo, in_progress, needs_rework, done
+├── state.yaml           each story's status: todo, in_progress, needs_rework, done, cancelled
+├── approvals.yaml       people's sign-offs on done stories (optional)
 ├── decisions.md         why things are the way they are, append-only
 ├── features/            one .feature file per story; its scenarios are the criteria
 │   └── <activity>/<story>.feature
@@ -90,8 +109,9 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI) |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
-| `nikos approve <id>` | Sign off a done story yourself, in your terminal (writes `intent/approvals.yaml`) |
+| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
+| `nikos suggest` | Where things stand, and a short menu of what to do next |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |

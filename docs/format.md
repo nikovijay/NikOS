@@ -319,14 +319,23 @@ approvals:
   HT-1:
     by: Niko Vijay              # git's user.name
     on: 2026-11-06
+    via: chat                   # chat (answered an agent) or terminal
     spec_hash: 3f9a1c2b7d4e     # the feature that was approved
     done_at: 2026-11-03T14:02:11Z   # the done that was approved
 ```
 
-`nikos approve <id>` writes an entry. It only runs in an interactive terminal
-and asks for the id to be typed back, so a coding agent can't approve its own
-work. It approves only a done story whose feature hasn't changed since, and
-reruns its scenarios first.
+`nikos approve <id>` writes an entry, in one of two ways:
+
+- **In chat.** When a story reaches done, the agent asks "Do you want to
+  approve HT-1: Add a task?". Only if the person answers Approve does it run
+  `nikos approve HT-1 --via chat`. The playbooks never let an agent approve on
+  its own judgement, and `via: chat` records how the approval was given.
+- **In a terminal.** The person runs `nikos approve HT-1` and types the id
+  back. It refuses to run without an interactive terminal, which is how coding
+  agents run commands.
+
+Either way, it approves only a done story whose feature hasn't changed since,
+and reruns its scenarios first.
 
 An approval holds while the story stays done, since that same done, with the
 same feature. Move it to needs_rework, take it through done again, or change its
