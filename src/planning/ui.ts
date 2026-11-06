@@ -128,7 +128,7 @@ window.addEventListener('hashchange', render);
 function krCard(k) {
   var chips = '';
   if (k.stale) chips += chip('Stale', 'amber');
-  if (k.upstream) chips += chip('Locked to ' + k.upstream.ref, 'lock');
+  if (k.upstream) chips += chip('Aligned to ' + k.upstream.ref, 'lock');
   var pct = Math.max(0, Math.min(100, Math.round(k.progress * 100)));
   return '<a class="card" href="#/kr/' + esc(k.id) + '">' +
     '<div class="row"><strong>' + esc(k.title) + '</strong>' + chips + '</div>' +
@@ -244,9 +244,10 @@ function betCard(b) {
 
 // The bet card's notes: "## " lines become headings, the rest stays plain escaped text.
 function prose(text) {
+  // Headings are blocks, so the line breaks either side of them would show as blank lines.
   return text.trim().split('\n').map(function (l) {
     return /^#{2,3} /.test(l) ? '<h4>' + esc(l.replace(/^#+ /, '')) + '</h4>' : esc(l);
-  }).join('\n');
+  }).join('\n').replace(/\n*(<h4>)/g, '$1').replace(/(<\/h4>)\n*/g, '$1');
 }
 
 function reviewForm(b) {

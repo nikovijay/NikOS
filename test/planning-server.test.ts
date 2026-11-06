@@ -149,6 +149,17 @@ describe("dashboard", () => {
   });
 });
 
+describe("dashboard copy", () => {
+  test("an upstream KR reads as aligned, and headings leave no blank line", async () => {
+    const html = await (await fetch(`${base(await start(setup()))}/`)).text();
+    expect(html).toContain("'Aligned to '");
+    expect(html).not.toContain("Locked to");
+    const fn = (name: string) => html.match(new RegExp(`function ${name}\\(text\\) \\{[\\s\\S]*?\\n\\}`))?.[0] ?? html.match(new RegExp(`function ${name}\\(s\\) \\{.*\\}`))?.[0];
+    const prose = new Function(`${fn("esc")}\n${fn("prose")}\nreturn prose;`)();
+    expect(prose("## Why we think so\n\nSeven of ten testers said so.\nAnd more.")).toBe("<h4>Why we think so</h4>Seven of ten testers said so.\nAnd more.");
+  });
+});
+
 describe("custom views", () => {
   test("a view in planning/views is served with the contract script", async () => {
     const root = setup();
