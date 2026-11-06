@@ -40,6 +40,7 @@ export function parseArgs(args: string[]) {
   return { positional, all: (n: string) => flags.get(n) ?? [], opt: (n: string) => flags.get(n)?.[0], has: (n: string) => flags.has(n) };
 }
 
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const num = (s: string | undefined) => (s === undefined || s.trim() === "" ? NaN : Number(s));
 
 export function status(root: string): string {
@@ -141,7 +142,7 @@ export async function runPlanning(args: string[]): Promise<number> {
         for (const i of issues) console.log(`✗ ${i.file}: ${i.message}`);
         // Unresolved upstream references are reported, never fatal: planning carries on without them.
         for (const r of crossRefs(root).filter((r) => !r.resolved)) console.log(`? ${r.file}: ${r.ref} is unresolved (not synced or not accessible)`);
-        console.log(issues.length ? `\n${issues.length} ${issues.length === 1 ? "problem" : "problems"} found.` : `✓ planning/ is valid — ${betIds(root).length} bets, ${krIds(root).length} key results`);
+        console.log(issues.length ? `\n${issues.length} ${issues.length === 1 ? "problem" : "problems"} found.` : `✓ planning/ is valid — ${count(betIds(root).length, "bet")}, ${count(krIds(root).length, "key result")}`);
         return issues.length ? 1 : 0;
       }
       case "sync":

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
@@ -6,6 +6,7 @@ import { newBet, reviewBet, type BetInput } from "../src/planning/bets";
 import { checkIn, isStale, newKr, reviseTarget } from "../src/planning/krs";
 import { delivery, describeDelivery } from "../src/planning/delivery";
 import { checkBet, loadBet, loadKr, validatePlanning } from "../src/planning/model";
+import { runPlanning } from "../src/planning/cli";
 import { copyExample, edit } from "./helpers";
 
 const repo = () => dirname(copyExample());
@@ -145,5 +146,16 @@ describe("example", () => {
     const loaded = loadKr(root, "k");
     writeFileSync(join(root, loaded.file), readFileSync(join(root, loaded.file), "utf8") + "# edited\n");
     expect(() => checkIn(root, "k", { value: 1, expect: loaded.hash })).toThrow("changed on disk");
+  });
+});
+
+describe("planning validate", () => {
+  it("counts one bet and one key result in the singular", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await runPlanning(["validate", "--dir", join(__dirname, "../examples/hello-todo")]);
+    const out = log.mock.calls.map((c) => c.join(" ")).join("\n");
+    log.mockRestore();
+    expect(code).toBe(0);
+    expect(out).toContain("1 bet, 1 key result");
   });
 });
