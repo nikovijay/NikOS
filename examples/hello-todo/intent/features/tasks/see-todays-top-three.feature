@@ -1,4 +1,4 @@
-@HT-2 @release-1 @must @activity-tasks @effort-M
+@HT-2 @release-1 @must @activity-tasks @step-focus @effort-M
 Feature: See today's top three
 
   As a busy person

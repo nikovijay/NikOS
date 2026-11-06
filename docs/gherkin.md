@@ -8,7 +8,7 @@ and the test: each acceptance criterion is a scenario that Cucumber can run.
 ## The shape of a story
 
 ```gherkin
-@HT-1 @release-1 @must @activity-tasks @effort-S
+@HT-1 @release-1 @must @activity-tasks @step-capture @effort-S
 Feature: Add a task
 
   As a busy person
@@ -54,6 +54,7 @@ criterion's priority).
 | `@release-N` | release the story is in | yes |
 | `@must` / `@should` / `@could` | story priority | yes |
 | `@activity-<id>` | activity, matching the folder name | no |
+| `@step-<id>` | step within that activity, from `storymap.yaml` | no |
 | `@effort-XS` … `@effort-XL` | size estimate | no |
 
 Anything else is a warning, so you notice typos.

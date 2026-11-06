@@ -41,6 +41,27 @@
           "title": {
             "type": "string",
             "minLength": 1
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "title"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
           }
         }
       }
@@ -62,6 +83,10 @@
             "minimum": 1
           },
           "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "goal": {
             "type": "string",
             "minLength": 1
           },

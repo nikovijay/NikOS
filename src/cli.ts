@@ -10,6 +10,8 @@ import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
 import { runStory } from "./commands/story.js";
+import { runStep } from "./commands/step.js";
+import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runPlanning } from "./planning/cli.js";
@@ -26,6 +28,8 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   show: runShow,
   decisions: runDecisions,
   story: runStory,
+  step: runStep,
+  release: runRelease,
   video: runVideo,
   map: runMap,
   planning: runPlanning,
@@ -39,7 +43,12 @@ Commands:
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   story add "<title>"  Add a story to the map, state and a starter feature
-                   (--activity, --release, --priority)
+                   (--activity, --step, --release, --priority)
+  step add "<title>"   Add a step under an activity (--activity, --id)
+  release add "<title>"  Add the next release (--goal)
+  release rename <n>   Change a release's title or goal (--goal)
+  release move <id> <n>  Move a story to another release, retagging its feature
+  release reorder <n> <pos>  Move a release and renumber them all
   plan new <id>    Start the next version of a story's plan
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
