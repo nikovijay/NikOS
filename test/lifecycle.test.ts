@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -61,7 +61,7 @@ describe("approve", () => {
     expect(await runApprove(["HT-1", "--dir", copyExample()])).toBe(1);
   });
 
-  it("records a sign-off in approvals.yaml that lapses when the feature changes or the story is redone", () => {
+  it("records a sign-off in approvals.yaml that lapses when the feature changes or the story is redone", async () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-approve-"));
     init(root, { name: "Fixture", key: "FX" });
     writeFileSync(join(root, "package.json"), '{"name":"fx","private":true}');
@@ -80,7 +80,7 @@ describe("approve", () => {
     expect(stateOf(intent, "FX-1")).toMatchObject({ status: "done", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
 
     expect(approve("FX-1", { dir: root, by: "Niko", date: "2026-11-06" })).toEqual({ story: "FX-1", by: "Niko", on: "2026-11-06" });
-    expect(approvals().approvals["FX-1"]).toEqual({ by: "Niko", on: "2026-11-06", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
+    expect(approvals().approvals["FX-1"]).toEqual({ by: "Niko", on: "2026-11-06", via: "terminal", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
     expect(readFileSync(join(intent, "approvals.yaml"), "utf8")).toContain("Protect this file with CODEOWNERS");
     expect(stateOf(intent, "FX-1").status).toBe("done"); // state.yaml doesn't change
     expect(validate(root).errors).toEqual([]);
@@ -106,7 +106,11 @@ describe("approve", () => {
     setState("FX-1", "done", { dir: root, now: "2026-11-07T09:00:00Z" });
     expect(validate(root).warnings.map((w) => w.message)).toEqual(["FX-1's approval no longer holds: it went through done again since"]);
     expect(storyMapOf(root).releases[0].stories[0].status).toBe("done");
-    approve("FX-1", { dir: root, by: "Niko", date: "2026-11-07" });
+    // The person answered "Approve" in chat: runApprove records it without a terminal.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(await runApprove(["FX-1", "--via", "chat", "--dir", root])).toBe(0);
+    log.mockRestore();
+    expect(approvals().approvals["FX-1"]).toMatchObject({ via: "chat", done_at: "2026-11-07T09:00:00Z" });
     expect(validate(root).warnings).toEqual([]);
   }, 60_000);
 
