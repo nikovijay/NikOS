@@ -1,0 +1,8 @@
+name: hello-todo
+period: Q4 2026
+level: team
+pillars: [Focus]
+objectives:
+  - id: focus
+    title: People finish what matters most each day
+    owner: Product

@@ -1,0 +1,11 @@
+{
+  "name": "nikos-planning",
+  "version": "0.0.7",
+  "description": "The nikOS Planning pack: objectives, key results and bets in your repo, linked to the story map that delivers them, with KR check-ins and a local dashboard.",
+  "author": { "name": "Niko Vijay" },
+  "homepage": "https://nikos.tools",
+  "repository": "https://github.com/nikovijay/NikOS",
+  "license": "MIT",
+  "keywords": ["planning", "okr", "key-results", "bets", "roadmap", "dashboard", "skills"],
+  "skills": "./skills/"
+}

@@ -19,8 +19,6 @@ intent/
   state.yaml             status, blockers and the run queue
   outreach/              optional, drafts from the validate playbook
     <date>-<channel>.md
-  bets/                  optional, time-boxed bets (see Bets)
-    <bet-id>.md
 ```
 
 Two rules hold across every file:
@@ -109,6 +107,27 @@ Rules:
 - Every story id has exactly one feature file and one `state.yaml` entry.
 - Release numbers start at 1 and have no gaps.
 
+### Bet links (optional)
+
+A release can name the bets it delivers, and a single story can override its
+release's list. The bets themselves live outside `intent/`, in `planning/`
+(the Planning pack, see [planning.md](planning.md)).
+
+```yaml
+releases:
+  - number: 1
+    title: MVP
+    bets: [fewer-missed-tasks]                 # a bet in planning/bets/
+    stories: [HT-1, HT-2]
+story_bets:
+  HT-2: [acme/company-plan#focus-mode]         # this story serves another repo's bet
+```
+
+- A bet id must have a `planning/bets/<id>.md` in the same repo.
+- `owner/repo#id` names another repo's bet. `nikos validate` checks its form
+  only and never fetches it.
+- A story's `story_bets` entry replaces its release's `bets` for that story.
+
 Add a story with `nikos story add "<title>" --activity <id>`. It takes the
 next free id, adds it to the last release (or `--release <n>`), gives it a
 `todo` entry in `state.yaml` and writes a starter feature file to fill in.
@@ -171,8 +190,6 @@ summary: One to three plain sentences on the approach.
 
 Notes for the agent.
 ```
-
-These fields match intentdocs plans one to one (see the mapping doc).
 
 Start a new version with `nikos plan new <story-id>`. It writes the next
 `v<N>` from a template, sets `supersedes`, and refuses to overwrite an
@@ -247,51 +264,6 @@ until the founder signs it off, then `Status: signed off <date>, for the
 person to send`. Then who it's for, the message, the questions to ask and,
 optionally, a demo or reel script. Written by the validate playbook; the
 founder sends it, never the agent.
-
----
-
-## bets/&lt;bet-id&gt;.md (optional)
-
-**Purpose:** a time-boxed bet that a set of stories will move a measure.
-
-**Path:** `intent/bets/<bet-id>.md`, where `<bet-id>` is lowercase words
-joined by hyphens.
-
-**Format:** Markdown with YAML front matter, then free-form notes. Create one
-with `nikos bet new`; the bet playbook frames and closes it.
-
-```markdown
----
-id: faster-reorder
-hypothesis: We believe drag to reorder will make people plan their day in the app because they reorder on paper today.
-key_result: Share of daily users who reorder at least once
-expected_uplift: from 10% to 30%
-time_box: 2026-12-01
-blockers: []
-stories: [HT-3]
-status: open
----
-
-## Why we think so
-The evidence behind the hypothesis.
-
-## Outcome
-Filled in when the time box ends.
-```
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `id` | yes | Matches the file name |
-| `hypothesis` | yes | What you believe and why |
-| `key_result` | yes | The one measure that says whether it worked |
-| `expected_uplift` | yes | How far you expect it to move, from what to what |
-| `time_box` | yes | End date, `YYYY-MM-DD` |
-| `blockers` | yes | What stands in the way; `[]` if nothing |
-| `stories` | yes | At least one story id; each must be in `storymap.yaml` |
-| `status` | yes | `open \| won \| lost \| killed` |
-
-`nikos validate` checks every field against `schemas/bet.schema.json`, that
-the id matches the file name, and that every linked story exists.
 
 ---
 

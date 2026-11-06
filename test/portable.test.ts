@@ -64,7 +64,7 @@ describe("nikos-mode router", () => {
   it("lists every principle with a trigger", () => {
     const principles = readFileSync(join(router, "principles/index.md"), "utf8");
     const lines = principles.split("\n").filter((l) => l.startsWith("| **"));
-    expect(lines).toHaveLength(7);
+    expect(lines).toHaveLength(5); // the two bet principles moved to the Planning pack
     for (const l of lines) expect(l.split("|").map((c) => c.trim()).filter(Boolean)).toHaveLength(2);
   });
 });

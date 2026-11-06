@@ -1,0 +1,16 @@
+id: missed-important-tasks
+title: Testers who missed an important task last week
+objective: focus
+owner: Product
+unit: "%"
+baseline: 70
+target: 35
+original_target: 35
+by: 2026-12-15
+checkins:
+  - date: 2026-10-12
+    value: 70
+    note: Baseline from the first survey.
+  - date: 2026-11-02
+    value: 55
+    note: After the top-three view shipped to testers.

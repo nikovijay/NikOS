@@ -67,8 +67,7 @@ intent/
 ├── decisions.md         why things are the way they are, append-only
 ├── features/            one .feature file per story; its scenarios are the criteria
 │   └── <activity>/<story>.feature
-├── plans/               how each story will be built, versioned: <story>.v<N>.md
-└── bets/                time-boxed bets and the stories that test them
+└── plans/               how each story will be built, versioned: <story>.v<N>.md
 ```
 
 Every file is plain text you can read, review and diff. The full format:
@@ -91,7 +90,7 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |
-| `nikos bet new <id>` | Write a time-boxed bet card linked to its stories |
+| `nikos map` | Write a read-only story map page |
 
 ## Links
 

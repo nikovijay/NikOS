@@ -18,7 +18,7 @@ describe("nikos show", () => {
     expect(out).toContain("  I want to see only my three most important tasks");
     expect(out).toContain("  AC1 — Only three tasks are shown");
     expect(out).toContain("Plan: v1 (intent/plans/HT-2.v1.md) — Rank tasks by importance");
-    expect(out).toMatch(/Bets: fewer-missed-tasks \(open, ends [\d-]+, intent\/bets\/fewer-missed-tasks\.md\)/);
+    expect(out).toContain("Bets: fewer-missed-tasks (planning/bets/fewer-missed-tasks.md) — from release 1");
   });
 
   it("shows the latest plan and the decisions tagged with the story", () => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
-import { parseBet } from "./bet.js";
+import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
 import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -29,7 +29,6 @@ const schemaDir = [join(here, "../../schemas"), join(here, "../schemas")].find((
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const checkStorymap = ajv.compile(JSON.parse(read(join(schemaDir, "storymap.schema.json"))));
 const checkState = ajv.compile(JSON.parse(read(join(schemaDir, "state.schema.json"))));
-const checkBet = ajv.compile(JSON.parse(read(join(schemaDir, "bet.schema.json"))));
 
 function pointer(e: ErrorObject): string {
   return e.instancePath.replace(/^\//, "").split("/").filter(Boolean).join(".") || "(root)";
@@ -175,31 +174,24 @@ export function validate(start: string): ValidationResult {
     }
   }
 
-  // Bets: schema, id matches the file name, and every linked story is in the story map.
-  for (const path of walk(join(dir, "bets"), ".md")) {
-    const file = rel(dir, path);
-    let bet;
-    try {
-      bet = parseBet(read(path));
-    } catch (err) {
-      errors.push({ file, message: `front matter isn't valid YAML: ${(err as Error).message.split("\n")[0]}` });
-      continue;
-    }
-    if (!bet) {
-      errors.push({ file, message: "has no front matter", hint: "create bets with `nikos bet new`" });
-      continue;
-    }
-    if (!checkBet(bet.meta)) {
-      for (const e of checkBet.errors ?? []) errors.push({ file, message: describe(e, bet.meta) });
-      continue;
-    }
-    if (bet.meta.id !== basename(path, ".md")) {
-      errors.push({ file, message: `id '${bet.meta.id}' doesn't match the file name`, hint: `rename the file to bets/${bet.meta.id}.md` });
-    }
-    if (storymap) {
-      for (const id of bet.meta.stories) {
-        if (!mapStories.has(id)) errors.push({ file, message: `links ${id}, which is not in storymap.yaml` });
+  // Bet links: each names a bet in planning/bets/ or one in another repo (owner/repo#id).
+  if (storymap && typeof storymap === "object") {
+    const betsDir = join(planningDir(dir), "bets");
+    const check = (where: string, refs: unknown) => {
+      for (const ref of Array.isArray(refs) ? refs : []) {
+        if (typeof ref !== "string") continue;
+        if (CROSS_REF.test(ref)) continue; // another repo's bet: checked for form only, never fetched
+        if (!BET_ID.test(ref)) {
+          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which is neither a bet id nor owner/repo#id`, hint: "use a bet id like faster-checkout, or owner/repo#bet-id for another repo's bet" });
+        } else if (!existsSync(join(betsDir, `${ref}.md`))) {
+          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which has no planning/bets/${ref}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
+        }
       }
+    };
+    for (const r of storymap.releases ?? []) check(`release ${r?.number}`, r?.bets);
+    for (const [id, refs] of Object.entries(storymap.story_bets ?? {})) {
+      if (!mapStories.has(id)) errors.push({ file: "storymap.yaml", message: `story_bets names ${id}, which is not in any release` });
+      check(id, refs);
     }
   }
 
