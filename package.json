@@ -24,6 +24,7 @@
     "docs"
   ],
   "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run build && npm test",
     "test": "vitest run",
