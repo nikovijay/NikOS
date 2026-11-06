@@ -319,12 +319,16 @@ approvals:
   HT-1:
     by: Niko Vijay              # git's user.name
     on: 2026-11-06
-    via: chat                   # chat (answered an agent) or terminal
+    via: chat                   # app, chat or terminal: how it was given
     spec_hash: 3f9a1c2b7d4e     # the feature that was approved
     done_at: 2026-11-03T14:02:11Z   # the done that was approved
 ```
 
-`nikos approve <id>` writes an entry, in one of two ways:
+`nikos approve <id>` writes an entry, in one of three ways:
+
+- **Through the app.** With `nikos mcp`, the approve tool asks the person
+  directly through their app's own prompt. The model never sees the question
+  or gives the answer. Recorded as `via: app`.
 
 - **In chat.** When a story reaches done, the agent asks "Do you want to
   approve HT-1: Add a task?". Only if the person answers Approve does it run

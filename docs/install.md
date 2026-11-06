@@ -65,6 +65,45 @@ In Codex and Cursor, install the pack from the same marketplace as nikOS.
 nikOS's router hands requests to an installed pack's skill, and gives the
 install command when the pack is missing.
 
+## Any app that runs MCP servers
+
+`nikos mcp` runs nikOS as a local MCP server. Claude Desktop, Cursor, Codex,
+Claude Code and other apps that run MCP servers on your machine can use it, with
+no skills to install. Its tools are nikOS's commands, its prompts are the
+playbooks, and it tells the app's model to keep the conversation going with a
+short menu of next steps. Point it at one repo with `--dir`.
+
+**Claude Desktop**: in Settings → Developer → Edit Config, add to
+`claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "nikos": { "command": "npx", "args": ["-y", "nikos", "mcp", "--dir", "/path/to/your/repo"] }
+  }
+}
+```
+
+**Cursor**: the same `mcpServers` entry, in `.cursor/mcp.json` in the repo.
+
+**Codex**: in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.nikos]
+command = "npx"
+args = ["-y", "nikos", "mcp", "--dir", "/path/to/your/repo"]
+```
+
+**Claude Code**: `claude mcp add nikos -- npx -y nikos mcp --dir "$PWD"` from
+the repo. The plugin above gives Claude Code the same and more, so you only
+need one of the two.
+
+**Approvals through the app.** When you ask to approve a story, the server asks
+you directly through the app's own prompt ("Do you want to approve HT-2:
+Reorder tasks?"). The model never sees the question or gives the answer, and
+the approval is recorded as `via: app`. If an app can't ask you directly, the
+server says so and approves nothing.
+
 ## The command-line tool
 
 The skills run the `nikos` command. When it isn't installed, they run it

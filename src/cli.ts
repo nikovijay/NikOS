@@ -10,6 +10,7 @@ import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
 import { runApprove } from "./commands/approve.js";
 import { runSuggest } from "./commands/suggest.js";
+import { runMcp } from "./mcp/server.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -32,6 +33,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   state: runState,
   approve: runApprove,
   suggest: runSuggest,
+  mcp: runMcp,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -74,6 +76,8 @@ Commands:
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
   suggest          What to do next: where things stand and a short menu (--json, --brief)
+  mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and
+                   other apps (--dir <repo>)
   decide "<title>" Append a decision to decisions.md
                    (--why, --story, --category, --supersedes)
   video            Draft a video brief and storyboard from the done stories

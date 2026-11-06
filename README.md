@@ -38,6 +38,7 @@ scenario, with every command and the output you should see.
 | Claude Code | `/plugin install nikos --marketplace nikovijay/NikOS` |
 | Codex | `codex plugin marketplace add nikovijay/NikOS` |
 | Cursor | Add `https://github.com/nikovijay/NikOS` as a plugin marketplace |
+| Claude Desktop, or any app that runs MCP servers | `npx -y nikos mcp --dir <repo>` as a local MCP server: see [docs/install.md](docs/install.md#any-app-that-runs-mcp-servers) |
 
 Then talk to your agent: the `nikos-mode` skill takes it from there. The
 skills run the `nikos` command through `npx`, so there's nothing else to
