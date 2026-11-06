@@ -77,8 +77,8 @@ five vision sections come first, in order, and aren't empty.
 
 ## storymap.yaml
 
-**Purpose:** the shape of the product: activities (columns), releases (rows)
-and the order stories should be built in. It is an index; the stories
+**Purpose:** the shape of the product: activities and their steps (columns),
+releases (rows) and the order stories should be built in. It is an index; the stories
 themselves live in feature files.
 
 **Path:** `intent/storymap.yaml`
@@ -92,9 +92,15 @@ key: HT                     # story id prefix: HT-1, HT-2 …
 activities:
   - id: tasks               # slug, matches the features/<activity>/ folder
     title: Manage tasks
+    steps:                  # optional: the steps a person takes in this activity
+      - id: capture         # slug, unique across the map; a story tags it @step-capture
+        title: Capture a task
+      - id: focus
+        title: Focus on today
 releases:
   - number: 1
     title: MVP
+    goal: Capture tasks and see only today's top three.   # optional, one line
     stories: [HT-1, HT-2]   # build order within the release
   - number: 2
     title: Enhancements
@@ -106,6 +112,11 @@ Rules:
 - Every story id appears in exactly one release.
 - Every story id has exactly one feature file and one `state.yaml` entry.
 - Release numbers start at 1 and have no gaps.
+- Step ids are unique across the map. A story's `@step-<id>` must name a step
+  of its own activity. A story with no step sits under the activity's first
+  step on the map.
+- A story's `@release-N` tag should match the release that lists it;
+  `nikos validate` warns when they differ.
 
 ### Bet links (optional)
 
@@ -128,9 +139,21 @@ story_bets:
   only and never fetches it.
 - A story's `story_bets` entry replaces its release's `bets` for that story.
 
-Add a story with `nikos story add "<title>" --activity <id>`. It takes the
-next free id, adds it to the last release (or `--release <n>`), gives it a
-`todo` entry in `state.yaml` and writes a starter feature file to fill in.
+Add a story with `nikos story add "<title>" --activity <id> [--step <id>]`.
+It takes the next free id, adds it to the last release (or `--release <n>`),
+gives it a `todo` entry in `state.yaml` and writes a starter feature file to
+fill in.
+
+The map's shape has commands too, so nobody has to hand-edit the YAML. Each
+keeps comments and leaves the rest of the file as it was:
+
+| Command | What it does |
+| --- | --- |
+| `nikos step add "<title>" --activity <id>` | Add a step under an activity (`--id` to choose its id) |
+| `nikos release add "<title>" [--goal "<goal>"]` | Add the next numbered release, with no stories yet |
+| `nikos release rename <n> ["<title>"] [--goal "<goal>"]` | Change a release's title or goal (`--goal ""` removes it) |
+| `nikos release move <story-id> <n>` | Move a story to the end of another release and retag its feature |
+| `nikos release reorder <n> <position>` | Move a release, renumber them all from 1 and retag every moved story |
 
 ---
 
@@ -148,7 +171,7 @@ story; each acceptance criterion is a `Scenario` (or `Scenario Outline`)
 titled with its label. Full rules are in [gherkin.md](gherkin.md).
 
 ```gherkin
-@HT-1 @release-1 @must @activity-tasks
+@HT-1 @release-1 @must @activity-tasks @step-capture
 Feature: Add a task
 
   As a busy person

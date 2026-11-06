@@ -1,4 +1,4 @@
-@HT-3 @release-2 @should @activity-tasks @effort-S
+@HT-3 @release-2 @should @activity-tasks @step-organise @effort-S
 Feature: Reorder tasks
 
   As a busy person

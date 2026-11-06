@@ -1,4 +1,4 @@
-@HT-1 @release-1 @must @activity-tasks @effort-S
+@HT-1 @release-1 @must @activity-tasks @step-capture @effort-S
 Feature: Add a task
 
   As a busy person

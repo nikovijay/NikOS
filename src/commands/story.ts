@@ -10,6 +10,8 @@ const PRIORITIES = ["must", "should", "could"] as const;
 export interface StoryInput {
   title: string;
   activity: string;
+  /** A step of that activity. */
+  step?: string;
   /** Release number; defaults to the last release. */
   release?: number;
   priority?: (typeof PRIORITIES)[number];
@@ -43,6 +45,12 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   if (!activities.includes(input.activity)) {
     throw new Error(`'${input.activity}' is not an activity in storymap.yaml. Activities: ${activities.join(", ") || "none"}`);
   }
+  if (input.step !== undefined) {
+    const steps: string[] = ((plain.activities ?? []).find((a: any) => a?.id === input.activity)?.steps ?? []).map((st: any) => st?.id);
+    if (!steps.includes(input.step)) {
+      throw new Error(`'${input.step}' is not a step of activity '${input.activity}'. Steps: ${steps.join(", ") || "none (add one with nikos step add)"}`);
+    }
+  }
   const releases: any[] = plain.releases ?? [];
   if (!releases.length) throw new Error("storymap.yaml has no releases to add the story to");
   const index = input.release === undefined ? releases.length - 1 : releases.findIndex((r) => r?.number === input.release);
@@ -61,7 +69,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   else map.setIn(["releases", index, "stories"], map.createNode([id], { flow: true }));
   state.setIn(["stories", id], state.createNode({ status: "todo" }));
 
-  const text = `@${id} @release-${release} @${priority} @activity-${input.activity}
+  const text = `@${id} @release-${release} @${priority} @activity-${input.activity}${input.step ? ` @step-${input.step}` : ""}
 Feature: ${title}
 
   As a <who it's for>
@@ -89,13 +97,13 @@ export function runStory(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   if (sub !== "add" || !title || title.startsWith("--") || !opt("activity")) {
-    console.error('Usage: nikos story add "<title>" --activity <id> [--release <n>] [--priority must|should|could]');
+    console.error('Usage: nikos story add "<title>" --activity <id> [--step <id>] [--release <n>] [--priority must|should|could]');
     return 1;
   }
   try {
     const release = opt("release");
     const r = newStory(
-      { title, activity: opt("activity")!, release: release === undefined ? undefined : Number(release), priority: opt("priority") as StoryInput["priority"] },
+      { title, activity: opt("activity")!, step: opt("step"), release: release === undefined ? undefined : Number(release), priority: opt("priority") as StoryInput["priority"] },
       opt("dir") ?? process.cwd(),
     );
     console.log(`Added ${r.id} to release ${r.release}\nCreated ${r.feature}`);

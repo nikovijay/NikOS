@@ -15,6 +15,17 @@
 
 ### Added
 
+- Steps under activities: `steps:` in `storymap.yaml`, a `@step-<id>` tag
+  on features, `nikos step add`, and `nikos story add --step`. The story map
+  shows a step row and puts each story under its step.
+- Release commands: `nikos release add` (with an optional `goal:`),
+  `rename`, `move` (a story to another release) and `reorder`, all keeping
+  feature `@release-N` tags in step. `nikos validate` now warns when a tag
+  and the map disagree.
+- The story map is restyled: a sticky activity and step spine, numbered
+  release dividers with a tally, goal and Shipped stamp, status-tinted
+  cards, and a panel per story with its acceptance criteria. The planning
+  dashboard has a How it works page.
 - The Planning pack (`tools/planning/`, `nikos-planning`): key results with
   check-ins, bet cards with review decisions, delivery status worked out
   from the story map, upstream plans from other repos, a local dashboard
