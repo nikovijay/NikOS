@@ -1,10 +1,10 @@
 // Approvals live in intent/approvals.yaml, apart from state.yaml, so a repo can protect them:
 // a CODEOWNERS rule on the file means an approval only lands when the right person reviews the
 // PR or merge request. Agents write state.yaml all the time; approvals.yaml only changes on sign-off.
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { read } from "./project.js";
+import { store } from "./store.js";
 
 export interface Approval {
   by: string;
@@ -21,7 +21,7 @@ export const approvalsPath = (intentDir: string) => join(intentDir, "approvals.y
 
 export function loadApprovals(intentDir: string): Record<string, Approval> {
   const path = approvalsPath(intentDir);
-  if (!existsSync(path)) return {};
+  if (!store().exists(path)) return {};
   return parse(read(path))?.approvals ?? {};
 }
 

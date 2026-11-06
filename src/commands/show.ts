@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
@@ -10,7 +10,7 @@ import { parseFrontMatter } from "../lib/frontmatter.js";
 import { BET_ID, betsFor } from "../lib/bets.js";
 import { decisionEntries } from "./decisions.js";
 
-const yamlFile = (path: string) => (existsSync(path) ? parse(read(path)) : undefined);
+const yamlFile = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
 
 /** Everything the intent/ folder says about one story, in plain text. */
 export function show(story: string, dir: string): string {

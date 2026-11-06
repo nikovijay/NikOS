@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { findIntentDir, read } from "../lib/project.js";
+import { store } from "../lib/store.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -62,7 +62,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const id = `${key}-${Math.max(0, ...taken) + 1}`;
 
   const feature = join(intentDir, "features", input.activity, `${slugify(title)}.feature`);
-  if (existsSync(feature)) throw new Error(`${feature} already exists; give the story a different title`);
+  if (store().exists(feature)) throw new Error(`${feature} already exists; give the story a different title`);
 
   const stories = map.getIn(["releases", index, "stories"], true);
   if (stories instanceof YAMLSeq) stories.add(id);
@@ -83,10 +83,9 @@ Feature: ${title}
     Then <what they see>
 `;
 
-  mkdirSync(dirname(feature), { recursive: true });
-  writeFileSync(feature, text, { flag: "wx" });
-  writeFileSync(mapPath, map.toString(yamlOpts));
-  writeFileSync(statePath, state.toString(yamlOpts));
+  store().write(feature, text, { create: true });
+  store().write(mapPath, map.toString(yamlOpts));
+  store().write(statePath, state.toString(yamlOpts));
   return { id, release, feature, validation: validate(intentDir) };
 }
 
