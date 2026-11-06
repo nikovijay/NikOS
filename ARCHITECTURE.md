@@ -11,7 +11,7 @@ Node.js (TypeScript)
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-11-03 | Project initialised with intentdocs | Story-map-driven development |
+| 2026-11-03 | Project initialised | Story-map-driven development |
 
 ## Patterns
 

@@ -4,5 +4,5 @@ dist/
 .evals-out/
 reports/
 
-# intentdocs
+# local tool config
 .intent/
