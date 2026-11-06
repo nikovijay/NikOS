@@ -47,3 +47,12 @@ Pending or unimplemented steps count as not passing.
 Report the command and the runner's summary line, such as
 `2 scenarios (2 passed)`. If anything failed or is pending, show the output
 and don't call the story done.
+
+## 5. Run it on every PR or merge request (once per repo)
+
+When the person wants the checks to run in CI, run `nikos ci setup`. It reads
+the origin remote to pick GitHub Actions (`.github/workflows/nikos.yml`) or
+GitLab CI (`.gitlab/ci/nikos.yml`, included from `.gitlab-ci.yml`). Pass
+`--github` or `--gitlab` when there's no remote yet. If the repo already has a
+`.gitlab-ci.yml`, it prints the `include:` lines to add: add them, and show the
+person the change.

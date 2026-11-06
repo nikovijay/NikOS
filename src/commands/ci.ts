@@ -1,0 +1,133 @@
+// `nikos ci setup`: run nikOS's checks on every pull request (GitHub) or merge request (GitLab).
+// The pipeline runs `nikos validate` and every story's scenarios with `nikos verify`, using the
+// nikos version that wrote it, so a red pipeline means the specs or the code broke, not nikos.
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { detectStack, type Stack } from "../verify/detect.js";
+
+export type Host = "github" | "gitlab";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const version = (): string => {
+  const pkg = [join(here, "../../package.json"), join(here, "../package.json")].find((p) => existsSync(p))!;
+  return JSON.parse(readFileSync(pkg, "utf8")).version;
+};
+
+/** github or gitlab, from the origin remote's url; undefined when it's neither or there's no remote. */
+export function detectHost(root: string): Host | undefined {
+  const url = spawnSync("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8" }).stdout?.trim() ?? "";
+  if (/github\.com[:/]/.test(url)) return "github";
+  if (/gitlab/i.test(url)) return "gitlab";
+  return undefined;
+}
+
+/** The shell steps that install the runner and run the checks, for a stack. */
+function steps(stack: Stack, root: string, nikos: string): string[] {
+  const install =
+    stack === "python"
+      ? [existsSync(join(root, "requirements.txt")) ? "pip install -r requirements.txt" : "", "pip install behave"].filter(Boolean)
+      : [existsSync(join(root, "package-lock.json")) ? "npm ci" : "npm install"];
+  return [...install, `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
+}
+
+export function githubWorkflow(stack: Stack, root: string): string {
+  const nikos = `nikos@${version()}`;
+  const python = stack === "python" ? `      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.12"\n` : "";
+  return `# Written by nikos ci setup: checks the specs in intent/ and runs every story's scenarios.
+name: nikos
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  nikos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+${python}${steps(stack, root, nikos).map((s) => `      - run: ${s}`).join("\n")}
+`;
+}
+
+export function gitlabJob(stack: Stack, root: string): string {
+  const nikos = `nikos@${version()}`;
+  // Python stories need node for nikos itself, so that image installs it.
+  const image = stack === "python" ? "python:3.12" : "node:22";
+  const setup = stack === "python" ? ["apt-get update -qq && apt-get install -y -qq nodejs npm"] : [];
+  return `# Written by nikos ci setup: checks the specs in intent/ and runs every story's scenarios.
+nikos:
+  image: ${image}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+${[...setup, ...steps(stack, root, nikos)].map((s) => `    - ${s}`).join("\n")}
+`;
+}
+
+export interface CiResult {
+  host: Host;
+  created: string[];
+  skipped: string[];
+  /** Something the person (or their agent) still has to do by hand. */
+  todo?: string;
+}
+
+const GITLAB_JOB = ".gitlab/ci/nikos.yml";
+const INCLUDE = `include:\n  - local: ${GITLAB_JOB}\n`;
+
+/** Write the pipeline for the repo's host and stack. Never overwrites a file. */
+export function setupCi(root: string, opts: { host?: Host } = {}): CiResult {
+  const host = opts.host ?? detectHost(root);
+  if (!host) throw new Error("Couldn't tell where this repo is hosted from its origin remote. Say which: --github or --gitlab");
+  const stack = detectStack(root);
+  if (!stack) throw new Error("Couldn't tell the stack: no package.json, pyproject.toml or requirements.txt. Run nikos verify setup first.");
+  const created: string[] = [];
+  const skipped: string[] = [];
+  const write = (rel: string, text: string) => {
+    const path = join(root, rel);
+    if (existsSync(path)) return void skipped.push(rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+    created.push(rel);
+  };
+  if (host === "github") {
+    write(".github/workflows/nikos.yml", githubWorkflow(stack, root));
+    return { host, created, skipped };
+  }
+  // GitLab reads one .gitlab-ci.yml, so the job lives in its own file and is included from it.
+  write(GITLAB_JOB, gitlabJob(stack, root));
+  const main = join(root, ".gitlab-ci.yml");
+  if (!existsSync(main)) {
+    write(".gitlab-ci.yml", INCLUDE);
+    return { host, created, skipped };
+  }
+  const included = readFileSync(main, "utf8").includes(GITLAB_JOB);
+  return { host, created, skipped, todo: included ? undefined : `Add this to .gitlab-ci.yml:\n${INCLUDE}` };
+}
+
+export function runCi(args: string[]): number {
+  const [sub, ...rest] = args;
+  if (sub !== "setup") {
+    console.error("Usage: nikos ci setup [--github | --gitlab] [--dir <path>]");
+    return 1;
+  }
+  const i = rest.indexOf("--dir");
+  const root = i >= 0 ? rest[i + 1] : process.cwd();
+  const host: Host | undefined = rest.includes("--github") ? "github" : rest.includes("--gitlab") ? "gitlab" : undefined;
+  try {
+    const r = setupCi(root, { host });
+    if (r.created.length) console.log(`Created:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
+    if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
+    if (r.todo) console.log(`\n${r.todo}`);
+    console.log(`\nEvery ${r.host === "github" ? "pull request" : "merge request"} now runs nikos validate and every story's scenarios.`);
+    return 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}
