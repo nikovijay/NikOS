@@ -10,6 +10,8 @@ import { findIntentDir, isDone } from "../lib/project.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate } from "./validate.js";
+import { isStale } from "../planning/krs.js";
+import { betIds, krIds, loadBet, loadKr, today } from "../planning/model.js";
 
 export interface Option {
   /** What the person sees, e.g. "Build HT-3: Reorder tasks". */
@@ -89,6 +91,29 @@ export function suggest(dir: string): Suggestion {
   };
   const ready = map.releases.filter(complete).at(-1);
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
+
+  // The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results.
+  const root = dirname(intentDir);
+  if (store().isDir(join(root, "planning"))) {
+    const due = betIds(root).flatMap((id) => {
+      try {
+        const m = loadBet(root, id).meta;
+        return m.outcome === "open" && m.review_on && String(m.review_on) <= today() ? [{ id, on: String(m.review_on) }] : [];
+      } catch {
+        return [];
+      }
+    });
+    if (due.length) add({ label: due.length === 1 ? `Review the ${due[0].id} bet (due ${due[0].on})` : `Review ${due.length} bets that are due`, do: "Run the nikos-planning review playbook: continue, change, stop or complete each bet, with the reason." });
+    const stale = krIds(root).flatMap((id) => {
+      try {
+        const k = loadKr(root, id).data;
+        return isStale(k) ? [String(k.title ?? id)] : [];
+      } catch {
+        return [];
+      }
+    });
+    if (stale.length) add({ label: stale.length === 1 ? `Check in on "${stale[0]}"` : `Check in on ${stale.length} key results`, do: "Run the nikos-planning checkin playbook: ask for each key result's latest value and record it." });
+  }
 
   add({ label: "Add a story", do: "Ask what the person wants the product to do next, then add it with nikos story add and write its scenarios." });
   add({ label: "Look at the story map", do: "Run nikos map, or open the planning dashboard's map if it's running, and show the person." });
