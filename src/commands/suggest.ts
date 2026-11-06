@@ -37,8 +37,8 @@ export function suggest(dir: string): Suggestion {
     return {
       summary: "nikOS isn't set up in this repo yet.",
       options: [
-        { label: "Set up nikOS here", do: "Run the idea-to-blueprint playbook for a new product, or nikos init with sensible defaults for an existing one." },
-        { label: "Map what this repo already does", do: "Draft the story map from the existing code: one activity per area, a story per feature that already exists." },
+        { label: "Set up nikOS here", do: "Run the start playbook: nikos start, then the first story through to passing." },
+        { label: "Map what this repo already does", do: "Run the map-existing playbook: draft the story map from the existing code, then prove what's there with scenarios." },
         { label: "Join our company plan", do: "Ask which repo holds the company or department plan, then nikos join <repo path> (add --host for GitLab). It links this repo and shows the settings it inherits." },
       ],
     };

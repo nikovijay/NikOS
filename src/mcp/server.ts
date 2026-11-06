@@ -20,7 +20,8 @@ import { newPlan } from "../commands/plan.js";
 import { addRelease, checkRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
 import { show } from "../commands/show.js";
 import { setState, type Status } from "../commands/state.js";
-import { newStep } from "../commands/step.js";
+import { newActivity, newStep } from "../commands/step.js";
+import { companyInit, start as startRepo } from "../commands/start.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate } from "../commands/validate.js";
@@ -142,6 +143,17 @@ export function createServer(repo: string): McpServer {
   }, (a) => {
     const r = importTickets(a.tickets, root, { release: a.release });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
+  });
+  tool("start", "Set this repo up in one go: intent/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+    const r = startRepo(root, a);
+    return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
+  });
+  tool("add_activity", "Add an activity to the story map.", { title: z.string(), id: z.string().optional() }, (a) => text(`Activity ${newActivity(a, root)}`));
+  tool("company_init", "Write a company plan repo in this folder: plan.yaml, settings every level inherits, departments, and a README on joining.", {
+    name: z.string(), period: z.string().optional(), departments: z.array(z.string()).optional(), repo: z.string().optional(), host: z.string().optional(),
+  }, (a) => {
+    const r = companyInit(root, a);
+    return text(`Created ${r.created.join(", ") || "nothing new"}.\nEach department or team joins with: ${r.join}`);
   });
   tool("init", "Set up nikOS in this repo: intent/ with a starter story.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });

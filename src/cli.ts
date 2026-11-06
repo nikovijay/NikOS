@@ -14,11 +14,12 @@ import { runMcp } from "./mcp/server.js";
 import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runTracker } from "./commands/tracker.js";
+import { runCompany, runStart } from "./commands/start.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
 import { runStory } from "./commands/story.js";
-import { runStep } from "./commands/step.js";
+import { runActivity, runStep } from "./commands/step.js";
 import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
@@ -41,11 +42,14 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   settings: runSettings,
   doctor: runDoctor,
   tracker: runTracker,
+  start: runStart,
+  company: runCompany,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
   story: runStory,
   step: runStep,
+  activity: runActivity,
   release: runRelease,
   video: runVideo,
   map: runMap,
@@ -58,10 +62,13 @@ const help = `nikos — spec-driven development for AI coding agents
 Usage: nikos <command> [options]
 
 Commands:
+  start            Set this repo up in one go: intent/, a scenario runner for its stack
+                   and CI for its host, each only if it's missing (--name, --key)
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   story add "<title>"  Add a story to the map, state and a starter feature
                    (--activity, --step, --release, --priority)
+  activity add "<title>"  Add an activity to the story map (--id)
   step add "<title>"   Add a step under an activity (--activity, --id)
   release add "<title>"  Add the next release (--goal)
   release rename <n>   Change a release's title or goal (--goal)
@@ -83,6 +90,8 @@ Commands:
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
   suggest          What to do next: where things stand and a short menu (--json, --brief)
+  company init     Write a company plan repo that departments and teams join
+                   (--name, --period, --departments, --repo, --host)
   join <repo>      Plan against a company or department plan, and inherit its settings
                    (--host gitlab.com, --url, --ref)
   settings [set <key> <value>]  See the settings that apply here and where each comes

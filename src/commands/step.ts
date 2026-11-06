@@ -33,6 +33,40 @@ export function newStep(input: { title: string; activity: string; id?: string },
   return { id, validation: validate(intentDir) };
 }
 
+/** Add an activity to the story map, e.g. an area of an existing product or an imported epic. Returns its id; an existing one is left as it is. */
+export function newActivity(input: { title: string; id?: string }, dir: string): string {
+  const title = input.title?.trim();
+  if (!title) throw new Error("An activity needs a title");
+  const intentDir = findIntentDir(dir);
+  const mapPath = join(intentDir, "storymap.yaml");
+  const map = parseDocument(read(mapPath));
+  const id = input.id ?? slugify(title);
+  const activities = map.get("activities", true);
+  if (!isSeq(activities)) throw new Error("storymap.yaml has no activities list");
+  if (activities.items.some((a) => isMap(a) && a.get("id") === id)) return id;
+  activities.add(map.createNode({ id, title }));
+  store().write(mapPath, map.toString(yamlOpts));
+  return id;
+}
+
+export function runActivity(args: string[]): number {
+  const [sub, title, ...rest] = args;
+  const i = rest.indexOf("--id");
+  const d = rest.indexOf("--dir");
+  if (sub !== "add" || !title || title.startsWith("--")) {
+    console.error('Usage: nikos activity add "<title>" [--id <activity-id>]');
+    return 1;
+  }
+  try {
+    const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined }, d >= 0 ? rest[d + 1] : process.cwd());
+    console.log(`Activity ${id}: its stories go in intent/features/${id}/`);
+    return 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}
+
 export function runStep(args: string[]): number {
   const [sub, title, ...rest] = args;
   const opt = (n: string) => {

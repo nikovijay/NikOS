@@ -10,10 +10,10 @@ import { findIntentDir, read, STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { approve } from "./approve.js";
-import { slugify } from "./init.js";
 import { storyMapOf } from "./map.js";
 import { setState, StateError } from "./state.js";
 import { newStory } from "./story.js";
+import { newActivity } from "./step.js";
 
 export type NikosStatus = "todo" | "in_progress" | "needs_rework" | "done" | "approved" | "cancelled";
 
@@ -120,19 +120,6 @@ export function ticketMoves(dir: string): TicketMove[] {
     if (ticket && status) out.push({ id: s.id, ticket, nikos: s.status as NikosStatus, status });
   }
   return out;
-}
-
-/** Add an activity to the story map (used when an import brings in a new epic or project). */
-export function newActivity(input: { title: string; id?: string }, dir: string): string {
-  const intentDir = findIntentDir(dir);
-  const path = join(intentDir, "storymap.yaml");
-  const map = parseDocument(read(path));
-  const id = input.id ?? slugify(input.title);
-  const activities = map.get("activities", true) as any;
-  if ((activities?.items ?? []).some((a: any) => a.get?.("id") === id)) return id;
-  activities.add(map.createNode({ id, title: input.title }));
-  store().write(path, map.toString(yamlOpts));
-  return id;
 }
 
 export interface ImportedTicket {

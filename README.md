@@ -51,6 +51,7 @@ request, says where things stand and offers a short menu of what to do next.
 Things you can say:
 
 - "Set up nikOS here", or "Map what this repo already does"
+- "Set nikOS up for our company" (a company plan every team joins)
 - "What should we build next?"
 - "Add a story: people can share a list with one other person"
 - "Build HT-3"
@@ -99,7 +100,10 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 
 | Command | What it does |
 | --- | --- |
+| `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host |
 | `nikos init` | Create `intent/` in this repo |
+| `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
+| `nikos activity add "<title>"` | Add an activity to the story map |
 | `nikos validate` | Check `intent/` is well formed |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature |
 | `nikos step add "<title>"` | Add a step under an activity |
