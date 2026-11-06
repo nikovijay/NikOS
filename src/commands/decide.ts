@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { STORY_ID, findIntentDir, read } from "../lib/project.js";
 import { formatResult, validate } from "./validate.js";
@@ -23,7 +23,7 @@ export function decide(input: DecisionInput, dir: string): string {
   const category = input.category ?? "architecture";
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
   const path = join(findIntentDir(dir), "decisions.md");
-  if (!existsSync(path)) throw new Error("No intent/decisions.md. Run `nikos init` first.");
+  if (!store().exists(path)) throw new Error("No intent/decisions.md. Run `nikos init` first.");
 
   const date = input.date ?? new Date().toISOString().slice(0, 10);
   const entry = [
@@ -36,7 +36,7 @@ export function decide(input: DecisionInput, dir: string): string {
   ].join("\n");
   const existing = read(path);
   const gap = existing.endsWith("\n\n") ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
-  appendFileSync(path, gap + entry);
+  store().append(path, gap + entry);
   return entry;
 }
 

@@ -1,7 +1,8 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
+import { diskStore, store, withStore } from "../lib/store.js";
 import { validate, formatResult, type ValidationResult } from "./validate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -40,21 +41,17 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   const created: string[] = [];
   const skipped: string[] = [];
 
-  for (const src of walk(templateDir)) {
+  // The templates ship with nikOS, so they're always listed and read from disk.
+  for (const src of withStore(diskStore, () => walk(templateDir))) {
     const rel = relative(templateDir, src);
     const dest = join(intentDir, rel);
-    if (existsSync(dest)) {
+    if (store().exists(dest)) {
       skipped.push(rel);
       continue;
     }
-    mkdirSync(dirname(dest), { recursive: true });
-    if (rel.endsWith(".gitkeep")) {
-      copyFileSync(src, dest);
-    } else {
-      const text = readFileSync(src, "utf8").replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? `{{${k}}}`);
-      // "wx" guards against a race where the file appears between the check and the write.
-      writeFileSync(dest, text, { flag: "wx" });
-    }
+    const text = readFileSync(src, "utf8").replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? `{{${k}}}`);
+    // create guards against a race where the file appears between the check and the write.
+    store().write(dest, text, { create: true });
     created.push(rel);
   }
   return { intentDir, created, skipped, validation: validate(intentDir) };

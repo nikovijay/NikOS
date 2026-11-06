@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { dirname, join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, findIntentDir, isDone, read, setFeatureTag, walk } from "../lib/project.js";
@@ -44,7 +44,7 @@ function retag(intentDir: string, moved: Map<string, number>) {
   for (const file of walk(join(intentDir, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
-    if (id && moved.has(id)) writeFileSync(file, setFeatureTag(text, "release", String(moved.get(id)), id));
+    if (id && moved.has(id)) store().write(file, setFeatureTag(text, "release", String(moved.get(id)), id));
   }
 }
 
@@ -60,7 +60,7 @@ function renumber(o: Opened) {
 }
 
 function save(o: Opened): ValidationResult {
-  writeFileSync(o.mapPath, o.map.toString(yamlOpts));
+  store().write(o.mapPath, o.map.toString(yamlOpts));
   return validate(o.intentDir);
 }
 

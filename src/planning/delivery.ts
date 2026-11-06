@@ -1,6 +1,6 @@
 // Delivery status of a bet, worked out from the story map: the stories whose release (or
 // own story_bets) names the bet, and their status in state.yaml. Never stored, never the outcome.
-import { existsSync, readFileSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { storiesFor } from "../lib/bets.js";
@@ -15,7 +15,7 @@ export interface Delivery {
   releases: number[];
 }
 
-const yamlAt = (p: string) => (existsSync(p) ? parse(readFileSync(p, "utf8")) : undefined);
+const yamlAt = (p: string) => (store().exists(p) ? parse(store().read(p)) : undefined);
 
 export function delivery(root: string, bet: string): Delivery {
   const intent = paths(root).intent;

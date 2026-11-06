@@ -8,12 +8,12 @@
 // needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parse, parseDocument } from "yaml";
 import { approvalLapse, approvalsPath, doneMark, loadApprovals } from "../lib/approvals.js";
+import { store } from "../lib/store.js";
 import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
@@ -68,10 +68,10 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
 
   const path = approvalsPath(intentDir);
   // A Document keeps comments and the other approvals as they were.
-  const doc = parseDocument(existsSync(path) ? read(path) : NEW_FILE);
+  const doc = parseDocument(store().exists(path) ? read(path) : NEW_FILE);
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
   doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, via: opts.via ?? "terminal", spec_hash: hash, done_at: doneMark(entry) }));
-  writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
+  store().write(path, doc.toString({ flowCollectionPadding: false }));
   return { story, by: opts.by, on };
 }
 

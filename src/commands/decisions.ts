@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { findIntentDir, read } from "../lib/project.js";
 
@@ -15,7 +15,7 @@ const STOP = new Set(["the", "and", "for", "why", "did", "was", "were", "are", "
 /** Every "## " entry in decisions.md, with its line range. HTML comments are skipped. */
 export function decisionEntries(dir: string): DecisionEntry[] {
   const path = join(findIntentDir(dir), "decisions.md");
-  if (!existsSync(path)) return [];
+  if (!store().exists(path)) return [];
   const lines = read(path).split("\n");
   const entries: DecisionEntry[] = [];
   let inComment = false;

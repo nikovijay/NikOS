@@ -2,10 +2,11 @@
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
 // Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
-import { existsSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
+import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, findIntentDir, isDone, read, specHash, walk } from "../lib/project.js";
 
 export interface MapCriterion {
@@ -56,7 +57,7 @@ export interface StoryMap {
 
 export const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-const yamlAt = (path: string) => (existsSync(path) ? parse(read(path)) : undefined);
+const yamlAt = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
 const PRIORITY = /@(must|should|could|wont)\b/;
 
 type StateFields = "status" | "blocked" | "waitingOn" | "specChanged" | "approvedBy" | "cancelledReason";
@@ -501,7 +502,7 @@ export function runMap(args: string[]): number {
   const out = resolve(flag("--out") ?? "storymap.html");
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
-    if (!existsSync(join(findIntentDir(dir), "storymap.yaml"))) throw new Error(`No storymap.yaml in ${findIntentDir(dir)}: run nikos init first`);
+    if (!store().exists(join(findIntentDir(dir), "storymap.yaml"))) throw new Error(`No storymap.yaml in ${findIntentDir(dir)}: run nikos init first`);
     writeFileSync(out, renderMap(dir));
     const shown = relative(process.cwd(), out);
     console.log(`Wrote ${shown && !shown.startsWith("..") ? shown : out}`);

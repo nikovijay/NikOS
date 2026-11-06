@@ -3,12 +3,13 @@
 import Ajv2020Module, { type ErrorObject } from "ajv/dist/2020.js";
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Document, parse } from "yaml";
 import { parseFrontMatter } from "../lib/frontmatter.js";
 import { walk } from "../lib/project.js";
+import { store } from "../lib/store.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Works from src/ (tests) and dist/ (published): schemas sit at the package root.
@@ -25,7 +26,7 @@ export const today = () => new Date().toISOString().slice(0, 10);
 /** The repo root holding planning/ (and usually intent/): a repo root, or planning/ itself. */
 export function findRoot(start: string): string {
   const abs = resolve(start);
-  return basename(abs) === "planning" && !existsSync(join(abs, "planning")) ? dirname(abs) : abs;
+  return basename(abs) === "planning" && !store().exists(join(abs, "planning")) ? dirname(abs) : abs;
 }
 
 export const paths = (root: string) => ({
@@ -71,12 +72,11 @@ export function writePlanning(root: string, path: string, text: string, opts: { 
   const rel = relative(root, path);
   if (!path.startsWith(paths(root).planning + sep)) throw new Error(`Refusing to write outside planning/: ${rel}`);
   if (opts.expect !== undefined) {
-    const current = existsSync(path) ? hash(readFileSync(path, "utf8")) : "";
+    const current = store().exists(path) ? hash(store().read(path)) : "";
     if (current !== opts.expect) throw new StaleError(rel);
   }
-  mkdirSync(dirname(path), { recursive: true });
   try {
-    writeFileSync(path, text, opts.create ? { flag: "wx" } : undefined);
+    store().write(path, text, { create: opts.create });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "EEXIST") throw new Error(`${rel} already exists`);
     throw err;
@@ -110,8 +110,8 @@ export const krText = (data: any) => yamlText(data);
 
 export function loadBet(root: string, id: string): Bet {
   const path = join(paths(root).bets, `${id}.md`);
-  if (!existsSync(path)) throw new Error(`No bet called '${id}' (planning/bets/${id}.md)`);
-  const text = readFileSync(path, "utf8");
+  if (!store().exists(path)) throw new Error(`No bet called '${id}' (planning/bets/${id}.md)`);
+  const text = store().read(path);
   const fm = parseFrontMatter(text);
   if (!fm) throw new Error(`planning/bets/${id}.md has no front matter`);
   return { meta: fm.meta, body: fm.body, file: relative(root, path), hash: hash(text) };
@@ -119,8 +119,8 @@ export function loadBet(root: string, id: string): Bet {
 
 export function loadKr(root: string, id: string): Kr {
   const path = join(paths(root).krs, `${id}.yaml`);
-  if (!existsSync(path)) throw new Error(`No key result called '${id}' (planning/krs/${id}.yaml)`);
-  const text = readFileSync(path, "utf8");
+  if (!store().exists(path)) throw new Error(`No key result called '${id}' (planning/krs/${id}.yaml)`);
+  const text = store().read(path);
   return { data: parse(text), file: relative(root, path), hash: hash(text) };
 }
 
@@ -129,7 +129,7 @@ export const krIds = (root: string) => walk(paths(root).krs, ".yaml").map((p) =>
 
 export function loadPlan(root: string): any | undefined {
   const p = paths(root).plan;
-  return existsSync(p) ? parse(readFileSync(p, "utf8")) : undefined;
+  return store().exists(p) ? parse(store().read(p)) : undefined;
 }
 
 export interface PlanningIssue {

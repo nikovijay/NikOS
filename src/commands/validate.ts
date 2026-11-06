@@ -1,6 +1,6 @@
 import Ajv2020Module, { type ErrorObject } from "ajv/dist/2020.js";
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -8,6 +8,7 @@ import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
+import { store } from "../lib/store.js";
 import { featureStoryIds, featureTag, featureTags, findIntentDir, isDone, read, rel, specHash, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -28,9 +29,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 // Works from src/ (tests) and dist/ (published): schemas sit at the package root.
 const schemaDir = [join(here, "../../schemas"), join(here, "../schemas")].find((d) => existsSync(d))!;
 const ajv = new Ajv2020({ allErrors: true, strict: false });
-const checkStorymap = ajv.compile(JSON.parse(read(join(schemaDir, "storymap.schema.json"))));
-const checkState = ajv.compile(JSON.parse(read(join(schemaDir, "state.schema.json"))));
-const checkApprovals = ajv.compile(JSON.parse(read(join(schemaDir, "approvals.schema.json"))));
+// The schemas ship with nikOS, so they're read from disk whatever store is in use.
+const schemaFile = (name: string) => JSON.parse(readFileSync(join(schemaDir, name), "utf8"));
+const checkStorymap = ajv.compile(schemaFile("storymap.schema.json"));
+const checkState = ajv.compile(schemaFile("state.schema.json"));
+const checkApprovals = ajv.compile(schemaFile("approvals.schema.json"));
 
 function pointer(e: ErrorObject): string {
   return e.instancePath.replace(/^\//, "").split("/").filter(Boolean).join(".") || "(root)";
@@ -62,7 +65,7 @@ function describe(e: ErrorObject, data: unknown): string {
 
 function loadYaml(dir: string, name: string, issues: Issue[]): any {
   const path = join(dir, name);
-  if (!existsSync(path)) {
+  if (!store().exists(path)) {
     issues.push({ file: name, message: "file is missing", hint: "run `nikos init` to create it" });
     return undefined;
   }
@@ -135,7 +138,7 @@ export function validate(start: string): ValidationResult {
   }
 
   const constitutionPath = join(dir, "constitution.md");
-  if (existsSync(constitutionPath)) {
+  if (store().exists(constitutionPath)) {
     for (const issue of lintConstitution(read(constitutionPath))) {
       (issue.level === "error" ? errors : warnings).push({ file: "constitution.md", message: issue.message, hint: issue.hint });
     }
@@ -217,7 +220,7 @@ export function validate(start: string): ValidationResult {
   }
 
   // approvals.yaml is optional: it appears with the first sign-off.
-  if (existsSync(join(dir, "approvals.yaml"))) {
+  if (store().exists(join(dir, "approvals.yaml"))) {
     const approvals = loadYaml(dir, "approvals.yaml", errors);
     if (approvals !== undefined && !checkApprovals(approvals)) {
       for (const e of checkApprovals.errors ?? []) {
@@ -262,7 +265,7 @@ export function validate(start: string): ValidationResult {
         if (CROSS_REF.test(ref)) continue; // another repo's bet: checked for form only, never fetched
         if (!BET_ID.test(ref)) {
           errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which is neither a bet id nor <repo path>#id`, hint: "use a bet id like faster-checkout, or owner/repo#bet-id for another repo's bet" });
-        } else if (!existsSync(join(betsDir, `${ref}.md`))) {
+        } else if (!store().exists(join(betsDir, `${ref}.md`))) {
           errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which has no planning/bets/${ref}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
         }
       }

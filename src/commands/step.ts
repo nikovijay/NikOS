@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument } from "yaml";
 import { findIntentDir, read } from "../lib/project.js";
@@ -29,7 +29,7 @@ export function newStep(input: { title: string; activity: string; id?: string },
   const steps = activity.get("steps", true);
   if (isSeq(steps)) steps.add(map.createNode({ id, title }));
   else activity.set("steps", map.createNode([{ id, title }]));
-  writeFileSync(mapPath, map.toString(yamlOpts));
+  store().write(mapPath, map.toString(yamlOpts));
   return { id, validation: validate(intentDir) };
 }
 

@@ -13,6 +13,14 @@
   "bin": {
     "nikos": "dist/cli.js"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
   "engines": {
     "node": ">=20"
   },

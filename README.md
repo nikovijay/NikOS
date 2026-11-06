@@ -90,7 +90,8 @@ intent/
 ```
 
 Every file is plain text you can read, review and diff. The full format:
-[docs/format.md](docs/format.md). A worked example:
+[docs/format.md](docs/format.md). Tools that work with these files without a
+shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked example:
 [examples/hello-todo](examples/hello-todo/intent).
 
 ## Commands

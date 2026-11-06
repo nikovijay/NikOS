@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { store } from "./store.js";
 import { join, relative } from "node:path";
 
 export const STORY_ID = /^[A-Z][A-Z0-9]{0,9}-[0-9]+$/;
@@ -20,21 +20,21 @@ export function specHash(text: string): string {
 
 /** Resolve the intent/ folder from a repo root or the folder itself. */
 export function findIntentDir(start: string): string {
-  if (existsSync(join(start, "storymap.yaml"))) return start;
+  if (store().exists(join(start, "storymap.yaml"))) return start;
   return join(start, "intent");
 }
 
 export function walk(dir: string, ext?: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).flatMap((f) => {
+  if (!store().exists(dir)) return [];
+  return store().list(dir).flatMap((f) => {
     const p = join(dir, f);
-    if (statSync(p).isDirectory()) return walk(p, ext);
+    if (store().isDir(p)) return walk(p, ext);
     return !ext || p.endsWith(ext) ? [p] : [];
   });
 }
 
 export function read(path: string): string {
-  return readFileSync(path, "utf8");
+  return store().read(path);
 }
 
 export function rel(dir: string, path: string): string {

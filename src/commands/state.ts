@@ -1,6 +1,6 @@
-import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseDocument } from "yaml";
+import { store } from "../lib/store.js";
 import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
 import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
@@ -106,7 +106,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   else doc.deleteIn([...entry, "cancelled_reason"]);
   doc.setIn(["stories", story, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
   // No padding keeps "[A-1, A-2]" as written instead of "[ A-1, A-2 ]".
-  writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
+  store().write(path, doc.toString({ flowCollectionPadding: false }));
   return result;
 }
 

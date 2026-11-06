@@ -3,7 +3,7 @@
 // question in its own way (a multiple-choice prompt where it has one) and runs what's picked.
 // Labels are plain words for the person. `do` tells the agent what a pick means; it's never
 // shown as a command for the person to run.
-import { existsSync } from "node:fs";
+import { store } from "../lib/store.js";
 import { join, resolve } from "node:path";
 import { findIntentDir, isDone } from "../lib/project.js";
 import { storyMapOf, type MapStory } from "./map.js";
@@ -32,7 +32,7 @@ const list = (ids: string[]) => (ids.length <= 3 ? ids.join(", ") : `${ids.slice
 
 export function suggest(dir: string): Suggestion {
   const intentDir = findIntentDir(dir);
-  if (!existsSync(join(intentDir, "storymap.yaml"))) {
+  if (!store().exists(join(intentDir, "storymap.yaml"))) {
     return {
       summary: "nikOS isn't set up in this repo yet.",
       options: [
@@ -108,7 +108,7 @@ export function runSuggest(args: string[]): number {
   const dir = resolve(i >= 0 ? args[i + 1] : process.cwd());
   // --brief is for a session-start hook: one line, and nothing at all outside a nikOS repo.
   if (args.includes("--brief")) {
-    if (!existsSync(join(findIntentDir(dir), "storymap.yaml"))) return 0;
+    if (!store().exists(join(findIntentDir(dir), "storymap.yaml"))) return 0;
     try {
       const s = suggest(dir);
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);
