@@ -44,6 +44,7 @@ export interface MapRelease {
 }
 export interface StoryMap {
   project: string;
+  key: string;
   personas: { id: string; title: string; description: string }[];
   activities: { id: string; title: string; steps: { id: string; title: string }[] }[];
   releases: MapRelease[];
@@ -134,6 +135,7 @@ export function storyMapOf(dir: string): StoryMap {
   const placed = new Set(releases.flatMap((r) => r.stories.map((s) => s.id)));
   return {
     project: String(map.project ?? ""),
+    key: String(map.key ?? ""),
     personas: (Array.isArray(map.personas) ? map.personas : []).map((p: any) => ({ id: String(p.id), title: String(p.title ?? p.id), description: String(p.description ?? "") })),
     activities: (Array.isArray(map.activities) ? map.activities : []).map((a: any) => ({
       id: String(a.id),

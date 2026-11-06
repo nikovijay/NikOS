@@ -16,6 +16,7 @@ import { runStep } from "./commands/step.js";
 import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
+import { runExport } from "./commands/export.js";
 import { runPlanning } from "./planning/cli.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
@@ -35,6 +36,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   release: runRelease,
   video: runVideo,
   map: runMap,
+  export: runExport,
   planning: runPlanning,
 };
 
@@ -53,6 +55,7 @@ Commands:
   release move <id> <n>  Move a story to another release, retagging its feature
   release reorder <n> <pos>  Move a release and renumber them all
   release remove <n>   Remove an empty release and renumber the rest
+  release check <n>    Is a release ready to ship? (--run reruns its scenarios)
   plan new <id>    Start the next version of a story's plan
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
@@ -68,6 +71,8 @@ Commands:
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
   map              Write a read-only story map page (--out, default storymap.html)
+  export --format <prd|linear|jira>  The story map as a PRD or tracker import
+                   (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
 

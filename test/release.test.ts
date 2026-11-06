@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../src/commands/release";
+import { addRelease, checkRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../src/commands/release";
+import { setState } from "../src/commands/state";
 import { newStep } from "../src/commands/step";
 import { newStory } from "../src/commands/story";
 import { validate } from "../src/commands/validate";
 import { renderMap } from "../src/commands/map";
-import { copyExample } from "./helpers";
+import { copyExample, edit } from "./helpers";
 
 const mapOf = (dir: string) => parse(readFileSync(join(dir, "storymap.yaml"), "utf8"));
 const tagLine = (dir: string, file: string) => readFileSync(join(dir, "features/tasks", file), "utf8").split("\n")[0];
@@ -82,6 +83,22 @@ describe("release commands", () => {
     moveStory({ id: "HT-1", to: 2 }, dir);
     moveStory({ id: "HT-2", to: 2 }, dir);
     expect(() => removeRelease({ number: 1 }, dir)).toThrow("Release 1 delivers bets (fewer-missed-tasks)");
+  });
+
+  it("checks whether a release is ready to ship", () => {
+    const dir = copyExample();
+    expect(checkRelease({ number: 1 }, dir)).toEqual({ number: 1, title: "MVP", ready: false, summary: "1 of 2 done", gaps: ["HT-2 is in progress"] });
+    edit(join(dir, "state.yaml"), (s) => s.replace("status: in_progress", "status: done").replace("blockers: []", "blockers: [waiting on design]"));
+    expect(checkRelease({ number: 1 }, dir).gaps).toEqual(["HT-2 is blocked"]);
+    edit(join(dir, "state.yaml"), (s) => s.replace("blockers: [waiting on design]", "blockers: []"));
+    expect(checkRelease({ number: 1 }, dir)).toMatchObject({ ready: true, summary: "2 of 2 done", gaps: [] });
+
+    edit(join(dir, "features/tasks/reorder-tasks.feature"), (s) => s.replace("@HT-3", "@HT-3 @depends-HT-2"));
+    edit(join(dir, "state.yaml"), (s) => s.replace("status: done\n    claimed_by", "status: in_progress\n    claimed_by"));
+    expect(checkRelease({ number: 2 }, dir).gaps).toEqual(["HT-3 is to do", "HT-3 depends on HT-2, which isn't done"]);
+    setState("HT-3", "cancelled", { dir, reason: "Later" });
+    expect(checkRelease({ number: 2 }, dir)).toMatchObject({ ready: false, summary: "0 of 0 done · 1 cancelled", gaps: ["it has no stories"] });
+    expect(() => checkRelease({ number: 7 }, dir)).toThrow("There is no release 7");
   });
 
   it("warns when a feature's release tag disagrees with storymap.yaml", () => {
