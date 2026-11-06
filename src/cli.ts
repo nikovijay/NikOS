@@ -13,6 +13,7 @@ import { runSuggest } from "./commands/suggest.js";
 import { runMcp } from "./mcp/server.js";
 import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
+import { runMigrate } from "./commands/migrate.js";
 import { runTracker } from "./commands/tracker.js";
 import { runCompany, runStart } from "./commands/start.js";
 import { runDecide } from "./commands/decide.js";
@@ -41,6 +42,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   join: runJoin,
   settings: runSettings,
   doctor: runDoctor,
+  migrate: runMigrate,
   tracker: runTracker,
   start: runStart,
   company: runCompany,
@@ -97,6 +99,8 @@ Commands:
   settings [set <key> <value>]  See the settings that apply here and where each comes
                    from, or change one this repo is allowed to
   doctor           Check this repo is set up well, and say what to do next (--offline)
+  migrate per-story  Give each story its own state and approval file, so parallel
+                   branches never conflict (migrate single-file goes back)
   tracker link|record|sync|import  Keep the story map and a Jira, Linear, GitHub or GitLab
                    tracker in step; the agent reads tickets through the tracker's MCP
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and

@@ -1,4 +1,5 @@
 import { store } from "../lib/store.js";
+import { loadStates } from "../lib/state-files.js";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
@@ -26,7 +27,7 @@ export function show(story: string, dir: string): string {
   const effort = tags.find((t) => t.startsWith("effort-"))?.slice(7);
   const map = yamlFile(join(intentDir, "storymap.yaml"));
   const release = (map?.releases ?? []).find((r: any) => (r?.stories ?? []).includes(story));
-  const states = yamlFile(join(intentDir, "state.yaml"))?.stories ?? {};
+  const states = loadStates(intentDir);
   const entry = states[story];
   const text = read(file);
 

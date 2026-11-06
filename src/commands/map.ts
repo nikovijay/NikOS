@@ -2,6 +2,7 @@
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
 // Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
+import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
@@ -103,7 +104,7 @@ export function storyMapOf(dir: string): StoryMap {
   const intent = findIntentDir(dir);
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
   const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
-    yamlAt(join(intent, "state.yaml"))?.stories ?? {};
+    loadStates(intent);
   const approvals = loadApprovals(intent);
   // Approved is shown as a status: done, plus an approval that still holds.
   const approvedBy = (id: string, hash?: string) => {

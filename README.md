@@ -85,6 +85,7 @@ intent/
 ├── storymap.yaml        activities and steps, releases, and the order to build stories in
 ├── state.yaml           each story's status: todo, in_progress, needs_rework, done, cancelled
 ├── approvals.yaml       people's sign-offs on done stories (optional)
+│                        (or state/<ID>.yaml and approvals/<ID>.yaml, one per story)
 ├── decisions.md         why things are the way they are, append-only
 ├── features/            one .feature file per story; its scenarios are the criteria
 │   └── <activity>/<story>.feature
@@ -117,6 +118,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
+| `nikos migrate per-story` | Give each story its own state and approval file, so parallel branches never conflict |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
 | `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |

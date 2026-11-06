@@ -17,6 +17,9 @@ intent/
     <story-id>.v<N>.md   versioned implementation plans
   decisions.md           append-only decision log
   state.yaml             status, blockers and the run queue
+  state/<story-id>.yaml  optional: each story's state in its own file
+  approvals.yaml         optional: people's sign-offs on done stories
+  approvals/<story-id>.yaml  optional: each sign-off in its own file
   outreach/              optional, drafts from the validate playbook
     <date>-<channel>.md
 ```
@@ -304,6 +307,26 @@ build-a-story playbook).
   above `Feature:` aren't part of the fingerprint, so moving a story between
   releases doesn't count as a change.
 
+### One file per story
+
+With several people or agents working in one repo, two branches that move
+different stories both edit `state.yaml`, and one of them has to resolve a
+merge conflict. `nikos migrate per-story` gives every story its own file:
+
+```
+intent/state.yaml          format_version and the run queue; stories: {}
+intent/state/HT-1.yaml     HT-1's entry, the same fields as under stories:
+intent/approvals/HT-1.yaml HT-1's sign-off, the same fields as under approvals:
+```
+
+Once `intent/state/` exists, every command reads and writes there: a new
+story gets its own file, and an approval goes to `intent/approvals/<id>.yaml`.
+`nikos validate` checks each file, and reports a story kept in both places.
+The migration only runs on a repo that validates, and it carries a CODEOWNERS
+rule on `approvals.yaml` over to `approvals/`. `nikos migrate single-file`
+moves everything back. Commit a migration on its own, from a branch nobody else
+is moving stories on.
+
 ## approvals.yaml
 
 **Purpose:** people's sign-offs on done stories. It's kept apart from
@@ -355,6 +378,7 @@ approves the pull request (GitHub) or merge request (GitLab):
 
 ```
 /intent/approvals.yaml  @your-product-lead
+/intent/approvals/      @your-product-lead    # with one file per story
 ```
 
 On GitLab, requiring code-owner approval needs a paid tier.

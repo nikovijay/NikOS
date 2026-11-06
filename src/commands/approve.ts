@@ -1,4 +1,5 @@
-// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml. Two
+// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml
+// (or intent/approvals/<ID>.yaml). Two
 // ways in, recorded as `via`:
 // - terminal: the person runs it and types the story id back. A coding agent runs commands
 //   without a terminal, so it can't take this route.
@@ -13,22 +14,15 @@
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { parse, parseDocument } from "yaml";
-import { approvalLapse, approvalsPath, doneMark, loadApprovals } from "../lib/approvals.js";
-import { store } from "../lib/store.js";
+import { approvalLapse, doneMark, loadApprovals } from "../lib/approvals.js";
+import { noEntry, storyState, writeApproval } from "../lib/state-files.js";
 import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
-
-const NEW_FILE = `# Sign-offs on done stories, written by nikos approve. Protect this file with CODEOWNERS
-# (e.g. "/intent/approvals.yaml @your-product-lead") so an approval needs that person's review.
-format_version: 1
-approvals: {}
-`;
 
 /** Who is approving: git's user.name, or the login name when git has none. */
 export function approver(dir: string): string {
@@ -58,8 +52,8 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
   if (via !== "tracker" && !(routes.value as ApprovalRoute[]).includes(via)) {
     throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
   }
-  const entry = parse(read(join(intentDir, "state.yaml")))?.stories?.[story];
-  if (!entry) throw new StateError(`${story} has no entry in state.yaml`);
+  const entry = storyState(intentDir, story);
+  if (!entry) throw new StateError(noEntry(intentDir, story));
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
   const feature = featureFor(story, dirname(intentDir));
   const hash = feature ? specHash(read(feature)) : undefined;
@@ -81,12 +75,8 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
     throw new StateError(`${story} isn't approved: its scenarios don't all pass${failing.length ? `:\n${failing.map((f) => `  ✗ ${f}`).join("\n")}` : ". See the runner output."}`);
   }
 
-  const path = approvalsPath(intentDir);
-  // A Document keeps comments and the other approvals as they were.
-  const doc = parseDocument(store().exists(path) ? read(path) : NEW_FILE);
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
-  doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry) }));
-  store().write(path, doc.toString({ flowCollectionPadding: false }));
+  writeApproval(intentDir, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry) });
   return { story, by: opts.by, on };
 }
 

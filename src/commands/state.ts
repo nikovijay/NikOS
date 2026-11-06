@@ -1,6 +1,5 @@
-import { dirname, join } from "node:path";
-import { parseDocument } from "yaml";
-import { store } from "../lib/store.js";
+import { dirname } from "node:path";
+import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
 import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
@@ -66,11 +65,8 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (${Object.keys(MOVES).join(", ")})`);
   if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
   const intentDir = findIntentDir(opts.dir ?? process.cwd());
-  const path = join(intentDir, "state.yaml");
-  // A Document keeps comments and the order of everything we don't touch.
-  const doc = parseDocument(read(path));
-  const from = doc.getIn(["stories", story, "status"]) as Status | undefined;
-  if (!from) throw new StateError(`${story} has no entry in state.yaml`);
+  const from = storyState(intentDir, story)?.status as Status | undefined;
+  if (!from) throw new StateError(noEntry(intentDir, story));
   if (!MOVES[from]?.includes(to)) {
     throw new StateError(`${story} can't move from ${from} to ${to}. From ${from} it can move to: ${MOVES[from].join(", ")}`);
   }
@@ -92,21 +88,21 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     result.output = run.output;
   }
 
-  doc.setIn(["stories", story, "status"], to);
-  if (opts.by && to === "in_progress") doc.setIn(["stories", story, "claimed_by"], opts.by);
-  const entry = ["stories", story];
   const feature = featureFor(story, dirname(intentDir));
-  if (to === "done") {
-    // What the scenarios proved: validate warns if the feature changes afterwards. done_at
-    // marks this done, so an approval of an earlier done doesn't carry over.
-    if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
-    doc.setIn([...entry, "done_at"], opts.now ?? new Date().toISOString());
-  }
-  if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
-  else doc.deleteIn([...entry, "cancelled_reason"]);
-  doc.setIn(["stories", story, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
-  // No padding keeps "[A-1, A-2]" as written instead of "[ A-1, A-2 ]".
-  store().write(path, doc.toString({ flowCollectionPadding: false }));
+  // A Document keeps comments and the order of everything we don't touch.
+  updateStory(intentDir, story, (doc, entry) => {
+    doc.setIn([...entry, "status"], to);
+    if (opts.by && to === "in_progress") doc.setIn([...entry, "claimed_by"], opts.by);
+    if (to === "done") {
+      // What the scenarios proved: validate warns if the feature changes afterwards. done_at
+      // marks this done, so an approval of an earlier done doesn't carry over.
+      if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
+      doc.setIn([...entry, "done_at"], opts.now ?? new Date().toISOString());
+    }
+    if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
+    else doc.deleteIn([...entry, "cancelled_reason"]);
+    doc.setIn([...entry, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
+  });
   return result;
 }
 
