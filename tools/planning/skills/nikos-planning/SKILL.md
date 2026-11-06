@@ -15,6 +15,7 @@ planning/
   bets/<bet-id>.md       bets: what we believe, the KRs they should move, reviews
   upstream.yaml          optional: plans in other repos this one works toward
   upstream.lock          written by `nikos planning sync`
+  downstream.yaml        optional: departments and teams that plan against this one
   views/<name>.html      optional: custom dashboard views
 ```
 
@@ -43,6 +44,7 @@ the same checks always run.
 | checkin | `playbooks/checkin.md` | The person wants to check in on their KRs, record progress, or asks how a key result is doing. |
 | review | `playbooks/review.md` | A bet is due for review, or the person wants to continue, change, stop or complete one and call its outcome. |
 | upstream | `playbooks/upstream.md` | The person wants to plan against a company or department plan in another repo, or refresh it. |
+| rollout | `playbooks/rollout.md` | The person wants to see how the departments or teams below their plan are doing: who has joined, who is behind, delivery and alignment across repos. |
 | dashboard | `playbooks/dashboard.md` | The person wants to see the plan, open the dashboard, share a snapshot, or have a custom dashboard view built. |
 
 3. Never write a planning file the person hasn't approved. Show what you will

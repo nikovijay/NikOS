@@ -28,7 +28,7 @@ export interface LockEntry {
   via?: string;
 }
 
-const git = (args: string[], cwd?: string) => spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+export const git = (args: string[], cwd?: string) => spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
 
 const HOST = /^[A-Za-z0-9.-]+(:[0-9]+)?$/;
 
@@ -42,13 +42,16 @@ export function upstreamEntries(root: string): UpstreamEntry[] {
   if (!existsSync(p)) return [];
   const list = parse(readFileSync(p, "utf8")) ?? [];
   if (!Array.isArray(list)) throw new Error("planning/upstream.yaml should be a list of { repo, ref }");
-  return list.map((e: any) => {
-    if (typeof e?.repo !== "string" || !REPO_PATH.test(e.repo)) {
-      throw new Error(`planning/upstream.yaml: '${e?.repo}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
-    }
-    if (e.host !== undefined && (typeof e.host !== "string" || !HOST.test(e.host))) throw new Error(`planning/upstream.yaml: '${e.host}' is not a host name, e.g. gitlab.com`);
-    return { repo: e.repo, ref: e.ref ?? "main", url: e.url ?? `https://${e.host ?? "github.com"}/${e.repo}.git` };
-  });
+  return list.map((e: any) => repoEntry(e, "planning/upstream.yaml"));
+}
+
+/** Check one { repo, ref, host, url } entry from a plan's yaml list, and work out its url. */
+export function repoEntry(e: any, file: string): UpstreamEntry {
+  if (typeof e?.repo !== "string" || !REPO_PATH.test(e.repo)) {
+    throw new Error(`${file}: '${e?.repo}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
+  }
+  if (e.host !== undefined && (typeof e.host !== "string" || !HOST.test(e.host))) throw new Error(`${file}: '${e.host}' is not a host name, e.g. gitlab.com`);
+  return { repo: e.repo, ref: e.ref ?? "main", url: e.url ?? `https://${e.host ?? "github.com"}/${e.repo}.git` };
 }
 
 export function readLock(root: string): LockEntry[] {
@@ -59,7 +62,7 @@ export function readLock(root: string): LockEntry[] {
 const cacheDir = (root: string, repo: string) => join(paths(root).cache, ...repo.split("/"));
 
 /** Make sure .nikos/ is gitignored, so upstream copies are never committed. */
-function ignoreCache(root: string): void {
+export function ignoreCache(root: string): void {
   const p = join(root, ".gitignore");
   const text = existsSync(p) ? readFileSync(p, "utf8") : "";
   if (!/^\/?\.nikos\/?$/m.test(text)) appendFileSync(p, `${text && !text.endsWith("\n") ? "\n" : ""}# nikos planning: read-only copies of upstream plans\n.nikos/\n`);

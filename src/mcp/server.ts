@@ -31,6 +31,7 @@ import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js"
 import { doctor } from "../commands/doctor.js";
 import { joinPlan } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
+import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
@@ -154,6 +155,16 @@ export function createServer(repo: string): McpServer {
   }, (a) => {
     const r = companyInit(root, a);
     return text(`Created ${r.created.join(", ") || "nothing new"}.\nEach department or team joins with: ${r.join}`);
+  });
+  tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
+    const r = rollout(root, { offline: a.offline });
+    return text(formatRollout(r), { ...r });
+  }, true);
+  tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {
+    name: z.string(), repo: z.string().optional(), host: z.string().optional(),
+  }, (a) => {
+    const r = addDownstream(root, a);
+    return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
   });
   tool("init", "Set up nikOS in this repo: intent/ with a starter story.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });

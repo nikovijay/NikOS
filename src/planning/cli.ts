@@ -5,6 +5,7 @@ import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
 import { delivery, describeDelivery } from "./delivery.js";
 import { crossRefs, runSync } from "./upstream.js";
 import { runServe } from "./server.js";
+import { addDownstream, formatRollout, rollout } from "./rollout.js";
 
 const help = `nikos planning — bets, key results and the planning dashboard
 
@@ -23,6 +24,9 @@ Commands:
   status             Every bet's delivery and outcome, every key result's latest value
   validate           Check planning/ against its schemas
   sync [--check]     Fetch the plans in planning/upstream.yaml read-only into .nikos/upstream/
+  downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com)
+  rollout            How the plans below this one are doing: joined, last synced, delivery, and
+                     the key results and bets that point here (--json, --offline, --as <repo path>)
   serve              Open the local dashboard (--port, --export <file>)`;
 
 export function parseArgs(args: string[]) {
@@ -147,6 +151,18 @@ export async function runPlanning(args: string[]): Promise<number> {
       }
       case "sync":
         return await runSync(root, { check: has("check") });
+      case "downstream":
+        if (sub === "add" && id) {
+          const r = addDownstream(root, { name: id, repo: opt("repo"), host: opt("host") });
+          console.log(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
+          return 0;
+        }
+        break;
+      case "rollout": {
+        const r = rollout(root, { offline: has("offline"), as: opt("as") });
+        console.log(has("json") ? JSON.stringify(r, null, 2) : formatRollout(r));
+        return 0;
+      }
       case "serve":
         return await runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export") });
     }

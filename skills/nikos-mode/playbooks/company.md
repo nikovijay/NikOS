@@ -12,4 +12,5 @@ anything) without a yes.
 5. Run the planning wizard at the company level for this period's objectives and key results. If they exist in a document already, read it through its MCP (Confluence, Google Docs, Notion) and draft from it.
 6. Ask whether to create the repo on GitHub or GitLab, and where. Only on a yes, create it with `gh` or `glab` (or the host's MCP), commit and push, and run `nikos company init --repo <path>` again to fill in the join line.
 7. Show the join line for each department and team, for the person to share however they like. Never send it yourself.
+   Later, "how's the rollout going?" runs `nikos planning rollout`: who has joined, who is behind, and delivery across their repos.
 8. Report every step with its evidence or its skip reason.
