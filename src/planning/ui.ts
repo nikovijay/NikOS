@@ -9,9 +9,9 @@ const CSS = `
 body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
 .side { background: var(--surface); border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.links { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 2px; }
-.links a { padding: 5px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 12px; line-height: 1.4; }
-.links a:hover { background: var(--grey-soft); color: var(--ink); }
+.links { margin-top: auto; padding-top: 16px; }
+.links a { padding: 0 10px; color: var(--muted); text-decoration: none; font-size: 12px; }
+.links a:hover { color: var(--ink-2); text-decoration: underline; }
 .brand { font-weight: 700; letter-spacing: .02em; }
 .project { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 nav a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--ink-2); text-decoration: none; font-size: 14px; }
@@ -366,13 +366,9 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
   const json = JSON.stringify(data).replace(/[<\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const nav =
     `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a>`;
-  // The links out appear only in the served dashboard: an export is a closed file with no outside links.
+  // The link out appears only in the served dashboard: an export is a closed file with no outside links.
   const links = live
-    ? `<div class="links">
-<a href="https://www.nikovijay.com/speaking?from=nikos-planning" target="_blank" rel="noopener">Ask me to present to your product &amp; engineering org</a>
-<a href="https://x.com/nikovijay" target="_blank" rel="noopener">Follow me on X</a>
-<a href="https://www.nikovijay.com/newsletter" target="_blank" rel="noopener">Subscribe to my newsletter</a>
-</div>\n`
+    ? `<div class="links"><a href="https://www.nikovijay.com/connect?from=nikos-planning" target="_blank" rel="noopener">Made by Niko Vijay</a></div>\n`
     : "";
   const extra = live
     ? `<h4>Story map</h4><a href="/map">Open the story map</a>` +
