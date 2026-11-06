@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `nikos release remove <n>` removes an empty release (no stories, no bets),
+  then renumbers the releases after it and retags their stories.
+- `nikos --version` (also `-v`, `version`) prints the installed version.
+
+### Fixed
+
+- `nikos release add` and `release rename` refuse a title another release
+  already has (ignoring case), so running `add` twice no longer makes two
+  releases with the same name.
+- `nikos init --name` or `--key` with no value is now an error. Before, it
+  fell back to the folder name and picked a key you didn't expect.
+
 ## 0.1.0 (2026-11-06)
 
 ### Breaking

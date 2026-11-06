@@ -150,10 +150,11 @@ keeps comments and leaves the rest of the file as it was:
 | Command | What it does |
 | --- | --- |
 | `nikos step add "<title>" --activity <id>` | Add a step under an activity (`--id` to choose its id) |
-| `nikos release add "<title>" [--goal "<goal>"]` | Add the next numbered release, with no stories yet |
+| `nikos release add "<title>" [--goal "<goal>"]` | Add the next numbered release, with no stories yet (titles must be unique) |
 | `nikos release rename <n> ["<title>"] [--goal "<goal>"]` | Change a release's title or goal (`--goal ""` removes it) |
 | `nikos release move <story-id> <n>` | Move a story to the end of another release and retag its feature |
 | `nikos release reorder <n> <position>` | Move a release, renumber them all from 1 and retag every moved story |
+| `nikos release remove <n>` | Remove a release with no stories or bets, renumber the rest and retag their stories |
 
 ---
 

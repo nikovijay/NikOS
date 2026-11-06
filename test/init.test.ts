@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { init, keyFor } from "../src/commands/init";
+import { init, keyFor, runInit } from "../src/commands/init";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "nikos-init-"));
 
@@ -49,5 +49,14 @@ describe("init", () => {
     init(root, { name: "Hello Todo", key: "todo" });
     expect(readFileSync(join(root, "intent/state.yaml"), "utf8")).toContain("TODO-1:");
     expect(() => init(tmp(), { key: "1x" })).toThrow("isn't a valid project key");
+  });
+
+  it("refuses --name or --key with no value instead of falling back to the folder name", () => {
+    const root = tmp();
+    for (const args of [["--dir", root, "--name"], ["--name", "--key", "HT", "--dir", root], ["--dir", root, "--key", ""]]) {
+      expect(runInit(args)).toBe(1);
+    }
+    expect(existsSync(join(root, "intent"))).toBe(false);
+    expect(runInit(["--dir", root, "--name", "Hello Todo"])).toBe(0);
   });
 });

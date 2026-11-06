@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { addRelease, moveStory, renameRelease, reorderRelease } from "../src/commands/release";
+import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../src/commands/release";
 import { newStep } from "../src/commands/step";
 import { newStory } from "../src/commands/story";
 import { validate } from "../src/commands/validate";
@@ -51,6 +51,37 @@ describe("release commands", () => {
     expect(tagLine(dir, "reorder-tasks.feature")).toMatch(/^@HT-3 @release-1 /);
     expect(tagLine(dir, "add-a-task.feature")).toMatch(/^@HT-1 @release-2 /);
     expect(() => reorderRelease({ number: 1, to: 5 }, dir)).toThrow("Position must be from 1 to 2");
+  });
+
+  it("refuses a release title that is already taken, ignoring case", () => {
+    const dir = copyExample();
+    addRelease({ title: "Beta" }, dir);
+    expect(() => addRelease({ title: " beta " }, dir)).toThrow("Release 3 is already called 'Beta'");
+    expect(() => renameRelease({ number: 2, title: "MVP" }, dir)).toThrow("Release 1 is already called 'MVP'");
+    renameRelease({ number: 3, title: "BETA" }, dir);
+    expect(mapOf(dir).releases.map((r: any) => r.title)).toEqual(["MVP", "Enhancements", "BETA"]);
+  });
+
+  it("removes only an empty release, renumbering and retagging the ones after it", () => {
+    const dir = copyExample();
+    addRelease({ title: "Beta" }, dir);
+    moveStory({ id: "HT-3", to: 3 }, dir);
+    expect(() => removeRelease({ number: 3 }, dir)).toThrow("Release 3 still has HT-3");
+    expect(() => removeRelease({ number: 1 }, dir)).toThrow("Release 1 still has HT-1, HT-2");
+    const r = removeRelease({ number: 2 }, dir);
+    expect(r).toMatchObject({ number: 2, title: "Enhancements" });
+    expect(r.validation.errors).toEqual([]);
+    expect(r.validation.warnings).toEqual([]);
+    expect(mapOf(dir).releases.map((x: any) => [x.number, x.title])).toEqual([[1, "MVP"], [2, "Beta"]]);
+    expect(tagLine(dir, "reorder-tasks.feature")).toMatch(/^@HT-3 @release-2 /);
+    expect(() => removeRelease({ number: 9 }, dir)).toThrow("There is no release 9");
+  });
+
+  it("won't remove a release that still delivers bets", () => {
+    const dir = copyExample();
+    moveStory({ id: "HT-1", to: 2 }, dir);
+    moveStory({ id: "HT-2", to: 2 }, dir);
+    expect(() => removeRelease({ number: 1 }, dir)).toThrow("Release 1 delivers bets (fewer-missed-tasks)");
   });
 
   it("warns when a feature's release tag disagrees with storymap.yaml", () => {

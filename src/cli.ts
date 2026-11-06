@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { runValidate } from "./commands/validate.js";
 import { runPlan } from "./commands/plan.js";
 import { runInit } from "./commands/init.js";
@@ -49,6 +50,7 @@ Commands:
   release rename <n>   Change a release's title or goal (--goal)
   release move <id> <n>  Move a story to another release, retagging its feature
   release reorder <n> <pos>  Move a release and renumber them all
+  release remove <n>   Remove an empty release and renumber the rest
   plan new <id>    Start the next version of a story's plan
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
@@ -65,12 +67,18 @@ Commands:
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
 
+  --version        Print the installed version
+
 Docs: https://nikos.tools`;
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") {
     console.log(help);
+    return 0;
+  }
+  if (cmd === "--version" || cmd === "-v" || cmd === "version") {
+    console.log(JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
     return 0;
   }
   const run = commands[cmd];
