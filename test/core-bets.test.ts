@@ -23,7 +23,8 @@ describe("bets leave core", () => {
 
   it("release notes name the breaking change and the planning pack", () => {
     const notes = read("CHANGELOG.md");
-    const breaking = notes.slice(notes.indexOf("### Breaking"), notes.indexOf("### Added"));
+    const start = notes.indexOf("### Breaking");
+    const breaking = notes.slice(start, notes.indexOf("### Added", start));
     expect(breaking).toMatch(/Bets have moved out of core nikOS into the Planning pack/);
     expect(breaking).toContain("nikos bet");
     expect(breaking).toContain("/plugin install nikos-planning@nikos");
