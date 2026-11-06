@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, findIntentDir, isDone, read, setFeatureTag, walk } from "../lib/project.js";
 import { storyMapOf } from "./map.js";
+import { resolveSettings } from "../lib/settings.js";
 import { failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
 import { validate, type ValidationResult } from "./validate.js";
@@ -174,6 +175,8 @@ export function checkRelease(input: { number: number; run?: boolean }, dir: stri
   const release = map.releases.find((r) => r.number === input.number);
   if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
   const inRelease = new Set(release.stories.map((s) => s.id));
+  // approval.policy: required-for-release makes a done story without a sign-off a gap.
+  const needApproval = resolveSettings(dirname(findIntentDir(dir)))["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   const gaps: string[] = [];
   for (const s of live) {
@@ -181,6 +184,7 @@ export function checkRelease(input: { number: number; run?: boolean }, dir: stri
     if (s.blocked) gaps.push(`${s.id} is blocked`);
     if (!s.criteria.length) gaps.push(`${s.id} has no scenarios`);
     if (s.specChanged) gaps.push(`${s.id}'s feature changed after it was ${s.status}`);
+    if (needApproval && s.status === "done" && !s.specChanged) gaps.push(`${s.id} isn't approved`);
     const outside = s.waitingOn.filter((d) => !inRelease.has(d));
     if (outside.length) gaps.push(`${s.id} depends on ${outside.join(", ")}, which ${outside.length === 1 ? "isn't" : "aren't"} done`);
   }

@@ -26,6 +26,9 @@ import { suggest } from "../commands/suggest.js";
 import { formatResult, validate } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
 import { read } from "../lib/project.js";
+import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
+import { doctor } from "../commands/doctor.js";
+import { joinPlan } from "../commands/join.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
@@ -99,6 +102,26 @@ export function createServer(repo: string): McpServer {
   }, true);
   tool("export", "The story map as a PRD in Markdown, or Linear or Jira import JSON.", { format: z.enum(FORMATS), release: z.number().int().optional() }, (a) => text(exportMap(root, a.format, { release: a.release })), true);
 
+  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals, tracker, upstream plans) and what to do next.", {}, () => {
+    const checks = doctor(root);
+    return text(checks.map((c) => `${{ ok: "✓", warn: "!", fail: "✗" }[c.status]} ${c.name}: ${c.found}${c.next ? ` → ${c.next}` : ""}`).join("\n"), { checks });
+  }, true);
+  tool("settings", "The settings that apply here, where each comes from (this repo, or a company or department plan above it), and which are locked.", {}, () => {
+    const s = resolveSettings(root);
+    return text(formatSettings(s), s as unknown as Record<string, unknown>);
+  }, true);
+  tool("change_setting", "Change a setting in this repo, unless a level above locked it. Ask the person first.", { key: z.string(), value: z.any() }, (a) => {
+    setSetting(root, a.key, a.value);
+    return text(`${a.key}: ${JSON.stringify(resolveSettings(root)[a.key].value)} (this repo)`);
+  });
+  tool("join", "Plan against a company or department plan in another repo, and inherit its settings. repo is its path on the host (owner/repo, or group/subgroup/project on GitLab).", {
+    repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
+  }, (a) => {
+    const r = joinPlan(root, a);
+    return text(
+      `${r.added ? `Joined ${r.repo}` : `Already joined to ${r.repo}`}.\n${r.sync.synced.map((s) => `✓ ${s.repo}${s.via ? ` (above ${s.via})` : ""}`).join("\n")}${r.sync.unresolved.map((u) => `\n? ${u.repo}: ${u.reason}`).join("")}\n\nSettings here now:\n${formatSettings(r.settings)}`,
+    );
+  });
   tool("init", "Set up nikOS in this repo: intent/ with a starter story.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
     return text(`Created ${r.created.length} files in intent/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);

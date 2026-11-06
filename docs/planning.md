@@ -120,7 +120,10 @@ overrides it for anything else, including SSH.
 
 `nikos planning sync` clones each into `.nikos/upstream/<repo>/`
 (gitignored; sync adds it to `.gitignore`) and writes the commit it read to
-`upstream.lock`. A repo it can't reach is reported as unresolved and planning
+`upstream.lock`. It follows the chain upwards: the plans a copy names in its
+own `upstream.yaml` are synced too, so a team that names its department also
+gets the company plan. `nikos join <repo>` adds an entry and syncs in one step;
+settings inherited this way are in [settings.md](settings.md). A repo it can't reach is reported as unresolved and planning
 carries on. `nikos planning sync --check` says whether an upstream has moved
 past its locked commit. This repo only stores references like
 `acme/company-plan#kr-2` or `acme/product/payments-plan#faster-checkout`, never

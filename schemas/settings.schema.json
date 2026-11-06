@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/settings.schema.json",
+  "title": "nikOS settings",
+  "type": "object",
+  "required": ["format_version"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": { "const": 1 },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": { "enum": ["off", "optional", "required-for-release"] },
+        "routes": { "type": "array", "items": { "enum": ["app", "chat", "terminal"] }, "uniqueItems": true, "minItems": 1 }
+      }
+    },
+    "tracker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "system": { "enum": ["none", "jira", "linear", "github", "gitlab", "azure-devops", "shortcut"] },
+        "site": { "type": "string" },
+        "project": { "type": "string" },
+        "statuses": {
+          "type": "object",
+          "description": "Each tracker status, and what it means to nikOS.",
+          "additionalProperties": { "enum": ["todo", "in_progress", "needs_rework", "done", "approved", "cancelled"] }
+        },
+        "approvals": { "type": "boolean", "description": "Whether moving a ticket to a status mapped to approved approves the story." }
+      }
+    },
+    "locked": {
+      "type": "array",
+      "description": "Settings the levels below can't change.",
+      "items": { "enum": ["approval.policy", "approval.routes", "tracker.system", "tracker.site", "tracker.project", "tracker.statuses", "tracker.approvals"] },
+      "uniqueItems": true
+    }
+  }
+}

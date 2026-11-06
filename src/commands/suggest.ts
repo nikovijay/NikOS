@@ -4,7 +4,8 @@
 // Labels are plain words for the person. `do` tells the agent what a pick means; it's never
 // shown as a command for the person to run.
 import { store } from "../lib/store.js";
-import { join, resolve } from "node:path";
+import { resolveSettings } from "../lib/settings.js";
+import { dirname, join, resolve } from "node:path";
 import { findIntentDir, isDone } from "../lib/project.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
@@ -38,7 +39,7 @@ export function suggest(dir: string): Suggestion {
       options: [
         { label: "Set up nikOS here", do: "Run the idea-to-blueprint playbook for a new product, or nikos init with sensible defaults for an existing one." },
         { label: "Map what this repo already does", do: "Draft the story map from the existing code: one activity per area, a story per feature that already exists." },
-        { label: "Join our company plan", do: "Run the upstream playbook to link this repo to the company or department plan above it." },
+        { label: "Join our company plan", do: "Ask which repo holds the company or department plan, then nikos join <repo path> (add --host for GitLab). It links this repo and shows the settings it inherits." },
       ],
     };
   }
@@ -63,7 +64,8 @@ export function suggest(dir: string): Suggestion {
 
   // Done stories nobody has signed off (the map shows a story with an approval that holds as
   // approved): the agent asks "Do you want to approve …?"
-  const unapproved = stories.filter((s) => s.status === "done" && !s.specChanged);
+  const approvalsOn = resolveSettings(dirname(intentDir))["approval.policy"].value !== "off";
+  const unapproved = approvalsOn ? stories.filter((s) => s.status === "done" && !s.specChanged) : [];
   if (unapproved.length) {
     add({
       label: unapproved.length === 1 ? `Approve ${named(unapproved[0])}` : `Approve ${unapproved.length} done stories (${list(unapproved.map((s) => s.id))})`,
