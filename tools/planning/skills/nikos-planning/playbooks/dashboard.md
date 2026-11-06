@@ -3,7 +3,7 @@
 Show the plan in the local dashboard, share a read-only snapshot, or build a
 custom view the person describes.
 
-1. To view or edit the plan, run `nikos planning serve` and give the person the URL it prints (it carries the start-up token). It serves 127.0.0.1 only. Edits write to `planning/` through the same checks as the commands, name the file they wrote, and commit nothing.
+1. To view or edit the plan, run `nikos planning serve` and give the person the URL it prints (it carries the start-up token). It runs until stopped, so start it in the background and read the URL from its first line of output, which starts `nikOS planning dashboard:`. Don't send that output to a file in a folder that might not exist. It serves 127.0.0.1 only. Edits write to `planning/` through the same checks as the commands, name the file they wrote, and commit nothing.
 2. To share, run `nikos planning serve --export <file>.html`. The snapshot is one offline file that can't edit anything. If it warns that it includes plans from other repos, tell the person and confirm they may share those before they send it.
 3. For a custom view, ask what the person wants to see and do: which key results or bets, filtered how, and whether it should save anything. Show a sketch of the view and wait for their yes.
 4. Build it as one HTML file at `planning/views/<name>.html` (lowercase words joined by hyphens). Use only the view contract below, inline CSS and JavaScript, and no external scripts.
