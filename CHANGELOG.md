@@ -1,13 +1,72 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-06)
+
+nikOS becomes conversational, works beyond Claude Code, and scales from one
+team to a whole company, on GitHub or GitLab.
 
 ### Added
 
+**Talk to it**
+
+- **`nikos suggest`**: where things stand, and two to four things to do next,
+  worked out from the repo. Agents end every request with it as a short menu,
+  and ask "Do you want to approve HT-1: Add a task?" when a story is done. A
+  SessionStart hook shows it when a Claude Code session opens. The menu also
+  offers a bet review when one is due and a check-in when a key result is
+  stale.
+- **`nikos mcp`**: nikOS as a local MCP server, so Claude Desktop and any app
+  that runs local MCP servers can read and change the story map through tools.
+  Approvals go through the app's own prompt (`via: app`), so the model never
+  answers for the person.
+- **The nikOS core as a library** (`import { … } from "nikos"`) with swappable
+  storage: load a repo's files into a `MemoryStore`, run nikOS on them, and
+  commit what changed. See [docs/library.md](docs/library.md).
+
+**Get started**
+
+- **`nikos start`** sets a repo up in one go: `intent/`, a scenario runner for
+  its stack and CI for its host. The start playbook takes the first session
+  through to one story proved done; the map-existing playbook drafts the story
+  map from an existing codebase.
+- **`nikos company init`** writes a company plan repo that departments and
+  teams join. **`nikos join <repo>`** links a team to it in one step.
+- **`nikos doctor`** checks the repo is set up well and says what to do next.
+- **`nikos activity add`**.
+
+**Companies, settings and trackers**
+
+- **Settings** in `nikos.settings.yaml`, inherited from the company plan down
+  through every department, group and team, with `locked` keys. **`nikos
+  settings`** shows each value and where it comes from. See
+  [docs/settings.md](docs/settings.md).
+- **The approval policy** (`approval.policy`): `off`, `optional` or
+  `required-for-release`, and which routes count (`approval.routes`).
+- **`nikos tracker`** keeps the story map and Jira, Linear, GitHub or GitLab
+  issues in step, through the tracker's own MCP: link stories to tickets, map
+  the tracker's statuses, import a backlog, and list which tickets should move.
+  A ticket can approve (when `tracker.approvals` is on) or cancel a story, never
+  mark it done.
+- **`nikos planning rollout`**: which departments and teams below a plan have
+  joined, whether they're behind, their delivery, and the key results and bets
+  that point up. `nikos planning downstream add` lists them, and the planning
+  dashboard has a Rollout tab.
+
+**GitLab**
+
+- Upstream plans and cross-repo references accept GitLab's nested groups
+  (`group/subgroup/project`) and a `host:` for gitlab.com or a self-managed host.
+- **`nikos ci setup`** writes a GitHub Actions workflow or a GitLab CI job that
+  runs `nikos validate` and every story's scenarios on each pull or merge
+  request.
+
+**Story map**
+
 - **Approvals**, a person's sign-off after done: `nikos approve <id>` writes it
-  to `intent/approvals.yaml`. It only runs in an interactive terminal and asks
-  for the id to be typed back, so a coding agent can't approve its own work. It
-  reruns the scenarios and records who approved and when. Protect the file with
+  to `intent/approvals.yaml`. A person approves in their terminal (typing the id
+  back), by answering their agent's "Do you want to approve …?" (`--via chat`),
+  or through their app's own prompt with `nikos mcp`. An agent never approves on
+  its own. It reruns the scenarios and records who approved, when and how. Protect the file with
   `CODEOWNERS` to make approvals need a review on GitHub or GitLab. The map,
   exports and release check show approved stories, and count them as done.
 - **Cancelled**, with a reason: `nikos state set <id> cancelled --reason "…"`.
@@ -30,12 +89,18 @@
 - **The dashboard's story map has filters:** search, release, type, persona and
   status, plus a switch that shows every release's stories in one row. The page
   `nikos map` writes stays free of scripts.
+- **One file per story**, for repos where many people or agents work at once:
+  `nikos migrate per-story` moves each story's state to `intent/state/<ID>.yaml`
+  and each approval to `intent/approvals/<ID>.yaml`, so parallel branches never
+  conflict. `nikos migrate single-file` moves them back.
 
 ### Changed
 
 - The map's release tally reads "2 of 3 done", and adds approved and
   spec-changed counts. A release is stamped Shipped only when every story that
   isn't cancelled is done or approved and unchanged since.
+- `nikos planning sync` follows the chain of plans upwards, so a team that
+  names its department also gets the company plan.
 
 ## 0.1.1 (2026-11-06)
 
