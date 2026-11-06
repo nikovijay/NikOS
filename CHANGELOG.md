@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.1 (2026-11-06)
+
+### Added
+
+- **A release check in CI.** `nikos ci setup` also writes a check you run by
+  hand when a release is meant to ship: a "nikos release check" workflow on
+  GitHub (run it from the Actions tab with the release number), or a
+  `nikos-release` job on GitLab (run a pipeline with `NIKOS_RELEASE` set). It
+  fails while a story isn't done, a spec changed after done, or, with
+  `approval.policy: required-for-release`, a story isn't approved. On GitLab,
+  a job file written by 0.2.0 isn't rewritten: `ci setup` prints the job to add.
+- **Session-start hooks for Codex and Cursor**, like Claude Code's: at the
+  start of a session in a repo with a story map, the agent hears where things
+  stand and what to suggest next. Codex runs the hook once you trust it. In
+  Cursor it can land after your first message on a slow first run. See
+  [docs/install.md](docs/install.md).
+
 ## 0.2.0 (2026-11-06)
 
 nikOS becomes conversational, works beyond Claude Code, and scales from one
