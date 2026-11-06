@@ -24,6 +24,8 @@ export interface LockEntry {
   ref: string;
   commit: string;
   synced: string;
+  /** For a plan further up the chain: the upstream that named it. */
+  via?: string;
 }
 
 const git = (args: string[], cwd?: string) => spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
@@ -68,12 +70,22 @@ export interface SyncReport {
   unresolved: { repo: string; reason: string }[];
 }
 
-/** Fetch every upstream plan read-only. Unreachable ones are reported, never fatal. */
+/** How many levels up sync follows: team → group → department → company, with room to spare. */
+const MAX_DEPTH = 6;
+
+/**
+ * Fetch every upstream plan read-only, and the plans above those: a team that names its
+ * department also gets the department's company, so settings and plans reach every level.
+ * Unreachable ones are reported, never fatal.
+ */
 export function sync(root: string): SyncReport {
   ignoreCache(root);
   const report: SyncReport = { synced: [], unresolved: [] };
   const previous = readLock(root);
-  for (const e of upstreamEntries(root)) {
+  const queue: { entry: UpstreamEntry; depth: number; via?: string }[] = upstreamEntries(root).map((entry) => ({ entry, depth: 1 }));
+  const seen = new Set(queue.map((q) => q.entry.repo));
+  while (queue.length) {
+    const { entry: e, depth, via } = queue.shift()!;
     const dir = cacheDir(root, e.repo);
     rmSync(dir, { recursive: true, force: true });
     const clone = git(["clone", "--quiet", "--depth", "1", "--branch", e.ref, e.url, dir]);
@@ -86,7 +98,19 @@ export function sync(root: string): SyncReport {
     }
     const commit = git(["rev-parse", "HEAD"], dir).stdout.trim();
     rmSync(join(dir, ".git"), { recursive: true, force: true }); // a plain copy: nothing to push back
-    report.synced.push({ repo: e.repo, ref: e.ref, commit, synced: today() });
+    report.synced.push({ repo: e.repo, ref: e.ref, commit, synced: today(), ...(via ? { via } : {}) });
+    if (depth >= MAX_DEPTH) continue;
+    let above: UpstreamEntry[] = [];
+    try {
+      above = upstreamEntries(dir);
+    } catch (err) {
+      report.unresolved.push({ repo: `${e.repo}'s upstream.yaml`, reason: (err as Error).message });
+    }
+    for (const up of above) {
+      if (seen.has(up.repo)) continue;
+      seen.add(up.repo);
+      queue.push({ entry: up, depth: depth + 1, via: e.repo });
+    }
   }
   writePlanning(root, paths(root).lock, `# Written by nikos planning sync: the upstream commit each plan was read at.\n${stringify(report.synced)}`);
   return report;
@@ -94,7 +118,16 @@ export function sync(root: string): SyncReport {
 
 /** Compare each locked commit with the upstream's current one. */
 export function checkStale(root: string): { stale: { repo: string; locked: string; current: string }[]; unresolved: { repo: string; reason: string }[] } {
-  const entries = upstreamEntries(root);
+  // This repo's own upstreams, and the ones further up that their copies name.
+  const entries = [...upstreamEntries(root)];
+  for (const l of readLock(root)) {
+    if (!REPO_PATH.test(l.repo)) continue;
+    try {
+      for (const e of upstreamEntries(cacheDir(root, l.repo))) if (!entries.some((x) => x.repo === e.repo)) entries.push(e);
+    } catch {
+      // A copy with a broken upstream.yaml was reported at sync.
+    }
+  }
   const out = { stale: [] as { repo: string; locked: string; current: string }[], unresolved: [] as { repo: string; reason: string }[] };
   for (const l of readLock(root)) {
     const e = entries.find((x) => x.repo === l.repo);

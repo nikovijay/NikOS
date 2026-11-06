@@ -16,6 +16,7 @@ import { createInterface } from "node:readline/promises";
 import { parse, parseDocument } from "yaml";
 import { approvalLapse, approvalsPath, doneMark, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
@@ -45,6 +46,14 @@ export type Via = "terminal" | "chat" | "app";
 export function approve(story: string, opts: { dir?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
   const intentDir = findIntentDir(opts.dir ?? process.cwd());
+  const settings = resolveSettings(dirname(intentDir));
+  const policy = settings["approval.policy"];
+  if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
+  const via = opts.via ?? "terminal";
+  const routes = settings["approval.routes"];
+  if (!(routes.value as ApprovalRoute[]).includes(via)) {
+    throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
+  }
   const entry = parse(read(join(intentDir, "state.yaml")))?.stories?.[story];
   if (!entry) throw new StateError(`${story} has no entry in state.yaml`);
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
@@ -72,7 +81,7 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
   // A Document keeps comments and the other approvals as they were.
   const doc = parseDocument(store().exists(path) ? read(path) : NEW_FILE);
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
-  doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, via: opts.via ?? "terminal", spec_hash: hash, done_at: doneMark(entry) }));
+  doc.setIn(["approvals", story], doc.createNode({ by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry) }));
   store().write(path, doc.toString({ flowCollectionPadding: false }));
   return { story, by: opts.by, on };
 }

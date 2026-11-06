@@ -11,6 +11,8 @@ import { runState } from "./commands/state.js";
 import { runApprove } from "./commands/approve.js";
 import { runSuggest } from "./commands/suggest.js";
 import { runMcp } from "./mcp/server.js";
+import { runJoin, runSettings } from "./commands/join.js";
+import { runDoctor } from "./commands/doctor.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -34,6 +36,9 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   approve: runApprove,
   suggest: runSuggest,
   mcp: runMcp,
+  join: runJoin,
+  settings: runSettings,
+  doctor: runDoctor,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -76,6 +81,11 @@ Commands:
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
   suggest          What to do next: where things stand and a short menu (--json, --brief)
+  join <repo>      Plan against a company or department plan, and inherit its settings
+                   (--host gitlab.com, --url, --ref)
+  settings [set <key> <value>]  See the settings that apply here and where each comes
+                   from, or change one this repo is allowed to
+  doctor           Check this repo is set up well, and say what to do next (--offline)
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and
                    other apps (--dir <repo>)
   decide "<title>" Append a decision to decisions.md

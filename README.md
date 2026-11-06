@@ -114,6 +114,9 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
+| `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
+| `nikos settings` | The settings that apply here, and where each comes from |
+| `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |
