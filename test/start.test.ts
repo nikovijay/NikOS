@@ -25,7 +25,7 @@ describe("start", () => {
     const r = start(root, { name: "Tip Calc", key: "TC" });
     expect(r.done[0]).toBe("Created intent/ for Tip Calc (1 starter story)");
     expect(r.done[1]).toMatch(/^Set up a Cucumber runner for js \(.*cucumber\.mjs.*\)\. Install it with: npm install --save-dev @cucumber\/cucumber/);
-    expect(r.done[2]).toBe("Added CI for github (.github/workflows/nikos.yml)");
+    expect(r.done[2]).toBe("Added CI for github (.github/workflows/nikos.yml, .github/workflows/nikos-release.yml)");
     expect(r.ask).toEqual([]);
     expect(r.next.options[0].label).toBe("Build TC-1: First story");
     expect(start(root).done).toEqual(["intent/ is already set up", "The js scenario runner is already set up", "CI for github is already set up"]);

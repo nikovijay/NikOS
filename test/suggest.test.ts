@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runSuggest, suggest } from "../src/commands/suggest";
 import { setState } from "../src/commands/state";
 import { specHash } from "../src/lib/project";
@@ -109,5 +110,27 @@ describe("conversation rules", () => {
     expect(cmd).toContain("[ -f intent/storymap.yaml ]");
     expect(cmd).toContain("nikos suggest --brief");
     expect(cmd).toMatch(/\|\| true$/);
+  });
+
+  it("Codex uses the same hook file, and Cursor its own sessionStart hook", () => {
+    const manifest = (p: string) => JSON.parse(readFileSync(join(__dirname, "..", p), "utf8"));
+    expect(manifest(".codex-plugin/plugin.json").hooks).toBe("./hooks/hooks.json");
+    expect(manifest(".cursor-plugin/plugin.json").hooks).toBe("./hooks/cursor-hooks.json");
+    const cursor = manifest("hooks/cursor-hooks.json");
+    expect(cursor.hooks.sessionStart).toEqual([{ command: "./hooks/cursor-session-start.mjs", timeout: 30 }]);
+    expect(statSync(join(__dirname, "../hooks/cursor-session-start.mjs")).mode & 0o111).not.toBe(0);
+  });
+
+  it("Cursor's hook adds the menu as additional_context, and nothing outside a nikOS repo", () => {
+    const script = join(__dirname, "../hooks/cursor-session-start.mjs");
+    const run = (input: string, env: Record<string, string> = {}) =>
+      JSON.parse(spawnSync(process.execPath, [script], { input, encoding: "utf8", env: { ...process.env, ...env } }).stdout);
+    expect(run(JSON.stringify({ workspace_roots: [mkdtempSync(join(tmpdir(), "nikos-cursor-"))] }))).toEqual({});
+    expect(run("not json")).toEqual({}); // the test runner's cwd has no story map
+    // A stand-in for nikos that echoes what it was asked, so only the hook itself is tested.
+    const fake = join(mkdtempSync(join(tmpdir(), "nikos-fake-")), "cli.mjs");
+    writeFileSync(fake, 'process.stdout.write("nikOS: " + process.argv.slice(2).join(" ") + "\\n");\n');
+    const repo = dirname(copyExample());
+    expect(run(JSON.stringify({ workspace_roots: [repo] }), { NIKOS_CLI: fake })).toEqual({ additional_context: `nikOS: suggest --brief --dir ${repo}` });
   });
 });

@@ -9,5 +9,6 @@
   "license": "MIT",
   "keywords": ["spec-driven", "cucumber", "gherkin", "story-map", "skills"],
   "logo": "assets/icon.svg",
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./hooks/cursor-hooks.json"
 }

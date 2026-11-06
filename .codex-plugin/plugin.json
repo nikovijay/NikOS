@@ -8,5 +8,6 @@
   "repository": "https://github.com/nikovijay/NikOS",
   "license": "MIT",
   "keywords": ["spec-driven", "cucumber", "gherkin", "story-map", "skills"],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
 }

@@ -56,3 +56,10 @@ GitLab CI (`.gitlab/ci/nikos.yml`, included from `.gitlab-ci.yml`). Pass
 `--github` or `--gitlab` when there's no remote yet. If the repo already has a
 `.gitlab-ci.yml`, it prints the `include:` lines to add: add them, and show the
 person the change.
+
+It also adds a release check the person runs by hand when a release is meant to
+ship: the "nikos release check" workflow on GitHub (Actions tab, Run workflow,
+with the release number), or on GitLab a pipeline run with `NIKOS_RELEASE` set to
+it. It fails while a story isn't done, a spec changed after done, or (when
+`approval.policy` is `required-for-release`) a story isn't approved. Tell the
+person how to run it; don't run it on every change.
