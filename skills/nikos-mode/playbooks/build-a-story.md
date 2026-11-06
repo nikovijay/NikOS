@@ -11,4 +11,4 @@ scenarios pass, not that you say so.
 6. Run `nikos verify <story-id>`, then `nikos verify` to check every other story still passes, and keep the output.
 7. Record each decision you made with `nikos decide "<title>" --story <story-id> --why "<why>"`. Add `--category interface` for anything a later story must keep to: command syntax, output format, API shape.
 8. Run `nikos state set <story-id> done`. If it refuses, fix the failing scenarios and go back to step 6.
-9. Report every step with its evidence or its skip reason.
+9. Report every step with its evidence or its skip reason. Never run `nikos approve`: approval is the person's sign-off, and they run it in their own terminal.

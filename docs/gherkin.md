@@ -56,6 +56,9 @@ criterion's priority).
 | `@activity-<id>` | activity, matching the folder name | no |
 | `@step-<id>` | step within that activity, from `storymap.yaml` | no |
 | `@effort-XS` … `@effort-XL` | size estimate | no |
+| `@depends-<story-id>` | a story that must be done first; repeat for several | no |
+| `@persona-<id>` | who the story is for, from `personas:` in `storymap.yaml`; repeatable | no |
+| `@type-technical` / `@type-bug-risk` | a story that isn't a user story (the default) | no |
 
 Anything else is a warning, so you notice typos.
 
