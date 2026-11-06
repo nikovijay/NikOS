@@ -12,7 +12,7 @@ export interface LintIssue {
 const STATUS_TAGS = /^@(todo|done|wip|in[-_]?progress|doing|blocked|needs[-_]?rework|ready|review|approved|complete[d]?|skip|pending)$/i;
 const PRIORITY = /^@(must|should|could)$/;
 const AC_TAG = /^@AC\d+$/;
-const KNOWN_FEATURE_TAG = [STORY_ID, /^release-\d+$/, /^(must|should|could)$/, /^activity-[a-z0-9-]+$/, /^step-[a-z0-9-]+$/, /^effort-(XS|S|M|L|XL)$/];
+const KNOWN_FEATURE_TAG = [STORY_ID, /^release-\d+$/, /^(must|should|could)$/, /^activity-[a-z0-9-]+$/, /^step-[a-z0-9-]+$/, /^effort-(XS|S|M|L|XL)$/, /^depends-[A-Z][A-Z0-9]{0,9}-[0-9]+$/, /^persona-[a-z0-9-]+$/, /^type-(technical|bug-risk)$/];
 
 function parser() {
   return new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher());
@@ -55,7 +55,7 @@ export function lintFeature(text: string): LintIssue[] {
     if (STATUS_TAGS.test(tag)) {
       issues.push({ level: "error", message: `uses status tag ${tag}`, hint: "status lives in state.yaml, not in the feature" });
     } else if (!KNOWN_FEATURE_TAG.some((re) => re.test(tag.slice(1)))) {
-      issues.push({ level: "warning", message: `has unrecognised tag ${tag}`, hint: "allowed: story id, @release-N, @must/@should/@could, @activity-<id>, @step-<id>, @effort-<size>" });
+      issues.push({ level: "warning", message: `has unrecognised tag ${tag}`, hint: "allowed: story id, @release-N, @must/@should/@could, @activity-<id>, @step-<id>, @effort-<size>, @depends-<story-id>, @persona-<id>, @type-technical, @type-bug-risk" });
     }
   }
   if (tags.filter((t) => PRIORITY.test(t)).length !== 1) {

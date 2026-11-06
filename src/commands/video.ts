@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
-import { findIntentDir, featureStoryIds, read, walk } from "../lib/project.js";
+import { findIntentDir, featureStoryIds, isDone, read, walk } from "../lib/project.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 
 export interface Storyboard {
@@ -46,7 +46,7 @@ export function storyboard(dir: string): Storyboard {
     const activity = feature.tags.map((t) => t.name).find((t) => t.startsWith("@activity-"))?.slice(10) ?? "";
     // "AC1 — A new plant shows its next watering day" → "A new plant shows its next watering day"
     const outcomes = scenariosOf(feature).map((s) => s.name.replace(/^AC\d+\s*[—–-]\s*/, ""));
-    return [{ id, title: feature.name, activity, outcomes, done: state.stories?.[id]?.status === "done" }];
+    return [{ id, title: feature.name, activity, outcomes, done: isDone(state.stories?.[id]?.status) }];
   });
   const byNumber = (a: { id: string }, b: { id: string }) => Number(a.id.split("-")[1]) - Number(b.id.split("-")[1]);
   const done = stories.filter((s) => s.done).sort(byNumber);

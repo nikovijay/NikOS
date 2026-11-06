@@ -15,11 +15,15 @@
         "required": ["status"],
         "additionalProperties": false,
         "properties": {
-          "status": { "enum": ["todo", "in_progress", "needs_rework", "done"] },
+          "status": { "enum": ["todo", "in_progress", "needs_rework", "done", "approved", "cancelled"] },
           "claimed_by": { "type": "string" },
           "plan_version": { "type": "integer", "minimum": 1 },
           "blockers": { "type": "array", "items": { "type": "string" } },
-          "updated": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+          "updated": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "spec_hash": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
+          "approved_by": { "type": "string", "minLength": 1 },
+          "approved_on": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "cancelled_reason": { "type": "string", "minLength": 1 }
         }
       }
     },

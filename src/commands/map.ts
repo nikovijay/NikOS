@@ -4,7 +4,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
-import { featureStoryIds, findIntentDir, read, walk } from "../lib/project.js";
+import { featureStoryIds, featureTags, findIntentDir, isDone, read, specHash, walk } from "../lib/project.js";
 
 export interface MapCriterion {
   id: string;
@@ -24,6 +24,16 @@ export interface MapStory {
   /** The user story sentence: As a…, I want…, So that…. */
   narrative: string;
   criteria: MapCriterion[];
+  /** user_story (the default), technical or bug_risk, from a @type- tag. */
+  type: string;
+  personas: string[];
+  dependsOn: string[];
+  /** Dependencies that aren't done or approved yet. */
+  waitingOn: string[];
+  /** The feature changed after the story was done or approved. */
+  specChanged: boolean;
+  approvedBy: string;
+  cancelledReason: string;
 }
 export interface MapRelease {
   number: number;
@@ -34,6 +44,7 @@ export interface MapRelease {
 }
 export interface StoryMap {
   project: string;
+  personas: { id: string; title: string; description: string }[];
   activities: { id: string; title: string; steps: { id: string; title: string }[] }[];
   releases: MapRelease[];
   /** Stories with a feature file that no release names. */
@@ -45,8 +56,10 @@ export const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&
 const yamlAt = (path: string) => (existsSync(path) ? parse(read(path)) : undefined);
 const PRIORITY = /@(must|should|could|wont)\b/;
 
+type StateFields = "status" | "blocked" | "waitingOn" | "specChanged" | "approvedBy" | "cancelledReason";
+
 /** One story's details from its feature file: title, tags, narrative and criteria. */
-function featureStory(text: string, id: string): Omit<MapStory, "status" | "blocked"> {
+function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
   const [head, body = ""] = text.split(/^\s*Feature:/m);
   const lines = body.split("\n");
   const narrative: string[] = [];
@@ -75,6 +88,9 @@ function featureStory(text: string, id: string): Omit<MapStory, "status" | "bloc
     effort: /@effort-([A-Za-z0-9]+)/.exec(head)?.[1] ?? "",
     narrative: narrative.map((l, i) => (i ? l.replace(/^So that\b/, "so that") : l)).join(", "),
     criteria,
+    type: { technical: "technical", "bug-risk": "bug_risk" }[featureTags(text, "type")[0] ?? ""] ?? "user_story",
+    personas: featureTags(text, "persona"),
+    dependsOn: featureTags(text, "depends"),
   };
 }
 
@@ -82,17 +98,32 @@ function featureStory(text: string, id: string): Omit<MapStory, "status" | "bloc
 export function storyMapOf(dir: string): StoryMap {
   const intent = findIntentDir(dir);
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
-  const states: Record<string, { status?: string; blockers?: string[] }> = yamlAt(join(intent, "state.yaml"))?.stories ?? {};
-  const stateOf = (id: string) => ({ status: states[id]?.status ?? "todo", blocked: (states[id]?.blockers ?? []).length > 0 });
+  const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; approved_by?: string; cancelled_reason?: string }> =
+    yamlAt(join(intent, "state.yaml"))?.stories ?? {};
+  const stateOf = (id: string, deps: string[], hash?: string) => {
+    const st = states[id] ?? {};
+    const status = st.status ?? "todo";
+    return {
+      status,
+      blocked: (st.blockers ?? []).length > 0,
+      waitingOn: isDone(status) || status === "cancelled" ? [] : deps.filter((d) => !isDone(states[d]?.status)),
+      specChanged: isDone(status) && !!st.spec_hash && !!hash && st.spec_hash !== hash,
+      approvedBy: String(st.approved_by ?? ""),
+      cancelledReason: String(st.cancelled_reason ?? ""),
+    };
+  };
   const features = new Map<string, MapStory>();
   for (const file of walk(join(intent, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
     if (!id) continue;
-    features.set(id, { ...featureStory(text, id), ...stateOf(id) });
+    const f = featureStory(text, id);
+    features.set(id, { ...f, ...stateOf(id, f.dependsOn, specHash(text)) });
   }
   const story = (id: string): MapStory =>
-    features.get(id) ?? { id, title: id, activity: "", step: "", priority: "", effort: "", narrative: "", criteria: [], ...stateOf(id) };
+    features.get(id) ?? {
+      id, title: id, activity: "", step: "", priority: "", effort: "", narrative: "", criteria: [], type: "user_story", personas: [], dependsOn: [], ...stateOf(id, []),
+    };
   const releases: MapRelease[] = (Array.isArray(map.releases) ? map.releases : []).map((r: any) => ({
     number: Number(r.number),
     title: String(r.title ?? `Release ${r.number}`),
@@ -103,6 +134,7 @@ export function storyMapOf(dir: string): StoryMap {
   const placed = new Set(releases.flatMap((r) => r.stories.map((s) => s.id)));
   return {
     project: String(map.project ?? ""),
+    personas: (Array.isArray(map.personas) ? map.personas : []).map((p: any) => ({ id: String(p.id), title: String(p.title ?? p.id), description: String(p.description ?? "") })),
     activities: (Array.isArray(map.activities) ? map.activities : []).map((a: any) => ({
       id: String(a.id),
       title: String(a.title ?? a.id),
@@ -113,14 +145,21 @@ export function storyMapOf(dir: string): StoryMap {
   };
 }
 
-/** Each status's tint class and the word shown on its card. Blocked wins over the status. */
+/**
+ * Each status's tint class and the word shown on its card. Blocked wins over the status, and a
+ * changed spec wins over done or approved: what was proved is no longer what the feature says.
+ */
 const STATUS: Record<string, { cls: string; word: string }> = {
   todo: { cls: "todo", word: "to do" },
   in_progress: { cls: "doing", word: "in progress" },
   needs_rework: { cls: "rework", word: "rework" },
   done: { cls: "done", word: "done" },
+  approved: { cls: "approved", word: "approved" },
+  cancelled: { cls: "cancelled", word: "cancelled" },
 };
-const statusOf = (s: MapStory) => (s.blocked ? { cls: "blocked", word: "blocked" } : STATUS[s.status] ?? STATUS.todo);
+const statusOf = (s: MapStory) =>
+  s.blocked ? { cls: "blocked", word: "blocked" } : s.specChanged ? { cls: "changed", word: "spec changed" } : STATUS[s.status] ?? STATUS.todo;
+const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The whole story map as one standalone HTML page. */
@@ -142,24 +181,37 @@ export function renderMap(dir: string): string {
   const card = (s: MapStory) => {
     const st = statusOf(s);
     const musts = s.criteria.filter((c) => c.priority === "must").length;
-    const foot = s.criteria.length
-      ? `<span>${s.criteria.length} ${s.criteria.length === 1 ? "criterion" : "criteria"}${musts ? ` · ${musts} must` : ""}</span>`
-      : `<span class="warn">No criteria</span>`;
-    return `<a class="card ${st.cls}" data-story="${esc(s.id)}" href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span><span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span><span class="cfoot">${foot}</span></a>`;
+    const foot = s.waitingOn.length
+      ? `<span class="wait">Waits on ${esc(s.waitingOn.join(", "))}</span>`
+      : s.criteria.length
+        ? `<span>${s.criteria.length} ${s.criteria.length === 1 ? "criterion" : "criteria"}${musts ? ` · ${musts} must` : ""}</span>`
+        : `<span class="warn">No criteria</span>`;
+    const type = TYPE_WORD[s.type] ? `<span class="stype">${TYPE_WORD[s.type]}</span>` : "";
+    // data- attributes let the live dashboard filter cards; the exported page ignores them.
+    const data = `data-story="${esc(s.id)}" data-status="${esc(st.cls)}" data-type="${esc(s.type)}" data-personas="${esc(s.personas.join(" "))}" data-search="${esc(`${s.id} ${s.title} ${s.narrative}`.toLowerCase())}"`;
+    return `<a class="card ${st.cls}" ${data} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span><span class="cfoot">${foot}</span></a>`;
   };
   const tally = (stories: MapStory[]) => {
-    const n = (f: (s: MapStory) => boolean) => stories.filter(f).length;
-    const parts = [`${n((s) => s.status === "done")} done`, `${n((s) => s.status === "in_progress")} in progress`, `${n((s) => s.status === "todo")} to do`];
-    const blocked = n((s) => s.blocked);
-    return parts.join(" · ") + (blocked ? ` · <span class="warn">${blocked} blocked</span>` : "");
+    const live = stories.filter((s) => s.status !== "cancelled");
+    const n = (f: (s: MapStory) => boolean) => live.filter(f).length;
+    const approved = n((s) => s.status === "approved");
+    const parts = [
+      `${n((s) => isDone(s.status))} of ${live.length} done`,
+      ...(approved ? [`${approved} approved`] : []),
+      `${n((s) => s.status === "in_progress")} in progress`,
+      `${n((s) => s.status === "todo")} to do`,
+    ];
+    const warn = [[n((s) => s.blocked), "blocked"], [n((s) => s.specChanged), "spec changed"]] as const;
+    return parts.join(" · ") + warn.map(([k, w]) => (k ? ` · <span class="warn">${k} ${w}</span>` : "")).join("");
   };
   const band = (id: string, code: string, heading: string, goal: string, bets: string[], stories: MapStory[]) => {
-    const shipped = stories.length > 0 && stories.every((s) => s.status === "done");
+    const live = stories.filter((s) => s.status !== "cancelled");
+    const shipped = live.length > 0 && live.every((s) => isDone(s.status) && !s.specChanged);
     const chips = bets.map((b) => `<span class="bet">${esc(b)}</span>`).join("");
     const cells = columns
       .map((c) => `<div class="cell" data-activity="${esc(c.label)}">${stories.filter((s) => columnOf(s) === c.key).map(card).join("")}</div>`)
       .join("");
-    return `<section class="band" id="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
+    return `<section class="band" id="${esc(id)}" data-release="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
       shipped ? `<span class="stamp">Shipped</span>` : ""
     }<span class="tally">${stories.length ? tally(stories) : "no stories"}</span><span class="rule"></span></div>${
       goal ? `<p class="goal">${esc(goal)}</p>` : ""
@@ -180,13 +232,21 @@ export function renderMap(dir: string): string {
   ].join("");
   const panel = (s: MapStory) => {
     const st = statusOf(s);
-    const facts = [s.id, s.priority, s.effort && `effort ${s.effort}`].filter(Boolean).map((f) => esc(f)).join(" · ");
+    const facts = [s.id, TYPE_WORD[s.type], s.priority, s.effort && `effort ${s.effort}`].filter(Boolean).map((f) => esc(f)).join(" · ");
+    const persona = (id: string) => m.personas.find((p) => p.id === id)?.title ?? id;
+    const notes = [
+      s.personas.length && `For ${s.personas.map(persona).join(", ")}`,
+      s.dependsOn.length && `Depends on ${s.dependsOn.map((d) => (s.waitingOn.includes(d) ? `${d} (not done)` : d)).join(", ")}`,
+      s.status === "approved" && `Approved by ${s.approvedBy || "someone"}`,
+      s.status === "cancelled" && `Cancelled: ${s.cancelledReason}`,
+      s.specChanged && "The feature changed after it was done, so its scenarios no longer prove it",
+    ].filter(Boolean).map((n) => `<li>${esc(n)}</li>`).join("");
     const criteria = s.criteria.length
       ? `<ol class="criteria">${s.criteria.map((c) => `<li><span class="sid">${esc(c.id)}</span>${esc(c.title)}${c.priority ? ` <span class="prio">${esc(c.priority)}</span>` : ""}</li>`).join("")}</ol>`
       : `<p class="warn">No criteria yet.</p>`;
     return `<div class="sheet-wrap" id="story-${esc(s.id)}"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="${esc(s.id)}"><div class="sheet-head"><span class="sid">${esc(s.id)}</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card ${st.cls}"><span class="sword">${esc(st.word)}</span><div class="sc-title">${esc(s.title)}</div><div class="facts">${facts}</div>${
       s.narrative ? `<p class="narrative">${esc(s.narrative)}</p>` : ""
-    }</div><div class="eyebrow">Acceptance criteria</div>${criteria}</aside></div>`;
+    }${notes ? `<ul class="notes">${notes}</ul>` : ""}</div><div class="eyebrow">Acceptance criteria</div>${criteria}</aside></div>`;
   };
   const title = m.project ? `${m.project} · Story map` : "Story map";
   return `<!doctype html>
@@ -262,6 +322,16 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 .card.rework { border-left: 4px solid #E8892B; }
 .done { --fill: #F1EEFB; --edge: #DCD5F3; --word: #6D5BB8; }
 .card.done .stitle { text-decoration: line-through; text-decoration-color: rgba(26,26,24,.35); }
+.approved { --fill: #EAF6EE; --edge: #C7E6D2; --word: #1E7A50; }
+.card.approved .stitle { text-decoration: line-through; text-decoration-color: rgba(26,26,24,.35); }
+.changed { --fill: #FFF6E5; --edge: #F2D9A6; --word: #B45309; }
+.card.changed { border-left: 4px solid #D97706; }
+.cancelled { --fill: transparent; --edge: #E3E1D9; --word: #7D786E; }
+.card.cancelled { border-style: dashed; box-shadow: none; opacity: .7; }
+.card.cancelled .stitle { text-decoration: line-through; }
+.stype { font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--elevated); color: var(--ink-2); }
+.wait { color: var(--warn); }
+.notes { margin: 10px 0 0; padding-left: 18px; color: var(--ink-2); }
 .blocked { --fill: #FDECEC; --edge: #F3C2C2; --word: #B83232; }
 .card.blocked { border-left: 4px solid #D64545; }
 .sheet-wrap { display: none; }

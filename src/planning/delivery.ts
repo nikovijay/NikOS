@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { storiesFor } from "../lib/bets.js";
+import { isDone } from "../lib/project.js";
 import { paths } from "./model.js";
 
 export interface Delivery {
@@ -21,8 +22,9 @@ export function delivery(root: string, bet: string): Delivery {
   const map = yamlAt(join(intent, "storymap.yaml"));
   const state = yamlAt(join(intent, "state.yaml"));
   const ids = map ? storiesFor(map, bet) : [];
-  const stories = ids.map((id) => ({ id, status: state?.stories?.[id]?.status ?? "todo" }));
-  const done = stories.filter((s) => s.status === "done").length;
+  // A cancelled story no longer counts towards the bet.
+  const stories = ids.map((id) => ({ id, status: state?.stories?.[id]?.status ?? "todo" })).filter((s) => s.status !== "cancelled");
+  const done = stories.filter((s) => isDone(s.status)).length;
   const releases: number[] = [...new Set<number>((map?.releases ?? []).filter((r: any) => (r?.stories ?? []).some((s: string) => ids.includes(s))).map((r: any) => r.number as number))];
   const status = !stories.length ? "Not started" : done === stories.length ? "Shipped" : "Building";
   return { status, done, total: stories.length, stories, releases };

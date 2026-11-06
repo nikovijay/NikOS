@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { STORY_ID, findIntentDir, read, rel } from "../lib/project.js";
+import { STORY_ID, featureTags, findIntentDir, isDone, read, rel, specHash } from "../lib/project.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
@@ -25,13 +25,18 @@ export function show(story: string, dir: string): string {
   const effort = tags.find((t) => t.startsWith("effort-"))?.slice(7);
   const map = yamlFile(join(intentDir, "storymap.yaml"));
   const release = (map?.releases ?? []).find((r: any) => (r?.stories ?? []).includes(story));
-  const entry = yamlFile(join(intentDir, "state.yaml"))?.stories?.[story];
+  const states = yamlFile(join(intentDir, "state.yaml"))?.stories ?? {};
+  const entry = states[story];
+  const text = read(file);
 
   const out = [`${story} — ${feature.name}`];
   if (entry) {
     const extra = [entry.claimed_by && `claimed by ${entry.claimed_by}`, entry.updated && `updated ${entry.updated}`].filter(Boolean);
     out.push(`Status: ${entry.status}${extra.length ? ` (${extra.join(", ")})` : ""}`);
     if (entry.blockers?.length) out.push(`Blockers: ${entry.blockers.join("; ")}`);
+    if (entry.status === "approved") out.push(`Approved by ${entry.approved_by ?? "someone"} on ${entry.approved_on ?? "an unknown date"}`);
+    if (entry.status === "cancelled") out.push(`Cancelled: ${entry.cancelled_reason ?? "no reason given"}`);
+    if (isDone(entry.status) && entry.spec_hash && entry.spec_hash !== specHash(text)) out.push(`! The feature changed after it was ${entry.status}: its scenarios no longer prove it`);
   } else {
     out.push("Status: not in state.yaml");
   }
@@ -40,6 +45,12 @@ export function show(story: string, dir: string): string {
       .filter(Boolean)
       .join(" · "),
   );
+  const deps = featureTags(text, "depends");
+  if (deps.length) out.push(`Depends on: ${deps.map((d) => `${d} (${states[d]?.status ?? "unknown"})`).join(", ")}`);
+  const personas = featureTags(text, "persona");
+  if (personas.length) out.push(`For: ${personas.join(", ")}`);
+  const type = featureTags(text, "type")[0];
+  if (type) out.push(`Type: ${type}`);
   out.push("", `Feature: intent/${rel(intentDir, file)}`);
   for (const line of feature.description.split("\n").map((l) => l.trim()).filter(Boolean)) out.push(`  ${line}`);
   out.push("", "Scenarios:");

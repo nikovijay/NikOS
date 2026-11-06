@@ -1,15 +1,28 @@
 import { join } from "node:path";
 import { parse } from "yaml";
-import { findIntentDir, read } from "../lib/project.js";
+import { featureStoryIds, featureTags, findIntentDir, isDone, read, walk } from "../lib/project.js";
 
 export interface NextResult {
   /** The story to build next, or undefined when nothing is left to do. */
   story?: string;
   /** Stories already started; finish these before starting something new. */
   open: { id: string; status: string }[];
+  /** Todo stories passed over because a story they depend on isn't done yet. */
+  waiting: { id: string; on: string[] }[];
 }
 
-/** The first todo story in run.queue, then in story map order. */
+/** Each story's @depends-<id> tags, from its feature file. */
+export function dependencies(intentDir: string): Map<string, string[]> {
+  const deps = new Map<string, string[]>();
+  for (const file of walk(join(intentDir, "features"), ".feature")) {
+    const text = read(file);
+    const id = featureStoryIds(text)[0];
+    if (id) deps.set(id, featureTags(text, "depends"));
+  }
+  return deps;
+}
+
+/** The first todo story in run.queue, then in story map order, whose dependencies are all done. */
 export function next(dir: string): NextResult {
   const intentDir = findIntentDir(dir);
   const map = parse(read(join(intentDir, "storymap.yaml")));
@@ -21,7 +34,15 @@ export function next(dir: string): NextResult {
     .flatMap((r: any) => r.stories ?? []);
   const order = [...new Set([...(state?.run?.queue ?? []), ...mapOrder])];
   const open = order.filter((id) => ["in_progress", "needs_rework"].includes(stories[id]?.status ?? "")).map((id) => ({ id, status: stories[id].status! }));
-  return { story: order.find((id) => (stories[id]?.status ?? "todo") === "todo"), open };
+  const deps = dependencies(intentDir);
+  const waiting: NextResult["waiting"] = [];
+  for (const id of order) {
+    if ((stories[id]?.status ?? "todo") !== "todo") continue;
+    const on = (deps.get(id) ?? []).filter((d) => !isDone(stories[d]?.status));
+    if (!on.length) return { story: id, open, waiting };
+    waiting.push({ id, on });
+  }
+  return { open, waiting };
 }
 
 export function runNext(args: string[]): number {
@@ -30,7 +51,8 @@ export function runNext(args: string[]): number {
     const r = next(i >= 0 ? args[i + 1] : process.cwd());
     for (const o of r.open) console.log(`! ${o.id} is ${o.status}; finish it first`);
     if (!r.story) {
-      console.log("Nothing left to do: every story is started or done.");
+      for (const w of r.waiting) console.log(`! ${w.id} is waiting on ${w.on.join(", ")}`);
+      console.log(r.waiting.length ? "Nothing is ready: every todo story waits on another." : "Nothing left to do: every story is started or done.");
       return 0;
     }
     console.log(r.story);

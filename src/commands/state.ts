@@ -1,18 +1,24 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseDocument } from "yaml";
-import { STORY_ID, findIntentDir, read } from "../lib/project.js";
+import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
+import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
 import { verify } from "./verify.js";
 
-export type Status = "todo" | "in_progress" | "needs_rework" | "done";
+export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "approved" | "cancelled";
 
-/** The moves docs/format.md allows. `done` also needs the story's scenarios to pass. */
+/**
+ * The moves docs/format.md allows. `done` also needs the story's scenarios to pass; `approved`
+ * is only reached through `nikos approve`, which a person runs; `cancelled` needs a reason.
+ */
 const MOVES: Record<Status, Status[]> = {
-  todo: ["in_progress"],
-  in_progress: ["needs_rework", "done"],
-  needs_rework: ["in_progress"],
-  done: ["needs_rework"],
+  todo: ["in_progress", "cancelled"],
+  in_progress: ["needs_rework", "done", "cancelled"],
+  needs_rework: ["in_progress", "cancelled"],
+  done: ["needs_rework", "approved"],
+  approved: ["needs_rework"],
+  cancelled: ["todo"],
 };
 
 export interface StateResult {
@@ -45,9 +51,21 @@ export class StateError extends Error {
   }
 }
 
-export function setState(story: string, to: Status, opts: { dir?: string; by?: string; date?: string } = {}): StateResult {
+export interface StateOptions {
+  dir?: string;
+  by?: string;
+  date?: string;
+  /** Why the story is cancelled; required for a move to cancelled. */
+  reason?: string;
+  /** Set only by approve(), so `state set … approved` can't skip the person. */
+  approving?: boolean;
+}
+
+export function setState(story: string, to: Status, opts: StateOptions = {}): StateResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
-  if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (todo, in_progress, needs_rework, done)`);
+  if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (${Object.keys(MOVES).join(", ")})`);
+  if (to === "approved" && !opts.approving) throw new StateError(`Only a person approves a story: run nikos approve ${story} in your terminal`);
+  if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
   const intentDir = findIntentDir(opts.dir ?? process.cwd());
   const path = join(intentDir, "state.yaml");
   // A Document keeps comments and the order of everything we don't touch.
@@ -59,7 +77,7 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
   }
 
   const result: StateResult = { story, from, to, failing: [] };
-  if (to === "done") {
+  if (to === "done" || to === "approved") {
     let run;
     try {
       run = verify(dirname(intentDir), story);
@@ -77,6 +95,21 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
 
   doc.setIn(["stories", story, "status"], to);
   if (opts.by && to === "in_progress") doc.setIn(["stories", story, "claimed_by"], opts.by);
+  const entry = ["stories", story];
+  const feature = featureFor(story, dirname(intentDir));
+  if (to === "done") {
+    // What the scenarios proved: validate warns if the feature changes afterwards.
+    if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
+  }
+  if (to === "approved") {
+    doc.setIn([...entry, "approved_by"], opts.by ?? "unknown");
+    doc.setIn([...entry, "approved_on"], opts.date ?? new Date().toISOString().slice(0, 10));
+  } else {
+    doc.deleteIn([...entry, "approved_by"]);
+    doc.deleteIn([...entry, "approved_on"]);
+  }
+  if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
+  else doc.deleteIn([...entry, "cancelled_reason"]);
   doc.setIn(["stories", story, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
   // No padding keeps "[A-1, A-2]" as written instead of "[ A-1, A-2 ]".
   writeFileSync(path, doc.toString({ flowCollectionPadding: false }));
@@ -86,7 +119,7 @@ export function setState(story: string, to: Status, opts: { dir?: string; by?: s
 export function runState(args: string[]): number {
   const [sub, story, to, ...rest] = args;
   if (sub !== "set" || !story || !to) {
-    console.error("Usage: nikos state set <story-id> <todo|in_progress|needs_rework|done> [--by <name>] [--dir <path>]");
+    console.error("Usage: nikos state set <story-id> <todo|in_progress|needs_rework|done|cancelled> [--by <name>] [--reason <why>] [--dir <path>]");
     return 1;
   }
   const opt = (n: string) => {
@@ -94,7 +127,7 @@ export function runState(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   try {
-    const r = setState(story, to as Status, { dir: opt("dir"), by: opt("by") });
+    const r = setState(story, to as Status, { dir: opt("dir"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
   } catch (err) {
     const e = err as StateError;

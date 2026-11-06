@@ -22,7 +22,7 @@ describe("story map view", () => {
     const html = renderMap(root);
     const release1 = html.slice(html.indexOf('id="release-1"'), html.indexOf('id="release-2"'));
     expect(release1).toContain('<span class="rnum">01</span>');
-    expect(release1).toContain("1 done · 1 in progress · 0 to do");
+    expect(release1).toContain("1 of 2 done · 1 in progress · 0 to do");
     expect(release1).not.toContain('class="stamp"');
     edit(join(root, "intent", "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     const shipped = renderMap(root);

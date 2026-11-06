@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
-import { featureStoryIds, featureTag, findIntentDir, read, rel, walk } from "../lib/project.js";
+import { featureStoryIds, featureTag, featureTags, findIntentDir, isDone, read, rel, specHash, walk } from "../lib/project.js";
 
 export interface Issue {
   file: string;
@@ -96,9 +96,14 @@ export function validate(start: string): ValidationResult {
   // Cross-file checks only when both files parsed into objects.
   const mapStories = new Map<string, number>();
   const activityIds = new Set<string>();
+  const personaIds = new Set<string>();
   // Each step id names its activity; ids are unique across the map so a @step tag is enough.
   const stepActivity = new Map<string, string>();
   if (storymap && typeof storymap === "object") {
+    for (const p of storymap.personas ?? []) {
+      if (personaIds.has(p?.id)) errors.push({ file: "storymap.yaml", message: `persona '${p.id}' appears more than once` });
+      personaIds.add(p?.id);
+    }
     for (const a of storymap.activities ?? []) {
       activityIds.add(a?.id);
       for (const st of a?.steps ?? []) {
@@ -136,6 +141,8 @@ export function validate(start: string): ValidationResult {
 
   // Features
   const featureIds = new Map<string, string>();
+  const dependsOn = new Map<string, string[]>();
+  const hashes = new Map<string, string>();
   for (const path of walk(join(dir, "features"), ".feature")) {
     const file = rel(dir, path);
     const text = read(path);
@@ -168,6 +175,11 @@ export function validate(start: string): ValidationResult {
       if (!owner) errors.push({ file, message: `@step-${step} is not a step in storymap.yaml`, hint: "add it under the activity's steps, or fix the tag" });
       else if (owner !== activity) errors.push({ file, message: `@step-${step} belongs to activity '${owner}', not '${activity}'` });
     }
+    for (const persona of featureTags(text, "persona")) {
+      if (storymap && !personaIds.has(persona)) errors.push({ file, message: `@persona-${persona} is not a persona in storymap.yaml`, hint: "add it under personas:, or fix the tag" });
+    }
+    dependsOn.set(id, featureTags(text, "depends"));
+    hashes.set(id, specHash(text));
     const release = featureTag(text, "release");
     if (release && mapStories.has(id) && Number(release) !== mapStories.get(id)) {
       warnings.push({ file, message: `is tagged @release-${release} but storymap.yaml puts ${id} in release ${mapStories.get(id)}`, hint: `move it with nikos release move ${id} <n>, which keeps both in step` });
@@ -192,6 +204,31 @@ export function validate(start: string): ValidationResult {
     for (const id of state.run?.queue ?? []) {
       if (!mapStories.has(id)) errors.push({ file: "state.yaml", message: `run.queue has unknown story id ${id}` });
     }
+    for (const [id, entry] of Object.entries(stateStories) as [string, any][]) {
+      if (!isDone(entry?.status) || !entry?.spec_hash || !hashes.has(id) || hashes.get(id) === entry.spec_hash) continue;
+      warnings.push({
+        file: featureIds.get(id)!,
+        message: `${id} changed after it was ${entry.status}${entry.status === "approved" ? ", so its approval no longer holds" : ""}`,
+        hint: `if the change matters, move it back: nikos state set ${id} needs_rework`,
+      });
+    }
+  }
+
+  // Dependencies: each @depends-<id> names a known story, never itself, never in a loop.
+  const statusOf = (id: string): string => (stateStories as any)[id]?.status ?? "todo";
+  for (const [id, deps] of dependsOn) {
+    const file = featureIds.get(id)!;
+    for (const dep of deps) {
+      if (dep === id) errors.push({ file, message: `${id} depends on itself` });
+      else if (!featureIds.has(dep) && !mapStories.has(dep)) errors.push({ file, message: `@depends-${dep} names a story that doesn't exist` });
+      else if (statusOf(dep) === "cancelled" && !isDone(statusOf(id))) warnings.push({ file, message: `${id} depends on ${dep}, which is cancelled`, hint: `drop the @depends-${dep} tag, or bring ${dep} back with nikos state set ${dep} todo` });
+      else if ((mapStories.get(dep) ?? 0) > (mapStories.get(id) ?? Infinity)) {
+        warnings.push({ file, message: `${id} in release ${mapStories.get(id)} depends on ${dep}, which is in a later release (${mapStories.get(dep)})`, hint: `move one of them: nikos release move ${dep} ${mapStories.get(id)}` });
+      }
+    }
+  }
+  for (const loop of dependencyLoops(dependsOn)) {
+    errors.push({ file: featureIds.get(loop[0])!, message: `stories depend on each other in a loop: ${[...loop, loop[0]].join(" → ")}`, hint: "remove one of the @depends tags" });
   }
 
   // Bet links: each names a bet in planning/bets/ or one in another repo (owner/repo#id).
@@ -216,6 +253,25 @@ export function validate(start: string): ValidationResult {
   }
 
   return { dir, errors, warnings, stories: mapStories.size, releases: storymap?.releases?.length ?? 0 };
+}
+
+/** Each dependency loop once, starting from its first story in file order. */
+function dependencyLoops(deps: Map<string, string[]>): string[][] {
+  const loops: string[][] = [];
+  const seen = new Set<string>();
+  const visit = (id: string, path: string[]) => {
+    const at = path.indexOf(id);
+    if (at >= 0) {
+      const loop = path.slice(at);
+      if (loop.length > 1 && !loops.some((l) => l.length === loop.length && l.every((x) => loop.includes(x)))) loops.push(loop);
+      return;
+    }
+    if (seen.has(id)) return;
+    for (const dep of deps.get(id) ?? []) if (dep !== id) visit(dep, [...path, id]);
+    seen.add(id);
+  };
+  for (const id of deps.keys()) visit(id, []);
+  return loops;
 }
 
 export function formatResult(r: ValidationResult): string {

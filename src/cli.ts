@@ -7,6 +7,7 @@ import { runClear } from "./commands/clear.js";
 import { runVerify } from "./commands/verify.js";
 import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
+import { runApprove } from "./commands/approve.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -25,6 +26,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   verify: runVerify,
   next: runNext,
   state: runState,
+  approve: runApprove,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -59,6 +61,8 @@ Commands:
   decisions "<q>"  Quote the decisions.md entries that mention a topic or story
   next             Print the next story to build
   state set <id> <status>  Move a story; done only if its scenarios pass
+                   (cancelled needs --reason)
+  approve <id>     Sign off a done story yourself (interactive terminal only)
   decide "<title>" Append a decision to decisions.md
                    (--why, --story, --category, --supersedes)
   video            Draft a video brief and storyboard from the done stories
