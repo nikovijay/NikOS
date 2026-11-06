@@ -5,6 +5,7 @@ import { runPlan } from "./commands/plan.js";
 import { runInit } from "./commands/init.js";
 import { runClear } from "./commands/clear.js";
 import { runVerify } from "./commands/verify.js";
+import { runCi } from "./commands/ci.js";
 import { runNext } from "./commands/next.js";
 import { runState } from "./commands/state.js";
 import { runApprove } from "./commands/approve.js";
@@ -25,6 +26,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   plan: runPlan,
   clear: runClear,
   verify: runVerify,
+  ci: runCi,
   next: runNext,
   state: runState,
   approve: runApprove,
@@ -60,6 +62,8 @@ Commands:
   clear <id>       Check a story is Lean and Executable before building
   verify setup     Set up a Cucumber runner for this repo's stack
   verify [id]      Run a story's scenarios (or all of them)
+  ci setup         Run validate and every story's scenarios on each PR or merge
+                   request (GitHub Actions or GitLab CI; --github, --gitlab)
   show <id>        Summarise a story: feature, status, plan, bets, decisions
   decisions "<q>"  Quote the decisions.md entries that mention a topic or story
   next             Print the next story to build

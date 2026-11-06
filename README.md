@@ -87,6 +87,7 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
+| `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI) |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
 | `nikos approve <id>` | Sign off a done story yourself, in your terminal (writes `intent/approvals.yaml`) |
