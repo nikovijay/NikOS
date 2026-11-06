@@ -253,7 +253,7 @@ export function validate(start: string): ValidationResult {
     errors.push({ file: featureIds.get(loop[0])!, message: `stories depend on each other in a loop: ${[...loop, loop[0]].join(" → ")}`, hint: "remove one of the @depends tags" });
   }
 
-  // Bet links: each names a bet in planning/bets/ or one in another repo (owner/repo#id).
+  // Bet links: each names a bet in planning/bets/ or one in another repo (<repo path>#id).
   if (storymap && typeof storymap === "object") {
     const betsDir = join(planningDir(dir), "bets");
     const check = (where: string, refs: unknown) => {
@@ -261,7 +261,7 @@ export function validate(start: string): ValidationResult {
         if (typeof ref !== "string") continue;
         if (CROSS_REF.test(ref)) continue; // another repo's bet: checked for form only, never fetched
         if (!BET_ID.test(ref)) {
-          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which is neither a bet id nor owner/repo#id`, hint: "use a bet id like faster-checkout, or owner/repo#bet-id for another repo's bet" });
+          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which is neither a bet id nor <repo path>#id`, hint: "use a bet id like faster-checkout, or owner/repo#bet-id for another repo's bet" });
         } else if (!existsSync(join(betsDir, `${ref}.md`))) {
           errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which has no planning/bets/${ref}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
         }
