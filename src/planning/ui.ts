@@ -8,7 +8,10 @@ const CSS = `
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-.side { background: var(--surface); border-right: 1px solid var(--line); padding: 20px 14px; }
+.side { background: var(--surface); border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.links { margin-top: auto; padding-top: 16px; }
+.links a { padding: 0 10px; color: var(--muted); text-decoration: none; font-size: 12px; }
+.links a:hover { color: var(--ink-2); text-decoration: underline; }
 .brand { font-weight: 700; letter-spacing: .02em; }
 .project { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 nav a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--ink-2); text-decoration: none; font-size: 14px; }
@@ -81,7 +84,8 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .toast.bad { background: var(--red); }
 @media (max-width: 720px) {
   .shell { grid-template-columns: 1fr; }
-  .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .side { border-right: 0; border-bottom: 1px solid var(--line); position: static; height: auto; }
+  .links { margin-top: 16px; }
   .content { padding: 16px 12px 48px; }
   .split, .fields { grid-template-columns: 1fr; }
   .timeline { --label: 96px; }
@@ -362,6 +366,10 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
   const json = JSON.stringify(data).replace(/[<\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const nav =
     `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a>`;
+  // The link out appears only in the served dashboard: an export is a closed file with no outside links.
+  const links = live
+    ? `<div class="links"><a href="https://www.nikovijay.com/connect?from=nikos-planning" target="_blank" rel="noopener">Made by Niko Vijay</a></div>\n`
+    : "";
   const extra = live
     ? `<h4>Story map</h4><a href="/map">Open the story map</a>` +
       ((data.views as string[]).length
@@ -389,7 +397,7 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
 <div class="brand">nikOS planning</div>
 <div class="project">${esc(data.project)}</div>
 <nav>${nav}${extra}</nav>
-</aside>
+${links}</aside>
 <div class="content">
 <div class="mode">${live ? "Saves write to planning/ in this repo, and nothing else." : "Snapshot, read only. The plans are as they were when this file was made."}</div>
 <main id="main"></main>

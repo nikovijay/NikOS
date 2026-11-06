@@ -158,6 +158,14 @@ describe("dashboard copy", () => {
     const prose = new Function(`${fn("esc")}\n${fn("prose")}\nreturn prose;`)();
     expect(prose("## Why we think so\n\nSeven of ten testers said so.\nAnd more.")).toBe("<h4>Why we think so</h4>Seven of ten testers said so.\nAnd more.");
   });
+
+  test("the sidebar ends with one quiet link to Niko's site", async () => {
+    const html = await (await fetch(`${base(await start(setup()))}/`)).text();
+    const links = html.match(/<div class="links">([\s\S]*?)<\/div>/)?.[1] ?? "";
+    expect(links.match(/<a /g)).toHaveLength(1);
+    expect(links).toContain('href="https://www.nikovijay.com/connect?from=nikos-planning"');
+    expect(html.indexOf('<div class="links">')).toBeLessThan(html.indexOf("</aside>"));
+  });
 });
 
 describe("custom views", () => {
