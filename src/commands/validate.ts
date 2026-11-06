@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
+import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { featureStoryIds, featureTag, featureTags, findIntentDir, isDone, read, rel, specHash, walk } from "../lib/project.js";
 
 export interface Issue {
@@ -29,6 +30,7 @@ const schemaDir = [join(here, "../../schemas"), join(here, "../schemas")].find((
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const checkStorymap = ajv.compile(JSON.parse(read(join(schemaDir, "storymap.schema.json"))));
 const checkState = ajv.compile(JSON.parse(read(join(schemaDir, "state.schema.json"))));
+const checkApprovals = ajv.compile(JSON.parse(read(join(schemaDir, "approvals.schema.json"))));
 
 function pointer(e: ErrorObject): string {
   return e.instancePath.replace(/^\//, "").split("/").filter(Boolean).join(".") || "(root)";
@@ -208,9 +210,29 @@ export function validate(start: string): ValidationResult {
       if (!isDone(entry?.status) || !entry?.spec_hash || !hashes.has(id) || hashes.get(id) === entry.spec_hash) continue;
       warnings.push({
         file: featureIds.get(id)!,
-        message: `${id} changed after it was ${entry.status}${entry.status === "approved" ? ", so its approval no longer holds" : ""}`,
+        message: `${id} changed after it was ${entry.status}`,
         hint: `if the change matters, move it back: nikos state set ${id} needs_rework`,
       });
+    }
+  }
+
+  // approvals.yaml is optional: it appears with the first sign-off.
+  if (existsSync(join(dir, "approvals.yaml"))) {
+    const approvals = loadYaml(dir, "approvals.yaml", errors);
+    if (approvals !== undefined && !checkApprovals(approvals)) {
+      for (const e of checkApprovals.errors ?? []) {
+        if (e.keyword === "pattern" && e.propertyName) continue;
+        errors.push({ file: "approvals.yaml", message: describe(e, approvals) });
+      }
+    } else if (approvals) {
+      for (const [id, a] of Object.entries(approvals.approvals ?? {}) as [string, Approval][]) {
+        if (!mapStories.has(id) && !featureIds.has(id)) {
+          errors.push({ file: "approvals.yaml", message: `approvals.${id} is an unknown story id` });
+          continue;
+        }
+        const lapse = approvalLapse(a, (stateStories as any)[id], hashes.get(id));
+        if (lapse) warnings.push({ file: "approvals.yaml", message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry` });
+      }
     }
   }
 

@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 
 export const STORY_ID = /^[A-Z][A-Z0-9]{0,9}-[0-9]+$/;
 
-/** Statuses that count as built: approved is done plus a person's sign-off. */
+/** Statuses that count as built. approved is how the map shows done plus a sign-off that holds. */
 export const DONE = new Set(["done", "approved"]);
 export const isDone = (status: string | undefined) => DONE.has(status ?? "");
 

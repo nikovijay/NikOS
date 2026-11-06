@@ -44,9 +44,9 @@ describe("cancel", () => {
 });
 
 describe("approve", () => {
-  it("can't be reached with state set, and refuses a story that isn't done", () => {
+  it("isn't a status, and refuses a story that isn't done", () => {
     const intent = copyExample();
-    expect(() => setState("HT-1", "approved", { dir: intent })).toThrow("Only a person approves a story: run nikos approve HT-1");
+    expect(() => setState("HT-1", "approved" as any, { dir: intent })).toThrow("Approval isn't a status: a person approves HT-1 with nikos approve");
     expect(() => approve("HT-3", { dir: intent, by: "Niko" })).toThrow("HT-3 is todo: only a done story can be approved");
   });
 
@@ -61,7 +61,7 @@ describe("approve", () => {
     expect(await runApprove(["HT-1", "--dir", copyExample()])).toBe(1);
   });
 
-  it("approves a done story whose scenarios pass, and the approval lapses if the feature changes", () => {
+  it("records a sign-off in approvals.yaml that lapses when the feature changes or the story is redone", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-approve-"));
     init(root, { name: "Fixture", key: "FX" });
     writeFileSync(join(root, "package.json"), '{"name":"fx","private":true}');
@@ -72,26 +72,49 @@ describe("approve", () => {
       `import { Given, When, Then } from "@cucumber/cucumber";\nGiven("I am a new user", () => {});\nWhen("I do the one thing this product is for", () => {});\nThen("I see the result I came for", () => {});\n`,
     );
     const intent = join(root, "intent");
+    const approvals = () => parse(readFileSync(join(intent, "approvals.yaml"), "utf8"));
     setState("FX-1", "in_progress", { dir: root });
-    setState("FX-1", "done", { dir: root });
+    setState("FX-1", "done", { dir: root, now: "2026-11-06T10:00:00Z" });
     const file = join(intent, "features/getting-started/first-story.feature");
-    expect(stateOf(intent, "FX-1").spec_hash).toBe(specHash(readFileSync(file, "utf8")));
+    const hash = specHash(readFileSync(file, "utf8"));
+    expect(stateOf(intent, "FX-1")).toMatchObject({ status: "done", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
 
-    approve("FX-1", { dir: root, by: "Niko", date: "2026-11-06" });
-    expect(stateOf(intent, "FX-1")).toMatchObject({ status: "approved", approved_by: "Niko", approved_on: "2026-11-06" });
+    expect(approve("FX-1", { dir: root, by: "Niko", date: "2026-11-06" })).toEqual({ story: "FX-1", by: "Niko", on: "2026-11-06" });
+    expect(approvals().approvals["FX-1"]).toEqual({ by: "Niko", on: "2026-11-06", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
+    expect(readFileSync(join(intent, "approvals.yaml"), "utf8")).toContain("Protect this file with CODEOWNERS");
+    expect(stateOf(intent, "FX-1").status).toBe("done"); // state.yaml doesn't change
+    expect(validate(root).errors).toEqual([]);
     expect(validate(root).warnings).toEqual([]);
     expect(storyMapOf(root).releases[0].stories[0]).toMatchObject({ status: "approved", approvedBy: "Niko", specChanged: false });
-    expect(next(root).story).toBeUndefined();
+    expect(show("FX-1", root)).toContain("Approved by Niko on 2026-11-06");
+    expect(() => approve("FX-1", { dir: root, by: "Niko" })).toThrow("FX-1 is already approved (by Niko on 2026-11-06)");
 
     edit(file, (s) => s.replace("Feature:", "@persona-new-user\nFeature:"));
     expect(validate(root).warnings).toEqual([]); // tags above Feature: aren't the spec
     edit(file, (s) => s.replace(/Scenario: (.*)/, "Scenario: $1 quickly"));
-    expect(validate(root).warnings.map((w) => w.message)).toEqual(["FX-1 changed after it was approved, so its approval no longer holds"]);
+    expect(validate(root).warnings.map((w) => w.message)).toEqual([
+      "FX-1 changed after it was done",
+      "FX-1's approval no longer holds: its feature changed since",
+    ]);
     expect(renderMap(root)).toContain('class="card changed"');
 
+    // Redone with the same feature: the old approval was for the earlier done.
+    edit(file, (s) => s.replace(" quickly", ""));
     setState("FX-1", "needs_rework", { dir: root });
-    expect(stateOf(intent, "FX-1").approved_by).toBeUndefined();
+    expect(validate(root).warnings.map((w) => w.message)).toEqual(["FX-1's approval no longer holds: it's needs_rework now"]);
+    setState("FX-1", "in_progress", { dir: root });
+    setState("FX-1", "done", { dir: root, now: "2026-11-07T09:00:00Z" });
+    expect(validate(root).warnings.map((w) => w.message)).toEqual(["FX-1's approval no longer holds: it went through done again since"]);
+    expect(storyMapOf(root).releases[0].stories[0].status).toBe("done");
+    approve("FX-1", { dir: root, by: "Niko", date: "2026-11-07" });
+    expect(validate(root).warnings).toEqual([]);
   }, 60_000);
+
+  it("validate checks approvals.yaml names real stories", () => {
+    const intent = copyExample();
+    writeFileSync(join(intent, "approvals.yaml"), "format_version: 1\napprovals:\n  HT-9: { by: Niko, on: 2026-11-06, spec_hash: abcdefabcdef, done_at: x }\n");
+    expect(errors(intent)).toEqual(["approvals.HT-9 is an unknown story id"]);
+  });
 });
 
 describe("spec changed after done", () => {

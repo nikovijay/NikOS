@@ -17,7 +17,7 @@ describe("validate", () => {
     const dir = copyExample();
     edit(join(dir, "state.yaml"), (s) => s.replace("status: todo", "status: blocked"));
     expect(messages(dir)).toContain(
-      "state.yaml: stories.HT-3.status 'blocked' is not one of todo, in_progress, needs_rework, done, approved, cancelled",
+      "state.yaml: stories.HT-3.status 'blocked' is not one of todo, in_progress, needs_rework, done, cancelled",
     );
   });
 

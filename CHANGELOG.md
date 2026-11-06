@@ -4,16 +4,19 @@
 
 ### Added
 
-- **Approved**, a person's sign-off after done: `nikos approve <id>`. It only
-  runs in an interactive terminal and asks for the id to be typed back, so a
-  coding agent can't approve its own work. It reruns the scenarios and records
-  who approved and when. Approved counts as done everywhere.
+- **Approvals**, a person's sign-off after done: `nikos approve <id>` writes it
+  to `intent/approvals.yaml`. It only runs in an interactive terminal and asks
+  for the id to be typed back, so a coding agent can't approve its own work. It
+  reruns the scenarios and records who approved and when. Protect the file with
+  `CODEOWNERS` to make approvals need a review on GitHub or GitLab. The map,
+  exports and release check show approved stories, and count them as done.
 - **Cancelled**, with a reason: `nikos state set <id> cancelled --reason "…"`.
   The story stays on the map, struck through. `nikos next` skips it, and it no
   longer counts towards its release or bets. `state set <id> todo` brings it back.
 - **Spec changed after done.** Done records a fingerprint of the feature. If the
   feature changes afterwards, `nikos validate` warns and the map marks the story
-  "spec changed". An approval no longer holds once the feature changes.
+  "spec changed". An approval lapses when the feature changes, or when the story
+  goes back through done.
 - **Dependencies:** `@depends-<id>` tags. `nikos next` waits until a story's
   dependencies are done, the map shows "Waits on …", and `nikos validate`
   catches unknown ids, loops and a dependency in a later release.

@@ -5,6 +5,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { featureStoryIds, featureTags, findIntentDir, isDone, read, specHash, walk } from "../lib/project.js";
 
 export interface MapCriterion {
@@ -100,17 +101,24 @@ function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
 export function storyMapOf(dir: string): StoryMap {
   const intent = findIntentDir(dir);
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
-  const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; approved_by?: string; cancelled_reason?: string }> =
+  const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
     yamlAt(join(intent, "state.yaml"))?.stories ?? {};
+  const approvals = loadApprovals(intent);
+  // Approved is shown as a status: done, plus an approval that still holds.
+  const approvedBy = (id: string, hash?: string) => {
+    const a = approvals[id];
+    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
+  };
   const stateOf = (id: string, deps: string[], hash?: string) => {
     const st = states[id] ?? {};
-    const status = st.status ?? "todo";
+    const by = approvedBy(id, hash);
+    const status = by ? "approved" : st.status ?? "todo";
     return {
       status,
       blocked: (st.blockers ?? []).length > 0,
       waitingOn: isDone(status) || status === "cancelled" ? [] : deps.filter((d) => !isDone(states[d]?.status)),
+      approvedBy: by,
       specChanged: isDone(status) && !!st.spec_hash && !!hash && st.spec_hash !== hash,
-      approvedBy: String(st.approved_by ?? ""),
       cancelledReason: String(st.cancelled_reason ?? ""),
     };
   };

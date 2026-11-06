@@ -275,8 +275,9 @@ blockers, and the run queue. Kept apart so specs stay clean.
 format_version: 1
 stories:
   HT-1:
-    status: done            # todo | in_progress | needs_rework | done | approved | cancelled
+    status: done            # todo | in_progress | needs_rework | done | cancelled
     spec_hash: 3f9a1c2b7d4e # set at done: a fingerprint of the feature from Feature: on
+    done_at: 2026-11-03T14:02:11Z  # set at done
     claimed_by: claude-code # optional
     plan_version: 2         # optional, the plan in use
     blockers: []            # optional, plain sentences
@@ -291,11 +292,8 @@ Status moves `todo → in_progress → done`, or `in_progress → needs_rework �
 in_progress`. Only a passing verification can set `done` (see the
 build-a-story playbook).
 
-- **Approved** is a person's sign-off on a done story: `nikos approve <id>`. It
-  only runs in an interactive terminal and asks for the id to be typed back, so a
-  coding agent can't approve its own work. It reruns the scenarios and records
-  `approved_by` (git's `user.name`) and `approved_on`. Approved counts as done
-  everywhere; `approved → needs_rework` undoes it.
+- **Approval** isn't a status. It's a person's sign-off, kept in
+  [approvals.yaml](#approvalsyaml) so a repo can protect it.
 - **Cancelled** keeps a story you've decided not to build, with a reason:
   `nikos state set <id> cancelled --reason "<why>"` from todo, in_progress or
   needs_rework. It's saved as `cancelled_reason`. `cancelled → todo` brings it back.
@@ -305,6 +303,48 @@ build-a-story playbook).
   story as "spec changed", and `nikos release check` counts it as a gap. Tags
   above `Feature:` aren't part of the fingerprint, so moving a story between
   releases doesn't count as a change.
+
+## approvals.yaml
+
+**Purpose:** people's sign-offs on done stories. It's kept apart from
+`state.yaml`, which agents write all the time, so it can be protected.
+
+**Path:** `intent/approvals.yaml` (optional; the first approval creates it)
+
+**Format:** YAML.
+
+```yaml
+format_version: 1
+approvals:
+  HT-1:
+    by: Niko Vijay              # git's user.name
+    on: 2026-11-06
+    spec_hash: 3f9a1c2b7d4e     # the feature that was approved
+    done_at: 2026-11-03T14:02:11Z   # the done that was approved
+```
+
+`nikos approve <id>` writes an entry. It only runs in an interactive terminal
+and asks for the id to be typed back, so a coding agent can't approve its own
+work. It approves only a done story whose feature hasn't changed since, and
+reruns its scenarios first.
+
+An approval holds while the story stays done, since that same done, with the
+same feature. Move it to needs_rework, take it through done again, or change its
+feature, and the approval lapses: `nikos validate` warns, and the map shows the
+story as done rather than approved. A person then approves it again.
+
+On the map, in exports and in `nikos release check`, a story with an approval
+that holds shows as **approved**, and counts as done.
+
+**Make approvals need a review.** Protect the default branch and add a
+`CODEOWNERS` rule for the file, so a change to it only merges when that person
+approves the pull request (GitHub) or merge request (GitLab):
+
+```
+/intent/approvals.yaml  @your-product-lead
+```
+
+On GitLab, requiring code-owner approval needs a paid tier.
 
 ---
 

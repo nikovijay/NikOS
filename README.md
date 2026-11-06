@@ -89,7 +89,7 @@ Every file is plain text you can read, review and diff. The full format:
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
-| `nikos approve <id>` | Sign off a done story yourself, in your terminal |
+| `nikos approve <id>` | Sign off a done story yourself, in your terminal (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
 | `nikos decide "<title>"` | Append a decision to `decisions.md` |

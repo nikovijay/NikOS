@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { STORY_ID, featureTags, findIntentDir, isDone, read, rel, specHash } from "../lib/project.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 import { featureFor } from "./clear.js";
@@ -34,7 +35,11 @@ export function show(story: string, dir: string): string {
     const extra = [entry.claimed_by && `claimed by ${entry.claimed_by}`, entry.updated && `updated ${entry.updated}`].filter(Boolean);
     out.push(`Status: ${entry.status}${extra.length ? ` (${extra.join(", ")})` : ""}`);
     if (entry.blockers?.length) out.push(`Blockers: ${entry.blockers.join("; ")}`);
-    if (entry.status === "approved") out.push(`Approved by ${entry.approved_by ?? "someone"} on ${entry.approved_on ?? "an unknown date"}`);
+    const approval = loadApprovals(intentDir)[story];
+    if (approval) {
+      const lapse = approvalLapse(approval, entry, specHash(text));
+      out.push(lapse ? `! Approved by ${approval.by} on ${approval.on}, but that no longer holds: ${lapse}` : `Approved by ${approval.by} on ${approval.on}`);
+    }
     if (entry.status === "cancelled") out.push(`Cancelled: ${entry.cancelled_reason ?? "no reason given"}`);
     if (isDone(entry.status) && entry.spec_hash && entry.spec_hash !== specHash(text)) out.push(`! The feature changed after it was ${entry.status}: its scenarios no longer prove it`);
   } else {
