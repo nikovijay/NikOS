@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
-import { checkStale, crossRefs, loadUpstream, resolveRef, sync } from "../src/planning/upstream";
+import { checkStale, crossRefs, loadUpstream, resolveRef, sync, upstreamEntries } from "../src/planning/upstream";
+import { CROSS_REF } from "../src/lib/bets";
 import { newKr } from "../src/planning/krs";
 import { runPlanning } from "../src/planning/cli";
 import { copyExample } from "./helpers";
@@ -48,6 +49,36 @@ describe("upstream", () => {
     expect(readFileSync(join(root, ".gitignore"), "utf8")).toMatch(/^\.nikos\/$/m);
     expect(resolveRef(root, "acme/company-plan#kr-2")?.data.title).toBe("Plants alive after 90 days");
     expect(loadUpstream(root)[0]).toMatchObject({ repo: "acme/company-plan", commit: head });
+  });
+
+  it("works with a GitLab project in nested groups", () => {
+    const company = companyPlan();
+    const root = team([{ repo: "acme/product/plans/company-plan", url: company }]);
+    newKr({ id: "nested", title: "Nested", owner: "Team", baseline: 0, target: 1, by: "2027-03-31", alignsTo: "acme/product/plans/company-plan#kr-2" }, root);
+    expect(sync(root).unresolved).toEqual([]);
+    expect(existsSync(join(root, ".nikos/upstream/acme/product/plans/company-plan/planning/krs/kr-2.yaml"))).toBe(true);
+    expect(resolveRef(root, "acme/product/plans/company-plan#kr-2")?.data.title).toBe("Plants alive after 90 days");
+    expect(loadUpstream(root).map((u) => u.repo)).toEqual(["acme/product/plans/company-plan"]);
+    expect(crossRefs(root)).toContainEqual({ ref: "acme/product/plans/company-plan#kr-2", file: "planning/krs/nested.yaml", resolved: true });
+  });
+
+  it("builds the url from host, defaulting to GitHub, and refuses paths that leave the copy folder", () => {
+    const root = dirname(copyExample());
+    mkdirSync(join(root, "planning"), { recursive: true });
+    const entries = (yaml: string) => {
+      writeFileSync(join(root, "planning/upstream.yaml"), yaml);
+      return upstreamEntries(root);
+    };
+    expect(entries("- repo: acme/company-plan\n")[0].url).toBe("https://github.com/acme/company-plan.git");
+    expect(entries("- repo: acme/product/plan\n  host: gitlab.com\n")[0]).toEqual({ repo: "acme/product/plan", ref: "main", url: "https://gitlab.com/acme/product/plan.git" });
+    expect(entries("- repo: acme/plan\n  host: gitlab.acme.internal:8443\n")[0].url).toBe("https://gitlab.acme.internal:8443/acme/plan.git");
+    expect(entries("- repo: acme/.github\n")[0].repo).toBe("acme/.github");
+    expect(() => entries("- repo: ../evil\n")).toThrow("is not a repo path");
+    expect(() => entries("- repo: acme/../../evil\n")).toThrow("is not a repo path");
+    expect(() => entries("- repo: company-plan\n")).toThrow("is not a repo path");
+    expect(() => entries("- repo: acme/plan\n  host: https://gitlab.com/\n")).toThrow("is not a host name");
+    expect(CROSS_REF.test("acme/product/plan#kr-2")).toBe(true);
+    expect(CROSS_REF.test("../plan#kr-2")).toBe(false);
   });
 
   it("an unreachable repo is unresolved and planning carries on", async () => {

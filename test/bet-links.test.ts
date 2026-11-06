@@ -35,7 +35,7 @@ describe("bet links", () => {
     setBets(dir, "bets: [fewer-missed-tasks]", "bets: [acme/company-plan#focus-mode]");
     expect(errors(dir)).toEqual([]); // no planning/ for acme here, and nothing is fetched
     setBets(dir, "bets: [acme/company-plan#focus-mode]", "bets: [acme#focus-mode]");
-    expect(errors(dir)).toContain("storymap.yaml: release 1 names bet 'acme#focus-mode', which is neither a bet id nor owner/repo#id");
+    expect(errors(dir)).toContain("storymap.yaml: release 1 names bet 'acme#focus-mode', which is neither a bet id nor <repo path>#id");
   });
 
   it("a story's own bets replace its release's", () => {

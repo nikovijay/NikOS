@@ -105,17 +105,26 @@ Write one with `nikos planning bet new`; review it with
 ever writing to them.
 
 ```yaml
-- repo: acme/company-plan
+- repo: acme/company-plan             # on GitHub
   ref: main
-  # url: https://git.example.com/acme/company-plan.git   (optional; defaults to GitHub)
+- repo: acme/product/payments-plan    # on GitLab: the full path, with every group
+  host: gitlab.com                    # or your self-managed host, e.g. gitlab.acme.com
+- repo: acme/ops-plan
+  url: ssh://git@git.example.com/acme/ops-plan.git   # any other git host
 ```
 
-`nikos planning sync` clones each into `.nikos/upstream/<owner>/<repo>/`
+`repo` is the repo's path on its host: `owner/repo` on GitHub, or
+`group/subgroup/project` on GitLab. The clone url is
+`https://<host>/<repo>.git`, with `host` defaulting to `github.com`; `url`
+overrides it for anything else, including SSH.
+
+`nikos planning sync` clones each into `.nikos/upstream/<repo>/`
 (gitignored; sync adds it to `.gitignore`) and writes the commit it read to
 `upstream.lock`. A repo it can't reach is reported as unresolved and planning
 carries on. `nikos planning sync --check` says whether an upstream has moved
 past its locked commit. This repo only stores references like
-`owner/repo#id`, never upstream content.
+`acme/company-plan#kr-2` or `acme/product/payments-plan#faster-checkout`, never
+upstream content.
 
 ## views/&lt;name&gt;.html
 

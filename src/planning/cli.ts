@@ -17,7 +17,7 @@ Commands:
   bet review <id> <continue|change|stop|complete>  Add a dated review decision (--why, --outcome won|lost)
   kr new <id>        Write planning/krs/<id>.yaml
                      (--title, --owner, --baseline, --target, --by YYYY-MM-DD, --unit, --objective,
-                      --aligns-to owner/repo#id, --stale-after <days>)
+                      --aligns-to <repo path>#id, --stale-after <days>)
   kr target <id> <n> Revise a key result's target; the original is kept
   checkin <kr> <value>  Add a dated check-in (--note, --evidence, --date)
   status             Every bet's delivery and outcome, every key result's latest value

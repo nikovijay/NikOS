@@ -1,17 +1,20 @@
 // Plans this repo works toward, in other repos. planning/upstream.yaml lists them;
-// `nikos planning sync` fetches a read-only copy of each into .nikos/upstream/<owner>/<repo>/
+// `nikos planning sync` fetches a read-only copy of each into .nikos/upstream/<repo path>/
 // (gitignored) and records the commit it read in planning/upstream.lock. This repo only ever
-// stores references like owner/repo#id, never the upstream content.
+// stores references like owner/repo#id, never the upstream content. Any git host works:
+// GitHub by default, GitLab (with nested groups) or a self-managed host through `host:`, and
+// anything else through `url:`.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse, stringify } from "yaml";
-import { CROSS_REF } from "../lib/bets.js";
+import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
 import { walk } from "../lib/project.js";
 import { betIds, krIds, loadBet, loadKr, paths, today, writePlanning } from "./model.js";
 
 export interface UpstreamEntry {
+  /** The repo's path on its host: owner/repo, or group/subgroup/project. */
   repo: string;
   ref: string;
   url: string;
@@ -25,15 +28,24 @@ export interface LockEntry {
 
 const git = (args: string[], cwd?: string) => spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
 
-/** The upstream plans listed in planning/upstream.yaml. A repo is owner/repo; url defaults to GitHub. */
+const HOST = /^[A-Za-z0-9.-]+(:[0-9]+)?$/;
+
+/**
+ * The upstream plans listed in planning/upstream.yaml. A repo is its path on the host; the url is
+ * https://<host>/<repo>.git, with host github.com unless the entry names one (gitlab.com, or a
+ * self-managed host), and url: overrides it for anything else.
+ */
 export function upstreamEntries(root: string): UpstreamEntry[] {
   const p = paths(root).upstream;
   if (!existsSync(p)) return [];
   const list = parse(readFileSync(p, "utf8")) ?? [];
   if (!Array.isArray(list)) throw new Error("planning/upstream.yaml should be a list of { repo, ref }");
   return list.map((e: any) => {
-    if (typeof e?.repo !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(e.repo)) throw new Error(`planning/upstream.yaml: '${e?.repo}' is not owner/repo`);
-    return { repo: e.repo, ref: e.ref ?? "main", url: e.url ?? `https://github.com/${e.repo}.git` };
+    if (typeof e?.repo !== "string" || !REPO_PATH.test(e.repo)) {
+      throw new Error(`planning/upstream.yaml: '${e?.repo}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
+    }
+    if (e.host !== undefined && (typeof e.host !== "string" || !HOST.test(e.host))) throw new Error(`planning/upstream.yaml: '${e.host}' is not a host name, e.g. gitlab.com`);
+    return { repo: e.repo, ref: e.ref ?? "main", url: e.url ?? `https://${e.host ?? "github.com"}/${e.repo}.git` };
   });
 }
 
@@ -95,12 +107,22 @@ export function checkStale(root: string): { stale: { repo: string; locked: strin
   return out;
 }
 
+/** The repo paths under .nikos/upstream/ that hold a planning/ folder, at any group depth. */
+function copiesOnDisk(cache: string, prefix = "", depth = 0): string[] {
+  if (depth > 8 || !existsSync(cache)) return [];
+  return readdirSync(cache, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name !== "planning")
+    .flatMap((d) => {
+      const path = prefix ? `${prefix}/${d.name}` : d.name;
+      return existsSync(join(cache, d.name, "planning")) ? [path] : copiesOnDisk(join(cache, d.name), path, depth + 1);
+    });
+}
+
 /** The read-only copies on disk: each upstream's key results and bets. */
 export function loadUpstream(root: string): { repo: string; commit?: string; krs: any[]; bets: any[] }[] {
   const lock = readLock(root);
-  const repos = new Set<string>(lock.map((l) => l.repo));
-  // Also pick up copies whose lock entry is missing (e.g. placed by hand).
-  for (const owner of walk(paths(root).cache).map((p) => p.slice(paths(root).cache.length + 1).split(/[\\/]/).slice(0, 2).join("/"))) repos.add(owner);
+  // Locked repos, plus copies whose lock entry is missing (e.g. placed by hand).
+  const repos = new Set<string>([...lock.map((l) => l.repo), ...copiesOnDisk(paths(root).cache)].filter((r) => REPO_PATH.test(r)));
   const out = [];
   for (const repo of repos) {
     const root2 = cacheDir(root, repo);

@@ -4,8 +4,15 @@ import { dirname, join } from "node:path";
 
 /** A bet in this repo: lowercase words joined by hyphens. */
 export const BET_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-/** A bet or key result in another repo: owner/repo#id. */
-export const CROSS_REF = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#[a-z0-9]+(-[a-z0-9]+)*$/;
+/** One part of a repo path; "." and ".." are never allowed, so a path can't leave .nikos/upstream/. */
+const SEGMENT = String.raw`(?!\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+`;
+/**
+ * Another repo, as its path on the host: owner/repo on GitHub, or group/subgroup/project on
+ * GitLab, with as many groups as it has.
+ */
+export const REPO_PATH = new RegExp(`^${SEGMENT}(?:/${SEGMENT})+$`);
+/** A bet or key result in another repo: <repo path>#id, e.g. acme/company-plan#d30-retention. */
+export const CROSS_REF = new RegExp(`^${SEGMENT}(?:/${SEGMENT})+#[a-z0-9]+(-[a-z0-9]+)*$`);
 
 export const isBetRef = (ref: string) => BET_ID.test(ref) || CROSS_REF.test(ref);
 
