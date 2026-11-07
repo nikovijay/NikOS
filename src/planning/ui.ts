@@ -186,7 +186,7 @@ function rolloutView() {
   var cls = { 'joined': 'green', 'not joined': 'amber', 'unreachable': '', 'no repo yet': '' };
   var cards = r.plans.map(function (p) {
     var rows = [];
-    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + (p.synced.current === false ? ', behind this plan' : ''));
+    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + (p.synced.current === false ? ', behind ' + esc(p.via || 'this plan') + ': ask them to run nikos planning sync' : ''));
     else if (p.state === 'joined') rows.push('Not synced yet');
     if (p.delivery) {
       var pct = p.delivery.stories ? Math.round(p.delivery.done / p.delivery.stories * 100) : 0;

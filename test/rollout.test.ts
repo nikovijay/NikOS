@@ -82,12 +82,14 @@ describe("rollout", () => {
     expect(by.Growth.reason).toBe("its planning/upstream.yaml doesn't list acme/company-plan yet");
     // The team joined its department, not the company, and has a story map.
     expect(by.Checkout).toMatchObject({ via: "acme/payments-plan", repo: "acme/payments/checkout" });
-    expect(by.Checkout.synced?.current).toBeUndefined();
+    // It synced the department before the department listed it, so it's behind the department.
+    expect(by.Checkout.synced?.current).toBe(false);
     expect(by.Checkout.delivery?.stories).toBeGreaterThan(0);
 
     const text = formatRollout(r);
     expect(text.split("\n")[0]).toBe("2 of 5 plans below acme/company-plan have joined.");
     expect(text).toContain("behind this plan: ask them to run nikos planning sync");
+    expect(text).toContain("behind acme/payments-plan: ask them to run nikos planning sync");
     expect(text).toContain("KR pay-1: Checkout conversion, 0%, no check-ins yet → acme/company-plan#kr-1");
     expect(readFileSync(join(co, ".gitignore"), "utf8")).toMatch(/^\.nikos\/$/m);
 
@@ -101,6 +103,21 @@ describe("rollout", () => {
     joinPlan(dept, { repo: "acme/company-plan" });
     commit(dept, "resync");
     expect(rollout(co).plans.find((p) => p.name === "Payments")?.synced?.current).toBe(true);
+  });
+
+  it("compares a plan further down with the plan it sits below", () => {
+    const { co, dept, team } = company();
+    joinPlan(team, { repo: "acme/payments-plan" });
+    commit(team, "resync");
+    expect(rollout(co).plans.find((p) => p.name === "Checkout")?.synced?.current).toBe(true);
+    writeFileSync(join(dept, "README.md"), "# Payments\n");
+    commit(dept, "moved on");
+    const r = rollout(co);
+    const checkout = r.plans.find((p) => p.name === "Checkout")!;
+    expect(checkout).toMatchObject({ via: "acme/payments-plan", synced: { current: false } });
+    expect(formatRollout(r)).toContain("behind acme/payments-plan: ask them to run nikos planning sync");
+    // The dashboard reads the same copies.
+    expect(planningData(co).downstream?.plans.find((p) => p.name === "Checkout")?.synced?.current).toBe(false);
   });
 
   it("lists a department, then gives it its repo", () => {

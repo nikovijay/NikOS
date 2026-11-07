@@ -24,7 +24,10 @@ export interface DownstreamPlan {
   reason?: string;
   /** When this repo's copy of it was fetched. */
   fetched?: string;
-  /** Its last sync of the plan it joined: when, and whether it read this repo's current commit. */
+  /**
+   * Its last sync of the plan it joined: when, and whether it read that plan's current commit.
+   * That plan is this repo, or for a plan further down, `via` as rollout fetched it.
+   */
   synced?: { on: string; commit: string; current?: boolean };
   delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number };
   /** stale: no check-in within its window. checkedIn: it has had at least one. */
@@ -162,7 +165,11 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     }
     // A plan further down joins the one that listed it, not this repo.
     const plan = { ...base, ...read(root, dir, e.repo, depth === 1 ? self : parent), ...(index[e.repo] ? { fetched: index[e.repo].fetched } : {}) };
-    if (depth > 1 && plan.synced) delete plan.synced.current;
+    if (depth > 1 && plan.synced) {
+      const above = index[parent]?.commit;
+      if (above) plan.synced.current = plan.synced.commit === above;
+      else delete plan.synced.current;
+    }
     plans.push(plan);
     if (depth >= MAX_DEPTH) continue;
     try {
@@ -188,7 +195,7 @@ export function formatRollout(r: Rollout): string {
   for (const p of r.plans) {
     const mark = p.state === "joined" ? "✓" : p.state === "not joined" ? "!" : "?";
     out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
-    if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? ", behind this plan: ask them to run nikos planning sync" : ""}`);
+    if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? `, behind ${p.via ?? "this plan"}: ask them to run nikos planning sync` : ""}`);
     if (p.delivery) out.push(`    delivery: ${p.delivery.done} of ${p.delivery.stories} stories done${p.delivery.approved ? ` (${p.delivery.approved} approved)` : ""}, ${p.delivery.inProgress} in progress`);
     for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to}` : ""}`);
     for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}`);
