@@ -320,7 +320,7 @@ separate) into the first implementation PR.
 3. **Trackers connect per team.** Each team repo has its own tracker settings
    and ticket links, and the company can still lock `tracker.system` for
    everyone. The group sees each story's ticket through the team's `status/`.
-4. **Changing an assignment** (recommended):
+4. **Changing an assignment:**
    - **Done and approved stories don't move.** They stay with the team that
      delivered them, with its status, evidence and delivery approval. An
      assignment change only covers unfinished work. `nikos assign` refuses to
@@ -336,7 +336,7 @@ separate) into the first implementation PR.
      they hold through a move. Delivery approvals are bound to a team's tested
      commit, so they never transfer: the new team proves the story and is
      approved again.
-5. **Step definitions live in each team's repo** (recommended). A step drives
+5. **Step definitions live in each team's repo.** A step drives
    that team's code, so it belongs beside the code, not with the map in the
    group repo, which has no code. When two teams' stories share a step phrase,
    each team writes its own definition, because it tests a different system. If
