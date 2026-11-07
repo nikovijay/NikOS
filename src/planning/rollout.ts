@@ -7,8 +7,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse, parseDocument } from "yaml";
-import { isDone } from "../lib/project.js";
+import { findIntentDir, isDone } from "../lib/project.js";
+import { loadStates } from "../lib/state-files.js";
 import { storyMapOf } from "../commands/map.js";
+import { next } from "../commands/next.js";
+import { decisionEntries } from "../commands/decisions.js";
 import { delivery, describeDelivery } from "./delivery.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
@@ -30,9 +33,38 @@ export interface DownstreamPlan {
    */
   synced?: { on: string; commit: string; current?: boolean };
   delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number };
+  /** The story its team builds next, as nikos next would say. */
+  next?: { id: string; title: string };
+  /** Stories with blockers in their state, and what's blocking each. */
+  blockers: Blocker[];
+  /** Its latest decisions, newest first. */
+  decisions: Decision[];
   /** stale: no check-in within its window. checkedIn: it has had at least one. */
   krs: { id: string; title: string; aligns_to?: string; progress: number; stale: boolean; checkedIn: boolean }[];
   bets: { id: string; outcome: string; delivery: string; krs: string[] }[];
+}
+
+export interface Blocker {
+  story: string;
+  title: string;
+  blockers: string[];
+}
+
+/** A decisions.md entry by its heading: "2027-01-12 — Card payments only at launch (PAY-2)". */
+export interface Decision {
+  title: string;
+}
+
+/** How many of a plan's decisions rollout shows. The rest stay in its decisions.md. */
+export const LATEST_DECISIONS = 3;
+
+/** A repo's latest decisions, from intent/decisions.md, or planning/decisions.md in a plan-only repo. */
+export function latestDecisions(dir: string): Decision[] {
+  try {
+    return decisionEntries(dir).slice(-LATEST_DECISIONS).reverse().map((e) => ({ title: e.title }));
+  } catch {
+    return [];
+  }
 }
 
 /** One key result or bet in the alignment tree, with what aligns to it below. Alignment only: no progress. */
@@ -51,6 +83,8 @@ export interface AlignmentNode {
 export interface Rollout {
   /** This repo's path, as the plans below name it in their upstream.yaml. */
   repo?: string;
+  /** This repo's own latest decisions. */
+  decisions: Decision[];
   plans: DownstreamPlan[];
   /**
    * The key results here, with the key results below that align to them and the bets on each, built
@@ -103,6 +137,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const lock = readLock(dir).find((l) => (self ? l.repo === self : !l.via));
   const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout?.trim();
   let deliv: DownstreamPlan["delivery"];
+  let nextUp: DownstreamPlan["next"];
+  const blockers: Blocker[] = [];
   if (existsSync(join(dir, "intent", "storymap.yaml"))) {
     try {
       const map = storyMapOf(dir);
@@ -114,6 +150,18 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         inProgress: stories.filter((s) => s.status === "in_progress").length,
         releases: map.releases.length,
       };
+      const titles = new Map([...stories, ...map.unreleased].map((s) => [s.id, s.title]));
+      const id = (() => {
+        try {
+          return next(dir).story;
+        } catch {
+          return undefined; // no state.yaml to read a queue from: delivery and blockers still show
+        }
+      })();
+      if (id) nextUp = { id, title: titles.get(id) ?? id };
+      for (const [story, st] of Object.entries(loadStates(findIntentDir(dir)))) {
+        if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
+      }
     } catch {
       // A story map that doesn't read is the team's to fix; the rest of the rollout still shows.
     }
@@ -140,6 +188,9 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     ...(joined ? {} : { reason: `its planning/upstream.yaml doesn't list ${self ?? "a plan"} yet` }),
     ...(lock ? { synced: { on: lock.synced, commit: lock.commit, ...(head && self ? { current: lock.commit === head } : {}) } } : {}),
     ...(deliv ? { delivery: deliv } : {}),
+    ...(nextUp ? { next: nextUp } : {}),
+    blockers,
+    decisions: latestDecisions(dir),
     krs,
     bets,
   };
@@ -157,7 +208,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
   const seen = new Set<string>();
   while (queue.length) {
     const { listed, depth, via, parent } = queue.shift()!;
-    const base = { name: listed.name, ...(via ? { via } : {}), krs: [], bets: [] };
+    const base = { name: listed.name, ...(via ? { via } : {}), blockers: [], decisions: [], krs: [], bets: [] };
     if (!listed.entry) {
       plans.push({ ...base, state: "no repo yet" });
       continue;
@@ -193,7 +244,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     try {
       for (const below of downstreamEntries(dir)) queue.push({ listed: below, depth: depth + 1, via: e.repo, parent: e.repo });
     } catch (err) {
-      plans.push({ name: `${e.repo}'s downstream.yaml`, state: "unreachable", reason: (err as Error).message, krs: [], bets: [] });
+      plans.push({ name: `${e.repo}'s downstream.yaml`, state: "unreachable", reason: (err as Error).message, blockers: [], decisions: [], krs: [], bets: [] });
     }
   }
   if (!opts.offline) {
@@ -201,7 +252,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     mkdirSync(cache(root), { recursive: true });
     writeFileSync(indexOf(root), JSON.stringify(index, null, 2));
   }
-  return { ...(self ? { repo: self } : {}), plans, tree: alignment(root, self, plans) };
+  return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
 }
 
 type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string }[]; bets: { id: string; krs: string[] }[] };
@@ -312,11 +363,15 @@ export function formatRollout(r: Rollout): string {
   out.push(`${joined} of ${r.plans.length} plans below ${r.repo ?? "this one"} have joined.`);
   const tree = formatTree(r.tree);
   if (tree.length) out.push("", ...tree);
+  if (r.decisions.length) out.push("", `Latest decisions here:`, ...r.decisions.map((d) => `  ${d.title}`));
   for (const p of r.plans) {
     const mark = p.state === "joined" ? "✓" : p.state === "not joined" ? "!" : "?";
     out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
     if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? `, behind ${p.via ?? "this plan"}: ask them to run nikos planning sync` : ""}`);
     if (p.delivery) out.push(`    delivery: ${p.delivery.done} of ${p.delivery.stories} stories done${p.delivery.approved ? ` (${p.delivery.approved} approved)` : ""}, ${p.delivery.inProgress} in progress`);
+    if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);
+    for (const b of p.blockers) out.push(`    blocked: ${b.story} ${b.title}: ${b.blockers.join("; ")}`);
+    for (const d of p.decisions) out.push(`    decision: ${d.title}`);
     for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to}` : ""}`);
     for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}`);
   }

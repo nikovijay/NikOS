@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A company or department plan with no story map works on its own. `nikos
+  decide` writes to `planning/decisions.md` (created on the first decision),
+  and `nikos decisions` searches it. `nikos doctor` checks the plan, its
+  decisions, the approval settings it hands down and the plans below, and
+  passes without an `intent/` folder.
+- `nikos planning rollout` and the dashboard's Rollout tab show, for each plan
+  below, the story it builds next, its blocked stories with what's blocking
+  them, and its latest three decisions. They list this plan's own latest
+  decisions too. `--json` has them as `next`, `blockers` and `decisions`.
+- The dashboard's Rollout tab shows the commit each plan synced, not just the
+  date.
+
+### Changed
+
+- `nikos company init` suggests locking `approval.routes` with
+  `approval.policy`, and `nikos doctor` warns in a plan-only repo when the
+  policy is locked and the routes aren't, since a team below could still
+  choose its own routes.
+
 ## 0.2.2 (2026-11-07)
 
 ### Added

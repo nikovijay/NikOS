@@ -61,7 +61,8 @@ export function companyInit(dir: string, opts: { name: string; period?: string; 
   const files: Record<string, string> = {
     "planning/plan.yaml": `# ${name}'s plan. Departments and teams align their key results and bets to it.\n${stringify({ name, period: opts.period ?? "Set the period, e.g. Q1 2027", level: "company", pillars: [] })}`,
     "nikos.settings.yaml": `# Settings every department, group and team that joins this plan inherits.
-# Lock a key (locked: [approval.policy]) so the levels below can't change it.
+# Lock a key so the levels below can't change it. To hold every level to the approval policy,
+# lock its routes with it: locked: [approval.policy, approval.routes]
 format_version: 1
 approval:
   policy: optional          # off | optional | required-for-release

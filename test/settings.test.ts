@@ -7,6 +7,9 @@ import { dirname, join } from "node:path";
 import { parse } from "yaml";
 import { describeJoin, joinPlan } from "../src/commands/join";
 import { doctor } from "../src/commands/doctor";
+import { companyInit } from "../src/commands/start";
+import { decide } from "../src/commands/decide";
+import { findDecisions, formatDecisions } from "../src/commands/decisions";
 import { checkRelease } from "../src/commands/release";
 import { suggest } from "../src/commands/suggest";
 import { approve } from "../src/commands/approve";
@@ -119,8 +122,43 @@ describe("doctor", () => {
     expect(checks[3].next).toContain("CODEOWNERS");
     writeFileSync(join(root, "CODEOWNERS"), "/intent/approvals.yaml @acme/product\n");
     expect(doctor(root, { offline: true })[3]).toMatchObject({ status: "ok", found: "required-for-release (this repo); intent/approvals.yaml needs a CODEOWNERS review" });
-    expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does" }]);
+    expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does. For a company or department plan, nikos company init" }]);
     expect(existsSync(join(root, "intent"))).toBe(true);
+  });
+});
+
+describe("a plan-only repo", () => {
+  it("records decisions in planning/decisions.md", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-co-"));
+    companyInit(root, { name: "Acme" });
+    decide({ title: "Revenue is the one company key result", why: "One number everyone can see.", date: "2027-01-05" }, root);
+    const text = readFileSync(join(root, "planning/decisions.md"), "utf8");
+    expect(text).toMatch(/^# Decisions\n/);
+    expect(text).toContain("## 2027-01-05 — Revenue is the one company key result");
+    expect(existsSync(join(root, "intent"))).toBe(false);
+    expect(formatDecisions("revenue", findDecisions("revenue", root), root)).toMatch(/^planning\/decisions\.md:\d+-\d+\n## 2027-01-05/);
+    // A repo with neither a story map nor a plan still needs nikos init.
+    expect(() => decide({ title: "x", why: "y" }, mkdtempSync(join(tmpdir(), "nikos-none-")))).toThrow(/Run `nikos init` first/);
+  });
+
+  it("passes doctor without a story map, and says when the routes aren't locked", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-co-"));
+    companyInit(root, { name: "Acme", departments: ["Payments", "Growth"] });
+    const names = (cs: ReturnType<typeof doctor>) => cs.map((c) => `${c.status} ${c.name}`);
+    const checks = doctor(root, { offline: true });
+    expect(names(checks)).toEqual(["ok plan", "ok decisions", "ok approvals", "ok plans below"]);
+    expect(checks[0].found).toBe("plan-only repo: 0 key results, 0 bets; no story map needed");
+    expect(checks[3].found).toBe("2 plans in planning/downstream.yaml, 2 with no repo yet");
+    decide({ title: "Revenue first", why: "One number." }, root);
+    expect(doctor(root, { offline: true })[1].found).toBe("1 decision in planning/decisions.md");
+
+    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\n");
+    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "ok", found: "required-for-release (this repo), not locked: the plans below can change it" });
+    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy]\n");
+    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "warn", next: "Add approval.routes to locked: in nikos.settings.yaml" });
+    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy, approval.routes]\n");
+    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "ok", found: "required-for-release (this repo), locked with its routes (app, chat, terminal)" });
+    expect(doctor(root, { offline: true }).some((c) => c.status === "fail")).toBe(false);
   });
 });
 

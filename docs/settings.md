@@ -22,7 +22,7 @@ tracker:
     Accepted: approved
     Won't Do: cancelled
   approvals: false               # true: a ticket moved to an "approved" status approves the story
-locked: [approval.policy]        # the levels below can't change these
+locked: [approval.policy, approval.routes]   # the levels below can't change these
 ```
 
 Every key is optional. See what applies, and where each value comes from:

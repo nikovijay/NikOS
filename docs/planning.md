@@ -13,6 +13,7 @@ planning/
   upstream.yaml          optional: plans in other repos this one works toward
   upstream.lock          written by `nikos planning sync`
   downstream.yaml        optional: departments and teams that plan against this one
+  decisions.md           in a plan-only repo: the plan's decisions, written by `nikos decide`
   views/<name>.html      optional: custom dashboard views
 ```
 
@@ -159,7 +160,12 @@ its own `downstream.yaml`, and reports for each:
 - **synced**: when it last ran `nikos planning sync`, and whether it read this
   repo's current commit
 - **delivery**: stories done, approved and in progress, from its story map
+- **next**: the story its team builds next, as `nikos next` would say there
+- **blocked**: each story with blockers in its state, and what's blocking it
+- **decisions**: its latest three, newest first, from its `decisions.md`
 - its key results and bets, and what each one points at
+
+It also lists this repo's own latest decisions.
 
 Above those it draws the alignment as a tree: each key result here, the key
 results below that align to it (`aligns_to`), the ones that align to those in
@@ -171,6 +177,21 @@ below it.
 `--json` gives the same as data, and `--offline` reads the copies already
 fetched. The dashboard's Rollout tab shows the same tree from the last fetch and
 never fetches on its own. A repo it can't reach is reported as unreachable and the rest carry on.
+
+## A plan-only repo
+
+A company or department plan often has no story map: it plans, and the teams
+below it deliver. A repo with `planning/` and no `intent/storymap.yaml` is a
+plan-only repo, and needs no `nikos init`.
+
+- `nikos decide` writes its decisions to `planning/decisions.md`, created on
+  the first one, in the same format as `intent/decisions.md` (see
+  [format.md](format.md)). `nikos decisions` searches it.
+- `nikos doctor` checks the plan, its decisions, the approval settings it hands
+  down, and the plans above and below it. It skips the story map, scenario
+  runner and CI checks, which belong to the teams. It warns when
+  `approval.policy` is locked and `approval.routes` isn't, since a team could
+  still choose its own routes.
 
 ## views/&lt;name&gt;.html
 

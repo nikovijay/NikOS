@@ -245,7 +245,8 @@ existing file.
 **Purpose:** why things are the way they are. Append-only; never rewrite an
 entry, add a new one that supersedes it.
 
-**Path:** `intent/decisions.md`
+**Path:** `intent/decisions.md`, or `planning/decisions.md` in a company or
+department plan with no story map (see [planning.md](planning.md))
 
 **Format:** Markdown. One `##` entry per decision, newest last:
 

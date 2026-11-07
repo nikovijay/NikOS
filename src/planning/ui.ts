@@ -192,12 +192,15 @@ function rolloutView() {
   var cls = { 'joined': 'green', 'not joined': 'amber', 'unreachable': '', 'no repo yet': '' };
   var cards = r.plans.map(function (p) {
     var rows = [];
-    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + (p.synced.current === false ? ', behind ' + esc(p.via || 'this plan') + ': ask them to run nikos planning sync' : ''));
+    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + ' at <code>' + esc(p.synced.commit.slice(0, 7)) + '</code>' + (p.synced.current === false ? ', behind ' + esc(p.via || 'this plan') + ': ask them to run nikos planning sync' : ''));
     else if (p.state === 'joined') rows.push('Not synced yet');
     if (p.delivery) {
       var pct = p.delivery.stories ? Math.round(p.delivery.done / p.delivery.stories * 100) : 0;
       rows.push(esc(p.delivery.done) + ' of ' + esc(p.delivery.stories) + ' stories done' + (p.delivery.approved ? ', ' + esc(p.delivery.approved) + ' approved' : '') + '<div class="progress"><div style="width:' + pct + '%"></div></div>');
     }
+    if (p.next) rows.push('<span class="muted">Next</span> ' + esc(p.next.id) + ' ' + esc(p.next.title));
+    (p.blockers || []).forEach(function (b) { rows.push(chip('Blocked', 'amber') + ' ' + esc(b.story) + ' ' + esc(b.title) + '<div class="muted">' + b.blockers.map(esc).join('; ') + '</div>'); });
+    if ((p.decisions || []).length) rows.push('<span class="muted">Latest decisions</span><ul class="checkins">' + p.decisions.map(function (d) { return '<li>' + esc(d.title) + '</li>'; }).join('') + '</ul>');
     var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (!k.checkedIn ? ' ' + chip('No check-ins yet', '') : k.stale ? ' ' + chip('Stale', 'amber') : '') + (k.aligns_to ? ' <span class="muted">→ ' + esc(k.aligns_to) + '</span>' : '') + '</li>'; })
       .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + '</li>'; }));
     return '<div class="card"><div class="row"><strong>' + esc(p.name) + '</strong>' + chip(p.state, cls[p.state] || '') + '</div>' +
@@ -206,7 +209,12 @@ function rolloutView() {
       rows.map(function (x) { return '<div style="margin-top:8px">' + x + '</div>'; }).join('') +
       (refs.length ? '<ul class="checkins" style="margin-top:8px">' + refs.join('') + '</ul>' : '') + '</div>';
   }).join('');
-  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p>' + alignmentTree(r.tree) + '<div class="cards">' + cards + '</div>';
+  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p>' + alignmentTree(r.tree) + ownDecisions(r.decisions) + '<div class="cards">' + cards + '</div>';
+}
+
+function ownDecisions(ds) {
+  if (!ds || !ds.length) return '';
+  return '<div class="panel"><h3>Latest decisions here</h3><ul class="checkins">' + ds.map(function (d) { return '<li>' + esc(d.title) + '</li>'; }).join('') + '</ul></div>';
 }
 
 // Links only: a key result's place in the tree says nothing about how it is doing.

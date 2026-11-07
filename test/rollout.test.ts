@@ -10,6 +10,7 @@ import { newKr } from "../src/planning/krs";
 import { newBet } from "../src/planning/bets";
 import { addDownstream, formatRollout, ownRepo, rollout } from "../src/planning/rollout";
 import { planningData } from "../src/planning/server";
+import { decide } from "../src/commands/decide";
 import { copyExample, edit } from "./helpers";
 
 const git = (cwd: string, ...args: string[]) => {
@@ -127,6 +128,35 @@ describe("rollout", () => {
       ].join("\n"),
     );
     expect(planningData(co).downstream?.tree.roots).toHaveLength(1);
+  });
+
+  it("shows what each plan does next, what's blocking it, and its latest decisions", () => {
+    const { co, dept, team } = company();
+    edit(join(team, "intent/state.yaml"), (s) => s.replace("blockers: []", "blockers: [Waiting on the card provider's sandbox]"));
+    decide({ title: "Store reminders in UTC", why: "Times move with daylight saving otherwise." }, team);
+    commit(team, "blocked");
+    for (const t of ["Cards only at launch", "No wallets until Q2", "Refunds stay manual", "One checkout page"]) decide({ title: t, why: "Keeps the first release small.", date: "2027-01-12" }, dept);
+    commit(dept, "decisions");
+    decide({ title: "Revenue is the one company key result", why: "One number everyone can see." , date: "2027-01-05" }, co);
+    commit(co, "decision");
+
+    const r = rollout(co);
+    const by = Object.fromEntries(r.plans.map((p) => [p.name, p]));
+    expect(by.Checkout.next).toEqual({ id: "HT-3", title: expect.any(String) });
+    expect(by.Checkout.blockers).toEqual([{ story: "HT-2", title: expect.any(String), blockers: ["Waiting on the card provider's sandbox"] }]);
+    expect(by.Checkout.decisions[0].title).toMatch(/— Store reminders in UTC$/);
+    // The latest three, newest first.
+    expect(by.Payments.decisions.map((d) => d.title)).toEqual(["2027-01-12 — One checkout page", "2027-01-12 — Refunds stay manual", "2027-01-12 — No wallets until Q2"]);
+    expect(by.Payments).toMatchObject({ blockers: [] });
+    expect(by.Payments.next).toBeUndefined();
+    expect(r.decisions).toEqual([{ title: "2027-01-05 — Revenue is the one company key result" }]);
+
+    const text = formatRollout(r);
+    expect(text).toContain("Latest decisions here:\n  2027-01-05 — Revenue is the one company key result");
+    expect(text).toMatch(/ {4}next: HT-3 /);
+    expect(text).toMatch(/ {4}blocked: HT-2 .+: Waiting on the card provider's sandbox/);
+    expect(text).toContain("    decision: 2027-01-12 — One checkout page");
+    expect(planningData(co).downstream?.plans.find((p) => p.name === "Checkout")?.blockers).toHaveLength(1);
   });
 
   it("is current once the plan below syncs again", () => {
