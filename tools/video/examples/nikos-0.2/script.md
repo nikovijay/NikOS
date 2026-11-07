@@ -1,12 +1,15 @@
 # nikOS 0.2: the film
 
-The voiceover script, about two minutes. It's revised from the original brief:
+The voiceover script, about two and a half minutes. It's revised from the original brief:
 
 - The positioning lines no longer knock hosted workspaces.
 - The goal runs through a department (Payments) to a team (Tip Calc) and the team's bet.
 - Every screen comes from a real run with nikos 0.2.1, described below.
 
-Connecting lines and labels are explanatory graphics.
+Connecting lines and labels are explanatory graphics. So are two stand-ins:
+
+- The pull request card in section 2 stands in for your forge's page. Its diff is the real commit.
+- The `plan.acme.com` address in section 7 stands in for wherever a company hosts its view. The view itself ran in `nikos planning serve`.
 
 ## 1. Your company. Your plan. Your repo.
 
@@ -19,6 +22,8 @@ Meet nikOS. Your company plan lives in a repository, right beside the work that 
 ## 2. Start with the outcome
 
 Start with your objectives and key results. What are we trying to achieve? Who owns it? How will we measure progress?
+
+Ask your agent to add one, and it arrives as a pull request: reviewed and merged, like any other change.
 
 Then connect the departments and teams contributing to that outcome.
 
@@ -56,7 +61,7 @@ Work in parallel. Review each bet's delivery alongside goal progress. See when p
 
 nikOS is open source, and it runs in the repositories you already use. Start with one team, with nothing new to buy.
 
-Then shape the tool itself to fit how your company works.
+Then shape the tool itself to fit how your company works. Your own views of the plan, at your own address.
 
 ## 8. Close the distance
 
@@ -75,6 +80,8 @@ Everything ran with `npx nikos@0.2.1`. Local bare repos stood in for GitHub. The
 - **acme/company-plan**:
   - `nikos company init --name Acme --period "Q1 2027" --departments "Payments, Growth"`.
   - Key result `kr-1`, *Grow revenue*: owned by the Board, baseline 1, target 2, by 2027-03-31, checked in at 1.2.
+  - For section 2, a clone with `kr-1` removed showed it being added: `git switch -c add-kr-1`, `nikos planning kr new kr-1 --title "Grow revenue" --owner Board --baseline 1 --target 2 --by 2027-03-31`, `nikos planning validate`, then commit and push.
+  - The custom view `planning/views/acme-q1.html`, built on the view contract: the company key result and the plans below it, read from the last rollout. Its source is in `views/acme-q1.html`, next to this script.
 - **acme/payments-plan**, the department:
   - `planning/plan.yaml` at `level: department`, then `nikos join acme/company-plan`.
   - Key result `pay-1`, *Group payments per week*, with `--aligns-to acme/company-plan#kr-1`.
