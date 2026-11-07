@@ -1,5 +1,6 @@
 // `nikos planning …`: the command line for the nikos-planning pack.
-import { betIds, findRoot, krIds, loadBet, loadKr, validatePlanning } from "./model.js";
+import { betIds, findRoot, krIds, loadBet, loadKr } from "./model.js";
+import { planningIssues } from "./levels.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "./bets.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
 import { delivery, describeDelivery } from "./delivery.js";
@@ -14,15 +15,16 @@ Usage: nikos planning <command> [options] [--dir <repo>]
 Commands:
   bet new <id>       Write planning/bets/<id>.md
                      (--owner, --hypothesis, --review YYYY-MM-DD, --kr <primary>, --also <ref>,
+                      --aligns-to <repo path>#<bet> (repeat for several: bets in the plan directly above),
                       --team, --starts, --deadline, --confidence low|medium|high, --dependency, --evidence)
   bet review <id> <continue|change|stop|complete>  Add a dated review decision (--why, --outcome won|lost)
-  kr new <id>        Write planning/krs/<id>.yaml
+  kr new <id>        Write planning/krs/<id>.yaml: company and department plans only
                      (--title, --owner, --baseline, --target, --by YYYY-MM-DD, --unit, --objective,
-                      --aligns-to <repo path>#id, --stale-after <days>)
+                      --aligns-to <repo path>#<kr> (repeat for several), --stale-after <days>)
   kr target <id> <n> Revise a key result's target; the original is kept
   checkin <kr> <value>  Add a dated check-in (--note, --evidence, --date)
   status             Every bet's delivery and outcome, every key result's latest value
-  validate           Check planning/ against its schemas
+  validate           Check planning/ against its schemas and the rules for its level
   sync [--check]     Fetch the plans in planning/upstream.yaml read-only into .nikos/upstream/
   downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com,
                      --url <git url> for any other host, an SSH url or a local repo)
@@ -92,6 +94,7 @@ export async function runPlanning(args: string[]): Promise<number> {
               deadline: opt("deadline"),
               primary: opt("kr"),
               also: all("also"),
+              alignsTo: all("aligns-to"),
               confidence: opt("confidence") as any,
               dependencies: all("dependency"),
               evidence: opt("evidence"),
@@ -120,7 +123,7 @@ export async function runPlanning(args: string[]): Promise<number> {
               by: opt("by") ?? "",
               unit: opt("unit"),
               objective: opt("objective"),
-              alignsTo: opt("aligns-to"),
+              alignsTo: all("aligns-to"),
               staleAfterDays: opt("stale-after") ? Number(opt("stale-after")) : undefined,
             },
             root,
@@ -143,8 +146,10 @@ export async function runPlanning(args: string[]): Promise<number> {
         console.log(status(root));
         return 0;
       case "validate": {
-        const issues = validatePlanning(root);
+        const found = planningIssues(root);
+        const issues = found.filter((i) => !i.warning);
         for (const i of issues) console.log(`✗ ${i.file}: ${i.message}`);
+        for (const w of found.filter((i) => i.warning)) console.log(`! ${w.file}: ${w.message}`);
         // Unresolved upstream references are reported, never fatal: planning carries on without them.
         for (const r of crossRefs(root).filter((r) => !r.resolved)) console.log(`? ${r.file}: ${r.ref} is unresolved (not synced or not accessible)`);
         console.log(issues.length ? `\n${issues.length} ${issues.length === 1 ? "problem" : "problems"} found.` : `✓ planning/ is valid — ${count(betIds(root).length, "bet")}, ${count(krIds(root).length, "key result")}`);

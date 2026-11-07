@@ -145,10 +145,9 @@ function render() {
 window.addEventListener('hashchange', render);
 
 var LEVELS = [
-  ['company', 'Company', 'Sets the few outcomes that matter most this period, as key results.'],
-  ['department', 'Department', 'Picks key results that move the company ones, and links each one up.'],
-  ['group', 'Group', 'Does the same for its area, aligned to the department.'],
-  ['team', 'Team', 'Makes bets on what will move its key results, and builds them as stories.']
+  ['company', 'Company', 'Sets the few outcomes that matter most this period as objectives and key results, and makes bets on them.'],
+  ['department', 'Department', 'Sets its own key results, each aligned to company ones or its own, and bets that may align to company bets.'],
+  ['group', 'Group', 'Has no key results: OKRs stop at department level. Makes bets on the department\'s key results, each aligned to a department bet or its own.']
 ];
 
 function guideView() {
@@ -162,11 +161,11 @@ function guideView() {
       '<div class="alt' + (l[0] === level ? ' here' : '') + '"><div class="row"><strong>' + l[1] + '</strong>' + (l[0] === level ? chip('This plan', 'green') : '') +
       '<span class="muted">its own repo, planning/</span></div><div class="muted">' + l[2] + '</div></div>';
   }).join('') +
-    '<div class="alt-arrow" aria-hidden="true">↑ delivers bets</div>' +
-    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ in the team repo</span></div><div class="muted">Releases name the bets they deliver. Story status comes from the work itself.</div></div>';
+    '<div class="alt-arrow" aria-hidden="true">↑ specs a bet</div>' +
+    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ in the repo that builds it</span></div><div class="muted">Specs a bet as stories, organised by activity and step. Story status comes from the work itself.</div></div>';
   var steps = [
     ['Plan the period', 'Ask your agent to plan the quarter. It asks for the level, pillars, objectives and key results, and shows a draft. Nothing is written until you approve.'],
-    ['Align upward', 'List the plans above you in planning/upstream.yaml. nikos planning sync keeps a read-only copy, so a key result can align to the company one by reference without ever writing to that repo.'],
+    ['Align upward', 'List the plans above you in planning/upstream.yaml. nikos planning sync keeps a read-only copy, so a key result can align to key results above, and a bet to bets above, by reference, without ever writing to that repo.'],
     ['Frame bets', 'A bet says what you believe will move a key result, and why, with the evidence. It has a review date, not a deadline.'],
     ['Deliver through the story map', 'A release in intent/storymap.yaml names the bets it delivers. Delivery status (Not started, Building, Shipped) is worked out from its stories.'],
     ['Check in', 'Record the key result value as it moves, by chat or here. A key result with no recent check-in is flagged stale.'],
@@ -201,8 +200,8 @@ function rolloutView() {
     if (p.next) rows.push('<span class="muted">Next</span> ' + esc(p.next.id) + ' ' + esc(p.next.title));
     (p.blockers || []).forEach(function (b) { rows.push(chip('Blocked', 'amber') + ' ' + esc(b.story) + ' ' + esc(b.title) + '<div class="muted">' + b.blockers.map(esc).join('; ') + '</div>'); });
     if ((p.decisions || []).length) rows.push('<span class="muted">Latest decisions</span><ul class="checkins">' + p.decisions.map(function (d) { return '<li>' + esc(d.title) + '</li>'; }).join('') + '</ul>');
-    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (!k.checkedIn ? ' ' + chip('No check-ins yet', '') : k.stale ? ' ' + chip('Stale', 'amber') : '') + (k.aligns_to ? ' <span class="muted">→ ' + esc(k.aligns_to) + '</span>' : '') + '</li>'; })
-      .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + '</li>'; }));
+    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (!k.checkedIn ? ' ' + chip('No check-ins yet', '') : k.stale ? ' ' + chip('Stale', 'amber') : '') + ((k.aligns_to || []).length ? ' <span class="muted">→ ' + esc([].concat(k.aligns_to).join(', ')) + '</span>' : '') + '</li>'; })
+      .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + ((b.aligns_to || []).length ? ' <span class="muted">· aligns to ' + esc(b.aligns_to.join(', ')) + '</span>' : '') + '</li>'; }));
     return '<div class="card"><div class="row"><strong>' + esc(p.name) + '</strong>' + chip(p.state, cls[p.state] || '') + '</div>' +
       (p.repo ? '<div class="muted">' + esc(p.repo) + (p.via ? ' · below ' + esc(p.via) : '') + (p.fetched ? ' · read ' + esc(p.fetched) : '') + '</div>' : '') +
       (p.reason ? '<div class="muted" style="margin-top:6px">' + esc(p.reason) + '</div>' : '') +
@@ -222,7 +221,7 @@ function alignmentTree(t) {
   if (!t || (!t.roots.length && !t.unaligned.length)) return '';
   function node(n) {
     var label = n.kind === 'kr' ? '<span class="kind">KR</span>' + esc(n.title) : '<span class="kind">Bet</span>' + esc(n.id);
-    return '<li>' + label + ' <span class="muted">' + esc(n.plan) + (n.aligns_to ? ' · points at ' + esc(n.aligns_to) + ', not in this rollout' : '') + '</span>' +
+    return '<li>' + label + ' <span class="muted">' + esc(n.plan) + ((n.aligns_to || []).length ? ' · points at ' + esc([].concat(n.aligns_to).join(', ')) + ', not in this rollout' : '') + '</span>' +
       (n.children.length ? '<ul>' + n.children.map(node).join('') + '</ul>' : '') + '</li>';
   }
   return '<div class="panel"><h3>Alignment</h3><div class="muted">Key results here, the ones below that align to them, and the bets on each. It shows links only: progress stays with each key result and never adds up from the ones below.</div>' +
@@ -280,11 +279,10 @@ function chartSvg(k) {
 function krDetail(id) {
   var k = krById(id);
   if (!k) return '<p>No key result called ' + esc(id) + '.</p>';
-  var upstream = '';
-  if (k.upstream) {
-    upstream = '<div class="panel"><div class="label">Aligned to ' + esc(k.upstream.ref) + ' (read-only copy)</div><div class="val">' +
-      (k.upstream.kr ? esc(k.upstream.kr.title) : 'Not in the synced copy yet') + '</div></div>';
-  }
+  var upstream = (k.aligned || (k.upstream ? [k.upstream] : [])).map(function (u) {
+    return '<div class="panel"><div class="label">Aligned to ' + esc(u.ref) + ' (read-only copy)</div><div class="val">' +
+      (u.kr ? esc(u.kr.title) : 'Not in the synced copy yet') + '</div></div>';
+  }).join('');
   var checkins = k.checkins.slice().reverse().map(function (c) {
     return '<li><span class="muted">' + esc(c.date) + '</span> <strong>' + esc(num(c.value, k.unit)) + '</strong>' +
       (c.note ? ' · ' + esc(c.note) : '') + (c.evidence ? ' · <span class="muted">' + esc(c.evidence) + '</span>' : '') + '</li>';
@@ -342,6 +340,7 @@ function betCard(b) {
         (stories ? '<ul class="stories">' + stories + '</ul>' : '') + '<div class="row">' + releases + '</div></div>' +
       '<div class="box outcome"><div class="label">Outcome</div><div class="val">' + esc(b.outcome) + '</div><div class="row">' + krLinks + '</div></div>' +
     '</div>' +
+    ((b.aligns_to || []).length ? '<div class="muted" style="margin-top:8px">Aligns to ' + b.aligns_to.map(function (r) { return chip(r, 'lock'); }).join(' ') + '</div>' : '') +
     (b.body ? '<div class="prose">' + prose(b.body) + '</div>' : '') +
     '<h4>Reviews</h4>' + reviews +
     (LIVE ? reviewForm(b) : '') +

@@ -198,11 +198,11 @@ export function crossRefs(root: string): { ref: string; file: string; resolved: 
   const refs: { ref: string; file: string }[] = [];
   for (const id of krIds(root)) {
     const k = loadKr(root, id);
-    if (k.data?.aligns_to) refs.push({ ref: k.data.aligns_to, file: k.file });
+    for (const r of [k.data?.aligns_to ?? []].flat()) if (typeof r === "string") refs.push({ ref: r, file: k.file });
   }
   for (const p of walk(paths(root).bets, ".md")) {
     const meta = parseFrontMatter(readFileSync(p, "utf8"))?.meta;
-    for (const r of [meta?.krs?.primary, ...(meta?.krs?.also ?? [])]) if (typeof r === "string" && r.includes("#")) refs.push({ ref: r, file: `planning/bets/${basename(p)}` });
+    for (const r of [meta?.krs?.primary, ...(meta?.krs?.also ?? []), ...[meta?.aligns_to ?? []].flat()]) if (typeof r === "string" && r.includes("#")) refs.push({ ref: r, file: `planning/bets/${basename(p)}` });
   }
   const mapPath = join(paths(root).intent, "storymap.yaml");
   if (existsSync(mapPath)) {

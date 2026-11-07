@@ -8,7 +8,8 @@ import { store } from "../lib/store.js";
 import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
-import { betIds, krIds, validatePlanning } from "../planning/model.js";
+import { betIds, krIds } from "../planning/model.js";
+import { planningIssues } from "../planning/levels.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
@@ -124,11 +125,17 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
 function planChecks(root: string, add: (c: Check) => void) {
-  const issues = validatePlanning(root);
+  const found = planningIssues(root);
+  const issues = found.filter((i) => !i.warning);
   add(
     issues.length
       ? { name: "plan", status: "fail", found: `${count(issues.length, "problem")} in planning/`, next: "Run nikos planning validate and fix what it lists" }
-      : { name: "plan", status: "ok", found: `plan-only repo: ${count(krIds(root).length, "key result")}, ${count(betIds(root).length, "bet")}; no story map needed` },
+      : {
+          name: "plan",
+          status: found.length ? "warn" : "ok",
+          found: `plan-only repo: ${count(krIds(root).length, "key result")}, ${count(betIds(root).length, "bet")}; no story map needed${found.length ? `, ${count(found.length, "warning")}` : ""}`,
+          ...(found.length ? { next: "Run nikos planning validate to see the warnings" } : {}),
+        },
   );
   const n = decisionEntries(root).length;
   add(

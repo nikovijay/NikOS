@@ -163,7 +163,8 @@ describe("dashboard copy", () => {
   test("a How it works page explains the levels and marks this plan's", async () => {
     const html = await (await fetch(`${base(await start(setup()))}/`)).text();
     expect(html).toContain('<a data-nav="guide" href="#/guide">How it works</a>');
-    for (const text of ["'Company'", "'Department'", "'Group'", "'Team'", "What nikOS adds", "shipped is not won"]) expect(html).toContain(text);
+    for (const text of ["'Company'", "'Department'", "'Group'", "OKRs stop at department level", "What nikOS adds", "shipped is not won"]) expect(html).toContain(text);
+    expect(html).not.toContain("['team', 'Team'");
     expect(html).toContain("l[0] === level ? chip('This plan', 'green')");
   });
 

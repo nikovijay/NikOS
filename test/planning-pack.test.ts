@@ -75,7 +75,8 @@ describe("Planning pack", () => {
   });
 
   it("wizard asks period, level and pillars", () => {
-    expect(steps(playbook("wizard"))[0].s).toMatch(/^Establish context\. Ask for the planning period .*, the level \(company, department, group or team\) and the strategic pillars/);
+    expect(steps(playbook("wizard"))[0].s).toMatch(/^Establish context\. Ask for the planning period .*, the level \(company, department or group\) and the strategic pillars/);
+    expect(steps(playbook("wizard"))[0].s).toContain("OKRs stop at department level");
   });
 
   it("wizard continues without a parent and writes only after approval", () => {

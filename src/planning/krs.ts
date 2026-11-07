@@ -3,6 +3,7 @@
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
 import { DATE, checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
+import { alignmentProblems, alignsValue, krLevelProblem, levelOf } from "./levels.js";
 
 export interface KrInput {
   id: string;
@@ -13,7 +14,8 @@ export interface KrInput {
   by: string;
   unit?: string;
   objective?: string;
-  alignsTo?: string;
+  /** The key results in the plan directly above that this one aligns to: one or several. */
+  alignsTo?: string | string[];
   staleAfterDays?: number;
 }
 
@@ -28,6 +30,12 @@ export function newKr(input: KrInput, root: string): string {
   if (!input.owner?.trim()) throw new Error("A key result needs an owner (--owner)");
   if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a numeric --baseline and --target");
   if (!DATE.test(input.by ?? "")) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
+  const level = levelOf(root);
+  const refused = krLevelProblem(level);
+  if (refused) throw new Error(refused);
+  const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
+  const problem = alignmentProblems(root, aligns, "kr", level)[0];
+  if (problem) throw new Error(problem);
   const data = checked({
     id: input.id,
     title: input.title.trim(),
@@ -38,7 +46,7 @@ export function newKr(input: KrInput, root: string): string {
     target: input.target,
     original_target: input.target,
     by: input.by,
-    ...(input.alignsTo ? { aligns_to: input.alignsTo } : {}),
+    ...(aligns.length ? { aligns_to: alignsValue(aligns) } : {}),
     ...(input.staleAfterDays ? { stale_after_days: input.staleAfterDays } : {}),
     checkins: [],
   });

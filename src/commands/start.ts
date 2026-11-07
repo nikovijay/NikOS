@@ -55,16 +55,29 @@ export interface CompanyResult {
   join: string;
 }
 
-/** Write a company plan repo: plan.yaml, settings every level inherits, the departments, and a README on joining. */
-export function companyInit(dir: string, opts: { name: string; period?: string; departments?: string[]; repo?: string; host?: string }): CompanyResult {
+export type PlanLevel = "company" | "department" | "group";
+
+/** Who plans against each level, for its README and join line. */
+const BELOW: Record<PlanLevel, string> = { company: "Departments", department: "Groups", group: "Teams" };
+
+/**
+ * Write a plan repo for a company, a department or a group: plan.yaml, settings every level
+ * below inherits, the plans below it, and a README on joining. Company and department plans set
+ * objectives and key results; a group plan only makes bets, aimed at the department's key
+ * results, since OKRs stop at department level. None of them has a story map of its own.
+ */
+export function companyInit(dir: string, opts: { name: string; period?: string; departments?: string[]; repo?: string; host?: string; level?: PlanLevel }): CompanyResult {
+  const level: PlanLevel = opts.level ?? "company";
   const name = opts.name?.trim();
-  if (!name) throw new Error("Give the company's name");
+  if (!name) throw new Error(`Give the ${level}'s name`);
   const root = resolve(dir);
   const repo = opts.repo ?? `<owner>/${basename(root)}`;
   const join_ = `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
+  const below = BELOW[level];
+  const holds = level === "group" ? "bets, aimed at the department's key results" : "objectives, key results and bets";
   const files: Record<string, string> = {
-    "planning/plan.yaml": `# ${name}'s plan. Departments and teams align their key results and bets to it.\n${stringify({ name, period: opts.period ?? "Set the period, e.g. Q1 2027", level: "company", pillars: [] })}`,
-    "nikos.settings.yaml": `# Settings every department, group and team that joins this plan inherits.
+    "planning/plan.yaml": `# ${name}'s plan: its ${holds}.${level === "group" ? " OKRs stop at department level, so it has no key results of its own." : ` ${below} align their ${level === "company" ? "key results and bets" : "bets"} to it.`}\n${stringify({ name, period: opts.period ?? "Set the period, e.g. Q1 2027", level, pillars: [] })}`,
+    "nikos.settings.yaml": `# Settings every level that joins this plan inherits.
 # Lock a key so the levels below can't change it. To hold every level to the approval policy,
 # lock its routes with it: locked: [approval.policy, approval.routes]
 format_version: 1
@@ -73,16 +86,16 @@ approval:
 tracker:
   system: none              # jira | linear | github | gitlab | …: connect it with the tracker playbook
 `,
-    "planning/downstream.yaml": `# The departments and teams that plan against this one: name, and their repo once they have one.\n${stringify((opts.departments ?? []).map((d) => ({ name: d.trim() })).filter((d) => d.name)) || "[]\n"}`,
+    "planning/downstream.yaml": `# The ${below.toLowerCase()} that plan against this one: name, and their repo once they have one.\n${stringify((opts.departments ?? []).map((d) => ({ name: d.trim() })).filter((d) => d.name)) || "[]\n"}`,
     "README.md": `# ${name} plan
 
-The company's objectives, key results and bets, planned with [nikOS](https://nikos.tools).
-Departments and teams plan against it from their own repos, and inherit the settings in
+The ${level}'s ${holds}, planned with [nikOS](https://nikos.tools).
+${below} plan against it from their own repos, and inherit the settings in
 \`nikos.settings.yaml\`.
 
 ## Join this plan
 
-From a department's or team's repo, ask your agent to "join our company plan", or run:
+From the repo below it, ask your agent to "join our ${level} plan", or run:
 
 \`\`\`
 ${join_}
@@ -102,7 +115,7 @@ Nothing in your repo moves.
       created.push(rel);
     }
   }
-  for (const sub of ["krs", "bets"]) {
+  for (const sub of level === "group" ? ["bets"] : ["krs", "bets"]) {
     const keep = join(root, "planning", sub, ".gitkeep");
     if (!store().exists(join(root, "planning", sub))) store().write(keep, "");
   }
@@ -145,22 +158,36 @@ export async function runStart(args: string[]): Promise<number> {
   }
 }
 
-export function runCompany(args: string[]): number {
+const USAGE: Record<PlanLevel, string> = {
+  company: 'Usage: nikos company init --name "<company>" [--level department] [--period "Q1 2027"] [--departments "Payments, Growth"] [--repo owner/company-plan] [--host gitlab.com] [--dir <path>]',
+  department: 'Usage: nikos company init --level department --name "<department>" [--period "Q1 2027"] [--departments "<groups>"] [--repo owner/payments-plan] [--host gitlab.com] [--dir <path>]',
+  group: 'Usage: nikos group init --name "<group>" [--period "Q1 2027"] [--repo owner/checkout-group] [--host gitlab.com] [--dir <path>]',
+};
+
+/** `nikos company init` (a company, or a department with --level department) and `nikos group init`. */
+function runPlanInit(args: string[], fixed?: PlanLevel): number {
   const [sub, ...rest] = args;
   const flag = (n: string) => {
     const i = rest.indexOf(`--${n}`);
     return i >= 0 ? rest[i + 1] : undefined;
   };
+  const asked = flag("level");
+  if (!fixed && asked && asked !== "company" && asked !== "department") {
+    console.error(asked === "group" ? "✗ A group plan is set up with nikos group init" : `✗ --level is company or department, not '${asked}'`);
+    return 1;
+  }
+  const level: PlanLevel = fixed ?? (asked as PlanLevel | undefined) ?? "company";
   if (sub !== "init" || !flag("name")) {
-    console.error('Usage: nikos company init --name "<company>" [--period "Q1 2027"] [--departments "Payments, Growth"] [--repo owner/company-plan] [--host gitlab.com] [--dir <path>]');
+    console.error(USAGE[level]);
     return 1;
   }
   try {
     const dir = flag("dir") ?? process.cwd();
-    const r = companyInit(dir, { name: flag("name")!, period: flag("period"), departments: flag("departments")?.split(","), repo: flag("repo"), host: flag("host") });
+    const r = companyInit(dir, { name: flag("name")!, period: flag("period"), departments: flag("departments")?.split(","), repo: flag("repo"), host: flag("host"), level });
     if (r.created.length) console.log(`Created:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
     if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
-    console.log(`\nEach department or team joins with:\n  ${r.join}${existsSync(join(dir, ".git")) ? "" : "\n\nThis folder isn't a git repo yet: create the repo on GitHub or GitLab and push it, so others can join."}`);
+    console.log(`\n${BELOW[level]} join it with:\n  ${r.join}${existsSync(join(dir, ".git")) ? "" : "\n\nThis folder isn't a git repo yet: create the repo on GitHub or GitLab and push it, so others can join."}`);
+    if (level !== "company") console.log(`\nLink it to the plan above with: ${cliCommand()} join <repo path of the ${level === "group" ? "department" : "company"} plan>`);
     console.log(`\nSee it: ${cliCommand()} serve`);
     return 0;
   } catch (err) {
@@ -168,3 +195,6 @@ export function runCompany(args: string[]): number {
     return 1;
   }
 }
+
+export const runCompany = (args: string[]) => runPlanInit(args);
+export const runGroup = (args: string[]) => runPlanInit(args, "group");

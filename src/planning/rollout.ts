@@ -16,6 +16,7 @@ import { delivery, describeDelivery } from "./delivery.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { git, ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
+import { alignsList } from "./levels.js";
 
 export interface DownstreamPlan {
   name: string;
@@ -40,8 +41,8 @@ export interface DownstreamPlan {
   /** Its latest decisions, newest first. */
   decisions: Decision[];
   /** stale: no check-in within its window. checkedIn: it has had at least one. */
-  krs: { id: string; title: string; aligns_to?: string; progress: number; stale: boolean; checkedIn: boolean }[];
-  bets: { id: string; outcome: string; delivery: string; krs: string[] }[];
+  krs: { id: string; title: string; aligns_to?: string[]; progress: number; stale: boolean; checkedIn: boolean }[];
+  bets: { id: string; outcome: string; delivery: string; krs: string[]; aligns_to?: string[] }[];
 }
 
 export interface Blocker {
@@ -75,8 +76,8 @@ export interface AlignmentNode {
   /** The plan it belongs to: a downstream name, or this repo. */
   plan: string;
   repo?: string;
-  /** For an unaligned key result: what it points at, which isn't in this rollout. */
-  aligns_to?: string;
+  /** For an unaligned key result or bet: what it points at, which isn't in this rollout. */
+  aligns_to?: string[];
   children: AlignmentNode[];
 }
 
@@ -169,7 +170,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const krs = krIds(dir).flatMap((id) => {
     try {
       const k = loadKr(dir, id).data;
-      return [{ id, title: k.title, ...(k.aligns_to ? { aligns_to: k.aligns_to } : {}), progress: progress(k), stale: isStale(k), checkedIn: (k.checkins?.length ?? 0) > 0 }];
+      const up = alignsList(k.aligns_to);
+      return [{ id, title: k.title, ...(up.length ? { aligns_to: up } : {}), progress: progress(k), stale: isStale(k), checkedIn: (k.checkins?.length ?? 0) > 0 }];
     } catch {
       return [];
     }
@@ -177,7 +179,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const bets = betIds(dir).flatMap((id) => {
     try {
       const m = loadBet(dir, id).meta;
-      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id)), krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean) }];
+      const up = alignsList(m.aligns_to);
+      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id)), krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean), ...(up.length ? { aligns_to: up } : {}) }];
     } catch {
       return [];
     }
@@ -255,7 +258,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
   return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
 }
 
-type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string }[]; bets: { id: string; krs: string[] }[] };
+type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[] };
 
 /** This repo's key results and bets, read the same way as a downstream copy's. */
 function own(root: string, self?: string): Source {
@@ -278,20 +281,26 @@ function own(root: string, self?: string): Source {
 }
 
 /**
- * The tree from aligns_to links: each key result's children are the key results that align to it,
- * then the bets that name it. It records links only and never works out progress from children.
+ * The tree from aligns_to links: each key result's children are the key results that align to
+ * it, then the bets that name it; each bet's children are the bets that align to it. A key result
+ * or bet that aligns to several things appears under each. It records links only and never
+ * works out progress from children.
  */
 export function alignment(root: string, self: string | undefined, plans: DownstreamPlan[]): Rollout["tree"] {
   const sources: Source[] = [own(root, self), ...plans.filter((p) => p.repo).map((p) => ({ plan: p.name, repo: p.repo, krs: p.krs, bets: p.bets }))];
-  // A key result is known as repo#id. One from a repo whose path isn't known can't be pointed at.
+  // Everything is known as repo#id. One from a repo whose path isn't known can't be pointed at.
   const key = (repo: string | undefined, id: string) => (repo ? `${repo}#${id}` : undefined);
   const krAt = new Map<string, { s: Source; k: Source["krs"][number] }>();
+  const betAt = new Set<string>();
   for (const s of sources) for (const k of s.krs) if (key(s.repo, k.id)) krAt.set(key(s.repo, k.id)!, { s, k });
+  for (const s of sources) for (const b of s.bets) if (key(s.repo, b.id)) betAt.add(key(s.repo, b.id)!);
   const alignsTo = new Map<string, { s: Source; k: Source["krs"][number] }[]>();
   const betsOn = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
+  const betsUnder = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
   const placed = new Set<string>();
   for (const s of sources.slice(1)) {
-    for (const k of s.krs) if (k.aligns_to && krAt.has(k.aligns_to)) alignsTo.set(k.aligns_to, [...(alignsTo.get(k.aligns_to) ?? []), { s, k }]);
+    for (const k of s.krs) for (const up of k.aligns_to ?? []) if (krAt.has(up)) alignsTo.set(up, [...(alignsTo.get(up) ?? []), { s, k }]);
+    for (const b of s.bets) for (const up of b.aligns_to ?? []) if (betAt.has(up)) betsUnder.set(up, [...(betsUnder.get(up) ?? []), { s, b }]);
   }
   for (const s of sources) {
     for (const b of s.bets) {
@@ -311,33 +320,50 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       ...(s.repo ? { repo: s.repo } : {}),
       children: [
         ...(alignsTo.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.k.id)!)).map((c) => krNode(c.s, c.k, next)),
-        ...(betsOn.get(at) ?? []).map(({ s: bs, b }) => betNode(bs, b)),
+        ...(betsOn.get(at) ?? []).map(({ s: bs, b }) => betNode(bs, b, next)),
       ],
     };
   };
-  const betNode = (s: Source, b: Source["bets"][number]): AlignmentNode => {
+  const betNode = (s: Source, b: Source["bets"][number], path: Set<string>): AlignmentNode => {
+    const at = key(s.repo, b.id) ?? `${s.plan}/${b.id}`;
     placed.add(`bet ${s.repo ?? s.plan}/${b.id}`);
-    return { kind: "bet", id: b.id, title: b.id, plan: s.plan, ...(s.repo ? { repo: s.repo } : {}), children: [] };
+    const next = new Set(path).add(at);
+    return {
+      kind: "bet",
+      id: b.id,
+      title: b.id,
+      plan: s.plan,
+      ...(s.repo ? { repo: s.repo } : {}),
+      children: (betsUnder.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.b.id)!)).map((c) => betNode(c.s, c.b, next)),
+    };
   };
   const roots = sources[0].krs.map((k) => krNode(sources[0], k, new Set()));
-  // Key results below that point at nothing here (or at nothing at all) start their own branch.
+  // Key results and bets below that point at nothing here (or at nothing at all) start their own branch.
   const unaligned: AlignmentNode[] = [];
+  const outside = (refs: string[] | undefined, known: (r: string) => boolean) => (refs ?? []).filter((r) => !known(r));
   for (const s of sources.slice(1)) {
     for (const k of s.krs) {
-      if (placed.has(`kr ${key(s.repo, k.id)}`) || (k.aligns_to && krAt.has(k.aligns_to))) continue;
-      unaligned.push({ ...krNode(s, k, new Set()), ...(k.aligns_to ? { aligns_to: k.aligns_to } : {}) });
+      if (placed.has(`kr ${key(s.repo, k.id)}`) || (k.aligns_to ?? []).some((r) => krAt.has(r))) continue;
+      const away = outside(k.aligns_to, (r) => krAt.has(r));
+      unaligned.push({ ...krNode(s, k, new Set()), ...(away.length ? { aligns_to: away } : {}) });
     }
   }
   // Key results that only align to each other in a loop are still shown, from the first one listed.
   for (const s of sources.slice(1)) for (const k of s.krs) if (!placed.has(`kr ${key(s.repo, k.id)}`)) unaligned.push(krNode(s, k, new Set()));
-  for (const s of sources) for (const b of s.bets) if (!placed.has(`bet ${s.repo ?? s.plan}/${b.id}`)) unaligned.push(betNode(s, b));
+  for (const s of sources) {
+    for (const b of s.bets) {
+      if (placed.has(`bet ${s.repo ?? s.plan}/${b.id}`) || (b.aligns_to ?? []).some((r) => betAt.has(r))) continue;
+      const away = outside(b.aligns_to, (r) => betAt.has(r));
+      unaligned.push({ ...betNode(s, b, new Set()), ...(away.length ? { aligns_to: away } : {}) });
+    }
+  }
   return { roots, unaligned };
 }
 
 /** The alignment tree as indented lines, with box-drawing branches. */
 export function formatTree(tree: Rollout["tree"]): string[] {
   const label = (n: AlignmentNode) =>
-    n.kind === "kr" ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to}, not in this rollout` : ""}` : `bet ${n.id} (${n.plan})`;
+    n.kind === "kr" ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}` : `bet ${n.id} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`;
   const out: string[] = [];
   const walk = (n: AlignmentNode, lead: string, last: boolean, top: boolean) => {
     out.push(top ? `  ${label(n)}` : `  ${lead}${last ? "└─ " : "├─ "}${label(n)}`);
@@ -372,8 +398,8 @@ export function formatRollout(r: Rollout): string {
     if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);
     for (const b of p.blockers) out.push(`    blocked: ${b.story} ${b.title}: ${b.blockers.join("; ")}`);
     for (const d of p.decisions) out.push(`    decision: ${d.title}`);
-    for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to}` : ""}`);
-    for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}`);
+    for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to.join(", ")}` : ""}`);
+    for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}${b.aligns_to ? `; aligns to ${b.aligns_to.join(", ")}` : ""}`);
   }
   return out.join("\n");
 }
