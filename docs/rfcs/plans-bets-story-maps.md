@@ -211,7 +211,7 @@ save check-ins, bets and bet reviews. It would cover:
 | --- | --- |
 | Company | Objectives, key results and check-ins; bets and their reviews; which key results each bet aims at; the departments listed below; the approval settings it hands down |
 | Department | The same for its own plan, plus aligning a key result to a company key result and a bet to a company bet, picked from the synced copy of the company plan |
-| Group | Bets and reviews; aligning a bet to a department bet; creating a story map for a bet; activities, steps, releases and stories; assigning teams to a whole map, activities or releases |
+| Group | Bets and reviews; aligning a bet to a department bet; creating a story map for a bet; activities, steps, releases and story titles (scenarios are left to the agent); assigning teams to a whole map, activities or releases |
 
 Rules that keep it safe:
 
@@ -258,9 +258,12 @@ takes effect when a git user applies it and the change is merged, so
 review and approval rules still hold. The name typed in the browser is
 attribution, not verified identity (see `verified-approvals.md`).
 
-Open: whether story editing in the dashboard should stop at titles and
-structure, leaving Gherkin scenarios to the agent; and whether an editable
-snapshot should be limited to one level's own plan by default.
+In the dashboard, story editing stops at structure: titles, activities, steps,
+releases and assignments. Gherkin scenarios are left to the agent, which writes
+them, checks them with CLEAR and asks for approval.
+
+Open: whether an editable snapshot should be limited to one level's own plan by
+default.
 
 ## The smallest setup
 
