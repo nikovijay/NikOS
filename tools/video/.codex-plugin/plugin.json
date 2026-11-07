@@ -1,7 +1,7 @@
 {
   "name": "nikos-video",
   "interface": { "displayName": "nikOS Video" },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "The nikOS Video pack: make short product explainer videos from a brief, rendered frame by frame with Playwright and ffmpeg.",
   "author": { "name": "Niko Vijay" },
   "homepage": "https://nikos.tools",
