@@ -236,8 +236,9 @@ it in:
 1. **A git user sends them an editable snapshot.** `nikos serve --export
    plan.html --editable` writes the dashboard as one HTML file, as
    `--export` does today, with editing switched on. It records the commit it
-   was made from. It contains only this repo's plan and the read-only copies
-   it already shows, so share it only with people allowed to see those.
+   was made from. By default it contains only this level's own plan, so it can't
+   leak other plans; `--with-linked` adds the read-only copies the dashboard
+   shows, for people allowed to see them.
 2. **They edit in their browser.** They open the file, with no install and no
    network. They make their changes (a check-in, a new key result, a bet
    review), and the same checks run in the page as in the CLI. Then they choose
@@ -262,8 +263,11 @@ In the dashboard, story editing stops at structure: titles, activities, steps,
 releases and assignments. Gherkin scenarios are left to the agent, which writes
 them, checks them with CLEAR and asks for approval.
 
-Open: whether an editable snapshot should be limited to one level's own plan by
-default.
+An editable snapshot holds only this level's own plan by default. Plans above
+and below, which the dashboard shows from read-only copies, are left out unless
+the git user asks for them with `--with-linked`. Links to them still show as
+references, so a department can still see which company key result its own
+aligns to.
 
 ## The smallest setup
 
