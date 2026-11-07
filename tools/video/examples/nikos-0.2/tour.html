@@ -4,8 +4,8 @@
 <!-- "What if your company's goals lived right next to the work that delivers them?": the nikOS 0.2
      film, made with the product-tour-video skill. Every frame is a pure function of time:
      window.renderAt(seconds) draws it, window.TOTAL is the length. Screens are real captures from
-     an independent test run of nikos@0.2.1 and from the Split the bill run in script.md; terminal
-     output is replayed from those runs' logs. Connecting lines and labels are explanatory graphics. -->
+     the nikos@0.2.1 run in script.md (a company, a department and a team); terminal output is
+     replayed from that run. Connecting lines and labels are explanatory graphics. -->
 <meta charset="utf-8">
 <title>nikOS: company direction, agent-ready work</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=block">
@@ -162,10 +162,10 @@ const el = (html) => { const d = document.createElement("div"); d.innerHTML = ht
 // ── The timeline: where each voiceover section starts ───────────────────
 // vo/s1.mp3 … vo/s8.mp3, laid at these seconds by voice.mjs; times below are those offsets
 // plus the word timings of each clip.
-const O = [0.6, 15.2, 30.4, 42.5, 58.7, 74.3, 88.2, 100.4];
+const O = [0.6, 15.2, 26.9, 51.7, 67.9, 83.5, 98.1, 110.3];
 const at = (s, x) => O[s - 1] + x;
-const END = at(8, 11.5); // "Start with nikOS."
-window.TOTAL = 120;
+const END = at(8, 14.4); // "Start with nikOS."
+window.TOTAL = 132;
 window.VO = O.map((x, i) => [`vo/s${i + 1}.mp3`, x]);
 
 const KICK = [
@@ -178,20 +178,21 @@ const KICK = [
 const CAPS = [
   [1, 0, 2.6, "Your company’s goals live in a deck."], [1, 2.8, 4.3, "Delivery lives in tickets."], [1, 4.4, 6.8, "Agents work from whatever context they’re given."],
   [1, 6.9, 8.6, "What if those things were connected?"], [1, 8.7, 9.7, "Meet nikOS."], [1, 9.7, 13.9, "Your company plan lives in a repository, right beside the work that delivers it."],
-  [2, 0, 3.6, "Start with your objectives and key results."], [2, 3.7, 6.4, "What are we trying to achieve?"], [2, 6.5, 8.1, "Who owns it?"],
-  [2, 8.2, 10.8, "How will we measure progress?"], [2, 10.9, 14.5, "Then connect the groups and teams contributing to that outcome."],
-  [3, 0, 4.0, "For the Tip Calc team, that means helping people split bills."], [3, 4.1, 6.7, "Connect the team’s measure to the company result."],
-  [3, 6.7, 9.1, "Then map the stories that could move it forward."], [3, 9.2, 11.4, "Now everyone can see why the work matters."],
+  [2, 0, 2.9, "Start with your objectives and key results."], [2, 3.0, 4.6, "What are we trying to achieve?"], [2, 4.7, 5.6, "Who owns it?"],
+  [2, 5.7, 7.5, "How will we measure progress?"], [2, 7.6, 11.0, "Then connect the departments and teams contributing to that outcome."],
+  [3, 0, 4.9, "For the Payments department, that means getting more groups paying together."], [3, 5.0, 8.6, "It sets its own key result, aligned to the company’s."],
+  [3, 8.7, 12.9, "The Tip Calc team connects its measure: bills split per week."], [3, 13.0, 18.8, "Then it places a bet: what it believes will move that number, and when it will review it."],
+  [3, 18.9, 21.4, "Map the stories that deliver the bet."], [3, 21.5, 24.1, "Now everyone can see why the work matters."],
   [4, 0, 3.0, "Before your agents build, define the intent."], [4, 3.1, 4.3, "Who is this for?"], [4, 4.3, 5.7, "What should happen?"], [4, 5.7, 7.4, "What does success look like?"],
   [4, 7.5, 12.1, "Turn those answers into concrete examples and executable specifications."], [4, 12.2, 15.5, "A shared agreement, not a vague handover."],
   [5, 0, 3.1, "Agents build from the specification."], [5, 3.2, 4.7, "Tests check the behaviour."], [5, 4.7, 8.2, "Pending tests? Not done."],
   [5, 8.3, 10.3, "Human approval stays separate."], [5, 10.3, 14.9, "Change the specification, and the old approval no longer holds."],
-  [6, 0, 5.3, "Teams keep their stories and specifications in their own repositories, connected to the company plan."],
-  [6, 5.3, 7.2, "Work in parallel."], [6, 7.2, 10.1, "Review delivery alongside goal progress."], [6, 10.1, 13.2, "See when plans need syncing."],
+  [6, 0, 7.5, "Teams keep their stories and specifications in their own repositories, connected to their department and the company plan."],
+  [6, 7.6, 9.0, "Work in parallel."], [6, 9.1, 12.0, "Review each bet’s delivery alongside goal progress."], [6, 12.1, 13.9, "See when plans need syncing."],
   [7, 0, 4.9, "nikOS is open source, and it runs in the repositories you already use."], [7, 5.0, 8.0, "Start with one team, with nothing new to buy."],
   [7, 8.1, 11.5, "Then shape the tool itself to fit how your company works."],
-  [8, 0, 2.6, "From company direction to team intent."], [8, 2.6, 6.6, "From intent to specifications your agents can build from."],
-  [8, 6.7, 11.3, "Your plans. Your repositories. Your way of working."],
+  [8, 0, 4.9, "From company direction to department goals and team bets."], [8, 5.0, 8.9, "From intent to specifications your agents can build from."],
+  [8, 9.0, 14.2, "Your plans. Your repositories. Your way of working."],
 ].map(([s, a, b, x]) => [at(s, a), at(s, b), x]);
 
 // ── 1. Three things that don't talk to each other ───────────────────────
@@ -216,29 +217,48 @@ const makeShot = (src, W, H, title) => {
     <div class="wh"><span class="dots"><i></i><i></i><i></i></span>${title}</div><div class="vp"><img src="${src}" width="${W}" height="${H}"><div class="spot"></div></div></div>`);
   return { node, W, H, img: node.querySelector("img"), spot: node.querySelector(".spot") };
 };
-// The planning dashboard (nikos planning serve) and the story map (nikos map), as captured.
-const KRS = makeShot("shots/krs.png", 1650, 910, "<b>acme/company-plan</b> · nikos planning serve");
-const ROLL = makeShot("shots/rollout.png", 1650, 914, "<b>acme/company-plan</b> · nikos planning serve");
-const MAP = makeShot("shots/storymap-approved.png", 1640, 880, "<b>acme/tip-calc</b> · nikos map");
+// The planning dashboards (nikos planning serve) at each level, and the team's story map
+// (nikos map), as captured from the run in script.md. Dashboards are 2× captures of a 1440×800 page.
+const DASH = (repo) => `<b>${repo}</b> · nikos planning serve`;
+const CKR = makeShot("shots/company-krs.png", 2880, 1600, DASH("acme/company-plan"));
+const CROLL = makeShot("shots/company-rollout.png", 2880, 1600, DASH("acme/company-plan"));
+const PKR = makeShot("shots/payments-krs.png", 2880, 1600, DASH("acme/payments-plan"));
+const TKR = makeShot("shots/team-krs.png", 2880, 1600, DASH("acme/tip-calc"));
+const BETS = makeShot("shots/team-bets.png", 2880, 1600, DASH("acme/tip-calc"));
+const MAP = makeShot("shots/storymap.png", 1640, 880, "<b>acme/tip-calc</b> · nikos map");
+// A key result card, close up: the same framing on every level's dashboard.
+const KRZ = [2.2, 1000, 415];
 // Each shot: when it shows, its zoom keys [t, zoom, focus x, focus y] in image pixels, and its highlights.
 const SHOTS = [
-  { s: KRS, vis: [at(1, 10.0), at(2, 11.3)], rise: at(1, 10.0),
-    zoom: [[0, 1, 825, 440], [at(1, 11.2), 1, 825, 440], [at(1, 12.2), 1.7, 560, 170], [at(2, 0.3), 1.7, 560, 170], [at(2, 1.9), 2.3, 560, 200]],
-    spots: [[at(1, 11.5), at(1, 14.3), 246, 14, 310, 26], [at(2, 3.7), at(2, 6.4), 256, 132, 124, 28], [at(2, 6.5), at(2, 8.1), 256, 155, 160, 22], [at(2, 8.2), at(2, 10.9), 256, 188, 274, 58]] },
-  { s: ROLL, vis: [at(2, 10.8), at(3, 6.8)],
-    zoom: [[0, 1, 825, 457], [at(2, 11.5), 1, 825, 457], [at(2, 12.4), 1.55, 700, 262], [at(3, 0.2), 1.55, 700, 262], [at(3, 1.4), 2.4, 565, 235]],
-    spots: [[at(3, 1.0), at(3, 4.1), 248, 123, 293, 217], [at(3, 4.1), at(3, 7.2), 257, 271, 274, 48]] },
-  { s: MAP, vis: [at(3, 6.6), at(4, 0.6)],
-    zoom: [[0, 1, 820, 440], [at(3, 7.0), 1, 820, 440], [at(3, 7.9), 1.9, 440, 560]],
-    spots: [[at(3, 8.0), at(4, 0.6), 49, 525, 479, 127]] },
+  { s: CKR, vis: [at(1, 10.0), at(2, 7.9)], rise: at(1, 10.0),
+    zoom: [[0, 1, 1440, 780], [at(1, 11.2), 1, 1440, 780], [at(1, 12.2), 1.6, 1100, 330], [at(2, 0.2), 1.6, 1100, 330], [at(2, 1.5), ...KRZ]],
+    spots: [[at(1, 11.5), at(1, 14.3), 500, 42, 830, 48], [at(2, 3.0), at(2, 4.6), 530, 276, 216, 58], [at(2, 4.7), at(2, 5.6), 530, 322, 330, 50], [at(2, 5.7), at(2, 7.5), 530, 392, 545, 128]] },
+  { s: CROLL, vis: [at(2, 7.5), at(3, 5.0)],
+    zoom: [[0, 1.3, 1420, 560], [at(3, 0.1), 1.3, 1420, 560], [at(3, 1.1), 1.9, 1000, 560]],
+    spots: [[at(2, 9.2), at(2, 11.0), 1767, 325, 543, 90], [at(3, 0.3), at(3, 5.0), 504, 249, 595, 576]] },
+  { s: PKR, vis: [at(3, 4.7), at(3, 8.9)], zoom: [[0, ...KRZ]],
+    spots: [[at(3, 5.0), at(3, 6.6), 504, 249, 595, 397], [at(3, 6.6), at(3, 8.7), 530, 338, 467, 60]] },
+  { s: TKR, vis: [at(3, 8.5), at(3, 13.2)], zoom: [[0, ...KRZ]],
+    spots: [[at(3, 8.7), at(3, 11.0), 504, 249, 595, 397], [at(3, 11.0), at(3, 13.0), 530, 338, 493, 60]] },
+  { s: BETS, vis: [at(3, 12.8), at(3, 19.4)], zoom: [[0, 1.7, 1326, 560]],
+    spots: [[at(3, 13.5), at(3, 16.8), 526, 262, 1150, 150], [at(3, 16.8), at(3, 18.9), 530, 402, 600, 54], [at(3, 18.9), at(3, 19.6), 534, 469, 878, 331]] },
+  { s: MAP, vis: [at(3, 19.2), at(4, 0.6)], zoom: [[0, 1.7, 520, 560]],
+    spots: [[at(3, 19.5), at(3, 20.6), 175, 376, 172, 52], [at(3, 20.6), at(4, 0.6), 49, 578, 479, 130]] },
 ];
 const geom = (sh, z, fx, fy) => { const s = (WIN.w / sh.W) * z; return { s, tx: WIN.w / 2 - fx * s, ty: (WIN.h - 40) / 2 - fy * s }; };
 const toStage = (g, x, y) => [WIN.left + g.tx + x * g.s, WIN.top + 40 + g.ty + y * g.s];
 
-// Chips that carry the goal down into the work.
-const GOAL = el(`<div class="chip"><div class="k">Company key result · kr-1</div><div class="t">Grow revenue</div></div>`);
-const TEAMKR = el(`<div class="chip"><div class="k">Tip Calc team · tips-1</div><div class="t">Bills split per week</div></div>`);
-const STORY = el(`<div class="chip"><div class="k">Story · TC-2</div><div class="t">Split the bill</div></div>`);
+// Chips that carry the goal down into the work: company, department, team, bet, story.
+const chip = (k, t) => el(`<div class="chip" style="width:340px"><div class="k">${k}</div><div class="t">${t}</div></div>`);
+const GOAL = chip("Company · key result kr-1", "Grow revenue");
+const CHAIN = [
+  [GOAL, at(3, 0.3)],
+  [chip("Payments department · pay-1", "Group payments per week"), at(3, 6.6)],
+  [chip("Tip Calc team · tips-1", "Bills split per week"), at(3, 11.0)],
+  [chip("Tip Calc bet", "group-split"), at(3, 13.6)],
+  [chip("Story · TC-2", "Split the bill"), at(3, 19.6)],
+];
+const CHAIN_X = 1520, CHAIN_Y = (i) => 236 + i * 136;
 
 // ── 4–5. The spec and the agent session ─────────────────────────────────
 const ED = el(`<div class="win" id="ed"><div class="wh"><span class="dots"><i></i><i></i><i></i></span><b>split-the-bill.feature</b><span>· intent/features/getting-started/</span><span style="margin-left:auto">Tip Calc · example project</span></div><div id="code"></div></div>`);
@@ -293,37 +313,39 @@ const TERM = [
   ["out", S5(12.35), O[5], `<span class="dim">    → once it's done again, a person approves it again (nikos approve TC-2), or remove the entry</span>`],
   ["out", S5(12.5), O[5], `<span class="ok">✓</span> intent/ is valid — 2 stories, 1 release`],
 
-  ["cmd", S6(7.3), O[6], "nikos planning rollout", 0, "acme-plan"],
-  ["out", S6(7.6), S6(12.0), "1 of 3 plans below acme/company-plan have joined."],
-  ["out", S6(7.75), O[6], `<span class="ok">✓</span> Tip Calc team (acme/tip-calc): joined`],
-  ["out", S6(7.9), S6(12.0), `<span class="wn">    synced on 2026-11-06 at 4c732ea, behind this plan: ask them to run nikos planning sync</span>`, [[S6(10.1), "hwarn"]]],
-  ["out", S6(8.05), S6(12.0), "    delivery: 1 of 3 stories done, 2 in progress", [[S6(8.0), "hgood"]]],
-  ["out", S6(8.2), S6(12.0), "    KR tips-1: Bills split per week, 0%, stale → acme/company-plan#kr-1", [[S6(8.9), "hgood"]]],
-  ["out", S6(8.35), S6(12.0), `<span class="dim">? Payments: no repo yet</span>`],
-  ["out", S6(8.5), S6(12.0), `<span class="dim">? Growth: no repo yet</span>`],
-  ["cmd", S6(11.0), S6(12.0), "nikos planning sync", 0, "tip-calc"],
-  ["out", S6(11.3), S6(12.0), `<span class="ok">✓</span> acme/company-plan @ dc08262 → .nikos/upstream/acme/company-plan/ (read-only copy)`],
-  ["out", S6(11.45), S6(12.0), `<span class="ok">✓</span> planning/upstream.lock updated`],
-  ["cmd", S6(12.0), O[6], "nikos planning rollout", 0, "acme-plan"],
-  ["out", S6(12.3), O[6], `<span class="ok">✓</span> Tip Calc team (acme/tip-calc): joined`],
-  ["out", S6(12.45), O[6], "    synced on 2026-11-06 at dc08262", [[S6(12.6), "hgood"]]],
-  ["out", S6(12.6), O[6], "    delivery: 1 of 3 stories done, 2 in progress"],
-  ["out", S6(12.75), O[6], "    KR tips-1: Bills split per week, 0%, stale → acme/company-plan#kr-1"],
+  ["cmd", S6(9.0), S6(12.8), "nikos planning rollout", 0, "company-plan"],
+  ["out", S6(9.3), S6(12.8), "2 of 3 plans below acme/company-plan have joined."],
+  ["out", S6(9.4), S6(12.8), `<span class="ok">✓</span> Payments (acme/payments-plan): joined`],
+  ["out", S6(9.5), S6(12.8), `<span class="wn">    synced on 2026-11-07 at f3783f5, behind this plan: ask them to run nikos planning sync</span>`, [[S6(12.1), "hwarn"]]],
+  ["out", S6(9.6), S6(12.8), "    KR pay-1: Group payments per week, 20% → acme/company-plan#kr-1", [[S6(10.6), "hgood"]]],
+  ["out", S6(9.7), S6(12.8), `<span class="dim">? Growth: no repo yet</span>`],
+  ["out", S6(9.8), S6(12.8), `<span class="ok">✓</span> Tip Calc team (acme/tip-calc), below acme/payments-plan: joined`],
+  ["out", S6(9.9), S6(12.8), "    synced on 2026-11-07 at f7dcdbe"],
+  ["out", S6(10.0), S6(12.8), "    delivery: 1 of 3 stories done (1 approved), 2 in progress", [[S6(9.9), "hgood"]]],
+  ["out", S6(10.1), S6(12.8), "    KR tips-1: Bills split per week, 30% → acme/payments-plan#pay-1", [[S6(10.6), "hgood"]]],
+  ["out", S6(10.2), S6(12.8), "    bet group-split: Building, 1 of 3 done, open → tips-1, acme/payments-plan#pay-1", [[S6(9.5), "hgood"]]],
+  ["cmd", S6(12.8), O[6], "nikos planning sync", 0, "payments-plan"],
+  ["out", S6(13.05), O[6], `<span class="ok">✓</span> acme/company-plan @ a67af74 → .nikos/upstream/acme/company-plan/ (read-only copy)`],
+  ["out", S6(13.2), O[6], `<span class="ok">✓</span> planning/upstream.lock updated`],
+  ["cmd", S6(13.6), O[6], "nikos planning rollout", 0, "company-plan"],
+  ["out", S6(13.9), O[6], "2 of 3 plans below acme/company-plan have joined."],
+  ["out", S6(14.0), O[6], `<span class="ok">✓</span> Payments (acme/payments-plan): joined`],
+  ["out", S6(14.1), O[6], "    synced on 2026-11-07 at a67af74", [[S6(14.2), "hgood"]]],
 ];
 const typedFor = (e) => (e[0] === "you" ? e[3].length / CPS : 0);
 
 // ── 6. One file per story ────────────────────────────────────────────────
-// intent/state/ after nikos migrate per-story in the test run, and the two branches it merged.
+// Tip Calc's intent/ after nikos migrate per-story, and the two branches it merged (script.md).
 const yk = (s) => s.replace(/^(\w+):/gm, `<span class="yk">$1</span>:`);
 const FILES = [
-  ["TC-1", "status: done\nupdated: 2026-11-06\nspec_hash: de72e931bf47\ndone_at: 2026-11-06T23:53:35Z", 150, 290],
-  ["TC-2", "status: %S%\nticket: PAY-12", 600, 290, "a"],
-  ["TC-3", "status: cancelled\nticket: PAY-13\nupdated: 2026-11-06", 150, 520],
-  ["TC-4", "status: %S%\nticket: PAY-20", 600, 520, "b"],
-].map(([id, body, x, y, br], i) => ({ id, body, x, y, br, i,
-  node: el(`<div class="win yaml" style="left:${x}px;top:${y}px"><div class="wh"><b>intent/state/${id}.yaml</b><span class="tag" style="opacity:0">branch ${br}</span></div><div class="body"></div></div>`) }));
-const TEAMREPO = el(`<div class="chip"><div class="k">Team repo</div><div class="t mono" style="font-size:22px">acme/tip-calc</div></div>`);
-const COREPO = el(`<div class="chip"><div class="k">Company repo</div><div class="t mono" style="font-size:22px">acme/company-plan</div></div>`);
+  ["intent/state/TC-1.yaml", "status: todo", "status: in_progress\nupdated: 2026-11-07", 150, 290, "a"],
+  ["intent/state/TC-2.yaml", "status: done\nupdated: 2026-11-07\nspec_hash: 179749fedc50\ndone_at: 2026-11-07T00:55:12Z", 0, 600, 290],
+  ["intent/state/TC-3.yaml", "status: todo", "status: in_progress\nupdated: 2026-11-07", 150, 520, "b"],
+  ["intent/approvals/TC-2.yaml", "by: Ana\non: 2026-11-07\nvia: chat\nspec_hash: 179749fedc50", 0, 600, 520],
+].map(([path, body, after, x, y, br], i) => ({ path, body, after, x, y, br, i,
+  node: el(`<div class="win yaml" style="left:${x}px;top:${y}px"><div class="wh"><b>${path}</b><span class="tag" style="opacity:0">branch ${br}</span></div><div class="body"></div></div>`) }));
+const repoChip = (k, r) => el(`<div class="chip"><div class="k">${k}</div><div class="t mono" style="font-size:20px">${r}</div></div>`);
+const REPOS = [[repoChip("Team repo", "acme/tip-calc"), 300, at(6, 0.4)], [repoChip("Department repo", "acme/payments-plan"), 690, at(6, 5.0)], [repoChip("Company repo", "acme/company-plan"), 1090, at(6, 6.0)]];
 const MERGED = el(`<div class="call"><small>git merge a, then b</small>No conflicts: one file per story</div>`);
 
 // ── 7. The files you already have ────────────────────────────────────────
@@ -342,31 +364,33 @@ const SHAPE = [
 
 // ── 8. The whole connection ──────────────────────────────────────────────
 const CARDS = [
-  ["Company direction", "shots/krs.png", 1650, 910, [248, 118, 293, 163], at(8, 0.2)],
-  ["Team goal", "shots/rollout.png", 1650, 914, [248, 123, 293, 217], at(8, 1.4)],
-  ["Stories", "shots/storymap-approved.png", 1640, 880, [48, 388, 480, 400], at(8, 2.0)],
-  ["Specifications", null, 0, 0, null, at(8, 3.4)],
-  ["Delivery evidence", null, 0, 0, null, at(8, 4.6)],
+  ["Company", "shots/company-krs.png", 2880, 1600, [504, 249, 595, 333], at(8, 0.3)],
+  ["Department", "shots/payments-krs.png", 2880, 1600, [504, 249, 595, 397], at(8, 2.1)],
+  ["Team bet", "shots/team-bets.png", 2880, 1600, [504, 249, 1100, 560], at(8, 3.5)],
+  ["Stories", "shots/storymap.png", 1640, 880, [40, 370, 500, 350], at(8, 5.0)],
+  ["Specifications", null, 0, 0, null, at(8, 5.9)],
+  ["Delivery evidence", null, 0, 0, null, at(8, 7.4)],
 ].map(([title, src, W, H, r, from], i) => {
-  const x = 105 + i * 350, y = 410;
-  const node = el(`<div class="card" style="left:${x}px;top:${y}px"><div class="th"></div></div>`);
-  const cap = el(`<div class="cap1" style="left:${x}px;top:${y - 34}px">${title}</div>`);
+  const x = 60 + i * 300, y = 410;
+  const node = el(`<div class="card" style="left:${x}px;top:${y}px;width:260px;height:180px"><div class="th"></div></div>`);
+  const cap = el(`<div class="cap1" style="left:${x}px;top:${y - 34}px;width:260px">${title}</div>`);
   const th = node.querySelector(".th");
   if (src) {
-    const s = Math.min(270 / r[2], 176 / r[3]);
-    put(th, { backgroundImage: `url(${src})`, backgroundSize: `${W * s}px ${H * s}px`, backgroundPosition: `${-r[0] * s + (270 - r[2] * s) / 2}px ${-r[1] * s + (176 - r[3] * s) / 2}px`, backgroundColor: "#F2F3EF" });
-  } else if (i === 3) {
-    th.innerHTML = `<div class="mono" style="font-size:12.5px;line-height:21px;padding:12px 10px;white-space:pre;color:var(--ink-2)">${kw("Scenario:")} AC1 — An even split\n  ${kw("Given")} a bill of $90.00\n    with a 20% tip\n  ${kw("When")} we split it between 4\n  ${kw("Then")} each person pays $27.00</div>`;
+    const s = Math.min(240 / r[2], 160 / r[3]);
+    put(th, { backgroundImage: `url(${src})`, backgroundSize: `${W * s}px ${H * s}px`, backgroundPosition: `${-r[0] * s + (240 - r[2] * s) / 2}px ${-r[1] * s + (160 - r[3] * s) / 2}px`, backgroundColor: "#F2F3EF" });
+  } else if (i === 4) {
+    th.innerHTML = `<div class="mono" style="font-size:11.5px;line-height:20px;padding:10px 8px;white-space:pre;color:var(--ink-2)">${kw("Scenario:")} AC1 — An even split\n  ${kw("Given")} a bill of $90.00\n    with a 20% tip\n  ${kw("When")} we split it between 4\n  ${kw("Then")} each person pays $27.00</div>`;
     put(th, { background: "#FBFBF9" });
   } else {
-    th.innerHTML = `<div class="mono" style="font-size:12.5px;line-height:22px;padding:14px 12px;white-space:pre-wrap;color:var(--term)"><span style="color:var(--term-dim)">$ nikos state set TC-2 done</span>\n<span class="ok">TC-2: in_progress → done</span>\n<span style="color:var(--term-dim)">$ nikos approve TC-2 --via chat</span>\n<span class="ok">approved by Ana in chat</span></div>`;
+    th.innerHTML = `<div class="mono" style="font-size:11.5px;line-height:21px;padding:12px 10px;white-space:pre-wrap;color:var(--term)"><span style="color:var(--term-dim)">$ nikos state set TC-2 done</span>\n<span class="ok">TC-2: in_progress → done</span>\n<span style="color:var(--term-dim)">$ nikos approve TC-2 --via chat</span>\n<span class="ok">approved by Ana in chat</span></div>`;
     put(th, { background: "var(--screen)" });
   }
   return { node, cap, from, x, y };
 });
 const BRACKETS = [
-  [el(`<div class="call" style="text-align:center"><small>Company repo</small>acme/company-plan</div>`), 105, 395, at(8, 8.0)],
-  [el(`<div class="call" style="text-align:center"><small>Team repo</small>acme/tip-calc</div>`), 455, 1745, at(8, 8.3)],
+  [el(`<div class="call" style="text-align:center"><small>Company</small>acme/company-plan</div>`), 60, 320, at(8, 10.7)],
+  [el(`<div class="call" style="text-align:center"><small>Department</small>acme/payments-plan</div>`), 360, 620, at(8, 10.95)],
+  [el(`<div class="call" style="text-align:center"><small>Team</small>acme/tip-calc</div>`), 660, 1820, at(8, 11.2)],
 ];
 
 // Scripts read these: music.mjs scores clicks and beats from them, voice.mjs lays the voiceover.
@@ -432,40 +456,47 @@ window.renderAt = (t) => {
 
   // 2. Callouts on the key result.
   let calls = "";
-  if (KRS.g && t > at(2, 3.5) && t < at(2, 11.2)) {
-    [[at(2, 3.7), at(2, 6.4), 145, "Objective", "What we want to achieve"], [at(2, 6.5), at(2, 8.1), 166, "Owner · deadline", "The Board, by 31 March 2027"],
-      [at(2, 8.2), at(2, 10.9), 217, "Key result", "Baseline 1 → target 2"]].forEach(([a, b, y, sm, text]) => {
+  if (CKR.g && t > at(2, 2.8) && t < at(2, 7.8)) {
+    [[at(2, 3.0), at(2, 4.6), 305, "Objective", "What we want to achieve"], [at(2, 4.7), at(2, 5.6), 347, "Owner · deadline", "The Board, by 31 March 2027"],
+      [at(2, 5.7), at(2, 7.5), 455, "Key result", "Baseline 1 → target 2"]].forEach(([a, b, y, sm, text]) => {
       const o = vis(t, a, b, 0.3, 0.3); if (o <= 0) return;
-      const [, sy] = toStage(KRS.g, 0, y), [sx] = toStage(KRS.g, 560, 0);
+      const [, sy] = toStage(CKR.g, 0, y), [sx] = toStage(CKR.g, 1120, 0);
       calls += `<div class="call" style="left:${sx + 30}px;top:${sy - 30}px;opacity:${o}"><small>${sm}</small>${text}</div>`;
     });
   }
 
-  // 2–3. The company KR, linked to the plans below it, then into Tip Calc's KR and its story.
-  const g2 = ROLL.g;
-  const goalO = vis(t, at(2, 12.0), at(4, 0.6), 0.5, 0.6);
-  const [gx, gy] = along([[at(3, 0.6), 959, 250], [at(3, 1.6), 1330, 250], [at(3, 6.8), 1330, 250], [at(3, 7.7), 1460, 300]], t);
-  chipAt(GOAL, gx, gy, goalO, t > at(3, 9.2) && t < at(4, 0.4), 1);
-  if (g2 && t < at(3, 0.6)) {
-    const lo = 1 - span(t, at(3, 0), 0.5);
-    [395, 699, 1003].forEach((ix, i) => {
-      const [cx, cy] = toStage(g2, ix, 124);
-      svg += path(`M959 284 C959 ${cy - 30} ${cx} 300 ${cx} ${cy - 8}`, span(t, at(2, 12.6) + i * 0.4, 0.6), lo);
+  // 2–3. The company KR, linked to the departments and teams below it, then down the chain to a story.
+  const g2 = CROLL.g;
+  const [gx, gy] = along([[at(3, 0.1), 960, 236], [at(3, 0.9), CHAIN_X, CHAIN_Y(0)]], t);
+  CHAIN.forEach(([node, from], i) => {
+    const o = i === 0 ? vis(t, at(2, 7.7), at(4, 0.6), 0.5, 0.6) : vis(t, from, at(4, 0.6), 0.4, 0.6);
+    const [x, y] = i === 0 ? [gx, gy] : [CHAIN_X, CHAIN_Y(i)];
+    chipAt(node, x, y, o, t > at(3, 21.5) && t < at(4, 0.4), i === 0 ? 1 : lerp(0.9, 1, back(span(t, from, 0.4))));
+    if (i > 0 && t < at(4, 0.6)) svg += path(`M${CHAIN_X} ${CHAIN_Y(i - 1) + 38} L${CHAIN_X} ${CHAIN_Y(i) - 42}`, span(t, from - 0.1, 0.35), 1 - span(t, at(4, 0), 0.5));
+  });
+  if (g2 && t < at(3, 0.4)) {
+    // Departments below the company, and the team below its department.
+    const lo = 1 - span(t, at(3, 0), 0.4);
+    [[801, at(2, 8.0)], [1420, at(2, 8.4)]].forEach(([ix, from]) => {
+      const [cx, cy] = toStage(g2, ix, 249);
+      svg += path(`M960 272 C960 ${cy - 40} ${cx} 300 ${cx} ${cy - 8}`, span(t, from, 0.6), lo);
     });
+    const [px, py] = toStage(g2, 801, 825), [tx2, ty2] = toStage(g2, 2038, 825);
+    svg += path(`M${px} ${py + 8} C${px} ${py + 70} ${tx2} ${ty2 + 70} ${tx2} ${ty2 + 12}`, span(t, at(2, 8.8), 0.7), lo);
   }
-  if (g2 && t > at(3, 4.2) && t < at(3, 7.4)) {
-    const [kx, ky] = toStage(g2, 500, 295);
-    svg += path(`M${kx + 10} ${ky} C1330 ${ky} 1330 420 1330 284`, span(t, at(3, 4.4), 0.8), 1 - span(t, at(3, 6.7), 0.5));
-    const o = vis(t, at(3, 5.0), at(3, 7.2), 0.3, 0.4);
-    calls += `<div class="call" style="left:1360px;top:430px;opacity:${o}"><small>--aligns-to</small>acme/company-plan#kr-1</div>`;
+  if (CROLL.g && t > at(2, 9.2) && t < at(2, 11.0)) {
+    const o = vis(t, at(2, 9.3), at(2, 11.0), 0.3, 0.3), [lx, ly] = toStage(g2, 1420, 825);
+    calls += `<div class="call" style="left:${lx - 150}px;top:${ly + 70}px;opacity:${o}"><small>Department → team</small>Tip Calc plans below Payments</div>`;
   }
-  const teamO = vis(t, at(3, 7.8), at(4, 0.6), 0.4, 0.6), storyO = vis(t, at(3, 8.6), at(4, 0.6), 0.4, 0.6);
-  chipAt(TEAMKR, 1460, 470, teamO, t > at(3, 9.4) && t < at(4, 0.4), lerp(0.9, 1, back(span(t, at(3, 7.8), 0.4))));
-  chipAt(STORY, 1460, 640, storyO, t > at(3, 9.6) && t < at(4, 0.4), lerp(0.9, 1, back(span(t, at(3, 8.6), 0.4))));
-  if (t > at(3, 7.8) && t < at(4, 0.6)) {
-    const o = 1 - span(t, at(4, 0), 0.5);
-    svg += path("M1460 336 L1460 428", span(t, at(3, 7.9), 0.4), o) + path("M1460 506 L1460 598", span(t, at(3, 8.7), 0.4), o);
-    if (MAP.g) { const [mx, my] = toStage(MAP.g, 528, 588); svg += path(`M1256 640 C1180 640 ${mx + 60} ${my} ${mx + 10} ${my}`, span(t, at(3, 9.0), 0.5), o); }
+  if (MAP.g && t > at(3, 19.6) && t < at(4, 0.6)) {
+    const [mx, my] = toStage(MAP.g, 528, 643);
+    svg += path(`M${CHAIN_X - 172} ${CHAIN_Y(4)} C${CHAIN_X - 260} ${CHAIN_Y(4)} ${mx + 80} ${my} ${mx + 12} ${my}`, span(t, at(3, 20.7), 0.5), 1 - span(t, at(4, 0), 0.5));
+  }
+  if (BETS.g) {
+    [[at(3, 13.5), at(3, 16.8), "Hypothesis", "What we believe will move it"], [at(3, 16.8), at(3, 18.9), "Review date", "When we decide: continue, change or stop"]].forEach(([a, b, sm, text], i) => {
+      const o = vis(t, a, b, 0.3, 0.3); if (o <= 0) return;
+      calls += `<div class="call" style="left:300px;top:${i ? 760 : 780}px;opacity:${o}"><small>${sm}</small>${text}</div>`;
+    });
   }
 
   // 4–5. Editor: the spec types in, then marks red, green, and changed.
@@ -491,7 +522,7 @@ window.renderAt = (t) => {
   }
 
   // Agent terminal: everything that has started and not been cleared, newest at the bottom.
-  const twO = Math.max(vis(t, at(4, 10.2), at(6, 0.3), 0.5, 0.5), vis(t, at(6, 7.0), at(7, 0), 0.5, 0.5));
+  const twO = Math.max(vis(t, at(4, 10.2), at(6, 0.3), 0.5, 0.5), vis(t, at(6, 8.7), at(7, 0), 0.5, 0.5));
   put(TW, { opacity: twO, visibility: twO > 0 ? "visible" : "hidden" });
   if (twO > 0) {
     const live = TERM.filter((e) => t >= e[1] && t < e[2]);
@@ -508,22 +539,22 @@ window.renderAt = (t) => {
     }).join("");
   }
 
-  // 6. Per-story files, two branches, one merge; the team repo joined to the company's.
+  // 6. Per-story files, two branches, one merge; the team repo joined to its department and the company.
   const fO = vis(t, at(6, 0.2), at(7, 0.2), 0.5, 0.5);
   FILES.forEach((f) => {
     const o = fO * span(t, at(6, 0.3) + f.i * 0.25, 0.4);
     put(f.node, { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `translateY(${lerp(30, 0, dec(span(t, at(6, 0.3) + f.i * 0.25, 0.5)))}px)` });
     if (o <= 0) return;
-    const moved = f.br && t >= at(6, f.br === "a" ? 5.5 : 6.0);
-    f.node.querySelector(".body").innerHTML = yk(esc(f.body)).replace("%S%", moved ? `<span class="hv">in_progress</span>` : "todo");
-    put(f.node.querySelector(".tag"), { opacity: f.br ? span(t, at(6, f.br === "a" ? 5.4 : 5.9), 0.3) : 0 });
-    f.node.classList.toggle("on", !!moved);
+    const moved = f.br && t >= at(6, f.br === "a" ? 7.8 : 8.2);
+    f.node.querySelector(".body").innerHTML = moved ? yk(esc(f.after)).replace("in_progress", `<span class="hv">in_progress</span>`) : yk(esc(f.body));
+    put(f.node.querySelector(".tag"), { opacity: f.br ? span(t, at(6, f.br === "a" ? 7.6 : 8.0), 0.3) : 0 });
   });
-  chipAt(TEAMREPO, 355, 215, fO * span(t, at(6, 0.4), 0.4));
-  chipAt(COREPO, 805, 215, fO * span(t, at(6, 3.2), 0.4));
-  if (fO > 0) svg += path("M512 215 L640 215", span(t, at(6, 3.4), 0.5), fO);
-  if (fO > 0) { const o = vis(t, at(6, 3.6), at(6, 7.0), 0.3, 0.4); if (o > 0) calls += `<div class="call" style="left:470px;top:110px;opacity:${o}"><small>nikos join</small>Connected to the company plan</div>`; }
-  put(MERGED, { left: "150px", top: "750px", opacity: fO * vis(t, at(6, 6.4), at(7, 0.2), 0.4, 0.5), visibility: fO > 0 ? "visible" : "hidden" });
+  const rcO = vis(t, at(6, 0.3), at(6, 8.8), 0.4, 0.4);
+  REPOS.forEach(([n, x, from], i) => {
+    chipAt(n, x, 205, rcO * span(t, from, 0.4));
+    if (i > 0) svg += path(`M${REPOS[i - 1][1] + 150} 205 L${x - 150} 205`, span(t, from - 0.2, 0.4), rcO);
+  });
+  put(MERGED, { left: "150px", top: "750px", opacity: fO * vis(t, at(6, 8.5), at(7, 0.2), 0.4, 0.5), visibility: fO > 0 ? "visible" : "hidden" });
 
   // 7. The real files, labelled.
   const tO = vis(t, at(7, 1.8), at(8, 0.2), 0.5, 0.5);
@@ -550,12 +581,12 @@ window.renderAt = (t) => {
     const sc = lerp(0.92, 1, back(span(t, cd.from, 0.45)));
     put(cd.node, { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `scale(${sc})` });
     put(cd.cap, { opacity: o, visibility: o > 0 ? "visible" : "hidden" });
-    if (i > 0 && rO > 0) svg += path(`M${cd.x - 56} 508 L${cd.x - 8} 508`, span(t, cd.from - 0.1, 0.3), rO);
+    if (i > 0 && rO > 0) svg += path(`M${cd.x - 36} 500 L${cd.x - 6} 500`, span(t, cd.from - 0.1, 0.3), rO);
   });
   BRACKETS.forEach(([n, x0, x1, from]) => {
     const o = rO * span(t, from, 0.4);
-    put(n, { opacity: o, visibility: o > 0 ? "visible" : "hidden", left: `${(x0 + x1) / 2}px`, top: "650px", transform: "translateX(-50%)" });
-    if (o > 0) svg += path(`M${x0} 626 L${x0} 636 L${x1} 636 L${x1} 626`, span(t, from, 0.5), rO);
+    put(n, { opacity: o, visibility: o > 0 ? "visible" : "hidden", left: `${(x0 + x1) / 2}px`, top: "636px", transform: "translateX(-50%)" });
+    if (o > 0) svg += path(`M${x0 + 4} 604 L${x0 + 4} 614 L${x1 - 4} 614 L${x1 - 4} 604`, span(t, from, 0.5), rO);
   });
 
   $("ovg").innerHTML = svg;

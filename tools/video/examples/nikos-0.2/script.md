@@ -1,12 +1,12 @@
-# nikOS 0.2: the two-minute film
+# nikOS 0.2: the film
 
-Voiceover script, revised from the original brief:
+The voiceover script, about two minutes. It's revised from the original brief:
 
 - The positioning lines no longer knock hosted workspaces.
-- The example team is the Tip Calc team, as in the real screenshots.
-- Section 4 shows a real "Split the bill" spec written and checked with nikos 0.2.1.
+- The goal runs through a department (Payments) to a team (Tip Calc) and the team's bet.
+- Every screen comes from a real run with nikos 0.2.1, described below.
 
-Every screen is a real capture from the 0.2.1 QA run or from the spec run below. Connecting lines and labels are explanatory graphics.
+Connecting lines and labels are explanatory graphics.
 
 ## 1. Your company. Your plan. Your repo.
 
@@ -20,15 +20,15 @@ Meet nikOS. Your company plan lives in a repository, right beside the work that 
 
 Start with your objectives and key results. What are we trying to achieve? Who owns it? How will we measure progress?
 
-Then connect the groups and teams contributing to that outcome.
+Then connect the departments and teams contributing to that outcome.
 
 ## 3. Follow the goal into the work
 
-For the Tip Calc team, that means helping people split bills.
+For the Payments department, that means getting more groups paying together. It sets its own key result, aligned to the company's.
 
-Connect the team's measure to the company result. Then map the stories that could move it forward.
+The Tip Calc team connects its measure: bills split per week. Then it places a bet: what it believes will move that number, and when it will review it.
 
-Now everyone can see why the work matters.
+Map the stories that deliver the bet. Now everyone can see why the work matters.
 
 ## 4. Turn intent into something buildable
 
@@ -48,9 +48,9 @@ Human approval stays separate. Change the specification, and the old approval no
 
 ## 6. Keep the connection as teams move
 
-Teams keep their stories and specifications in their own repositories, connected to the company plan.
+Teams keep their stories and specifications in their own repositories, connected to their department and the company plan.
 
-Work in parallel. Review delivery alongside goal progress. See when plans need syncing.
+Work in parallel. Review each bet's delivery alongside goal progress. See when plans need syncing.
 
 ## 7. Start with what you already have
 
@@ -60,7 +60,7 @@ Then shape the tool itself to fit how your company works.
 
 ## 8. Close the distance
 
-From company direction to team intent. From intent to specifications your agents can build from.
+From company direction to department goals and team bets. From intent to specifications your agents can build from.
 
 Your plans. Your repositories. Your way of working.
 
@@ -68,9 +68,37 @@ Start with nikOS.
 
 **End card:** nikOS · Company direction. Agent-ready work. · `npx nikos` · github.com/nikovijay/NikOS
 
-## The real spec (section 4)
+## The run behind the screens
 
-Written in a fresh repo with `npx nikos@0.2.1 start` and `story add "Split the bill"`, then checked with `nikos clear TC-2` (Lean ✓, Executable ✓, 2 scenarios) and `nikos validate` (✓ 2 stories, 1 release).
+Everything ran with `npx nikos@0.2.1`. Local bare repos stood in for GitHub. The repos are:
+
+- **acme/company-plan**:
+  - `nikos company init --name Acme --period "Q1 2027" --departments "Payments, Growth"`.
+  - Key result `kr-1`, *Grow revenue*: owned by the Board, baseline 1, target 2, by 2027-03-31, checked in at 1.2.
+- **acme/payments-plan**, the department:
+  - `planning/plan.yaml` at `level: department`, then `nikos join acme/company-plan`.
+  - Key result `pay-1`, *Group payments per week*, with `--aligns-to acme/company-plan#kr-1`.
+  - It lists the Tip Calc team in `planning/downstream.yaml`.
+- **acme/tip-calc**, the team:
+  - `nikos start`, then `nikos join acme/payments-plan`, which syncs the company plan above it too.
+  - Key result `tips-1`, *Bills split per week*, aligned to `acme/payments-plan#pay-1`.
+  - Bet `group-split` (`nikos planning bet new`), named by release 1 in the story map (`bets: [group-split]`).
+
+In the team repo, the Split the bill story ran like this:
+
+1. TC-2 was written as the spec below. `nikos clear TC-2` reported Lean ✓ and Executable ✓.
+2. `state set TC-2 done` was refused while its steps were pending.
+3. After `src/split.mjs` and real steps were written, the same command moved it to done.
+4. `nikos approve TC-2 --via chat` recorded the approval.
+5. A changed line then made `nikos validate` report that the approval no longer holds. The change was reverted afterwards.
+
+Then the parallel work and the sync:
+
+1. `nikos migrate per-story` gave one state file per story.
+2. Branch a moved TC-1 and branch b moved TC-3, and both merged with no conflicts.
+3. A company check-in (`kr-1` to 1.3) left Payments behind in `nikos planning rollout` until it ran `nikos planning sync`.
+
+The dashboards are `nikos planning serve` at each level, captured at 2×. The story map is `nikos map`.
 
 ```gherkin
 @TC-2 @release-1 @must @activity-getting-started
