@@ -4,6 +4,11 @@
 
 ### Added
 
+- `nikos planning rollout` and the dashboard's Rollout tab draw the alignment
+  as a tree: company key result, the department and team key results aligned
+  to it, then the bets on each, following nested `downstream.yaml` plans. It
+  shows links only and never works out progress from the key results below.
+  `--json` has it as `tree`.
 - `nikos planning downstream add --url <git url>`, for a department or team on
   another git host, over SSH or in a local repo. The MCP `add_downstream` tool
   takes it too.

@@ -66,6 +66,12 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .chart .pt { fill: var(--blue); }
 .chart .ax { font-size: 11px; fill: var(--muted); }
 .checkins { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.tree, .tree ul { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.tree ul { margin-left: 9px; padding-left: 16px; border-left: 1px solid var(--line-2); }
+.tree li { padding: 3px 0; }
+.tree > li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.tree > li:last-child { border-bottom: 0; }
+.tree .kind { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 6px; }
 .checkins li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .timeline { --label: 170px; overflow-x: auto; }
 .axis { position: relative; height: 20px; margin-left: var(--label); font-size: 11px; color: var(--muted); }
@@ -200,7 +206,20 @@ function rolloutView() {
       rows.map(function (x) { return '<div style="margin-top:8px">' + x + '</div>'; }).join('') +
       (refs.length ? '<ul class="checkins" style="margin-top:8px">' + refs.join('') + '</ul>' : '') + '</div>';
   }).join('');
-  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p><div class="cards">' + cards + '</div>';
+  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p>' + alignmentTree(r.tree) + '<div class="cards">' + cards + '</div>';
+}
+
+// Links only: a key result's place in the tree says nothing about how it is doing.
+function alignmentTree(t) {
+  if (!t || (!t.roots.length && !t.unaligned.length)) return '';
+  function node(n) {
+    var label = n.kind === 'kr' ? '<span class="kind">KR</span>' + esc(n.title) : '<span class="kind">Bet</span>' + esc(n.id);
+    return '<li>' + label + ' <span class="muted">' + esc(n.plan) + (n.aligns_to ? ' · points at ' + esc(n.aligns_to) + ', not in this rollout' : '') + '</span>' +
+      (n.children.length ? '<ul>' + n.children.map(node).join('') + '</ul>' : '') + '</li>';
+  }
+  return '<div class="panel"><h3>Alignment</h3><div class="muted">Key results here, the ones below that align to them, and the bets on each. It shows links only: progress stays with each key result and never adds up from the ones below.</div>' +
+    (t.roots.length ? '<ul class="tree" style="margin-top:8px">' + t.roots.map(node).join('') + '</ul>' : '') +
+    (t.unaligned.length ? '<h4>Not aligned to a key result in this rollout</h4><ul class="tree">' + t.unaligned.map(node).join('') + '</ul>' : '') + '</div>';
 }
 
 function krCard(k) {
