@@ -11,6 +11,8 @@ import { sync, upstreamEntries, type SyncReport } from "../planning/upstream.js"
 export interface JoinResult {
   repo: string;
   added: boolean;
+  /** Whether the plan could be fetched. When it couldn't, it stays listed, for a later sync. */
+  fetched: boolean;
   sync: SyncReport;
   settings: Resolved;
 }
@@ -36,7 +38,24 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
     }
   }
   const report = sync(root);
-  return { repo: input.repo, added, sync: report, settings: resolveSettings(root) };
+  return { repo: input.repo, added, fetched: !report.unresolved.some((u) => u.repo === input.repo), sync: report, settings: resolveSettings(root) };
+}
+
+/** What joining did, in words: for the command line and the MCP tool alike. */
+export function describeJoin(r: JoinResult): string {
+  const why = r.sync.unresolved.find((u) => u.repo === r.repo)?.reason;
+  if (!r.fetched) {
+    return [
+      `✗ Couldn't fetch ${r.repo}: ${why}`,
+      `  It's ${r.added ? "now" : "still"} listed in planning/upstream.yaml, so nothing is inherited from it yet. Check the repo path and that you can clone it,`,
+      "  then run nikos planning sync. To drop it, remove it from planning/upstream.yaml.",
+    ].join("\n");
+  }
+  const lines = [r.added ? `Joined ${r.repo}: added to planning/upstream.yaml` : `Already joined to ${r.repo}`];
+  for (const s of r.sync.synced) lines.push(`  ✓ ${s.repo} at ${s.commit.slice(0, 7)}${s.via ? ` (above ${s.via})` : ""}`);
+  for (const u of r.sync.unresolved) lines.push(`  ? ${u.repo}: ${u.reason}`);
+  lines.push("", "Settings here now:", formatSettings(r.settings));
+  return lines.join("\n");
 }
 
 export function runJoin(args: string[]): number {
@@ -51,11 +70,8 @@ export function runJoin(args: string[]): number {
   }
   try {
     const r = joinPlan(flag("dir") ?? process.cwd(), { repo, host: flag("host"), url: flag("url"), ref: flag("ref") });
-    console.log(r.added ? `Joined ${r.repo}: added to planning/upstream.yaml` : `Already joined to ${r.repo}`);
-    for (const s of r.sync.synced) console.log(`  ✓ ${s.repo} at ${s.commit.slice(0, 7)}${s.via ? ` (above ${s.via})` : ""}`);
-    for (const u of r.sync.unresolved) console.log(`  ? ${u.repo}: ${u.reason}`);
-    console.log(`\nSettings here now:\n${formatSettings(r.settings)}`);
-    return r.sync.unresolved.some((u) => u.repo === r.repo) ? 1 : 0;
+    (r.fetched ? console.log : console.error)(describeJoin(r));
+    return r.fetched ? 0 : 1;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;

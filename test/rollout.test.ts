@@ -78,7 +78,7 @@ describe("rollout", () => {
     ]);
     // Payments synced the company plan at a commit before the departments were listed: behind.
     expect(by.Payments.synced).toMatchObject({ current: false });
-    expect(by.Payments.krs).toEqual([{ id: "pay-1", title: "Checkout conversion", aligns_to: "acme/company-plan#kr-1", progress: 0, stale: expect.any(Boolean) }]);
+    expect(by.Payments.krs).toEqual([{ id: "pay-1", title: "Checkout conversion", aligns_to: "acme/company-plan#kr-1", progress: 0, stale: expect.any(Boolean), checkedIn: false }]);
     expect(by.Growth.reason).toBe("its planning/upstream.yaml doesn't list acme/company-plan yet");
     // The team joined its department, not the company, and has a story map.
     expect(by.Checkout).toMatchObject({ via: "acme/payments-plan", repo: "acme/payments/checkout" });
@@ -88,7 +88,7 @@ describe("rollout", () => {
     const text = formatRollout(r);
     expect(text.split("\n")[0]).toBe("2 of 5 plans below acme/company-plan have joined.");
     expect(text).toContain("behind this plan: ask them to run nikos planning sync");
-    expect(text).toContain("KR pay-1: Checkout conversion, 0%, stale → acme/company-plan#kr-1");
+    expect(text).toContain("KR pay-1: Checkout conversion, 0%, no check-ins yet → acme/company-plan#kr-1");
     expect(readFileSync(join(co, ".gitignore"), "utf8")).toMatch(/^\.nikos\/$/m);
 
     // Offline reads the copies on disk, and the dashboard shows the same, without fetching.

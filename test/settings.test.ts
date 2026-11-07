@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
-import { joinPlan } from "../src/commands/join";
+import { describeJoin, joinPlan } from "../src/commands/join";
 import { doctor } from "../src/commands/doctor";
 import { checkRelease } from "../src/commands/release";
 import { suggest } from "../src/commands/suggest";
@@ -121,5 +121,18 @@ describe("doctor", () => {
     expect(doctor(root, { offline: true })[3]).toMatchObject({ status: "ok", found: "required-for-release (this repo); intent/approvals.yaml needs a CODEOWNERS review" });
     expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does" }]);
     expect(existsSync(join(root, "intent"))).toBe(true);
+  });
+});
+
+describe("join, when the plan can't be fetched", () => {
+  it("says it couldn't fetch it, keeps the entry for a later sync, and inherits nothing", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-nojoin-"));
+    const r = joinPlan(root, { repo: "acme/product/company-plan", url: join(tmpdir(), "no-such-plan-nikos") });
+    expect(r.fetched).toBe(false);
+    const text = describeJoin(r);
+    expect(text.split("\n")[0]).toMatch(/^✗ Couldn't fetch acme\/product\/company-plan: /);
+    expect(text).toContain("It's now listed in planning/upstream.yaml, so nothing is inherited from it yet");
+    expect(text).not.toContain("Joined");
+    expect(readFileSync(join(root, "planning/upstream.yaml"), "utf8")).toContain("acme/product/company-plan");
   });
 });

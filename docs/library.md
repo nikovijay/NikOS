@@ -16,6 +16,7 @@ const repo = new MemoryStore({
 });
 
 const changes = withStore(repo, () => {
+  // activity is an activity id from the repo's storymap.yaml (storyMapOf lists them).
   newStory({ title: "Split the bill evenly", activity: "checkout" }, repo.root);
   const problems = validate(repo.root).errors;
   if (problems.length) throw new Error(problems.map((p) => p.message).join("\n"));

@@ -43,6 +43,20 @@ export function failingScenarios(output: string): string[] {
   return [...names];
 }
 
+/**
+ * Why scenarios didn't pass when it's the steps, not the product: steps still returning
+ * "pending", or with no step definition yet. From the cucumber-js or behave step tally.
+ */
+export function stepTrouble(output: string): string[] {
+  const tally = /^\d+ steps? \(([^)]*)\)/m.exec(output)?.[1] ?? /^\d+ steps? passed.*$/m.exec(output)?.[0] ?? "";
+  const n = (word: string) => Number(new RegExp(`(\\d+) ${word}`).exec(tally)?.[1] ?? 0);
+  const steps = (k: number) => `${k} ${k === 1 ? "step" : "steps"}`;
+  const out: string[] = [];
+  if (n("pending")) out.push(`${steps(n("pending"))} still ${n("pending") === 1 ? "returns" : "return"} "pending": replace it with a real check in the step definitions`);
+  if (n("undefined")) out.push(`${steps(n("undefined"))} ${n("undefined") === 1 ? "has" : "have"} no step definition yet: add ${n("undefined") === 1 ? "it" : "them"} to the step definitions (the runner's output has a snippet to start from)`);
+  return out;
+}
+
 export class StateError extends Error {
   constructor(message: string, readonly result?: StateResult) {
     super(message);
@@ -82,7 +96,10 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     if (run.status !== 0) {
       result.failing = failingScenarios(run.output);
       result.output = run.output;
-      const list = result.failing.length ? `:\n${result.failing.map((s) => `  ✗ ${s}`).join("\n")}` : ". See the runner output.";
+      const trouble = stepTrouble(run.output);
+      const list =
+        (result.failing.length ? `:\n${result.failing.map((s) => `  ✗ ${s}`).join("\n")}` : ". See the runner output.") +
+        trouble.map((t) => `\n  → ${t}`).join("");
       throw new StateError(`${story} stays ${from}: its scenarios don't all pass${list}`, result);
     }
     result.output = run.output;
