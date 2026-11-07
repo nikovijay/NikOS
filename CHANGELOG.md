@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Onboarding sets up one level at a time: a company plan, a department plan or
+  a team. The "both, in one repo" choice is gone: company and department plans
+  have no story map, and a story map only lives in a team's repo, where it
+  specs the team's bets into stories. This applies to the `nikos start` wizard
+  and the `onboard` playbook.
+- The wizard's team option writes the team's own plan (`planning/plan.yaml`,
+  `level: team`) beside its story map, and asks which plan above it works
+  toward, so it can say how to join it.
+- `nikos company init --level department` writes a department plan, with a
+  README that its teams join. `--level team` is refused: a team sets up with
+  `nikos start`.
+
 ## 0.2.4 (2026-11-07)
 
 ### Added

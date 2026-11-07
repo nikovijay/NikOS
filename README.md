@@ -41,8 +41,10 @@ scenario, with every command and the output you should see.
 | Claude Desktop, or any app that runs MCP servers | `npx -y nikos@latest mcp --dir <repo>` as a local MCP server: see [docs/install.md](docs/install.md#any-app-that-runs-mcp-servers) |
 
 Then tell your agent what you want to organise ("set up nikOS for my
-company", "set up nikOS for this product"): the `nikos-mode` skill asks a few
-questions and sets up the right repo. The skills run the `nikos` command
+company", "set up nikOS for my team"): the `nikos-mode` skill asks whether it's
+a company, a department or a team, and sets up the right repo. Company and
+department plans hold objectives, key results and bets; a team's repo adds the
+story map that specs its bets into stories. The skills run the `nikos` command
 through `npx -y nikos@latest`, so there's nothing else to install. More in
 [docs/install.md](docs/install.md).
 
@@ -110,7 +112,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
 | `nikos serve` | Open the dashboard: the plan's key results, bets and rollout, and the story map |
 | `nikos init` | Create `intent/` in this repo |
-| `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
+| `nikos company init` | Write a company plan repo that departments and teams join, or a department's with `--level department`. Neither has a story map ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |
 | `nikos validate` | Check `intent/` is well formed |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature |

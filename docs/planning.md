@@ -178,11 +178,23 @@ below it.
 fetched. The dashboard's Rollout tab shows the same tree from the last fetch and
 never fetches on its own. A repo it can't reach is reported as unreachable and the rest carry on.
 
+## Levels, and where the story map lives
+
+Company and department plans hold objectives, key results and bets, and have no
+story map: they plan, and the teams below them deliver. A story map only lives
+in a team's repo, beside the team's own plan (`level: team`), where it specs the
+team's bets into stories organised by activity and step. Each level has its own
+repo, and joins the one above it with `nikos join`.
+
+`nikos company init` writes a company plan, or a department's with
+`--level department`. `nikos start` sets up a team: in a terminal, without
+`--name`, it asks which level you're setting up and writes the team's plan
+beside its story map.
+
 ## A plan-only repo
 
-A company or department plan often has no story map: it plans, and the teams
-below it deliver. A repo with `planning/` and no `intent/storymap.yaml` is a
-plan-only repo, and needs no `nikos init`.
+A repo with `planning/` and no `intent/storymap.yaml` is a plan-only repo, as
+every company and department plan is, and needs no `nikos init`.
 
 - `nikos decide` writes its decisions to `planning/decisions.md`, created on
   the first one, in the same format as `intent/decisions.md` (see

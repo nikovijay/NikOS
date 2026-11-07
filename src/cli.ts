@@ -96,8 +96,9 @@ Commands:
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
   suggest          What to do next: where things stand and a short menu (--json, --brief)
-  company init     Write a company plan repo that departments and teams join
-                   (--name, --period, --departments, --repo, --host)
+  company init     Write a company or department plan repo that the levels below join.
+                   No story map: teams spec bets into stories in their own repos
+                   (--name, --level company|department, --period, --departments, --repo, --host)
   join <repo>      Plan against a company or department plan, and inherit its settings
                    (--host gitlab.com, --url, --ref)
   settings [set <key> <value>]  See the settings that apply here and where each comes
