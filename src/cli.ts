@@ -26,6 +26,7 @@ import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
 import { runPlanning } from "./planning/cli.js";
+import { runServeCommand } from "./commands/serve.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -57,6 +58,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   map: runMap,
   export: runExport,
   planning: runPlanning,
+  serve: runServeCommand,
 };
 
 const help = `nikos — spec-driven development for AI coding agents
@@ -65,7 +67,9 @@ Usage: nikos <command> [options]
 
 Commands:
   start            Set this repo up in one go: intent/, a scenario runner for its stack
-                   and CI for its host, each only if it's missing (--name, --key)
+                   and CI for its host, each only if it's missing (--name, --key).
+                   In a terminal without --name, asks what you're setting up first
+  serve            Open the dashboard for this repo: the plan, and the story map (--port)
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   story add "<title>"  Add a story to the map, state and a starter feature

@@ -11,6 +11,7 @@ import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate } from "./validate.js";
 import { isStale } from "../planning/krs.js";
+import { staleCliWarning } from "../lib/cli-version.js";
 import { betIds, krIds, loadBet, loadKr, today } from "../planning/model.js";
 
 export interface Option {
@@ -139,6 +140,8 @@ export function runSuggest(args: string[]): number {
     try {
       const s = suggest(dir);
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);
+      const stale = staleCliWarning();
+      if (stale) console.log(`nikOS: ${stale}`);
     } catch {
       // A hook must never break the session.
     }

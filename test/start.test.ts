@@ -52,7 +52,7 @@ describe("company init", () => {
     const company = repo();
     const r = companyInit(company, { name: "Acme", period: "Q1 2027", departments: ["Payments", " Growth "], repo: "acme/product/company-plan", host: "gitlab.com" });
     expect(r.created).toEqual(["planning/plan.yaml", "nikos.settings.yaml", "planning/downstream.yaml", "README.md"]);
-    expect(r.join).toBe("npx -y nikos join acme/product/company-plan --host gitlab.com");
+    expect(r.join).toBe("npx -y nikos@latest join acme/product/company-plan --host gitlab.com");
     expect(parse(readFileSync(join(company, "planning/plan.yaml"), "utf8"))).toEqual({ name: "Acme", period: "Q1 2027", level: "company", pillars: [] });
     expect(parse(readFileSync(join(company, "planning/downstream.yaml"), "utf8"))).toEqual([{ name: "Payments" }, { name: "Growth" }]);
     expect(readFileSync(join(company, "README.md"), "utf8")).toContain(r.join);

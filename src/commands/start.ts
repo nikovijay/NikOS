@@ -11,6 +11,9 @@ import { detectHost, setupCi } from "./ci.js";
 import { init } from "./init.js";
 import { suggest, type Suggestion } from "./suggest.js";
 import { setupVerify } from "./verify.js";
+import { createInterface } from "node:readline/promises";
+import { askOnboarding, setUp } from "./onboard.js";
+import { cliCommand } from "../lib/cli-version.js";
 
 export interface StartResult {
   /** One line per thing start did, or found already done. */
@@ -34,6 +37,7 @@ export function start(root: string, opts: { name?: string; key?: string } = {}):
   else {
     const v = setupVerify(root);
     done.push(v.created.length ? `Set up a Cucumber runner for ${stack} (${v.created.join(", ")}). Install it with: ${v.install}` : `The ${stack} scenario runner is already set up`);
+    if (v.node) ask.push(v.node);
   }
   const host = detectHost(root);
   if (!host) ask.push("Is this repo on GitHub or GitLab? There's no origin remote yet, so CI isn't set up.");
@@ -57,7 +61,7 @@ export function companyInit(dir: string, opts: { name: string; period?: string; 
   if (!name) throw new Error("Give the company's name");
   const root = resolve(dir);
   const repo = opts.repo ?? `<owner>/${basename(root)}`;
-  const join_ = `npx -y nikos join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
+  const join_ = `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
   const files: Record<string, string> = {
     "planning/plan.yaml": `# ${name}'s plan. Departments and teams align their key results and bets to it.\n${stringify({ name, period: opts.period ?? "Set the period, e.g. Q1 2027", level: "company", pillars: [] })}`,
     "nikos.settings.yaml": `# Settings every department, group and team that joins this plan inherits.
@@ -105,16 +109,35 @@ Nothing in your repo moves.
   return { created, skipped, join: join_ };
 }
 
-export function runStart(args: string[]): number {
+/** A person at a terminal, not an agent, a pipe or CI: the only time start asks questions. */
+const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY && !process.env.CI;
+
+export async function runStart(args: string[]): Promise<number> {
   const flag = (n: string) => {
     const i = args.indexOf(`--${n}`);
     return i >= 0 ? args[i + 1] : undefined;
   };
+  if (!flag("name") && !flag("key") && !args.includes("--yes") && interactive()) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const cwd = flag("dir") ?? process.cwd();
+      const answers = await askOnboarding(cwd, (q, s) => rl.question(`${q}${s ? ` [${s}]` : ""}: `));
+      rl.close();
+      console.log("");
+      for (const line of setUp(answers, cwd)) console.log(line);
+      return 0;
+    } catch (err) {
+      rl.close();
+      console.error(`✗ ${(err as Error).message}`);
+      return 1;
+    }
+  }
   try {
     const r = start(flag("dir") ?? process.cwd(), { name: flag("name"), key: flag("key") });
     for (const d of r.done) console.log(`✓ ${d}`);
     for (const a of r.ask) console.log(`? ${a}`);
     console.log(`\n${r.next.summary}\n${r.next.options.map((o, n) => `  ${n + 1}. ${o.label}`).join("\n")}`);
+    console.log(`\nSee it: ${cliCommand()} serve`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
@@ -138,6 +161,7 @@ export function runCompany(args: string[]): number {
     if (r.created.length) console.log(`Created:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
     if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
     console.log(`\nEach department or team joins with:\n  ${r.join}${existsSync(join(dir, ".git")) ? "" : "\n\nThis folder isn't a git repo yet: create the repo on GitHub or GitLab and push it, so others can join."}`);
+    console.log(`\nSee it: ${cliCommand()} serve`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

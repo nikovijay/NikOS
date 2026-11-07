@@ -38,11 +38,16 @@ scenario, with every command and the output you should see.
 | Claude Code | `/plugin install nikos --marketplace nikovijay/NikOS` |
 | Codex | `codex plugin marketplace add nikovijay/NikOS` |
 | Cursor | Add `https://github.com/nikovijay/NikOS` as a plugin marketplace |
-| Claude Desktop, or any app that runs MCP servers | `npx -y nikos mcp --dir <repo>` as a local MCP server: see [docs/install.md](docs/install.md#any-app-that-runs-mcp-servers) |
+| Claude Desktop, or any app that runs MCP servers | `npx -y nikos@latest mcp --dir <repo>` as a local MCP server: see [docs/install.md](docs/install.md#any-app-that-runs-mcp-servers) |
 
-Then talk to your agent: the `nikos-mode` skill takes it from there. The
-skills run the `nikos` command through `npx`, so there's nothing else to
-install. More in [docs/install.md](docs/install.md).
+Then tell your agent what you want to organise ("set up nikOS for my
+company", "set up nikOS for this product"): the `nikos-mode` skill asks a few
+questions and sets up the right repo. The skills run the `nikos` command
+through `npx -y nikos@latest`, so there's nothing else to install. More in
+[docs/install.md](docs/install.md).
+
+Without an agent, run `npx -y nikos@latest start` in a terminal: it asks the
+same questions. Then `npx -y nikos@latest serve` opens the dashboard.
 
 ## Talk to it
 
@@ -66,12 +71,12 @@ tasks?". Your answer is the sign-off. It's recorded in
 ## The loop
 
 ```bash
-npx -y nikos init                     # create intent/ with a starter story
+npx -y nikos@latest init                # create intent/ with a starter story
 # write the story's scenarios in intent/features/
-npx -y nikos verify setup             # add a Cucumber runner for your stack
-npx -y nikos verify TC-1              # run the story: it fails until it's built
+npx -y nikos@latest verify setup        # add a Cucumber runner for your stack
+npx -y nikos@latest verify TC-1         # run the story: it fails until it's built
 # build it, then
-npx -y nikos state set TC-1 done      # refused unless its scenarios pass
+npx -y nikos@latest state set TC-1 done # refused unless its scenarios pass
 ```
 
 That's what runs underneath. With an agent, you only make the request ("add
@@ -102,7 +107,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 
 | Command | What it does |
 | --- | --- |
-| `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host |
+| `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
+| `nikos serve` | Open the dashboard: the plan's key results, bets and rollout, and the story map |
 | `nikos init` | Create `intent/` in this repo |
 | `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |

@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A first-run wizard. `nikos start` in a terminal, without `--name`, asks
+  what you're setting up (a team's product, a company or department plan, or
+  both in one repo), where, the name, and the story key separately, then sets
+  it up. It won't set up in your home folder, checks before using a folder
+  that already has files in it, and offers `git init`. Agents pass flags and
+  never see it.
+- The `onboard` playbook asks the same questions in chat. The nikOS skill now
+  starts it when someone has just installed nikOS or wants to organise their
+  company, department, team or product, in any folder, not only in a repo
+  that already has `intent/`.
+- `nikos serve` opens the dashboard: the plan, its rollout, and the story map.
+  `nikos start` and `nikos company init` end with how to open it.
+- `nikos verify setup`, `nikos start` and a failing `nikos verify` say when
+  this Node can't run Cucumber 12 (it needs Node 20, 22, or 24 and later), and
+  how to switch, before anything is installed.
+
+### Changed
+
+- The skills, session hooks, README and docs run `npx -y nikos@latest`. A plain
+  `npx -y nikos` could reuse an old cached copy.
+- `nikos doctor`, the session hook and the wizard warn when the `nikos` on
+  your PATH is older than the one running, and say how to update it. The
+  skills compare `nikos --version` with `npx -y nikos@latest --version` before
+  their first command, and never follow an old version's help.
+- The planning skill sets a company plan up with `nikos company init`, and
+  never puts company goals in `intent/constitution.md`.
+
 ## 0.2.3 (2026-11-07)
 
 ### Added

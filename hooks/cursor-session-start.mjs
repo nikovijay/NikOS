@@ -17,7 +17,7 @@ const root = (Array.isArray(input.workspace_roots) && input.workspace_roots[0]) 
 let context = "";
 if (existsSync(join(root, "intent", "storymap.yaml"))) {
   // NIKOS_CLI points at a local build, for testing this script.
-  const [cmd, args] = process.env.NIKOS_CLI ? [process.execPath, [process.env.NIKOS_CLI]] : ["npx", ["-y", "nikos"]];
+  const [cmd, args] = process.env.NIKOS_CLI ? [process.execPath, [process.env.NIKOS_CLI]] : ["npx", ["-y", "nikos@latest"]];
   const r = spawnSync(cmd, [...args, "suggest", "--brief", "--dir", root], { encoding: "utf8", timeout: 25000 });
   if (r.status === 0) context = r.stdout.trim();
 }

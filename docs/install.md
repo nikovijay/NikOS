@@ -111,7 +111,7 @@ command = "npx"
 args = ["-y", "nikos", "mcp", "--dir", "/path/to/your/repo"]
 ```
 
-**Claude Code**: `claude mcp add nikos -- npx -y nikos mcp --dir "$PWD"` from
+**Claude Code**: `claude mcp add nikos -- npx -y nikos@latest mcp --dir "$PWD"` from
 the repo. The plugin above gives Claude Code the same and more, so you only
 need one of the two.
 
@@ -123,9 +123,12 @@ server says so and approves nothing.
 
 ## The command-line tool
 
-The skills run the `nikos` command. When it isn't installed, they run it
-through `npx -y nikos`, so nothing has to be installed globally. To install
-it anyway: `npm install -g nikos`.
+The skills run the `nikos` command. When it isn't installed, or is older than
+the latest release, they run it through `npx -y nikos@latest`, so nothing has
+to be installed globally. `@latest` matters: a plain `npx -y nikos` can reuse
+an old copy npx has cached. To install it anyway: `npm install -g nikos@latest`,
+and the same again to update it. `nikos --version` says which you have, and
+`nikos doctor` warns when the one on your PATH is older than the one running.
 
 ## Formats checked
 

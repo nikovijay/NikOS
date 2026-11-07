@@ -1,6 +1,6 @@
 ---
 name: nikos-mode
-description: Entry point for nikOS spec-driven work. Use at the start of any request in a repo with an intent/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
+description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with an intent/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
 ---
 
 # nikos-mode
@@ -8,9 +8,13 @@ description: Entry point for nikOS spec-driven work. Use at the start of any req
 You follow a named playbook for every request instead of improvising. Run
 these six steps in order, every time.
 
-The playbooks run the `nikos` command. When it isn't installed (`nikos
---version` fails), run it as `npx -y nikos` instead: `npx -y nikos validate`
-for `nikos validate`, and so on.
+The playbooks run the `nikos` command. Before the first one, check which
+`nikos` you'd get: run `nikos --version` and `npx -y nikos@latest --version`.
+If `nikos` isn't installed, fails, or prints an older version than npx, run
+every command as `npx -y nikos@latest` instead (`npx -y nikos@latest validate`
+for `nikos validate`, and so on), and tell the person once that their `nikos`
+is out of date and `npm install -g nikos@latest` updates it. An old `nikos`
+is missing commands the playbooks use: never fall back to what its help says.
 
 ## 1. Read the principles
 
