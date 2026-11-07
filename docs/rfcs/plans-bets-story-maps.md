@@ -31,12 +31,12 @@ erDiagram
   DEPARTMENT_PLAN }o--|| COMPANY_PLAN : "plans against"
   GROUP_PLAN }o--|| DEPARTMENT_PLAN : "plans against"
   OBJECTIVE ||--|{ KEY_RESULT : "measured by"
-  KEY_RESULT }o--o| KEY_RESULT : "department KR may align to company KR"
+  KEY_RESULT }o--o{ KEY_RESULT : "department KR may align to company KRs"
   COMPANY_PLAN ||--o{ BET : owns
   DEPARTMENT_PLAN ||--o{ BET : owns
   GROUP_PLAN ||--o{ BET : owns
   KEY_RESULT }o--o{ BET : "moved by"
-  BET }o--o| BET : "may align to a bet one level up"
+  BET }o--o{ BET : "may align to bets one level up"
   BET ||--o{ STORY_MAP : "group bets are specced by"
   STORY_MAP ||--|{ ACTIVITY : has
   STORY_MAP ||--|{ RELEASE : has
@@ -66,7 +66,7 @@ Two rules from today carry over unchanged:
 | Today | Proposed |
 | --- | --- |
 | Key results at company, department, group and team level | Key results at company and department level only. `nikos planning validate` refuses them in a group plan |
-| A bet links only to key results | A bet can also align to one bet in the plan directly above |
+| A bet links only to key results | A bet can also align to one or more bets in the plan directly above |
 | One story map per repo, in `intent/` | A group repo holds several story maps, one per bet, under `maps/` |
 | Releases name the bets they deliver (`bets:`, `story_bets:`) | The story map names its one bet; releases and stories don't |
 | A bet's delivery counts stories in its own repo only | A bet's delivery counts every story map that specs it, with status from the assigned teams' repos |
@@ -85,7 +85,7 @@ No `intent/`.
 A bet card gains one optional field:
 
 ```yaml
-aligns_to: acme/company-plan#one-tap-pay   # a bet in the plan directly above
+aligns_to: [acme/company-plan#one-tap-pay]   # bets in the plan directly above: none, one or several
 ```
 
 ### Group repos
@@ -104,6 +104,9 @@ maps/
     assignments.yaml        which team has which part of the map
     approvals/              intent approvals: the spec, signed off by its owners
 ```
+
+A department key result's `aligns_to` becomes a list too, so it can align to
+several company key results.
 
 A group bet card names key results the way bets do today (`krs.primary`,
 `krs.also`), pointing at the department's or company's (`acme/payments-plan#kr-2`).
@@ -302,19 +305,44 @@ this RFC replaces. Proposed: close #71 unmerged, and carry `--level department`
 and the three-way question (company, department or group, with team setup
 separate) into the first implementation PR.
 
-## Open questions
+## Decisions
 
-1. **One parent or several.** This RFC lets a bet align to one bet above at
-   most, and a department key result to one company key result at most. Should
-   either allow several?
-2. **Changing assignments.** When a release moves from one team to another,
-   what happens to the first team's status and approvals?
-3. **Story ids.** Each map has its own key. Should ids also carry the group, to
-   stay unique across a department?
-4. **Trackers.** Should a tracker be connected per group (one project per story
-   map) or per team?
-5. **Shared step definitions.** Two teams assigned parts of one map may need the
-   same steps. Should those live with the map or be copied?
+1. **Several parents.** A bet can align to one or more bets in the plan directly
+   above, and a department key result to one or more company key results.
+   `aligns_to` is a list. The views draw a line to each.
+2. **Story ids are unique across the company.** Every story id carries the
+   group's key and the map's key: `<GROUP>-<MAP>-<n>`, for example
+   `PAY-CHK-12`. A group's key is chosen at `nikos group init` and checked
+   unique across the company when the group joins, the way `nikos join`
+   checks the plan above today. A map's key is unique within its group. Ids stay
+   readable and never collide. From another repo, a story is still referred to
+   as `<repo>#<id>`.
+3. **Trackers connect per team.** Each team repo has its own tracker settings
+   and ticket links, and the company can still lock `tracker.system` for
+   everyone. The group sees each story's ticket through the team's `status/`.
+4. **Changing an assignment** (recommended):
+   - **Done and approved stories don't move.** They stay with the team that
+     delivered them, with its status, evidence and delivery approval. An
+     assignment change only covers unfinished work. `nikos assign` refuses to
+     move a done story unless told to with `--include-done`, and then the new
+     team starts it at todo.
+   - **Unfinished stories start fresh with the new team.** The new team's copy
+     has the story at todo. The old team's next `nikos sync` marks its entry
+     "reassigned to <team>", keeps it as history, and drops it from
+     `nikos next`. Work in progress isn't lost: the old team's branch and notes
+     stay in its repo, and `nikos map status` shows the story as moved, with
+     the old team's last status.
+   - **Approvals:** intent approvals live with the spec in the group repo, so
+     they hold through a move. Delivery approvals are bound to a team's tested
+     commit, so they never transfer: the new team proves the story and is
+     approved again.
+5. **Step definitions live in each team's repo** (recommended). A step drives
+   that team's code, so it belongs beside the code, not with the map in the
+   group repo, which has no code. When two teams' stories share a step phrase,
+   each team writes its own definition, because it tests a different system. If
+   two teams share a codebase, they can share steps as an ordinary package
+   (npm, pip), which nikOS doesn't need to know about. `nikos verify` lists any
+   step in the team's assigned stories that has no definition yet.
 
 ## Not in scope
 
