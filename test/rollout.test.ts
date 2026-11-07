@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import { companyInit } from "../src/commands/start";
 import { joinPlan } from "../src/commands/join";
 import { newKr } from "../src/planning/krs";
+import { newBet } from "../src/planning/bets";
 import { addDownstream, formatRollout, ownRepo, rollout } from "../src/planning/rollout";
 import { planningData } from "../src/planning/server";
 import { copyExample, edit } from "./helpers";
@@ -46,7 +47,10 @@ function company() {
   mkdirSync(join(team, "planning"), { recursive: true });
   writeFileSync(join(team, "planning/upstream.yaml"), `- repo: acme/payments-plan\n  url: ${dept}\n`);
   joinPlan(team, { repo: "acme/payments-plan" });
+  edit(join(team, "planning/krs/missed-important-tasks.yaml"), (t) => `${t}aligns_to: acme/payments-plan#pay-1\n`);
   commit(team);
+  newBet({ id: "one-tap-pay", owner: "Payments", hypothesis: "We believe one-tap pay lifts conversion.", reviewOn: "2027-02-14", primary: "pay-1" }, dept);
+  newKr({ id: "pay-2", title: "Refund time", owner: "Payments", baseline: 9, target: 3, by: "2027-03-31", alignsTo: "acme/company-plan#kr-9" }, dept);
   writeFileSync(join(dept, "planning/downstream.yaml"), `- name: Checkout\n  repo: acme/payments/checkout\n  url: ${team}\n`);
   commit(dept, "downstream");
 
@@ -78,7 +82,7 @@ describe("rollout", () => {
     ]);
     // Payments synced the company plan at a commit before the departments were listed: behind.
     expect(by.Payments.synced).toMatchObject({ current: false });
-    expect(by.Payments.krs).toEqual([{ id: "pay-1", title: "Checkout conversion", aligns_to: "acme/company-plan#kr-1", progress: 0, stale: expect.any(Boolean), checkedIn: false }]);
+    expect(by.Payments.krs[0]).toEqual({ id: "pay-1", title: "Checkout conversion", aligns_to: "acme/company-plan#kr-1", progress: 0, stale: expect.any(Boolean), checkedIn: false });
     expect(by.Growth.reason).toBe("its planning/upstream.yaml doesn't list acme/company-plan yet");
     // The team joined its department, not the company, and has a story map.
     expect(by.Checkout).toMatchObject({ via: "acme/payments-plan", repo: "acme/payments/checkout" });
@@ -96,6 +100,33 @@ describe("rollout", () => {
     // Offline reads the copies on disk, and the dashboard shows the same, without fetching.
     expect(rollout(co, { offline: true }).plans.map((p) => p.state)).toEqual(r.plans.map((p) => p.state));
     expect(planningData(co).downstream?.plans).toHaveLength(5);
+  });
+
+  it("draws the alignment tree from aligns_to links, links only", () => {
+    const { co } = company();
+    const r = rollout(co);
+    const shape = (n: any): any => [`${n.kind} ${n.id} (${n.plan})`, ...n.children.map(shape)];
+    expect(r.tree.roots.map(shape)).toEqual([
+      ["kr kr-1 (acme/company-plan)", ["kr pay-1 (Payments)", ["kr missed-important-tasks (Checkout)", ["bet fewer-missed-tasks (Checkout)"]], ["bet one-tap-pay (Payments)"]]],
+    ]);
+    expect(r.tree.unaligned).toEqual([{ kind: "kr", id: "pay-2", title: "Refund time", plan: "Payments", repo: "acme/payments-plan", aligns_to: "acme/company-plan#kr-9", children: [] }]);
+    // Nothing in the tree carries progress, so no parent can look further along than its own check-ins.
+    expect(JSON.stringify(r.tree)).not.toMatch(/progress|checkedIn|stale/);
+
+    const text = formatRollout(r);
+    expect(text).toContain(
+      [
+        "  KR kr-1: Grow revenue (acme/company-plan)",
+        "  └─ KR pay-1: Checkout conversion (Payments)",
+        "     ├─ KR missed-important-tasks: Testers who missed an important task last week (Checkout)",
+        "     │  └─ bet fewer-missed-tasks (Checkout)",
+        "     └─ bet one-tap-pay (Payments)",
+        "",
+        "Not aligned to a key result in this rollout:",
+        "  KR pay-2: Refund time (Payments) → acme/company-plan#kr-9, not in this rollout",
+      ].join("\n"),
+    );
+    expect(planningData(co).downstream?.tree.roots).toHaveLength(1);
   });
 
   it("is current once the plan below syncs again", () => {

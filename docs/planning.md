@@ -161,9 +161,16 @@ its own `downstream.yaml`, and reports for each:
 - **delivery**: stories done, approved and in progress, from its story map
 - its key results and bets, and what each one points at
 
+Above those it draws the alignment as a tree: each key result here, the key
+results below that align to it (`aligns_to`), the ones that align to those in
+turn, and the bets that name each one. Key results and bets that point at
+nothing in the rollout are listed after the tree. The tree shows links only. A
+key result's progress comes from its own check-ins and never from the ones
+below it.
+
 `--json` gives the same as data, and `--offline` reads the copies already
-fetched. The dashboard's Rollout tab shows the last fetch and never fetches on
-its own. A repo it can't reach is reported as unreachable and the rest carry on.
+fetched. The dashboard's Rollout tab shows the same tree from the last fetch and
+never fetches on its own. A repo it can't reach is reported as unreachable and the rest carry on.
 
 ## views/&lt;name&gt;.html
 
