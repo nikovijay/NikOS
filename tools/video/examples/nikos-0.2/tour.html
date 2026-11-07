@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- "What if your company's goals lived right next to the work that delivers them?": the nikOS 0.2
+     film, made with the product-tour-video skill. Every frame is a pure function of time:
+     window.renderAt(seconds) draws it, window.TOTAL is the length. Screens are real captures from
+     the nikos@0.2.1 run in script.md (a company, a department and a team); terminal output is
+     replayed from that run. Connecting lines and labels are explanatory graphics. -->
+<meta charset="utf-8">
+<title>nikOS: company direction, agent-ready work</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=block">
+<style>
+/* nikos.tools tokens. */
+:root { --ground: #F2F3EF; --surface: #FFFFFF; --ink: #111411; --ink-2: #3F453F; --muted: #5C625C; --faint: #9AA19A;
+  --line: #DCDFD8; --line-2: #B9BEB6; --accent: #14823E; --accent-soft: #E2EFE5; --screen: #070A08;
+  --glyph: #3CFF7A; --term: #D7DDD7; --term-dim: #7E877F; --you: #F2F5F2; --bad: #FF6B5E; --bad-soft: #FBE6E3;
+  --warn: #C46A12; --warn-soft: #FCEFD9; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: 'Schibsted Grotesk', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(17,20,17,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(17,20,17,.05) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.abs { position: absolute; }
+
+/* Windows: real screens, framed. */
+.win { position: absolute; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17,20,17,.06), 0 22px 60px rgba(17,20,17,.12); }
+.wh { position: absolute; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line);
+  font: 500 13px 'JetBrains Mono', monospace; color: var(--muted); background: #FAFAF8; }
+.wh b { color: var(--ink); font-weight: 600; }
+.dots { display: flex; gap: 7px; margin-right: 6px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+.vp { position: absolute; left: 0; top: 40px; right: 0; bottom: 0; overflow: hidden; background: #F2F3EF; }
+.vp img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.spot { position: absolute; border: 3px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 4000px rgba(17,20,17,.36); }
+.spot.warn { border-color: var(--warn); }
+
+/* Explanatory chips and callouts. */
+.chip { position: absolute; background: var(--surface); border: 1.5px solid var(--line-2); border-radius: 10px; padding: 12px 18px; box-shadow: 0 8px 24px rgba(17,20,17,.10); white-space: nowrap; }
+.chip .k { font: 600 12px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chip .t { font: 600 24px 'Schibsted Grotesk', sans-serif; margin-top: 3px; }
+.chip.on { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(20,130,62,.14), 0 8px 24px rgba(17,20,17,.10); }
+.call { position: absolute; background: var(--ink); color: #FFF; border-radius: 8px; padding: 10px 16px; font: 600 21px 'Schibsted Grotesk', sans-serif; white-space: nowrap; box-shadow: 0 8px 24px rgba(17,20,17,.18); }
+.call small { display: block; font: 500 12px 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--glyph); margin-bottom: 2px; }
+
+/* Opening tiles. */
+.tile { position: absolute; width: 400px; height: 250px; border-radius: 12px; padding: 22px 24px; box-shadow: 0 12px 36px rgba(17,20,17,.12); }
+.tile .k { font: 600 12px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Editor. */
+#ed { position: absolute; left: 150px; top: 160px; width: 880px; height: 680px; }
+#code { position: absolute; left: 0; right: 0; top: 56px; font: 400 19px/31px 'JetBrains Mono', monospace; }
+.ln { display: flex; padding-right: 16px; }
+.ln > .n { width: 52px; text-align: right; padding-right: 16px; color: var(--line-2); flex: none; }
+.ln > .x { white-space: pre; min-width: 0; }
+.ln.bad { background: var(--bad-soft); box-shadow: inset 4px 0 0 #D64545; }
+.ln.good { background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--accent); }
+.ln.warn { background: var(--warn-soft); box-shadow: inset 4px 0 0 var(--warn); }
+.ln.lit { background: #EEF5EF; }
+.k2 { color: #7A3E9D; } .tg { color: var(--muted); }
+
+/* Agent terminal. */
+#tw { position: absolute; left: 1070px; top: 160px; width: 700px; height: 680px; background: var(--screen); border-color: #1d241f; }
+#tw .wh { background: #0E1310; border-bottom-color: #1d241f; color: var(--term-dim); }
+#tw .wh b { color: var(--term); }
+#term { position: absolute; left: 0; right: 0; top: 40px; bottom: 0; padding: 18px 22px; overflow: hidden; font: 400 15px/24px 'JetBrains Mono', monospace; color: var(--term); }
+#term .l { white-space: pre-wrap; padding: 1px 6px; margin: 0 -6px; border-radius: 3px; }
+#term .you { color: var(--you); background: rgba(255,255,255,.06); border-left: 2px solid var(--glyph); padding: 6px 10px; margin: 10px 0 6px; border-radius: 0 4px 4px 0; }
+#term .you b { color: var(--glyph); font-weight: 500; margin-right: 8px; }
+#term .ag { margin: 6px 0; color: #C9D2C9; font-style: italic; }
+#term .cmd { color: var(--term-dim); margin-top: 10px; }
+#term .cmd b { color: var(--glyph); font-weight: 400; }
+#term .out { padding-left: 20px; }
+#term .hgood { background: rgba(60,255,122,.14); }
+#term .hwarn { background: rgba(255,170,60,.18); }
+.ok { color: var(--glyph); } .dim { color: var(--term-dim); } .no { color: var(--bad); } .wn { color: #FFB453; }
+#tcaret { display: inline-block; width: 9px; height: 17px; background: var(--you); vertical-align: -3px; margin-left: 1px; }
+
+/* The pull request (an explanatory card standing in for the forge's page). */
+#pr { position: absolute; left: 150px; top: 160px; width: 880px; height: 680px; }
+#pr .in { position: absolute; left: 0; right: 0; top: 40px; padding: 26px 30px; }
+#pr h3 { margin: 0; font: 600 30px/1.25 'Schibsted Grotesk', sans-serif; }
+#pr .br { margin-top: 10px; font: 500 15px 'JetBrains Mono', monospace; color: var(--muted); display: flex; align-items: center; gap: 12px; }
+#pr .st { font: 600 13px 'JetBrains Mono', monospace; padding: 4px 12px; border-radius: 999px; color: #FFF; background: var(--accent); }
+#pr .diff { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font: 400 16px/26px 'JetBrains Mono', monospace; }
+#pr .diff .f { background: #FAFAF8; border-bottom: 1px solid var(--line); padding: 8px 14px; color: var(--ink-2); font-weight: 500; }
+#pr .diff .a { background: #EEF7F0; color: #1E5E33; padding: 0 14px; white-space: pre; }
+#pr .row { margin-top: 16px; display: flex; align-items: center; gap: 12px; font: 500 18px 'Schibsted Grotesk', sans-serif; color: var(--ink-2); }
+#pr .row i { font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #FFF; background: var(--accent); font-size: 15px; }
+.url { font: 500 14px 'JetBrains Mono', monospace; color: var(--ink); background: #FFF; border: 1px solid var(--line); border-radius: 999px; padding: 4px 16px; }
+
+/* Per-story files. */
+.yaml { position: absolute; width: 410px; height: 196px; }
+.yaml .body { position: absolute; left: 0; right: 0; top: 40px; padding: 14px 18px; font: 400 16px/27px 'JetBrains Mono', monospace; color: var(--ink-2); white-space: pre; }
+.yaml .tag { margin-left: auto; font: 600 12px 'JetBrains Mono', monospace; padding: 3px 9px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); }
+.yk { color: #7A3E9D; } .hv { background: var(--accent-soft); color: var(--accent); font-weight: 600; border-radius: 3px; padding: 0 3px; }
+
+/* Repo trees. */
+.tree { position: absolute; width: 520px; }
+.tree .body { position: absolute; left: 0; right: 0; top: 40px; padding: 14px 0; font: 400 17px/30px 'JetBrains Mono', monospace; color: var(--ink-2); }
+.tree .r { padding: 0 18px; white-space: pre; }
+.tree .r.d { color: var(--muted); }
+.tree .r.on { background: var(--accent-soft); color: var(--ink); box-shadow: inset 4px 0 0 var(--accent); }
+
+/* Recap chain. */
+.card { position: absolute; width: 290px; height: 196px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(17,20,17,.10); }
+.card .th { position: absolute; left: 10px; top: 10px; right: 10px; bottom: 10px; background-repeat: no-repeat; border-radius: 6px; }
+.cap1 { position: absolute; width: 290px; text-align: center; font: 600 13px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+#kick { position: absolute; left: 80px; top: 52px; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+#kick b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+#cap { position: absolute; left: 0; right: 0; top: 966px; text-align: center; z-index: 60; }
+#cap span { display: inline-block; max-width: 1500px; background: rgba(17,20,17,.86); color: #FFF; font: 500 29px/1.3 'Schibsted Grotesk', sans-serif; padding: 10px 22px; border-radius: 8px; }
+#mark { position: absolute; right: 80px; top: 40px; z-index: 55; width: 46px; height: 46px; border-radius: 8px; background: rgba(242,243,239,.94); box-shadow: 0 1px 2px rgba(17,20,17,.08); display: flex; align-items: center; justify-content: center; }
+#ov { position: absolute; left: 0; top: 0; z-index: 30; pointer-events: none; }
+
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--screen); color: #FFF;
+  background-image: linear-gradient(rgba(60,255,122,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(60,255,122,.06) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; visibility: hidden; }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<svg id="ov" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#14823E"/></marker></defs>
+  <g id="ovg"></g>
+</svg>
+<div id="kick"></div>
+<div id="cap"><span></span></div>
+<!-- The author's N mark, from assets/icon.svg. -->
+<div id="mark"><svg width="30" height="30" viewBox="170 245 340 245" aria-hidden="true"><path fill="#111411" d="M287 252 L179 483 L180 485 L253 484 L324 331 Z"/><path fill="#111411" d="M504 251 L431 251 L360 404 L396 483 L398 482 L501 261 Z"/></svg></div>
+<div id="end">
+  <svg class="e0" width="110" height="80" viewBox="170 245 340 245" aria-hidden="true"><path fill="#3CFF7A" d="M287 252 L179 483 L180 485 L253 484 L324 331 Z"/><path fill="#3CFF7A" d="M504 251 L431 251 L360 404 L396 483 L398 482 L501 261 Z"/></svg>
+  <span class="e1" style="font:700 120px 'Schibsted Grotesk',sans-serif;letter-spacing:-.03em;line-height:1">nikOS</span>
+  <span class="e2" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:64px">Company direction. Agent-ready work.</span>
+  <span class="mono e3" style="font-size:30px;color:var(--glyph);margin-top:10px">npx nikos</span>
+  <span class="mono e4" style="font-size:22px;color:rgba(255,255,255,.7)">github.com/nikovijay/NikOS</span>
+</div>
+
+<script>
+// ── Time helpers (from the starter) ─────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1);
+const dec = bezier(0, 0, 0.2, 1);
+const back = (x) => { x = clamp(x); const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => Object.assign(n.style, s);
+const typeOut = (text, t, from, dur) => text.slice(0, Math.round(text.length * clamp((t - from) / dur)));
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+// Visible from a to b, fading in and out.
+const vis = (t, a, b = 1e9, fi = 0.5, fo = 0.5) => Math.min(span(t, a, fi), 1 - span(t, b - fo, fo));
+// Keyframes [t, ...values], eased between.
+const along = (K, t) => {
+  if (t <= K[0][0]) return K[0].slice(1);
+  for (let i = 0; i < K.length - 1; i++) { const [t0, ...a] = K[i], [t1, ...b] = K[i + 1]; if (t < t1) { const p = std(span(t, t0, t1 - t0)); return a.map((v, j) => lerp(v, b[j], p)); } }
+  return K[K.length - 1].slice(1);
+};
+const el = (html) => { const d = document.createElement("div"); d.innerHTML = html.trim(); return $("stage").appendChild(d.firstChild); };
+
+// ── The timeline: where each voiceover section starts ───────────────────
+// vo/s1.mp3 … vo/s8.mp3, laid at these seconds by voice.mjs; times below are those offsets
+// plus the word timings of each clip.
+const O = [0.6, 15.2, 34.4, 59.2, 75.4, 91.0, 105.6, 122.5];
+const at = (s, x) => O[s - 1] + x;
+const END = at(8, 14.4); // "Start with nikOS."
+window.TOTAL = 144.5;
+window.VO = O.map((x, i) => [`vo/s${i + 1}.mp3`, x]);
+
+const KICK = [
+  [0.4, "01", "Your company. Your plan. Your repo."], [at(2, -0.2), "02", "Start with the outcome"],
+  [at(3, -0.2), "03", "Follow the goal into the work"], [at(4, -0.2), "04", "Turn intent into something buildable"],
+  [at(5, -0.2), "05", "Give “done” some evidence"], [at(6, -0.2), "06", "Keep the connection as teams move"],
+  [at(7, -0.2), "07", "Start with what you already have"], [at(8, -0.2), "08", "Close the distance"],
+];
+// Captions: the voiceover, as said.
+const CAPS = [
+  [1, 0, 2.6, "Your company’s goals live in a deck."], [1, 2.8, 4.3, "Delivery lives in tickets."], [1, 4.4, 6.8, "Agents work from whatever context they’re given."],
+  [1, 6.9, 8.6, "What if those things were connected?"], [1, 8.7, 9.7, "Meet nikOS."], [1, 9.7, 13.9, "Your company plan lives in a repository, right beside the work that delivers it."],
+  [2, 0, 2.9, "Start with your objectives and key results."], [2, 3.0, 4.6, "What are we trying to achieve?"], [2, 4.7, 5.6, "Who owns it?"],
+  [2, 5.7, 7.5, "How will we measure progress?"], [2, 8.0, 9.6, "Ask your agent to add one,"], [2, 9.7, 11.6, "and it arrives as a pull request:"],
+  [2, 11.7, 14.6, "reviewed and merged, like any other change."], [2, 14.8, 18.2, "Then connect the departments and teams contributing to that outcome."],
+  [3, 0, 4.9, "For the Payments department, that means getting more groups paying together."], [3, 5.0, 8.6, "It sets its own key result, aligned to the company’s."],
+  [3, 8.7, 12.9, "The Tip Calc team connects its measure: bills split per week."], [3, 13.0, 18.8, "Then it places a bet: what it believes will move that number, and when it will review it."],
+  [3, 18.9, 21.4, "Map the stories that deliver the bet."], [3, 21.5, 24.1, "Now everyone can see why the work matters."],
+  [4, 0, 3.0, "Before your agents build, define the intent."], [4, 3.1, 4.3, "Who is this for?"], [4, 4.3, 5.7, "What should happen?"], [4, 5.7, 7.4, "What does success look like?"],
+  [4, 7.5, 12.1, "Turn those answers into concrete examples and executable specifications."], [4, 12.2, 15.5, "A shared agreement, not a vague handover."],
+  [5, 0, 3.1, "Agents build from the specification."], [5, 3.2, 4.7, "Tests check the behaviour."], [5, 4.7, 8.2, "Pending tests? Not done."],
+  [5, 8.3, 10.3, "Human approval stays separate."], [5, 10.3, 14.9, "Change the specification, and the old approval no longer holds."],
+  [6, 0, 7.5, "Teams keep their stories and specifications in their own repositories, connected to their department and the company plan."],
+  [6, 7.6, 9.0, "Work in parallel."], [6, 9.1, 12.0, "Review each bet’s delivery alongside goal progress."], [6, 12.1, 13.9, "See when plans need syncing."],
+  [7, 0, 5.3, "nikOS is open source, and it runs in the repositories you already use."], [7, 5.9, 9.0, "Start with one team, with nothing new to buy."],
+  [7, 9.6, 12.4, "Then shape the tool itself to fit how your company works."], [7, 13.0, 15.9, "Your own views of the plan, at your own address."],
+  [8, 0, 4.9, "From company direction to department goals and team bets."], [8, 5.0, 8.9, "From intent to specifications your agents can build from."],
+  [8, 9.0, 14.2, "Your plans. Your repositories. Your way of working."],
+].map(([s, a, b, x]) => [at(s, a), at(s, b), x]);
+
+// ── 1. Three things that don't talk to each other ───────────────────────
+const TILES = [
+  [el(`<div class="tile" style="background:#FFF;border:1px solid var(--line)"><div class="k">Q1 plan.pptx · slide 3</div>
+    <div style="font:700 40px 'Schibsted Grotesk';margin-top:26px;letter-spacing:-.01em">Grow revenue</div>
+    <div style="margin-top:22px;display:grid;gap:10px"><i style="display:block;height:10px;width:80%;background:var(--line);border-radius:5px"></i><i style="display:block;height:10px;width:62%;background:var(--line);border-radius:5px"></i><i style="display:block;height:10px;width:70%;background:var(--line);border-radius:5px"></i></div></div>`), 420, at(1, 1.0)],
+  [el(`<div class="tile" style="background:#F7F8F4;border:1px solid var(--line)"><div class="k">Tracker · backlog</div>
+    ${["PAY-12|Split the bill", "PAY-13|Add a tip"].map((x) => { const [k, v] = x.split("|"); return `<div style="margin-top:16px;background:#FFF;border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;gap:14px;align-items:center;font:500 20px 'Schibsted Grotesk'"><span class="mono" style="font-size:14px;color:var(--muted)">${k}</span>${v}<span class="mono" style="margin-left:auto;font-size:12px;color:var(--muted)">TO DO</span></div>`; }).join("")}</div>`), 960, at(1, 2.8)],
+  [el(`<div class="tile" style="background:var(--screen);color:var(--term)"><div class="k" style="color:var(--term-dim)">Agent session</div>
+    <div class="mono" style="margin-top:24px;font-size:20px;color:var(--you);border-left:2px solid var(--glyph);padding:8px 12px;background:rgba(255,255,255,.06)"><span style="color:var(--glyph)">›</span> <span id="agtyped"></span></div>
+    <div class="mono" style="margin-top:20px;font-size:15px;color:var(--term-dim)">context: this one message</div></div>`), 1500, at(1, 4.4)],
+];
+const BRAND = el(`<div class="abs" style="left:0;right:0;top:400px;text-align:center"><div style="display:inline-flex;align-items:center;gap:30px">
+  <svg width="120" height="88" viewBox="170 245 340 245"><path fill="#111411" d="M287 252 L179 483 L180 485 L253 484 L324 331 Z"/><path fill="#14823E" d="M504 251 L431 251 L360 404 L396 483 L398 482 L501 261 Z"/></svg>
+  <span style="font:700 132px 'Schibsted Grotesk';letter-spacing:-.03em">nikOS</span></div></div>`);
+
+// ── Real screens ─────────────────────────────────────────────────────────
+const WIN = { left: 240, top: 120, w: 1440, h: 800 };
+const makeShot = (src, W, H, title) => {
+  const node = el(`<div class="win" style="left:${WIN.left}px;top:${WIN.top}px;width:${WIN.w}px;height:${WIN.h}px">
+    <div class="wh"><span class="dots"><i></i><i></i><i></i></span>${title}</div><div class="vp"><img src="${src}" width="${W}" height="${H}"><div class="spot"></div></div></div>`);
+  return { node, W, H, img: node.querySelector("img"), spot: node.querySelector(".spot") };
+};
+// The planning dashboards (nikos planning serve) at each level, and the team's story map
+// (nikos map), as captured from the run in script.md. Dashboards are 2× captures of a 1440×800 page.
+const DASH = (repo) => `<b>${repo}</b> · nikos planning serve`;
+const CKR = makeShot("shots/company-krs.png", 2880, 1600, DASH("acme/company-plan"));
+const CROLL = makeShot("shots/company-rollout.png", 2880, 1600, DASH("acme/company-plan"));
+const PKR = makeShot("shots/payments-krs.png", 2880, 1600, DASH("acme/payments-plan"));
+const TKR = makeShot("shots/team-krs.png", 2880, 1600, DASH("acme/tip-calc"));
+const BETS = makeShot("shots/team-bets.png", 2880, 1600, DASH("acme/tip-calc"));
+const ACME = makeShot("shots/acme-view.png", 2880, 1600, `<span class="url">plan.acme.com</span><span style="margin-left:auto">acme/company-plan · planning/views/acme-q1.html</span>`);
+const MAP = makeShot("shots/storymap.png", 1640, 880, "<b>acme/tip-calc</b> · nikos map");
+// A key result card, close up: the same framing on every level's dashboard.
+const KRZ = [2.2, 1000, 415];
+// Each shot: when it shows, its zoom keys [t, zoom, focus x, focus y] in image pixels, and its highlights.
+const SHOTS = [
+  { s: CKR, vis: [at(1, 10.0), at(2, 7.9)], rise: at(1, 10.0),
+    zoom: [[0, 1, 1440, 780], [at(1, 11.2), 1, 1440, 780], [at(1, 12.2), 1.6, 1100, 330], [at(2, 0.2), 1.6, 1100, 330], [at(2, 1.5), ...KRZ]],
+    spots: [[at(1, 11.5), at(1, 14.3), 500, 42, 830, 48], [at(2, 3.0), at(2, 4.6), 530, 276, 216, 58], [at(2, 4.7), at(2, 5.6), 530, 322, 330, 50], [at(2, 5.7), at(2, 7.5), 530, 392, 545, 128]] },
+  { s: CROLL, vis: [at(2, 14.7), at(3, 5.0)],
+    zoom: [[0, 1.3, 1420, 560], [at(3, 0.1), 1.3, 1420, 560], [at(3, 1.1), 1.9, 1000, 560]],
+    spots: [[at(2, 16.4), at(2, 18.2), 1767, 325, 543, 90], [at(3, 0.3), at(3, 5.0), 504, 249, 595, 576]] },
+  { s: PKR, vis: [at(3, 4.7), at(3, 8.9)], zoom: [[0, ...KRZ]],
+    spots: [[at(3, 5.0), at(3, 6.6), 504, 249, 595, 397], [at(3, 6.6), at(3, 8.7), 530, 338, 467, 60]] },
+  { s: TKR, vis: [at(3, 8.5), at(3, 13.2)], zoom: [[0, ...KRZ]],
+    spots: [[at(3, 8.7), at(3, 11.0), 504, 249, 595, 397], [at(3, 11.0), at(3, 13.0), 530, 338, 493, 60]] },
+  { s: BETS, vis: [at(3, 12.8), at(3, 19.4)], zoom: [[0, 1.7, 1326, 560]],
+    spots: [[at(3, 13.5), at(3, 16.8), 526, 262, 1150, 150], [at(3, 16.8), at(3, 18.9), 530, 402, 600, 54], [at(3, 18.9), at(3, 19.6), 534, 469, 878, 331]] },
+  { s: MAP, vis: [at(3, 19.2), at(4, 0.6)], zoom: [[0, 1.7, 520, 560]],
+    spots: [[at(3, 19.5), at(3, 20.6), 175, 376, 172, 52], [at(3, 20.6), at(4, 0.6), 49, 578, 479, 130]] },
+  { s: ACME, vis: [at(7, 12.6), at(8, 0.4)], rise: at(7, 12.6), zoom: [[0, 1, 1440, 760], [at(7, 13.2), 1, 1440, 760], [at(8, 0.4), 1.06, 1440, 700]], spots: [] },
+];
+const geom = (sh, z, fx, fy) => { const s = (WIN.w / sh.W) * z; return { s, tx: WIN.w / 2 - fx * s, ty: (WIN.h - 40) / 2 - fy * s }; };
+const toStage = (g, x, y) => [WIN.left + g.tx + x * g.s, WIN.top + 40 + g.ty + y * g.s];
+
+// Chips that carry the goal down into the work: company, department, team, bet, story.
+const chip = (k, t) => el(`<div class="chip" style="width:340px"><div class="k">${k}</div><div class="t">${t}</div></div>`);
+const GOAL = chip("Company · key result kr-1", "Grow revenue");
+const CHAIN = [
+  [GOAL, at(3, 0.3)],
+  [chip("Payments department · pay-1", "Group payments per week"), at(3, 6.6)],
+  [chip("Tip Calc team · tips-1", "Bills split per week"), at(3, 11.0)],
+  [chip("Tip Calc bet", "group-split"), at(3, 13.6)],
+  [chip("Story · TC-2", "Split the bill"), at(3, 19.6)],
+];
+const CHAIN_X = 1520, CHAIN_Y = (i) => 236 + i * 136;
+
+// ── 4–5. The spec and the agent session ─────────────────────────────────
+const ED = el(`<div class="win" id="ed"><div class="wh"><span class="dots"><i></i><i></i><i></i></span><b>split-the-bill.feature</b><span>· intent/features/getting-started/</span><span style="margin-left:auto">Tip Calc · example project</span></div><div id="code"></div></div>`);
+// The key result added above, as a pull request: the diff is the real commit from script.md.
+const KR1 = ["id: kr-1", "title: Grow revenue", "owner: Board", "baseline: 1", "target: 2", "original_target: 2", "by: 2027-03-31", "checkins: []"];
+const PR = el(`<div class="win" id="pr"><div class="wh"><span class="dots"><i></i><i></i><i></i></span><b>acme/company-plan</b><span>· pull request</span></div><div class="in">
+  <h3>Add company key result kr-1: Grow revenue</h3>
+  <div class="br"><span class="st" id="prst">Open</span>add-kr-1 → main · 1 file changed</div>
+  <div class="diff"><div class="f">planning/krs/kr-1.yaml  <span style="color:var(--accent)">+8</span></div>${KR1.map((l) => `<div class="a">+ ${l}</div>`).join("")}</div>
+  <div class="row" id="prchk"><i>✓</i>nikos planning validate: planning/ is valid</div>
+  <div class="row" id="prrev"><i>✓</i>Reviewed: approved by the Board</div></div></div>`);
+const TW = el(`<div class="win" id="tw"><div class="wh"><span class="dots"><i></i><i></i><i></i></span><b>agent session</b><span id="twcwd">· tip-calc</span></div><div id="term"></div></div>`);
+const kw = (s) => `<span class="k2">${s}</span>`, tg = (s) => `<span class="tg">${s}</span>`;
+// The spec, as written for this film with nikos 0.2.1 (script.md). [html, shows from, typed?]
+const S4 = (x) => at(4, x);
+const FEAT = [
+  [tg("@TC-2 @release-1 @must @activity-getting-started"), S4(0.3)], [`${kw("Feature:")} Split the bill`, S4(0.3)], ["", 0],
+  ["  As a group paying one bill together", S4(3.2), 1], ["  I want to split the total evenly, tip included", S4(4.4), 1], ["  So that everyone pays their fair share", S4(5.8), 1], ["", 0],
+  [`  ${tg("@AC1 @must")}`, S4(7.6)], [`  ${kw("Scenario:")} AC1 — An even split, tip included`, S4(7.8)],
+  [`    ${kw("Given")} a bill of $90.00 with a 20% tip`, S4(8.3)], [`    ${kw("When")} we split it between 4 people`, S4(8.6)], [`    ${kw("Then")} each person pays $27.00`, S4(8.9)], ["", 0],
+  [`  ${tg("@AC2 @must")}`, S4(10.0)], [`  ${kw("Scenario:")} AC2 — Rounding never loses a cent`, S4(10.2)],
+  [`    ${kw("Given")} a bill of $100.00 with no tip`, S4(10.6)], [`    ${kw("When")} we split it between 3 people`, S4(10.9)], [`    ${kw("Then")} two people pay $33.33 and one pays $33.34`, S4(11.2)],
+];
+const S5 = (x) => at(5, x);
+const EDIT = { line: 9, from: S5(10.4), text: ", rounded up" }; // the change made after approval
+// [line, from, to, class]
+const MARKS = [[3, S4(3.1), S4(4.3), "lit"], [4, S4(4.3), S4(5.7), "lit"], [5, S4(5.7), S4(7.4), "lit"],
+  [8, S5(4.6), S5(8.1), "bad"], [14, S5(4.6), S5(8.1), "bad"], [8, S5(8.1), at(6, 0), "good"], [14, S5(8.1), at(6, 0), "good"], [9, EDIT.from, at(6, 0), "warn"]];
+const EDCALL = [[3, S4(3.1), S4(7.6), "Who it’s for"], [4, S4(4.3), S4(7.6), "What should happen"], [5, S4(5.7), S4(7.6), "Why it matters"]];
+
+// The agent session. you: typed by the person; ag: the agent; cmd: a command it runs; out: that
+// command's output, exactly as the run logged it. [kind, from, until, text, highlights]
+const CPS = 30;
+const S6 = (x) => at(6, x);
+const S2 = (x) => at(2, x);
+const TERM = [
+  ["you", S2(7.6), S2(14.8), "Add a company KR: grow revenue 1 → 2 by 31 Mar 2027, owner Board", 0, "company-plan"],
+  ["cmd", S2(9.75), S2(14.8), "git switch -c add-kr-1"],
+  ["out", S2(9.85), S2(14.8), "Switched to a new branch 'add-kr-1'"],
+  ["cmd", S2(10.0), S2(14.8), 'nikos planning kr new kr-1 --title "Grow revenue" --owner Board --baseline 1 --target 2 --by 2027-03-31'],
+  ["out", S2(10.25), S2(14.8), "Wrote planning/krs/kr-1.yaml", [[S2(10.25), "hgood"]]],
+  ["cmd", S2(10.45), S2(14.8), "nikos planning validate"],
+  ["out", S2(10.6), S2(14.8), `<span class="ok">✓</span> planning/ is valid — 0 bets, 1 key result`],
+  ["cmd", S2(10.75), S2(14.8), 'git commit -m "Add company key result kr-1: Grow revenue"'],
+  ["cmd", S2(10.95), S2(14.8), "git push -u origin add-kr-1"],
+  ["ag", S2(11.3), S2(14.8), "Pushed add-kr-1 and opened a pull request for the Board."],
+
+  ["cmd", S4(10.5), O[4], "nikos clear TC-2"],
+  ["out", S4(10.9), O[4], `CLEAR TC-2 (intent/features/getting-started/split-the-bill.feature)`],
+  ["out", S4(11.1), O[4], `<span class="dim">?</span> Clear       needs a reader: one reading, no ambiguity`],
+  ["out", S4(11.25), O[4], `<span class="ok">✓</span> Lean        no implementation detail found`],
+  ["out", S4(11.4), O[4], `<span class="ok">✓</span> Executable  2 scenarios, each with When and Then`, [[S4(11.6), "hgood"]]],
+  ["out", S4(11.55), O[4], `<span class="dim">?</span> Accurate    needs a reader: matches constitution.md and decisions.md`],
+  ["out", S4(11.7), O[4], `<span class="dim">?</span> Responsible needs a reader: privacy, safety and accessibility considered`],
+
+  ["cmd", S5(0.3), O[5], "nikos state set TC-2 in_progress"],
+  ["out", S5(0.6), O[5], "TC-2: todo → in_progress"],
+  ["cmd", S5(3.3), O[5], "nikos state set TC-2 done"],
+  ["out", S5(4.6), O[5], `<span class="no">✗ TC-2 stays in_progress: its scenarios don't all pass:</span>`],
+  ["out", S5(4.75), O[5], `<span class="no">  ✗ AC1 — An even split, tip included</span>`],
+  ["out", S5(4.9), O[5], `<span class="no">  ✗ AC2 — Rounding never loses a cent</span>`],
+  ["ag", S5(6.9), O[5], "Steps written against src/split.mjs. Trying again."],
+  ["cmd", S5(7.6), O[5], "nikos state set TC-2 done"],
+  ["out", S5(8.0), O[5], `<span class="ok">TC-2: in_progress → done</span>`],
+  ["you", S5(8.6), O[5], "Approve TC-2"],
+  ["cmd", S5(9.3), O[5], "nikos approve TC-2 --via chat"],
+  ["out", S5(9.6), O[5], `<span class="ok">TC-2: approved by Ana in chat (intent/approvals.yaml)</span>`],
+  ["cmd", S5(11.6), O[5], "nikos validate"],
+  ["out", S5(11.9), O[5], `<span class="wn">! features/getting-started/split-the-bill.feature: TC-2 changed after it was done</span>`],
+  ["out", S5(12.05), O[5], `<span class="dim">    → if the change matters, move it back: nikos state set TC-2 needs_rework</span>`],
+  ["out", S5(12.2), O[5], `<span class="wn">! approvals.yaml: TC-2's approval no longer holds: its feature changed since</span>`, [[S5(12.6), "hwarn"]]],
+  ["out", S5(12.35), O[5], `<span class="dim">    → once it's done again, a person approves it again (nikos approve TC-2), or remove the entry</span>`],
+  ["out", S5(12.5), O[5], `<span class="ok">✓</span> intent/ is valid — 2 stories, 1 release`],
+
+  ["cmd", S6(9.0), S6(12.8), "nikos planning rollout", 0, "company-plan"],
+  ["out", S6(9.3), S6(12.8), "2 of 3 plans below acme/company-plan have joined."],
+  ["out", S6(9.4), S6(12.8), `<span class="ok">✓</span> Payments (acme/payments-plan): joined`],
+  ["out", S6(9.5), S6(12.8), `<span class="wn">    synced on 2026-11-07 at f3783f5, behind this plan: ask them to run nikos planning sync</span>`, [[S6(12.1), "hwarn"]]],
+  ["out", S6(9.6), S6(12.8), "    KR pay-1: Group payments per week, 20% → acme/company-plan#kr-1", [[S6(10.6), "hgood"]]],
+  ["out", S6(9.7), S6(12.8), `<span class="dim">? Growth: no repo yet</span>`],
+  ["out", S6(9.8), S6(12.8), `<span class="ok">✓</span> Tip Calc team (acme/tip-calc), below acme/payments-plan: joined`],
+  ["out", S6(9.9), S6(12.8), "    synced on 2026-11-07 at f7dcdbe"],
+  ["out", S6(10.0), S6(12.8), "    delivery: 1 of 3 stories done (1 approved), 2 in progress", [[S6(9.9), "hgood"]]],
+  ["out", S6(10.1), S6(12.8), "    KR tips-1: Bills split per week, 30% → acme/payments-plan#pay-1", [[S6(10.6), "hgood"]]],
+  ["out", S6(10.2), S6(12.8), "    bet group-split: Building, 1 of 3 done, open → tips-1, acme/payments-plan#pay-1", [[S6(9.5), "hgood"]]],
+  ["cmd", S6(12.8), O[6], "nikos planning sync", 0, "payments-plan"],
+  ["out", S6(13.05), O[6], `<span class="ok">✓</span> acme/company-plan @ a67af74 → .nikos/upstream/acme/company-plan/ (read-only copy)`],
+  ["out", S6(13.2), O[6], `<span class="ok">✓</span> planning/upstream.lock updated`],
+  ["cmd", S6(13.6), O[6], "nikos planning rollout", 0, "company-plan"],
+  ["out", S6(13.9), O[6], "2 of 3 plans below acme/company-plan have joined."],
+  ["out", S6(14.0), O[6], `<span class="ok">✓</span> Payments (acme/payments-plan): joined`],
+  ["out", S6(14.1), O[6], "    synced on 2026-11-07 at a67af74", [[S6(14.2), "hgood"]]],
+];
+const typedFor = (e) => (e[0] === "you" ? e[3].length / CPS : 0);
+
+// ── 6. One file per story ────────────────────────────────────────────────
+// Tip Calc's intent/ after nikos migrate per-story, and the two branches it merged (script.md).
+const yk = (s) => s.replace(/^(\w+):/gm, `<span class="yk">$1</span>:`);
+const FILES = [
+  ["intent/state/TC-1.yaml", "status: todo", "status: in_progress\nupdated: 2026-11-07", 150, 290, "a"],
+  ["intent/state/TC-2.yaml", "status: done\nupdated: 2026-11-07\nspec_hash: 179749fedc50\ndone_at: 2026-11-07T00:55:12Z", 0, 600, 290],
+  ["intent/state/TC-3.yaml", "status: todo", "status: in_progress\nupdated: 2026-11-07", 150, 520, "b"],
+  ["intent/approvals/TC-2.yaml", "by: Ana\non: 2026-11-07\nvia: chat\nspec_hash: 179749fedc50", 0, 600, 520],
+].map(([path, body, after, x, y, br], i) => ({ path, body, after, x, y, br, i,
+  node: el(`<div class="win yaml" style="left:${x}px;top:${y}px"><div class="wh"><b>${path}</b><span class="tag" style="opacity:0">branch ${br}</span></div><div class="body"></div></div>`) }));
+const repoChip = (k, r) => el(`<div class="chip"><div class="k">${k}</div><div class="t mono" style="font-size:20px">${r}</div></div>`);
+const REPOS = [[repoChip("Team repo", "acme/tip-calc"), 300, at(6, 0.4)], [repoChip("Department repo", "acme/payments-plan"), 690, at(6, 5.0)], [repoChip("Company repo", "acme/company-plan"), 1090, at(6, 6.0)]];
+const MERGED = el(`<div class="call"><small>git merge a, then b</small>No conflicts: one file per story</div>`);
+
+// ── 7. The files you already have ────────────────────────────────────────
+const tree = (repo, rows, x) => el(`<div class="win tree" style="left:${x}px;top:300px;height:${rows.length * 30 + 70}px"><div class="wh"><span class="dots"><i></i><i></i><i></i></span><b>${repo}</b></div>
+  <div class="body">${rows.map(([r, key]) => `<div class="r${r.endsWith("/") ? " d" : ""}" data-k="${key || ""}">${esc(r)}</div>`).join("")}</div></div>`);
+const T1 = tree("acme/company-plan", [["README.md"], ["nikos.settings.yaml", "settings"], ["  approval.policy: required-for-release", "settings"], ["  locked: [approval.policy]", "settings"], ["planning/"], ["  plan.yaml"], ["  downstream.yaml"], ["  krs/kr-1.yaml"]], 200);
+const T2 = tree("acme/tip-calc", [[".github/workflows/"], ["  nikos.yml", "ci"], ["  nikos-release.yml", "ci"], ["intent/"], ["  features/getting-started/"], ["  state/  approvals/"], ["planning/"], ["  krs/tips-1.yaml"], ["  upstream.yaml  upstream.lock"]], 1200);
+const OSS = el(`<div class="chip"><div class="k">Open source · MIT licence</div><div class="t mono" style="font-size:22px">github.com/nikovijay/NikOS</div></div>`);
+const FORGE = el(`<div class="call"><small>Your forge</small>GitHub or GitLab</div>`);
+const START = el(`<div class="win" style="width:420px;height:96px;background:var(--screen);border-color:#1d241f"><div class="wh" style="background:#0E1310;border-bottom-color:#1d241f;color:var(--term-dim)"><span class="dots"><i></i><i></i><i></i></span>one team, one command</div>
+  <div class="mono" style="position:absolute;left:22px;top:52px;font-size:20px;color:var(--term)"><span style="color:var(--glyph)">$</span> <span id="starttyped"></span></div></div>`);
+const SHAPE = [
+  [el(`<div class="call"><small>Company settings</small>Policies every team inherits</div>`), "settings", T1, 2, 1],
+  [el(`<div class="call"><small>Team workflows</small>CI checks in your pipeline</div>`), "ci", T2, 1, -1],
+];
+
+// ── 8. The whole connection ──────────────────────────────────────────────
+const CARDS = [
+  ["Company", "shots/company-krs.png", 2880, 1600, [504, 249, 595, 333], at(8, 0.3)],
+  ["Department", "shots/payments-krs.png", 2880, 1600, [504, 249, 595, 397], at(8, 2.1)],
+  ["Team bet", "shots/team-bets.png", 2880, 1600, [504, 249, 1100, 560], at(8, 3.5)],
+  ["Stories", "shots/storymap.png", 1640, 880, [40, 370, 500, 350], at(8, 5.0)],
+  ["Specifications", null, 0, 0, null, at(8, 5.9)],
+  ["Delivery evidence", null, 0, 0, null, at(8, 7.4)],
+].map(([title, src, W, H, r, from], i) => {
+  const x = 60 + i * 300, y = 410;
+  const node = el(`<div class="card" style="left:${x}px;top:${y}px;width:260px;height:180px"><div class="th"></div></div>`);
+  const cap = el(`<div class="cap1" style="left:${x}px;top:${y - 34}px;width:260px">${title}</div>`);
+  const th = node.querySelector(".th");
+  if (src) {
+    const s = Math.min(240 / r[2], 160 / r[3]);
+    put(th, { backgroundImage: `url(${src})`, backgroundSize: `${W * s}px ${H * s}px`, backgroundPosition: `${-r[0] * s + (240 - r[2] * s) / 2}px ${-r[1] * s + (160 - r[3] * s) / 2}px`, backgroundColor: "#F2F3EF" });
+  } else if (i === 4) {
+    th.innerHTML = `<div class="mono" style="font-size:11.5px;line-height:20px;padding:10px 8px;white-space:pre;color:var(--ink-2)">${kw("Scenario:")} AC1 — An even split\n  ${kw("Given")} a bill of $90.00\n    with a 20% tip\n  ${kw("When")} we split it between 4\n  ${kw("Then")} each person pays $27.00</div>`;
+    put(th, { background: "#FBFBF9" });
+  } else {
+    th.innerHTML = `<div class="mono" style="font-size:11.5px;line-height:21px;padding:12px 10px;white-space:pre-wrap;color:var(--term)"><span style="color:var(--term-dim)">$ nikos state set TC-2 done</span>\n<span class="ok">TC-2: in_progress → done</span>\n<span style="color:var(--term-dim)">$ nikos approve TC-2 --via chat</span>\n<span class="ok">approved by Ana in chat</span></div>`;
+    put(th, { background: "var(--screen)" });
+  }
+  return { node, cap, from, x, y };
+});
+const BRACKETS = [
+  [el(`<div class="call" style="text-align:center"><small>Company</small>acme/company-plan</div>`), 60, 320, at(8, 10.7)],
+  [el(`<div class="call" style="text-align:center"><small>Department</small>acme/payments-plan</div>`), 360, 620, at(8, 10.95)],
+  [el(`<div class="call" style="text-align:center"><small>Team</small>acme/tip-calc</div>`), 660, 1820, at(8, 11.2)],
+];
+
+// Scripts read these: music.mjs scores clicks and beats from them, voice.mjs lays the voiceover.
+window.CLICK_TIMES = TERM.filter((e) => e[0] === "cmd" || e[0] === "you").map((e) => e[1] + typedFor(e));
+window.LABEL_TIMES = KICK.map(([a]) => a);
+window.END_AT = END;
+window.MUSIC = { arpIn: 0.6, bassIn: at(1, 8.7), drums: [[at(3, 0), at(5, -0.4)], [at(6, 0), at(8, -0.3)]], end: END };
+
+// ── Drawing ──────────────────────────────────────────────────────────────
+const path = (d, p, o = 1, dash = false) => p <= 0 || o <= 0 ? "" :
+  `<path d="${d}" pathLength="1" fill="none" stroke="#14823E" stroke-width="3" stroke-linecap="round" ${dash ? "" : `stroke-dasharray="1" stroke-dashoffset="${1 - p}"`} ${dash ? `stroke-dasharray="8 8" opacity="${o * p}"` : `opacity="${o}"`} ${p >= 1 && !dash ? `marker-end="url(#ah)"` : ""}/>`;
+const chipAt = (node, x, y, o, on = false, sc = 1) => {
+  put(node, { left: `${x}px`, top: `${y}px`, opacity: o, transform: `translate(-50%, -50%) scale(${sc})`, visibility: o > 0 ? "visible" : "hidden" });
+  node.classList.toggle("on", on);
+};
+
+window.renderAt = (t) => {
+  let svg = "";
+
+  // Kicker and caption.
+  const k = [...KICK].reverse().find(([a]) => t >= a);
+  $("kick").innerHTML = k ? `<b>${k[1]}</b>${k[2]}` : "";
+  put($("kick"), { opacity: k ? Math.min(span(t, k[0], 0.3), 1 - span(t, END - 0.2, 0.3)) : 0 });
+  const c = CAPS.find(([a, b]) => t >= a && t < b);
+  $("cap").firstChild.textContent = c ? c[2] : "";
+  put($("cap"), { opacity: c ? Math.min(span(t, c[0], 0.12), 1 - span(t, c[1] - 0.12, 0.12)) : 0 });
+  put($("mark"), { opacity: span(t, 0.2, 0.5) });
+
+  // 1. Deck, tickets, agent: apart, then connected, then gathered into nikOS.
+  const gather = std(span(t, at(1, 8.0), 0.8));
+  TILES.forEach(([node, cx, from], i) => {
+    const o = span(t, from, 0.5) * (1 - span(t, at(1, 8.3), 0.5));
+    const y = 470 + Math.sin(t * 0.9 + i * 2) * 6 + lerp(24, 0, dec(span(t, from, 0.6)));
+    const x = lerp(cx, 960, gather);
+    put(node, { left: `${x - 200}px`, top: `${y - 125}px`, opacity: o, transform: `scale(${lerp(1, 0.55, gather)})`, visibility: o > 0 ? "visible" : "hidden" });
+  });
+  $("agtyped").textContent = typeOut("Build bill splitting", t, at(1, 4.6), 0.9);
+  const link = span(t, at(1, 6.9), 0.9);
+  if (t < at(1, 9.4)) {
+    const o = 1 - span(t, at(1, 8.6), 0.4);
+    svg += path("M622 470 L758 470", span(t, at(1, 1.6), 0.4), o * (1 - link), true) + path("M1162 470 L1298 470", span(t, at(1, 4.6), 0.4), o * (1 - link), true);
+    svg += path("M622 470 L752 470", span(t, at(1, 6.9), 0.6), o) + path("M1162 470 L1292 470", span(t, at(1, 7.3), 0.6), o);
+  }
+  const bo = vis(t, at(1, 8.9), at(1, 10.4), 0.4, 0.5);
+  put(BRAND, { opacity: bo, transform: `scale(${lerp(0.92, 1, back(span(t, at(1, 8.9), 0.5)))})`, visibility: bo > 0 ? "visible" : "hidden" });
+
+  // Real screens: each fades in, zooms, and spotlights what the voice names.
+  for (const { s, vis: [a, b], rise, zoom, spots } of SHOTS) {
+    const o = vis(t, a, b, 0.6, 0.6);
+    put(s.node, { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: rise ? `translateY(${lerp(140, 0, dec(span(t, rise, 0.9)))}px)` : "none" });
+    if (o <= 0) continue;
+    const g = geom(s, ...along(zoom, t));
+    s.g = g;
+    put(s.img, { transform: `translate(${g.tx}px, ${g.ty}px) scale(${g.s})` });
+    const i = spots.findIndex(([a2, b2]) => t >= a2 && t < b2);
+    if (i < 0) { put(s.spot, { opacity: 0 }); continue; }
+    let [a2, b2, x, y, w, h] = spots[i];
+    const prev = spots[i - 1];
+    if (prev && prev[1] >= a2 - 0.01) { const p = std(span(t, a2, 0.4)); [x, y, w, h] = [x, y, w, h].map((v, j) => lerp(prev[j + 2], v, p)); }
+    const so = prev && prev[1] >= a2 - 0.01 ? 1 - span(t, b2 - 0.3, 0.3) : vis(t, a2, b2, 0.3, 0.3);
+    put(s.spot, { opacity: so, left: `${g.tx + x * g.s - 6}px`, top: `${g.ty + y * g.s - 6}px`, width: `${w * g.s + 12}px`, height: `${h * g.s + 12}px` });
+  }
+
+  // 2. Callouts on the key result.
+  let calls = "";
+  if (CKR.g && t > at(2, 2.8) && t < at(2, 7.8)) {
+    [[at(2, 3.0), at(2, 4.6), 305, "Objective", "What we want to achieve"], [at(2, 4.7), at(2, 5.6), 347, "Owner · deadline", "The Board, by 31 March 2027"],
+      [at(2, 5.7), at(2, 7.5), 455, "Key result", "Baseline 1 → target 2"]].forEach(([a, b, y, sm, text]) => {
+      const o = vis(t, a, b, 0.3, 0.3); if (o <= 0) return;
+      const [, sy] = toStage(CKR.g, 0, y), [sx] = toStage(CKR.g, 1120, 0);
+      calls += `<div class="call" style="left:${sx + 30}px;top:${sy - 30}px;opacity:${o}"><small>${sm}</small>${text}</div>`;
+    });
+  }
+
+  // 2–3. The company KR, linked to the departments and teams below it, then down the chain to a story.
+  const g2 = CROLL.g;
+  const [gx, gy] = along([[at(3, 0.1), 960, 236], [at(3, 0.9), CHAIN_X, CHAIN_Y(0)]], t);
+  CHAIN.forEach(([node, from], i) => {
+    const o = i === 0 ? vis(t, at(2, 14.9), at(4, 0.6), 0.5, 0.6) : vis(t, from, at(4, 0.6), 0.4, 0.6);
+    const [x, y] = i === 0 ? [gx, gy] : [CHAIN_X, CHAIN_Y(i)];
+    chipAt(node, x, y, o, t > at(3, 21.5) && t < at(4, 0.4), i === 0 ? 1 : lerp(0.9, 1, back(span(t, from, 0.4))));
+    if (i > 0 && t < at(4, 0.6)) svg += path(`M${CHAIN_X} ${CHAIN_Y(i - 1) + 38} L${CHAIN_X} ${CHAIN_Y(i) - 42}`, span(t, from - 0.1, 0.35), 1 - span(t, at(4, 0), 0.5));
+  });
+  if (g2 && t < at(3, 0.4)) {
+    // Departments below the company, and the team below its department.
+    const lo = 1 - span(t, at(3, 0), 0.4);
+    [[801, at(2, 15.2)], [1420, at(2, 15.6)]].forEach(([ix, from]) => {
+      const [cx, cy] = toStage(g2, ix, 249);
+      svg += path(`M960 272 C960 ${cy - 40} ${cx} 300 ${cx} ${cy - 8}`, span(t, from, 0.6), lo);
+    });
+    const [px, py] = toStage(g2, 801, 825), [tx2, ty2] = toStage(g2, 2038, 825);
+    svg += path(`M${px} ${py + 8} C${px} ${py + 70} ${tx2} ${ty2 + 70} ${tx2} ${ty2 + 12}`, span(t, at(2, 16.0), 0.7), lo);
+  }
+  if (CROLL.g && t > at(2, 16.4) && t < at(2, 18.2)) {
+    const o = vis(t, at(2, 16.5), at(2, 18.2), 0.3, 0.3), [lx, ly] = toStage(g2, 1420, 825);
+    calls += `<div class="call" style="left:${lx - 150}px;top:${ly + 70}px;opacity:${o}"><small>Department → team</small>Tip Calc plans below Payments</div>`;
+  }
+  if (MAP.g && t > at(3, 19.6) && t < at(4, 0.6)) {
+    const [mx, my] = toStage(MAP.g, 528, 643);
+    svg += path(`M${CHAIN_X - 172} ${CHAIN_Y(4)} C${CHAIN_X - 260} ${CHAIN_Y(4)} ${mx + 80} ${my} ${mx + 12} ${my}`, span(t, at(3, 20.7), 0.5), 1 - span(t, at(4, 0), 0.5));
+  }
+  if (BETS.g) {
+    [[at(3, 13.5), at(3, 16.8), "Hypothesis", "What we believe will move it"], [at(3, 16.8), at(3, 18.9), "Review date", "When we decide: continue, change or stop"]].forEach(([a, b, sm, text], i) => {
+      const o = vis(t, a, b, 0.3, 0.3); if (o <= 0) return;
+      calls += `<div class="call" style="left:300px;top:${i ? 760 : 780}px;opacity:${o}"><small>${sm}</small>${text}</div>`;
+    });
+  }
+
+  // 4–5. Editor: the spec types in, then marks red, green, and changed.
+  const edO = vis(t, at(4, 0.2), at(6, 0.3), 0.6, 0.5);
+  put(ED, { opacity: edO, visibility: edO > 0 ? "visible" : "hidden", transform: `translateY(${lerp(60, 0, dec(span(t, at(4, 0.2), 0.8)))}px)` });
+  if (edO > 0) {
+    $("code").innerHTML = FEAT.map(([html, from, typed], i) => {
+      if (!from || t < from) return `<div class="ln"><span class="n">${i + 1}</span><span class="x"> </span></div>`;
+      let x = typed ? esc(typeOut(html, t, from, 0.6)) : html;
+      if (i === EDIT.line && t >= EDIT.from) x += `<span style="color:var(--warn);font-weight:600">${esc(typeOut(EDIT.text, t, EDIT.from + 0.2, 0.6))}</span>`;
+      const m = MARKS.filter(([l, a, b]) => l === i && t >= a && t < b).pop();
+      const tick = m && (m[3] === "bad" || m[3] === "good") ? `  <span style="color:${m[3] === "good" ? "var(--accent)" : "#D64545"};font-weight:700">${m[3] === "good" ? "✓" : "✗"}</span>` : "";
+      return `<div class="ln${m ? ` ${m[3]}` : ""}"><span class="n">${i + 1}</span><span class="x">${x}${tick}</span></div>`;
+    }).join("");
+    EDCALL.forEach(([l, a, b, text]) => {
+      const o = vis(t, a, b, 0.3, 0.4); if (o <= 0) return;
+      calls += `<div class="call" style="left:${150 + 900 + lerp(20, 0, dec(span(t, a, 0.4)))}px;top:${160 + 56 + l * 31 - 6}px;opacity:${o * edO}">${text}</div>`;
+    });
+    const so = vis(t, at(4, 12.2), at(4, 15.6), 0.3, 0.4);
+    if (so > 0) calls += `<div class="call" style="left:1070px;top:860px;opacity:${so}"><small>One file in the repo</small>Read by people. Run as tests.</div>`;
+    const ao = vis(t, at(5, 8.4), at(5, 10.3), 0.3, 0.4);
+    if (ao > 0) calls += `<div class="call" style="left:1070px;top:860px;opacity:${ao}"><small>Approval</small>A person approves, not the agent</div>`;
+  }
+
+  // 2. The pull request: open, checked, reviewed, merged.
+  const prO = vis(t, at(2, 10.9), at(2, 14.8), 0.5, 0.5);
+  put(PR, { opacity: prO, visibility: prO > 0 ? "visible" : "hidden", transform: `translateY(${lerp(40, 0, dec(span(t, at(2, 10.9), 0.7)))}px)` });
+  if (prO > 0) {
+    const merged = t >= at(2, 12.4);
+    $("prst").textContent = merged ? "Merged" : "Open";
+    put($("prst"), { background: merged ? "#6E40C9" : "var(--accent)" });
+    put($("prchk"), { opacity: span(t, at(2, 11.2), 0.3) });
+    put($("prrev"), { opacity: span(t, at(2, 11.7), 0.3) });
+  }
+
+  // Agent terminal: everything that has started and not been cleared, newest at the bottom.
+  const twO = Math.max(vis(t, at(2, 7.5), at(2, 14.8), 0.5, 0.5), vis(t, at(4, 10.2), at(6, 0.3), 0.5, 0.5), vis(t, at(6, 8.7), at(7, 0), 0.5, 0.5));
+  put(TW, { opacity: twO, visibility: twO > 0 ? "visible" : "hidden" });
+  if (twO > 0) {
+    const live = TERM.filter((e) => t >= e[1] && t < e[2]);
+    const typing = live.find((e) => e[0] === "you" && t < e[1] + typedFor(e) + 0.25);
+    const cwd = [...live].reverse().find((e) => e[5]);
+    $("twcwd").textContent = `· ${cwd ? cwd[5] : "tip-calc"}`;
+    $("term").innerHTML = live.map((e) => {
+      const [kind, from, , text, hl] = e;
+      if (kind === "you") return `<div class="l you"><b>›</b>${esc(typeOut(text, t, from, typedFor(e)))}${e === typing ? `<span id="tcaret"></span>` : ""}</div>`;
+      if (kind === "ag") { const w = text.split(" "); return `<div class="l ag">${esc(w.slice(0, Math.ceil(w.length * span(t, from, Math.max(0.4, w.length / 14)))).join(" "))}</div>`; }
+      if (kind === "cmd") return `<div class="l cmd"><b>$</b> ${esc(text)}</div>`;
+      const h = (hl || []).filter(([a]) => t >= a).pop();
+      return `<div class="l out${h ? ` ${h[1]}` : ""}">${text || " "}</div>`;
+    }).join("");
+  }
+
+  // 6. Per-story files, two branches, one merge; the team repo joined to its department and the company.
+  const fO = vis(t, at(6, 0.2), at(7, 0.2), 0.5, 0.5);
+  FILES.forEach((f) => {
+    const o = fO * span(t, at(6, 0.3) + f.i * 0.25, 0.4);
+    put(f.node, { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `translateY(${lerp(30, 0, dec(span(t, at(6, 0.3) + f.i * 0.25, 0.5)))}px)` });
+    if (o <= 0) return;
+    const moved = f.br && t >= at(6, f.br === "a" ? 7.8 : 8.2);
+    f.node.querySelector(".body").innerHTML = moved ? yk(esc(f.after)).replace("in_progress", `<span class="hv">in_progress</span>`) : yk(esc(f.body));
+    put(f.node.querySelector(".tag"), { opacity: f.br ? span(t, at(6, f.br === "a" ? 7.6 : 8.0), 0.3) : 0 });
+  });
+  const rcO = vis(t, at(6, 0.3), at(6, 8.8), 0.4, 0.4);
+  REPOS.forEach(([n, x, from], i) => {
+    chipAt(n, x, 205, rcO * span(t, from, 0.4));
+    if (i > 0) svg += path(`M${REPOS[i - 1][1] + 150} 205 L${x - 150} 205`, span(t, from - 0.2, 0.4), rcO);
+  });
+  put(MERGED, { left: "150px", top: "750px", opacity: fO * vis(t, at(6, 8.5), at(7, 0.2), 0.4, 0.5), visibility: fO > 0 ? "visible" : "hidden" });
+
+  // 7. The real files, labelled.
+  const tO = vis(t, at(7, 1.8), at(7, 12.9), 0.5, 0.5);
+  [T1, T2].forEach((n, i) => {
+    const o = tO * span(t, at(7, 1.9) + i * 0.3, 0.4);
+    put(n, { opacity: o, visibility: o > 0 ? "visible" : "hidden" });
+    n.querySelectorAll(".r").forEach((r) => r.classList.toggle("on", (r.dataset.k === "settings" && t >= at(7, 9.7)) || (r.dataset.k === "ci" && t >= at(7, 10.5))));
+  });
+  chipAt(OSS, 960, 190, vis(t, at(7, 0.3), at(7, 12.9), 0.5, 0.5), t >= at(7, 10.6) && t < at(7, 12.6));
+  put(FORGE, { left: "830px", top: "640px", opacity: tO * span(t, at(7, 2.8), 0.4), visibility: tO > 0 ? "visible" : "hidden" });
+  put(START, { left: "750px", top: "420px", opacity: tO * vis(t, at(7, 5.8), at(7, 9.4), 0.4, 0.4), visibility: tO > 0 ? "visible" : "hidden" });
+  $("starttyped").textContent = typeOut("npx nikos start", t, at(7, 6.0), 0.6);
+  SHAPE.forEach(([n, key, tr, row, side], i) => {
+    const o = tO * span(t, at(7, 9.7) + i * 0.8, 0.4);
+    const r = tr.getBoundingClientRect();
+    put(n, { opacity: o, visibility: o > 0 ? "visible" : "hidden", left: `${r.left}px`, top: `${r.bottom + 24}px` });
+  });
+  if (tO > 0) { const o = vis(t, at(7, 10.6), at(7, 12.9), 0.3, 0.4); if (o > 0) calls += `<div class="call" style="left:1190px;top:156px;opacity:${o}"><small>The tool itself</small>Fork it. Change it.</div>`; }
+
+  // 7. A company's own view of the plan, at its own address.
+  const vo2 = vis(t, at(7, 13.4), at(8, 0.2), 0.3, 0.4);
+  if (vo2 > 0) calls += `<div class="call" style="left:1250px;top:770px;opacity:${vo2}"><small>Your own view</small>One HTML file in the company repo</div>`;
+
+  // 8. The whole connection, card by card, grouped by repo.
+  const rO = vis(t, at(8, 0), END + 0.9, 0.4, 0.4);
+  CARDS.forEach((cd, i) => {
+    const o = rO * span(t, cd.from, 0.4);
+    const sc = lerp(0.92, 1, back(span(t, cd.from, 0.45)));
+    put(cd.node, { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `scale(${sc})` });
+    put(cd.cap, { opacity: o, visibility: o > 0 ? "visible" : "hidden" });
+    if (i > 0 && rO > 0) svg += path(`M${cd.x - 36} 500 L${cd.x - 6} 500`, span(t, cd.from - 0.1, 0.3), rO);
+  });
+  BRACKETS.forEach(([n, x0, x1, from]) => {
+    const o = rO * span(t, from, 0.4);
+    put(n, { opacity: o, visibility: o > 0 ? "visible" : "hidden", left: `${(x0 + x1) / 2}px`, top: "636px", transform: "translateX(-50%)" });
+    if (o > 0) svg += path(`M${x0 + 4} 604 L${x0 + 4} 614 L${x1 - 4} 614 L${x1 - 4} 604`, span(t, from, 0.5), rO);
+  });
+
+  $("ovg").innerHTML = svg;
+  $("calls").innerHTML = calls;
+
+  // Close: the end card opens as a circle from the centre.
+  const er = std(span(t, END, 0.9));
+  put($("end"), { visibility: t >= END ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 1200, er)}px at 960px 540px)` });
+  [".e0", ".e1", ".e2", ".e3", ".e4"].forEach((sel, i) => { const s0 = END + 0.6 + i * 0.3; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+};
+el(`<div id="calls" style="position:absolute;inset:0;z-index:40;pointer-events:none"></div>`);
+</script>
+</body>
+</html>

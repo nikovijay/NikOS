@@ -1,0 +1,9 @@
+music/
+video.mp4
+final.mp4
+still_*.jpg
+sheet.png
+node_modules/
+*.mjs
+package.json
+!voice.mjs

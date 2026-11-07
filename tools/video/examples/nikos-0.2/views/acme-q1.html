@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme · Q1 2027</title>
+<style>
+  :root { --navy: #14213D; --orange: #F26B1D; --ink: #1B1F2A; --muted: #6B7280; --line: #E5E7EB; --bg: #F7F7F5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  header { background: var(--navy); color: #fff; padding: 22px 48px; display: flex; align-items: center; gap: 18px; }
+  .logo { width: 38px; height: 38px; border-radius: 9px; background: var(--orange); display: grid; place-items: center; font: 800 22px Georgia, serif; }
+  header h1 { margin: 0; font: 700 24px Georgia, serif; letter-spacing: .01em; }
+  header .p { margin-left: auto; font-size: 14px; opacity: .75; }
+  main { padding: 30px 48px; display: grid; grid-template-columns: 420px 1fr; gap: 28px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; }
+  .k { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .big { font: 700 34px Georgia, serif; margin: 6px 0 2px; }
+  .bar { height: 12px; border-radius: 6px; background: #EEF0F3; overflow: hidden; margin: 14px 0 8px; }
+  .bar i { display: block; height: 100%; background: var(--orange); border-radius: 6px; }
+  .row { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }
+  .tree { list-style: none; margin: 14px 0 0; padding: 0; }
+  .node { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; background: #fff; }
+  .node .who { width: 170px; font-weight: 700; }
+  .node .what { flex: 1; }
+  .node .sm { font-size: 13px; color: var(--muted); }
+  .mini { width: 120px; height: 8px; border-radius: 4px; background: #EEF0F3; overflow: hidden; }
+  .mini i { display: block; height: 100%; background: var(--navy); }
+  .pct { width: 44px; text-align: right; font-weight: 700; font-size: 14px; }
+  .tag { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #FDEBDD; color: #A8470C; }
+  .gap { color: var(--muted); font-style: italic; }
+  footer { padding: 0 48px 24px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header><div class="logo">A</div><h1>Acme · How we're doing</h1><span class="p" id="period"></span></header>
+<main>
+  <section class="card" id="company"></section>
+  <section class="card"><div class="k">Who's contributing</div><ul class="tree" id="tree"></ul></section>
+</main>
+<footer id="foot"></footer>
+<script>
+  const pct = (p) => Math.round((p || 0) * 100);
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  nikos.data().then((d) => {
+    document.getElementById("period").textContent = d.plan.period || "";
+    const kr = d.krs[0];
+    document.getElementById("company").innerHTML = kr ? `<div class="k">Company key result · ${esc(kr.owner)}</div>
+      <div class="big">${esc(kr.title)}</div>
+      <div class="bar"><i style="width:${pct(kr.progress)}%"></i></div>
+      <div class="row"><span>${kr.baseline} → ${kr.target} by ${esc(kr.by)}</span><b>${kr.latestValue ?? kr.baseline} now</b></div>` : "No company key result yet.";
+    // Each nested plan right under the plan it sits below.
+    const all = (d.downstream && d.downstream.plans) || [];
+    const plans = all.filter((p) => !p.via).flatMap((p) => [p, ...all.filter((q) => p.repo && q.via === p.repo)]);
+    document.getElementById("tree").innerHTML = plans.map((p) => {
+      const pad = p.via ? "margin-left:40px" : "";
+      if (!p.krs.length && !p.bets.length) return `<li class="node" style="${pad}"><span class="who">${esc(p.name)}</span><span class="what gap">${esc(p.state)}</span></li>`;
+      const krs = p.krs.map((k) => `<li class="node" style="${pad}"><span class="who">${esc(p.name)}</span><span class="what">${esc(k.title)}<div class="sm">aligned to ${esc(k.aligns_to || "—")}</div></span><span class="mini"><i style="width:${pct(k.progress)}%"></i></span><span class="pct">${pct(k.progress)}%</span></li>`).join("");
+      const bets = p.bets.map((b) => `<li class="node" style="${p.via ? "margin-left:80px" : "margin-left:40px"}"><span class="who">Bet</span><span class="what">${esc(b.id)}<div class="sm">${esc(b.outcome)}</div></span><span class="tag">${esc(b.delivery)}</span></li>`).join("");
+      return krs + bets;
+    }).join("");
+    document.getElementById("foot").textContent = `From ${d.downstream ? d.downstream.repo : "this repo"} · plans below read ${plans.find((p) => p.fetched)?.fetched || "not yet"}`;
+  });
+</script>
+</body>
+</html>
