@@ -4,6 +4,7 @@ import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "ya
 import { featureStoryIds, findIntentDir, isDone, read, setFeatureTag, walk } from "../lib/project.js";
 import { storyMapOf } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
+import { loadApprovals } from "../lib/approvals.js";
 import { failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
 import { validate, type ValidationResult } from "./validate.js";
@@ -178,13 +179,18 @@ export function checkRelease(input: { number: number; run?: boolean }, dir: stri
   // approval.policy: required-for-release makes a done story without a sign-off a gap.
   const needApproval = resolveSettings(dirname(findIntentDir(dir)))["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
+  // A done story with an approval on file that no longer holds: say so, as validate does.
+  const signedOff = loadApprovals(findIntentDir(dir));
+  const lapsed = (s: (typeof live)[number]) => s.status === "done" && !!signedOff[s.id];
   const gaps: string[] = [];
   for (const s of live) {
     if (!isDone(s.status)) gaps.push(`${s.id} is ${STATUS_WORD[s.status] ?? s.status}`);
     if (s.blocked) gaps.push(`${s.id} is blocked`);
     if (!s.criteria.length) gaps.push(`${s.id} has no scenarios`);
-    if (s.specChanged) gaps.push(`${s.id}'s feature changed after it was ${s.status}`);
-    if (needApproval && s.status === "done" && !s.specChanged) gaps.push(`${s.id} isn't approved`);
+    if (s.specChanged) gaps.push(`${s.id}'s feature changed after it was ${s.status}${lapsed(s) ? `, so ${signedOff[s.id].by}'s approval no longer holds` : ""}`);
+    else if (needApproval && s.status === "done") {
+      gaps.push(lapsed(s) ? `${s.id} isn't approved: it went through done again since ${signedOff[s.id].by} approved it` : `${s.id} isn't approved`);
+    }
     const outside = s.waitingOn.filter((d) => !inRelease.has(d));
     if (outside.length) gaps.push(`${s.id} depends on ${outside.join(", ")}, which ${outside.length === 1 ? "isn't" : "aren't"} done`);
   }

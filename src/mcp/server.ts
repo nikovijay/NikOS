@@ -29,7 +29,7 @@ import { verify } from "../commands/verify.js";
 import { count, read } from "../lib/project.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
-import { joinPlan } from "../commands/join.js";
+import { describeJoin, joinPlan } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 import { migrate } from "../commands/migrate.js";
@@ -122,9 +122,7 @@ export function createServer(repo: string): McpServer {
     repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
   }, (a) => {
     const r = joinPlan(root, a);
-    return text(
-      `${r.added ? `Joined ${r.repo}` : `Already joined to ${r.repo}`}.\n${r.sync.synced.map((s) => `✓ ${s.repo}${s.via ? ` (above ${s.via})` : ""}`).join("\n")}${r.sync.unresolved.map((u) => `\n? ${u.repo}: ${u.reason}`).join("")}\n\nSettings here now:\n${formatSettings(r.settings)}`,
-    );
+    return { ...text(describeJoin(r)), isError: !r.fetched };
   });
   tool("link_ticket", "Link a story to its tracker ticket (e.g. PAY-123, ENG-42, #57).", { id: z.string(), ticket: z.string() }, (a) => {
     const r = linkTicket(a, root);

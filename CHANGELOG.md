@@ -12,6 +12,19 @@
 
 - `nikos doctor` and `nikos migrate` say "1 story" and "1 approval", not
   "1 stories" and "1 approvals".
+- `nikos release check` says when a story's approval no longer holds: "TC-1's
+  feature changed after it was done, so Niko's approval no longer holds", and,
+  when approvals are required, "TC-1 isn't approved: it went through done again
+  since Niko approved it".
+- `nikos join` no longer says "Joined" when it can't fetch the plan. It says it
+  couldn't, that the entry stays listed for a later `nikos planning sync`, and
+  how to drop it.
+- Moving a story to done names steps that are still pending, or have no step
+  definition yet, as well as the failing scenarios.
+- A key result with no check-ins reads "no check-ins yet" in the rollout and on
+  the dashboard, instead of "stale".
+- The dashboard's Rollout tab no longer says "no repo yet" twice for a plan
+  without a repo.
 
 ## 0.2.1 (2026-11-06)
 

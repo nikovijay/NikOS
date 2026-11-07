@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { init } from "../src/commands/init";
 import { setupVerify } from "../src/commands/verify";
-import { setState } from "../src/commands/state";
+import { setState, stepTrouble } from "../src/commands/state";
 import { approve, runApprove } from "../src/commands/approve";
 import { next } from "../src/commands/next";
+import { checkRelease } from "../src/commands/release";
 import { validate } from "../src/commands/validate";
 import { renderMap, storyMapOf } from "../src/commands/map";
 import { show } from "../src/commands/show";
@@ -174,5 +175,44 @@ describe("personas and story types", () => {
     expect(html).toContain('data-type="technical" data-personas="planner ghost"');
     expect(html).toContain('<span class="stype">Technical</span>');
     expect(html).toContain("<li>For Weekly planner, ghost</li>");
+  });
+});
+
+describe("release check and approvals", () => {
+  const signed = (intent: string) => {
+    const hash = specHash(readFileSync(feature(intent, "add-a-task.feature"), "utf8"));
+    writeFileSync(join(intent, "approvals.yaml"), `format_version: 1\napprovals:\n  HT-1: { by: Niko, on: 2026-11-06, via: chat, spec_hash: "${hash}", done_at: 2026-11-03 }\n`);
+  };
+
+  it("says when a changed feature means an approval no longer holds", () => {
+    const intent = copyExample();
+    signed(intent);
+    expect(checkRelease({ number: 1 }, intent).gaps).not.toContain("HT-1's feature changed after it was done");
+    edit(feature(intent, "add-a-task.feature"), (s) => s.replace(/Scenario: (.*)/, "Scenario: $1 quickly"));
+    edit(join(intent, "state.yaml"), (s) => s.replace("plan_version: 2", `plan_version: 2\n    spec_hash: ${"abcdef123456"}`));
+    expect(checkRelease({ number: 1 }, intent).gaps).toContain("HT-1's feature changed after it was done, so Niko's approval no longer holds");
+  });
+
+  it("says why a story isn't approved when approvals are required and it went through done again", () => {
+    const intent = copyExample();
+    signed(intent);
+    writeFileSync(join(intent, "../nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\n");
+    expect(checkRelease({ number: 1 }, intent).gaps).not.toContain("HT-1 isn't approved");
+    edit(join(intent, "state.yaml"), (s) => s.replace("plan_version: 2", "plan_version: 2\n    done_at: 2026-11-07T09:00:00Z"));
+    expect(checkRelease({ number: 1 }, intent).gaps).toContain("HT-1 isn't approved: it went through done again since Niko approved it");
+    // With approvals optional, a lapsed approval doesn't hold the release back.
+    writeFileSync(join(intent, "../nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: optional\n");
+    expect(checkRelease({ number: 1 }, intent).gaps.filter((g) => g.startsWith("HT-1"))).toEqual([]);
+  });
+});
+
+describe("step trouble", () => {
+  it("names pending and undefined steps from the runner's tally", () => {
+    expect(stepTrouble("1 scenario (1 pending)\n3 steps (1 pending, 2 skipped)\n")).toEqual(['1 step still returns "pending": replace it with a real check in the step definitions']);
+    expect(stepTrouble("1 scenario (1 undefined)\n3 steps (2 undefined, 1 passed)\n")).toEqual([
+      "2 steps have no step definition yet: add them to the step definitions (the runner's output has a snippet to start from)",
+    ]);
+    expect(stepTrouble("0 features passed, 1 failed\n1 scenario passed\n0 steps passed, 0 failed, 1 skipped, 2 undefined\n")[0]).toMatch(/^2 steps have no step definition yet/);
+    expect(stepTrouble("1 scenario (1 failed)\n3 steps (1 failed, 2 passed)\n")).toEqual([]);
   });
 });

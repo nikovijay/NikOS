@@ -27,7 +27,8 @@ export interface DownstreamPlan {
   /** Its last sync of the plan it joined: when, and whether it read this repo's current commit. */
   synced?: { on: string; commit: string; current?: boolean };
   delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number };
-  krs: { id: string; title: string; aligns_to?: string; progress: number; stale: boolean }[];
+  /** stale: no check-in within its window. checkedIn: it has had at least one. */
+  krs: { id: string; title: string; aligns_to?: string; progress: number; stale: boolean; checkedIn: boolean }[];
   bets: { id: string; outcome: string; delivery: string; krs: string[] }[];
 }
 
@@ -99,7 +100,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const krs = krIds(dir).flatMap((id) => {
     try {
       const k = loadKr(dir, id).data;
-      return [{ id, title: k.title, ...(k.aligns_to ? { aligns_to: k.aligns_to } : {}), progress: progress(k), stale: isStale(k) }];
+      return [{ id, title: k.title, ...(k.aligns_to ? { aligns_to: k.aligns_to } : {}), progress: progress(k), stale: isStale(k), checkedIn: (k.checkins?.length ?? 0) > 0 }];
     } catch {
       return [];
     }
@@ -189,7 +190,7 @@ export function formatRollout(r: Rollout): string {
     out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
     if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? ", behind this plan: ask them to run nikos planning sync" : ""}`);
     if (p.delivery) out.push(`    delivery: ${p.delivery.done} of ${p.delivery.stories} stories done${p.delivery.approved ? ` (${p.delivery.approved} approved)` : ""}, ${p.delivery.inProgress} in progress`);
-    for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to}` : ""}`);
+    for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to}` : ""}`);
     for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}`);
   }
   return out.join("\n");

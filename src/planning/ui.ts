@@ -192,10 +192,10 @@ function rolloutView() {
       var pct = p.delivery.stories ? Math.round(p.delivery.done / p.delivery.stories * 100) : 0;
       rows.push(esc(p.delivery.done) + ' of ' + esc(p.delivery.stories) + ' stories done' + (p.delivery.approved ? ', ' + esc(p.delivery.approved) + ' approved' : '') + '<div class="progress"><div style="width:' + pct + '%"></div></div>');
     }
-    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (k.stale ? ' ' + chip('Stale', 'amber') : '') + (k.aligns_to ? ' <span class="muted">→ ' + esc(k.aligns_to) + '</span>' : '') + '</li>'; })
+    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (!k.checkedIn ? ' ' + chip('No check-ins yet', '') : k.stale ? ' ' + chip('Stale', 'amber') : '') + (k.aligns_to ? ' <span class="muted">→ ' + esc(k.aligns_to) + '</span>' : '') + '</li>'; })
       .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + '</li>'; }));
     return '<div class="card"><div class="row"><strong>' + esc(p.name) + '</strong>' + chip(p.state, cls[p.state] || '') + '</div>' +
-      '<div class="muted">' + esc(p.repo || 'no repo yet') + (p.via ? ' · below ' + esc(p.via) : '') + (p.fetched ? ' · read ' + esc(p.fetched) : '') + '</div>' +
+      (p.repo ? '<div class="muted">' + esc(p.repo) + (p.via ? ' · below ' + esc(p.via) : '') + (p.fetched ? ' · read ' + esc(p.fetched) : '') + '</div>' : '') +
       (p.reason ? '<div class="muted" style="margin-top:6px">' + esc(p.reason) + '</div>' : '') +
       rows.map(function (x) { return '<div style="margin-top:8px">' + x + '</div>'; }).join('') +
       (refs.length ? '<ul class="checkins" style="margin-top:8px">' + refs.join('') + '</ul>' : '') + '</div>';
@@ -205,7 +205,8 @@ function rolloutView() {
 
 function krCard(k) {
   var chips = '';
-  if (k.stale) chips += chip('Stale', 'amber');
+  if (!k.checkins.length) chips += chip('No check-ins yet', '');
+  else if (k.stale) chips += chip('Stale', 'amber');
   if (k.upstream) chips += chip('Aligned to ' + k.upstream.ref, 'lock');
   var pct = Math.max(0, Math.min(100, Math.round(k.progress * 100)));
   return '<a class="card" href="#/kr/' + esc(k.id) + '">' +
