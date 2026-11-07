@@ -2,7 +2,7 @@
 // and, when something's missing, the next thing to do, in words an agent can act on.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { findIntentDir } from "../lib/project.js";
+import { count, findIntentDir } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { perStory } from "../lib/state-files.js";
@@ -36,7 +36,7 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
   add(
     v.errors.length
       ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in intent/`, next: "Run nikos validate and fix what it lists" }
-      : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${v.stories} stories in ${v.releases} releases${v.warnings.length ? `, ${v.warnings.length} warnings` : ""}`, ...(v.warnings.length ? { next: "Run nikos validate to see the warnings" } : {}) },
+      : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(v.releases, "release")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, ...(v.warnings.length ? { next: "Run nikos validate to see the warnings" } : {}) },
   );
 
   const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));

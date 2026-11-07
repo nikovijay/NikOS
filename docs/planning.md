@@ -146,7 +146,9 @@ company or department can see how the rollout is going.
 
 Entries take the same `repo`, `ref`, `host` and `url` as `upstream.yaml`.
 `nikos company init --departments` writes the names; `nikos planning
-downstream add "<name>" --repo <path>` adds one or gives it its repo.
+downstream add "<name>" --repo <path>` adds one or gives it its repo (add
+`--host` for GitLab, or `--url` for any other git url, including SSH or a local
+repo).
 
 `nikos planning rollout` clones each listed repo read-only into
 `.nikos/downstream/<repo>/` (gitignored), follows the plans each one lists in

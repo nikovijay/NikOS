@@ -24,7 +24,8 @@ Commands:
   status             Every bet's delivery and outcome, every key result's latest value
   validate           Check planning/ against its schemas
   sync [--check]     Fetch the plans in planning/upstream.yaml read-only into .nikos/upstream/
-  downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com)
+  downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com,
+                     --url <git url> for any other host, an SSH url or a local repo)
   rollout            How the plans below this one are doing: joined, last synced, delivery, and
                      the key results and bets that point here (--json, --offline, --as <repo path>)
   serve              Open the local dashboard (--port, --export <file>)`;
@@ -153,7 +154,7 @@ export async function runPlanning(args: string[]): Promise<number> {
         return await runSync(root, { check: has("check") });
       case "downstream":
         if (sub === "add" && id) {
-          const r = addDownstream(root, { name: id, repo: opt("repo"), host: opt("host") });
+          const r = addDownstream(root, { name: id, repo: opt("repo"), host: opt("host"), url: opt("url") });
           console.log(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
           return 0;
         }

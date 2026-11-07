@@ -5,7 +5,7 @@
 // Both layouts read and write the same through lib/state-files.ts.
 import { dirname, join } from "node:path";
 import { parse, parseDocument, stringify } from "yaml";
-import { findIntentDir, read } from "../lib/project.js";
+import { count, findIntentDir, read } from "../lib/project.js";
 import { approvalsDir, approvalsFile, stateDir, statePath, storyApprovalPath, storyFiles, storyStatePath } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { validate } from "./validate.js";
@@ -98,8 +98,8 @@ export function runMigrate(args: string[]): number {
     const r = migrate(dir, to);
     console.log(
       r.layout === "per-story"
-        ? `Moved ${r.states} stories to intent/state/<ID>.yaml${r.approvals ? ` and ${r.approvals} approvals to intent/approvals/<ID>.yaml` : ""}.`
-        : `Moved ${r.states} stories back to intent/state.yaml${r.approvals ? ` and ${r.approvals} approvals to intent/approvals.yaml` : ""}.`,
+        ? `Moved ${count(r.states, "story", "stories")} to intent/state/<ID>.yaml${r.approvals ? ` and ${count(r.approvals, "approval")} to intent/approvals/<ID>.yaml` : ""}.`
+        : `Moved ${count(r.states, "story", "stories")} back to intent/state.yaml${r.approvals ? ` and ${count(r.approvals, "approval")} to intent/approvals.yaml` : ""}.`,
     );
     if (r.codeowners) console.log(`Added a matching approvals rule to ${r.codeowners}.`);
     console.log("Commit the change in one go, on a branch nobody else is moving stories on.");

@@ -26,7 +26,7 @@ import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
-import { read } from "../lib/project.js";
+import { count, read } from "../lib/project.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { joinPlan } from "../commands/join.js";
@@ -159,14 +159,14 @@ export function createServer(repo: string): McpServer {
   });
   tool("migrate", "Move every story's state and approval to its own file (per-story), so parallel branches never conflict, or back (single-file). Ask the person first; commit it on its own.", { to: z.enum(["per-story", "single-file"]) }, (a) => {
     const r = migrate(root, a.to);
-    return text(`Moved ${r.states} stories${r.approvals ? ` and ${r.approvals} approvals` : ""} to the ${r.layout} layout${r.codeowners ? `, and added a matching approvals rule to ${r.codeowners}` : ""}.`);
+    return text(`Moved ${count(r.states, "story", "stories")}${r.approvals ? ` and ${count(r.approvals, "approval")}` : ""} to the ${r.layout} layout${r.codeowners ? `, and added a matching approvals rule to ${r.codeowners}` : ""}.`);
   });
   tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
     const r = rollout(root, { offline: a.offline });
     return text(formatRollout(r), { ...r });
   }, true);
   tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {
-    name: z.string(), repo: z.string().optional(), host: z.string().optional(),
+    name: z.string(), repo: z.string().optional(), host: z.string().optional(), url: z.string().optional(),
   }, (a) => {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
