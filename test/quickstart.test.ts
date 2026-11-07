@@ -27,7 +27,7 @@ describe("quickstart walkthrough", () => {
   });
 
   it("only uses commands nikos has", () => {
-    const commands = [...doc.matchAll(/npx -y nikos (\w+)/g)].map((m) => m[1]);
+    const commands = [...doc.matchAll(/npx -y nikos@latest (\w+)/g)].map((m) => m[1]);
     expect(new Set(commands)).toEqual(new Set(["init", "validate", "state", "verify"]));
   });
 

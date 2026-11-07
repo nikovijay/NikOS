@@ -17,7 +17,7 @@ npm pkg set type=module
 ## 2. Create the intent/ folder (1 minute)
 
 ```bash
-npx -y nikos init --name "Tip Calculator" --key TC
+npx -y nikos@latest init --name "Tip Calculator" --key TC
 ```
 
 You should see:
@@ -56,8 +56,8 @@ The scenario is the acceptance criterion: TC-1 isn't done until it passes.
 Check the folder is still well formed, and start the story:
 
 ```bash
-npx -y nikos validate
-npx -y nikos state set TC-1 in_progress
+npx -y nikos@latest validate
+npx -y nikos@latest state set TC-1 in_progress
 ```
 
 ```text
@@ -68,7 +68,7 @@ TC-1: todo → in_progress
 ## 4. Set up the runner (2 minutes)
 
 ```bash
-npx -y nikos verify setup
+npx -y nikos@latest verify setup
 npm install --save-dev @cucumber/cucumber@^12
 ```
 
@@ -76,7 +76,7 @@ npm install --save-dev @cucumber/cucumber@^12
 which runs every story in `intent/` as a test. Now run TC-1:
 
 ```bash
-npx -y nikos verify TC-1
+npx -y nikos@latest verify TC-1
 ```
 
 It fails, and says why: none of the three steps has any code behind it yet.
@@ -119,7 +119,7 @@ Then("the total is {float}", function (expected) {
 Run it again:
 
 ```bash
-npx -y nikos verify TC-1
+npx -y nikos@latest verify TC-1
 ```
 
 ```text
@@ -130,7 +130,7 @@ npx -y nikos verify TC-1
 ## 6. Call it done (1 minute)
 
 ```bash
-npx -y nikos state set TC-1 done
+npx -y nikos@latest state set TC-1 done
 ```
 
 ```text

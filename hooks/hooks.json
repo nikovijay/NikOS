@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f intent/storymap.yaml ] && npx -y nikos suggest --brief 2>/dev/null || true",
+            "command": "[ -f intent/storymap.yaml ] && npx -y nikos@latest suggest --brief 2>/dev/null || true",
             "timeout": 30
           }
         ]

@@ -1,6 +1,6 @@
 ---
 name: nikos-planning
-description: Plan objectives, key results and bets in the repo's planning/ folder, linked to the nikOS story map that delivers them. Use when someone wants to plan a period or quarter, set OKRs or key results, frame or review a bet, check in on their KRs, see or build a planning dashboard, or plan against a company or department plan in another repo.
+description: Plan objectives, key results and bets in the repo's planning/ folder, linked to the nikOS story map that delivers them. Use when someone wants to organise their company's or department's goals, plan a period or quarter, set OKRs or key results, frame or review a bet, check in on their KRs, see or build a planning dashboard, or plan against a company or department plan in another repo.
 ---
 
 # nikos-planning
@@ -27,9 +27,17 @@ is worked out from those stories; its outcome (open, awaiting evidence, won,
 lost, stopped) is only ever set from the key result evidence. Shipped is not
 won.
 
-The commands are `nikos planning …` (run `npx -y nikos planning …` when
-`nikos` isn't installed). Every write goes through them or the dashboard, so
-the same checks always run.
+The commands are `nikos planning …`. Check `nikos --version` against
+`npx -y nikos@latest --version` first: if `nikos` isn't installed or is older,
+run them as `npx -y nikos@latest planning …` and tell the person once that
+`npm install -g nikos@latest` updates theirs. Every write goes through them or
+the dashboard, so the same checks always run.
+
+With no `planning/` folder yet, set one up before planning: for a company or
+department, `nikos company init` in a folder of its own (the nikOS skill's
+onboard playbook walks through it); for a team, `nikos start` and then this
+skill's wizard. Never put company goals in `intent/constitution.md`: that's one
+product's vision, not the company's plan.
 
 ## How to work
 

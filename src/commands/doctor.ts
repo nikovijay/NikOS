@@ -11,6 +11,7 @@ import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { betIds, krIds, validatePlanning } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
+import { staleCliWarning } from "../lib/cli-version.js";
 import { validate } from "./validate.js";
 
 export interface Check {
@@ -98,6 +99,9 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
       add(problems.length ? { name: "upstream plans", status: "warn", found: problems.join("; "), next: "Run nikos planning sync" } : { name: "upstream plans", status: "ok", found: `${lock.length} synced and current` });
     } else add({ name: "upstream plans", status: "ok", found: `${lock.length} synced` });
   }
+  const stale = staleCliWarning();
+  if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
+
   if (planOnly) {
     let below: ReturnType<typeof downstreamEntries> = [];
     try {

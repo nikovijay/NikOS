@@ -108,7 +108,7 @@ describe("conversation rules", () => {
     const hooks = JSON.parse(readFileSync(join(__dirname, "../hooks/hooks.json"), "utf8"));
     const cmd = hooks.hooks.SessionStart[0].hooks[0].command as string;
     expect(cmd).toContain("[ -f intent/storymap.yaml ]");
-    expect(cmd).toContain("nikos suggest --brief");
+    expect(cmd).toContain("npx -y nikos@latest suggest --brief");
     expect(cmd).toMatch(/\|\| true$/);
   });
 
