@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- `nikos planning rollout` says when a plan further down is behind the plan it
+  sits below: "behind acme/payments-plan: ask them to run nikos planning sync",
+  in the text, in `--json` (`synced.current: false`) and on the dashboard's
+  Rollout tab. It used to say nothing.
 - `nikos doctor` and `nikos migrate` say "1 story" and "1 approval", not
   "1 stories" and "1 approvals".
 - `nikos release check` says when a story's approval no longer holds: "TC-1's
