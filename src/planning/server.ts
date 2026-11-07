@@ -15,6 +15,7 @@ import { checkIn, isStale, latest, progress } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
 import { rollout } from "./rollout.js";
 import { loadUpstream } from "./upstream.js";
+import { alignsList } from "./levels.js";
 import { renderDashboard } from "./ui.js";
 
 const MAX_BODY = 100_000;
@@ -30,7 +31,9 @@ A custom view is a page at planning/views/<name>.html (lowercase letters, digits
 
 window.nikos.data(): Promise<object>
   The dashboard data: { project, today, plan, krs, bets, story, upstream, views, problems }.
-  krs[]: id, title, owner, unit, baseline, target, by, latest, latestValue, progress, stale, hash, checkins, upstream.
+  krs[]: id, title, owner, unit, baseline, target, by, latest, latestValue, progress, stale, hash, checkins,
+    aligns_to (a list), upstream (the first key result it aligns to) and aligned (every one).
+  bets[] also carry aligns_to: the bets in the plan above they align to, as a list.
   bets[]: id, owner, team, hypothesis, krs, starts, review_on, deadline, confidence, outcome, reviews, body, hash, delivery, releases.
   upstream[] is read-only: plans synced from other repos. Never save to it.
 
@@ -110,7 +113,7 @@ export function planningData(root: string) {
           original_target: d.original_target,
           by: d.by,
           stale_after_days: d.stale_after_days ?? 14,
-          aligns_to: d.aligns_to ?? null,
+          aligns_to: alignsList(d.aligns_to),
           checkins: d.checkins ?? [],
           latest: last,
           latestValue: last ? last.value : d.baseline,
@@ -118,7 +121,8 @@ export function planningData(root: string) {
           stale: isStale(d),
           hash: kr.hash,
           file: kr.file,
-          upstream: upstreamRef(upstream, d.aligns_to),
+          upstream: upstreamRef(upstream, alignsList(d.aligns_to)[0]),
+          aligned: alignsList(d.aligns_to).map((r) => upstreamRef(upstream, r)),
         },
       ];
     } catch (err) {
@@ -138,6 +142,7 @@ export function planningData(root: string) {
           team: m.team ?? "",
           hypothesis: m.hypothesis,
           krs: { primary: m.krs?.primary ?? null, also: m.krs?.also ?? [] },
+          aligns_to: alignsList(m.aligns_to),
           starts: m.starts ?? null,
           review_on: m.review_on,
           deadline: m.deadline ?? null,

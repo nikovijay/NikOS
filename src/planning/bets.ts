@@ -3,6 +3,7 @@
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
 import { DATE, betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
+import { alignmentProblems, alignsValue } from "./levels.js";
 
 export interface BetInput {
   id: string;
@@ -14,6 +15,8 @@ export interface BetInput {
   deadline?: string;
   primary?: string;
   also?: string[];
+  /** The bets in the plan directly above that this one aligns to: none, one or several. */
+  alignsTo?: string[];
   confidence?: "low" | "medium" | "high";
   dependencies?: string[];
   evidence?: string;
@@ -30,12 +33,16 @@ export function newBet(input: BetInput, root: string): string {
   if (!input.owner?.trim()) throw new Error("A bet needs an owner (--owner)");
   if (!input.hypothesis?.trim()) throw new Error("A bet needs a hypothesis (--hypothesis)");
   if (!DATE.test(input.reviewOn ?? "")) throw new Error("A bet needs a review date (--review YYYY-MM-DD)");
+  const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
+  const problem = alignmentProblems(root, aligns, "bet")[0];
+  if (problem) throw new Error(problem);
   const meta = checked({
     id: input.id,
     owner: input.owner.trim(),
     ...(input.team ? { team: input.team } : {}),
     hypothesis: input.hypothesis.trim(),
     krs: { ...(input.primary ? { primary: input.primary } : {}), also: input.also ?? [] },
+    ...(aligns.length ? { aligns_to: alignsValue(aligns) } : {}),
     ...(input.starts ? { starts: input.starts } : {}),
     review_on: input.reviewOn,
     ...(input.deadline ? { deadline: input.deadline } : {}),

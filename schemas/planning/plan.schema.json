@@ -20,7 +20,7 @@
           "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
           "title": { "type": "string", "minLength": 1 },
           "owner": { "type": "string" },
-          "aligns_to": { "type": "string" }
+          "aligns_to": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }] }
         }
       }
     }

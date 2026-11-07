@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Plan levels follow the model in `docs/rfcs/plans-bets-story-maps.md`: OKRs stop
+  at department level. Company and department plans set objectives and key
+  results. A group plan only makes bets, aimed at the department's (or
+  company's) key results. `nikos planning validate` refuses key results and
+  objectives in a group plan, and `nikos planning kr new` won't write one there.
+- Bets can align to bets: a department bet to company bets, a group bet to
+  department bets (`aligns_to` on the bet card, `nikos planning bet new
+  --aligns-to`). The rollout draws them under the bets they align to.
+- `aligns_to` can name several key results or bets (repeat `--aligns-to`). A
+  single reference still works as before.
+- A key result or bet only aligns to the plan directly above it, of the level
+  above: `kr new` and `bet new` refuse anything else, and `validate` checks it
+  against the synced copy. A company plan aligns to nothing.
+- `nikos group init` writes a group plan. `nikos company init --level
+  department` writes a department plan.
+
+### Changed
+
+- A plan at `level: team` loads with a warning: teams are assigned story maps by
+  their group instead. Its key results and objectives are warnings, not errors,
+  until a later release migrates them.
+- `nikos planning rollout --json`, the dashboard's data and custom views give
+  `aligns_to` as a list on key results and bets. A key result also carries
+  `aligned`, every key result it aligns to. `upstream` is still the first.
+- The dashboard's guide shows company, department and group, with the story map
+  under a bet.
+
 ## 0.2.4 (2026-11-07)
 
 ### Added

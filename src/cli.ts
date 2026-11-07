@@ -15,7 +15,7 @@ import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runMigrate } from "./commands/migrate.js";
 import { runTracker } from "./commands/tracker.js";
-import { runCompany, runStart } from "./commands/start.js";
+import { runCompany, runGroup, runStart } from "./commands/start.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -47,6 +47,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   tracker: runTracker,
   start: runStart,
   company: runCompany,
+  group: runGroup,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -96,8 +97,10 @@ Commands:
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
   suggest          What to do next: where things stand and a short menu (--json, --brief)
-  company init     Write a company plan repo that departments and teams join
-                   (--name, --period, --departments, --repo, --host)
+  company init     Write a company plan repo that departments join, or a department's with
+                   --level department (--name, --period, --departments, --repo, --host)
+  group init       Write a group plan repo: bets aimed at the department's key results,
+                   and no key results of its own (--name, --period, --repo, --host)
   join <repo>      Plan against a company or department plan, and inherit its settings
                    (--host gitlab.com, --url, --ref)
   settings [set <key> <value>]  See the settings that apply here and where each comes

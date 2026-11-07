@@ -100,13 +100,13 @@ const yamlText = (data: unknown, flow: string[] = []) => {
   const doc = new Document(data);
   for (const key of flow) {
     const node = doc.getIn(key.split("."), true) as any;
-    if (node && typeof node === "object" && "flow" in node) node.flow = true;
+    if (node && typeof node === "object" && "items" in node) node.flow = true;
   }
   return doc.toString({ lineWidth: 0, flowCollectionPadding: false });
 };
 
-export const betText = (meta: any, body: string) => `---\n${yamlText(meta, ["krs.also", "dependencies"])}---\n${body}`;
-export const krText = (data: any) => yamlText(data);
+export const betText = (meta: any, body: string) => `---\n${yamlText(meta, ["krs.also", "aligns_to", "dependencies"])}---\n${body}`;
+export const krText = (data: any) => yamlText(data, ["aligns_to"]);
 
 export function loadBet(root: string, id: string): Bet {
   const path = join(paths(root).bets, `${id}.md`);
@@ -135,6 +135,8 @@ export function loadPlan(root: string): any | undefined {
 export interface PlanningIssue {
   file: string;
   message: string;
+  /** Worth fixing, but not a failure: validate still passes. */
+  warning?: boolean;
 }
 
 /** Check every planning file against its schema and the links between them. */

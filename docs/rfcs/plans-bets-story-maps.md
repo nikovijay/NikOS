@@ -138,6 +138,24 @@ status/<story-id>.yaml      the team's status for each assigned story, with evid
 approvals/<story-id>.yaml   delivery approvals: this spec, at this tested commit
 ```
 
+`nikos.team.yaml` also says who is in the team:
+
+```yaml
+name: Checkout web
+group: acme/payments/checkout-group
+members:
+  - name: Priya Shah
+    role: Lead          # free text
+    handle: priya-s     # GitHub or GitLab username, optional
+```
+
+The team edits its own members, reviewed like any change, and the group reads
+them from the team repo. Names, roles and usernames only: no emails or personal
+fields, since anyone who can read the repo can read the list. With handles set,
+verified approvals can check that an approver is a current member, and `nikos
+doctor` can suggest a CODEOWNERS rule for the team's lead. `nikos team member
+add`, `remove` and `nikos team show` manage it.
+
 `nikos sync` fetches the assigned stories and records the commit it read, the
 same way `nikos planning sync` does for plans. `nikos verify` runs the copied
 features against the team's own step definitions and code. `nikos state set`

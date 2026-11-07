@@ -19,19 +19,39 @@ planning/
 
 `nikos planning validate` checks every file against `schemas/planning/`.
 
+## Levels
+
+Each level is its own repo, and joins the one directly above it with
+`nikos join`.
+
+| Level | Objectives and key results | Bets |
+| --- | --- | --- |
+| Company | Yes | Yes, on company key results |
+| Department | Yes. A key result may align to one or more company key results, or be the department's own | Yes. A bet may align to one or more company bets, or stand on its own |
+| Group | No: OKRs stop at department level | Yes, on the department's (or company's) key results. A bet may align to one or more department bets, or stand on its own |
+
+`nikos company init` writes a company plan, `nikos company init --level
+department` a department's, and `nikos group init` a group's. A key result or
+bet aligns only to the plan directly above it: `nikos planning kr new` and `bet
+new` refuse anything else, and `nikos planning validate` checks it against the
+synced copy. A plan at `level: team`, from before 0.3, still loads with a
+warning: teams are assigned story maps by their group instead (see
+[the RFC](rfcs/plans-bets-story-maps.md)).
+
 ## plan.yaml
 
 **Purpose:** the planning context: the period, the level being planned
-(company, department, group or team), its strategic pillars and objectives.
+(company, department or group), its strategic pillars and objectives. A group
+plan has no objectives.
 
 ```yaml
 period: Q1 2027
-level: team
+level: department
 pillars: [Retention]
 objectives:
   - id: keep-plants-alive
     title: People keep their plants alive
-    aligns_to: acme/company-plan#plants-alive   # optional
+    aligns_to: acme/company-plan#plants-alive   # optional; a list for several
 ```
 
 ## krs/&lt;kr-id&gt;.yaml
@@ -48,7 +68,7 @@ baseline: 41
 target: 60
 original_target: 60        # kept when the target is revised
 by: 2027-03-31
-aligns_to: acme/company-plan#kr-2   # optional, another repo's key result
+aligns_to: acme/company-plan#kr-2   # optional: a company key result, or a list of several
 stale_after_days: 14       # optional, default 14
 checkins:
   - date: 2027-01-20
@@ -57,7 +77,8 @@ checkins:
     evidence: https://analytics.example.com/reminders
 ```
 
-Add one with `nikos planning kr new`, check in with `nikos planning checkin`,
+Key results live in company and department plans only. Add one with `nikos
+planning kr new` (`--aligns-to`, repeated for several), check in with `nikos planning checkin`,
 and revise a target with `nikos planning kr target` (the original stays).
 
 ## bets/&lt;bet-id&gt;.md
@@ -74,6 +95,7 @@ hypothesis: We believe reminders at each plant's real watering time get acted on
 krs:
   primary: reminders-acted-on
   also: [acme/company-plan#kr-2]
+aligns_to: [acme/company-plan#one-tap-pay]   # optional: bets in the plan directly above
 starts: 2027-01-06
 review_on: 2027-02-14
 deadline: 2027-03-31        # optional: only a hard deadline
@@ -98,7 +120,12 @@ reviews:
   that deliver the bet. The outcome only changes at a review: stop sets
   `stopped`; complete sets `won` or `lost` from the key result evidence.
 
-Write one with `nikos planning bet new`; review it with
+A bet's `aligns_to` names the bets in the plan directly above that it
+contributes to: a department bet to company bets, a group bet to department
+bets. Leave it out for a bet that's the plan's own. Its outcome still comes only
+from its own reviews.
+
+Write one with `nikos planning bet new` (`--aligns-to`, repeated for several); review it with
 `nikos planning bet review`.
 
 ## upstream.yaml and upstream.lock

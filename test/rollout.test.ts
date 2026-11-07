@@ -83,7 +83,7 @@ describe("rollout", () => {
     ]);
     // Payments synced the company plan at a commit before the departments were listed: behind.
     expect(by.Payments.synced).toMatchObject({ current: false });
-    expect(by.Payments.krs[0]).toEqual({ id: "pay-1", title: "Checkout conversion", aligns_to: "acme/company-plan#kr-1", progress: 0, stale: expect.any(Boolean), checkedIn: false });
+    expect(by.Payments.krs[0]).toEqual({ id: "pay-1", title: "Checkout conversion", aligns_to: ["acme/company-plan#kr-1"], progress: 0, stale: expect.any(Boolean), checkedIn: false });
     expect(by.Growth.reason).toBe("its planning/upstream.yaml doesn't list acme/company-plan yet");
     // The team joined its department, not the company, and has a story map.
     expect(by.Checkout).toMatchObject({ via: "acme/payments-plan", repo: "acme/payments/checkout" });
@@ -110,7 +110,7 @@ describe("rollout", () => {
     expect(r.tree.roots.map(shape)).toEqual([
       ["kr kr-1 (acme/company-plan)", ["kr pay-1 (Payments)", ["kr missed-important-tasks (Checkout)", ["bet fewer-missed-tasks (Checkout)"]], ["bet one-tap-pay (Payments)"]]],
     ]);
-    expect(r.tree.unaligned).toEqual([{ kind: "kr", id: "pay-2", title: "Refund time", plan: "Payments", repo: "acme/payments-plan", aligns_to: "acme/company-plan#kr-9", children: [] }]);
+    expect(r.tree.unaligned).toEqual([{ kind: "kr", id: "pay-2", title: "Refund time", plan: "Payments", repo: "acme/payments-plan", aligns_to: ["acme/company-plan#kr-9"], children: [] }]);
     // Nothing in the tree carries progress, so no parent can look further along than its own check-ins.
     expect(JSON.stringify(r.tree)).not.toMatch(/progress|checkedIn|stale/);
 
