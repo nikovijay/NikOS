@@ -228,9 +228,39 @@ Rules that keep it safe:
   local, single-person tool. A hosted, always-on, multi-person editing service
   is out of scope for nikOS.
 
-Open: how much of this a reader who doesn't use git can do (it needs the CLI
-and a clone today), and whether story editing in the dashboard should stop at
-titles and structure, leaving Gherkin scenarios to the agent.
+### For people who don't use git
+
+Someone who doesn't use git can still do their part, with a git user bringing
+it in:
+
+1. **A git user sends them an editable snapshot.** `nikos serve --export
+   plan.html --editable` writes the dashboard as one HTML file, as
+   `--export` does today, with editing switched on. It records the commit it
+   was made from. It contains only this repo's plan and the read-only copies
+   it already shows, so share it only with people allowed to see those.
+2. **They edit in their browser.** They open the file, with no install and no
+   network. They make their changes (a check-in, a new key result, a bet
+   review), and the same checks run in the page as in the CLI. Then they choose
+   **Download changes**.
+3. **They get a change file.** `<plan>-changes-<date>.nikos.json` lists each
+   change as an operation, such as "check in kr-2: 44 on 2027-01-20, evidence
+   …", not as raw file edits. It also records who made the changes (as they
+   typed it) and the commit the snapshot came from.
+4. **A git user applies it.** `nikos apply <file>` makes a branch and applies
+   each operation through the same commands. It runs validation and shows what
+   changed, then offers to commit and open a pull or merge request. If the plan
+   has moved on since the snapshot, each operation is checked against the
+   current files. One that no longer applies (say, a check-in on a key result
+   that was since removed) is listed with the reason, and the rest still apply.
+
+The change file holds no credentials and does nothing on its own: it only
+takes effect when a git user applies it and the change is merged, so
+review and approval rules still hold. The name typed in the browser is
+attribution, not verified identity (see `verified-approvals.md`).
+
+Open: whether story editing in the dashboard should stop at titles and
+structure, leaving Gherkin scenarios to the agent; and whether an editable
+snapshot should be limited to one level's own plan by default.
 
 ## The smallest setup
 
