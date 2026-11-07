@@ -9,7 +9,7 @@ import { joinPlan } from "../src/commands/join";
 import { newKr } from "../src/planning/krs";
 import { addDownstream, formatRollout, ownRepo, rollout } from "../src/planning/rollout";
 import { planningData } from "../src/planning/server";
-import { copyExample } from "./helpers";
+import { copyExample, edit } from "./helpers";
 
 const git = (cwd: string, ...args: string[]) => {
   const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
@@ -114,6 +114,10 @@ describe("rollout", () => {
       { name: "Data" },
     ]);
     expect(() => addDownstream(root, { name: "Bad", repo: "../etc" })).toThrow(/not a repo path/);
+    expect(() => addDownstream(root, { name: "Ops", url: "/srv/git/ops.git" })).toThrow("Give the repo path too (--repo)");
+    addDownstream(root, { name: "Ops", repo: "acme/ops-plan", url: "ssh://git@git.acme.internal/acme/ops-plan.git" });
+    expect(parse(readFileSync(join(root, "planning/downstream.yaml"), "utf8")).at(-1)).toEqual({ name: "Ops", repo: "acme/ops-plan", url: "ssh://git@git.acme.internal/acme/ops-plan.git" });
+    edit(join(root, "planning/downstream.yaml"), (s) => s.slice(0, s.indexOf("- name: Ops")));
     expect(rollout(root, { offline: true }).plans.map((p) => p.state)).toEqual(["unreachable", "no repo yet", "no repo yet"]);
   });
 });

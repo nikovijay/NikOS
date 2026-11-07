@@ -98,3 +98,6 @@ export function featureStoryIds(text: string): string[] {
   }
   return ids;
 }
+
+/** "1 story", "2 stories": a number with its noun. */
+export const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

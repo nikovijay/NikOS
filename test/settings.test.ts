@@ -1,3 +1,4 @@
+import { init } from "../src/commands/init";
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -104,6 +105,10 @@ describe("doctor", () => {
     const root = dirname(copyExample());
     const names = (cs: ReturnType<typeof doctor>) => cs.map((c) => `${c.status} ${c.name}`);
     expect(names(doctor(root, { offline: true }))).toEqual(["ok story map", "fail scenario runner", "warn CI", "ok approvals"]);
+    expect(doctor(root, { offline: true })[0].found).toBe("3 stories in 2 releases");
+    const one = mkdtempSync(join(tmpdir(), "nikos-one-"));
+    init(one, { name: "One", key: "ON" });
+    expect(doctor(one, { offline: true })[0].found).toBe("1 story in 1 release");
     writeFileSync(join(root, "package.json"), "{}");
     writeFileSync(join(root, "cucumber.mjs"), "export default {};\n");
     mkdirSync(join(root, ".github/workflows"), { recursive: true });

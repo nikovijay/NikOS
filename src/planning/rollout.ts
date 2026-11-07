@@ -196,10 +196,11 @@ export function formatRollout(r: Rollout): string {
 }
 
 /** List a department or team in planning/downstream.yaml, or give an entry already there its repo. */
-export function addDownstream(root: string, input: { name: string; repo?: string; host?: string }): { name: string; repo?: string; added: boolean } {
+export function addDownstream(root: string, input: { name: string; repo?: string; host?: string; url?: string }): { name: string; repo?: string; added: boolean } {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the department's or team's name");
-  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.host ? { host: input.host } : {}) };
+  if ((input.host || input.url) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
+  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
   if (input.repo) repoEntry(entry, "planning/downstream.yaml"); // a bad repo path or host fails before anything is written
   const p = join(root, "planning", "downstream.yaml");
   const doc = parseDocument(existsSync(p) ? readFileSync(p, "utf8") : "# The departments and teams that plan against this one: name, and their repo once they have one.\n[]\n");

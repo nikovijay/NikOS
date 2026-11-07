@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
@@ -11,7 +11,7 @@ import { next } from "../src/commands/next";
 import { newStory } from "../src/commands/story";
 import { validate } from "../src/commands/validate";
 import { storyMapOf } from "../src/commands/map";
-import { migrate } from "../src/commands/migrate";
+import { migrate, runMigrate } from "../src/commands/migrate";
 import { linkTicket } from "../src/commands/tracker";
 import { MemoryStore, withStore } from "../src/lib/store";
 import { walk } from "../src/lib/project";
@@ -62,6 +62,16 @@ describe("per-story files", () => {
       "state/notes.yaml: 'notes' is not a story id",
       "state/HT-9.yaml: HT-9 is an unknown story id",
     ]);
+  });
+
+  it("counts what it moved in words", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-count-"));
+    init(root, { name: "One", key: "ON" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(runMigrate(["per-story", "--dir", root])).toBe(0);
+    const out = log.mock.calls.map((c) => c.join(" "));
+    log.mockRestore();
+    expect(out[0]).toBe("Moved 1 story to intent/state/<ID>.yaml.");
   });
 
   it("refuses to move a repo with problems, so nothing is lost", () => {

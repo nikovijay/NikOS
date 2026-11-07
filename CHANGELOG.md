@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `nikos planning downstream add --url <git url>`, for a department or team on
+  another git host, over SSH or in a local repo. The MCP `add_downstream` tool
+  takes it too.
+
+### Fixed
+
+- `nikos doctor` and `nikos migrate` say "1 story" and "1 approval", not
+  "1 stories" and "1 approvals".
+
 ## 0.2.1 (2026-11-06)
 
 ### Added
