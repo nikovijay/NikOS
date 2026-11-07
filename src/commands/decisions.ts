@@ -1,6 +1,6 @@
 import { store } from "../lib/store.js";
-import { join } from "node:path";
-import { findIntentDir, read } from "../lib/project.js";
+import { relative } from "node:path";
+import { decisionsPath, read } from "../lib/project.js";
 
 export interface DecisionEntry {
   /** First and last line of the entry in decisions.md, 1-based. */
@@ -14,7 +14,7 @@ const STOP = new Set(["the", "and", "for", "why", "did", "was", "were", "are", "
 
 /** Every "## " entry in decisions.md, with its line range. HTML comments are skipped. */
 export function decisionEntries(dir: string): DecisionEntry[] {
-  const path = join(findIntentDir(dir), "decisions.md");
+  const path = decisionsPath(dir);
   if (!store().exists(path)) return [];
   const lines = read(path).split("\n");
   const entries: DecisionEntry[] = [];
@@ -58,9 +58,12 @@ export function findDecisions(query: string, dir: string): DecisionEntry[] {
     .map((m) => m.e);
 }
 
-export function formatDecisions(query: string, found: DecisionEntry[]): string {
-  if (!found.length) return `No decision in intent/decisions.md mentions "${query}".`;
-  return found.map((e) => `intent/decisions.md:${e.start}-${e.end}\n${e.text}`).join("\n\n");
+/** decisions.md as the repo names it: intent/decisions.md, or planning/decisions.md in a plan-only repo. */
+const fileName = (dir?: string) => (dir ? relative(dir, decisionsPath(dir)) : "intent/decisions.md");
+
+export function formatDecisions(query: string, found: DecisionEntry[], dir?: string): string {
+  if (!found.length) return `No decision in ${fileName(dir)} mentions "${query}".`;
+  return found.map((e) => `${fileName(dir)}:${e.start}-${e.end}\n${e.text}`).join("\n\n");
 }
 
 export function runDecisions(args: string[]): number {
@@ -71,6 +74,6 @@ export function runDecisions(args: string[]): number {
     console.error('Usage: nikos decisions "<topic or story id>" [--dir <path>]');
     return 1;
   }
-  console.log(formatDecisions(query, findDecisions(query, dir)));
+  console.log(formatDecisions(query, findDecisions(query, dir), dir));
   return 0;
 }

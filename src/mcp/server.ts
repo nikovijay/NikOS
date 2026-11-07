@@ -99,7 +99,7 @@ export function createServer(repo: string): McpServer {
     if (!file) throw new Error(`No feature file is tagged @${a.id}`);
     return text(formatClear(clear(read(file))));
   }, true);
-  tool("find_decisions", "Quote the decisions.md entries that mention a topic or a story id.", { query: z.string() }, (a) => text(formatDecisions(a.query, findDecisions(a.query, root))), true);
+  tool("find_decisions", "Quote the decisions.md entries that mention a topic or a story id.", { query: z.string() }, (a) => text(formatDecisions(a.query, findDecisions(a.query, root), root)), true);
   tool("check_release", "Is a release ready to ship? Lists what's in the way. run: rerun each done story's scenarios.", { number: z.number().int(), run: z.boolean().optional() }, (a) => {
     const r = checkRelease({ number: a.number, run: a.run }, root);
     return text(`Release ${r.number} · ${r.title}: ${r.ready ? "ready" : "not ready"} — ${r.summary}${r.gaps.map((g) => `\n  ✗ ${g}`).join("")}`, r as unknown as Record<string, unknown>);

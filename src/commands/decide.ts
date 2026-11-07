@@ -1,7 +1,11 @@
 import { store } from "../lib/store.js";
-import { join } from "node:path";
-import { STORY_ID, findIntentDir, read } from "../lib/project.js";
+import { STORY_ID, decisionsPath, isPlanOnly, read } from "../lib/project.js";
 import { formatResult, validate } from "./validate.js";
+
+const PLAN_DECISIONS = `# Decisions
+
+What this plan decided and why, newest last. Add one with \`nikos decide\`; earlier entries are never edited.
+`;
 
 const CATEGORIES = ["product", "architecture", "design", "interface", "process"];
 
@@ -22,8 +26,11 @@ export function decide(input: DecisionInput, dir: string): string {
   if (input.story && !STORY_ID.test(input.story)) throw new Error(`'${input.story}' is not a story id (expected e.g. HT-1)`);
   const category = input.category ?? "architecture";
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
-  const path = join(findIntentDir(dir), "decisions.md");
-  if (!store().exists(path)) throw new Error("No intent/decisions.md. Run `nikos init` first.");
+  const path = decisionsPath(dir);
+  if (!store().exists(path)) {
+    if (!isPlanOnly(dir)) throw new Error("No intent/decisions.md. Run `nikos init` first, or `nikos company init` for a company or department plan.");
+    store().write(path, PLAN_DECISIONS, { create: true });
+  }
 
   const date = input.date ?? new Date().toISOString().slice(0, 10);
   const entry = [
@@ -53,11 +60,12 @@ export function runDecide(args: string[]): number {
   const dir = opt("dir") ?? process.cwd();
   try {
     decide({ title, why: opt("why") ?? "", story: opt("story"), category: opt("category"), supersedes: opt("supersedes") }, dir);
-    console.log(`Added to decisions.md: ${title}`);
+    console.log(`Added to ${isPlanOnly(dir) ? "planning" : "intent"}/decisions.md: ${title}`);
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
+  if (isPlanOnly(dir)) return 0; // no story map to check
   const v = validate(dir);
   if (v.errors.length) {
     console.error(formatResult(v));

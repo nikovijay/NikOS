@@ -24,6 +24,19 @@ export function findIntentDir(start: string): string {
   return join(start, "intent");
 }
 
+/**
+ * A company or department plan with no story map of its own: a planning/ folder and no
+ * intent/storymap.yaml. Its decisions live in planning/decisions.md.
+ */
+export function isPlanOnly(dir: string): boolean {
+  return !store().exists(join(findIntentDir(dir), "storymap.yaml")) && store().isDir(join(dir, "planning"));
+}
+
+/** Where a repo keeps its decisions: intent/decisions.md, or planning/decisions.md in a plan-only repo. */
+export function decisionsPath(dir: string): string {
+  return isPlanOnly(dir) ? join(dir, "planning", "decisions.md") : join(findIntentDir(dir), "decisions.md");
+}
+
 export function walk(dir: string, ext?: string): string[] {
   if (!store().exists(dir)) return [];
   return store().list(dir).flatMap((f) => {
