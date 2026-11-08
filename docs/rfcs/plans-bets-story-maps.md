@@ -58,10 +58,13 @@ status/ approvals/          as today, for both kinds
    the team from. Its rollout shows which of the team's maps and bets align
    to its bets and key results, and the delivery of those maps, read from the
    team's committed status. Settings and locks still come only from the home.
-5. **Groups get the same shortcut.** "The smallest setup" already says a group
-   can align to company bets when there are no departments. 0.3.0 refuses that
-   (a group bet must align to a department). The rule becomes: a group aligns
-   to the plan it joined, company or department.
+5. **Groups have one home and many plans too.** "The smallest setup" already
+   says a group can align to company bets when there are no departments.
+   0.3.0 refuses that (a group bet must align to a department). The rule
+   becomes the team's rule 1: a group is homed in one company or department
+   plan, where its settings and locks come from, and can join other plans at
+   any level above it. Its bets may align to bets in any plan it has joined,
+   and aim at key results in any of them. Every plan it joins lists it.
 6. **Migration.** `nikos migrate maps` refuses a team repo with `intent/` today.
    With this amendment it can move `intent/` to the team's own `maps/<key>/`
    in place, asking for the team key, its home and the bet.
@@ -80,6 +83,24 @@ status/ approvals/          as today, for both kinds
 8. **A team's own bets aim at company or department key results.** Groups
    have no key results, so a team's bet that relates to a group's work
    aligns to the group's bet instead.
+9. **Delivery reaches the plans above through a committed summary.** In
+   0.3.0, `nikos map status` keeps what it reads from teams in `.nikos/`, which
+   is gitignored, so a department's or company's rollout never sees team
+   delivery and prints "0 of 2 done". Instead, `nikos map status` writes a
+   dated summary beside each map it reads (`maps/<key>/delivery.yaml`: per
+   story, the team, status, freshness and approval, and when it was read). The
+   map's owner commits it like any other file, and every rollout above reads
+   it, saying how old it is. This covers a group's maps, a team's own maps,
+   and stories another team builds from a team's map. A rollout never fetches
+   team repos itself.
+10. **A stopped bet doesn't stop the bets aimed at it.** Each level owns its
+    bets, so stopping a department bet leaves a group or team bet aligned to
+    it open. The rollout and the views flag it: "aligns to manual-queue, which
+    was stopped on <date>", so the owner can review it.
+11. **Approvals name a person, not a verified identity.** An approval records
+    who approved it (the git name, or the name given in chat) until the
+    verified-approvals RFC is built. Nothing presents that name as checked by
+    the forge.
 
 ### Decided in review
 
@@ -87,6 +108,10 @@ status/ approvals/          as today, for both kinds
   results, and may align to a group bet (rule 8).
 - A plan the team joined but isn't homed in lists the team (rule 4).
 - Stories on a team's map can be given to another team. The group decides, the assignment sits beside the map in the team's repo, and the map never moves (rule 7).
+- A group, like a team, can join many plans, homed in one (rule 5).
+- Delivery travels up as a committed summary written by `nikos map status` (rule 9).
+- A stopped bet leaves the bets aimed at it open, and the rollout flags them (rule 10).
+- Approvals stay names until verified approvals are built (rule 11).
 
 ## PR 6 status
 
