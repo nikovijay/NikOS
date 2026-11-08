@@ -202,8 +202,10 @@ key result's progress comes from its own check-ins and never from the ones
 below it.
 
 `--json` gives the same as data, and `--offline` reads the copies already
-fetched. The dashboard's Rollout tab shows the same tree from the last fetch and
-never fetches on its own. A repo it can't reach is reported as unreachable and the rest carry on.
+fetched. A repo it can't reach is reported as unreachable and the rest carry on.
+A fetch that fails keeps the last good copy: the plan shows as unreachable, with
+the date that copy was read. The dashboard no longer has a Rollout tab; its views
+are in [The dashboard](#the-dashboard).
 
 ## Story maps in a group repo
 
@@ -374,6 +376,117 @@ plan-only repo, and needs no `nikos init`.
   runner and CI checks, which belong to the teams. It warns when
   `approval.policy` is locked and `approval.routes` isn't, since a team could
   still choose its own routes.
+
+## The dashboard
+
+**Purpose:** `nikos planning serve` (or `nikos serve`) runs a local dashboard on
+127.0.0.1 for one person. It shows the plan's views, and it makes changes through
+the same commands as the command line.
+
+Views, by level:
+
+- **Company and department:** *OKRs and bets* (the key results above this plan
+  aligns to, this plan's key results by objective, its bets, the bets above
+  them, and group bets aligned to one of its bets, as delivery only) and *OKR
+  ladder* (the plan above in one column, this plan in the other, with the chain
+  marked "On this plan's chain").
+- **Group:** *Bets and story maps*: each bet with its delivery and what it aligns
+  to, then each story map with its teams and each story's status from the
+  team's last `nikos map status` on this machine. The page never fetches.
+
+Links, not totals: no view adds progress up from one plan into another.
+
+Editing. Each save is one change, sent to `POST /api/op` as `{ op, target,
+args, expect }`. The server runs it through `src/planning/ops.ts`, which checks
+the op's name, the plan's level, each id (with the same rules the page uses),
+then calls the command the CLI uses, so a save the CLI would refuse is refused
+with the same message. `expect` is the hash of the file the page loaded: if the
+file has changed since, the save gets 409 and the page offers a reload. Ops by
+level are listed in `OP_LEVELS`. Outcome is only set by a review, not by an edit.
+
+Every POST passes the same checks before its body is read: the Host must be this
+machine's address, an Origin (if sent) must be this machine's, Sec-Fetch-Site
+(if sent) must be same-origin or none, the token must match, and Content-Type
+must be JSON. Bodies over 100 KB get 413.
+
+Branches and pending changes. In a git repo, the first save made while HEAD is on
+the base branch (main, or origin's default) creates `nikos/plan-<level>-<date>`
+and saves there; later saves go on the same branch. Saves never commit or push.
+The pending bar shows the planning files changed but not committed, and has the
+buttons:
+
+- **Commit** stages only `planning/`, `maps/` and `intent/`, and commits only
+  those paths. Changes elsewhere in the repo stay as they are, and the bar warns
+  about them.
+- **Push branch** runs `git push -u origin <branch>`.
+- **Open pull request** (or merge request on GitLab) runs `gh pr create` (or
+  `glab mr create`) only when that tool is installed, and only after the branch
+  is pushed. Without the tool, the exact command is shown to copy.
+
+Nothing is merged, and no branch is ever force-pushed or deleted. Outside a git
+repo, saves are plain file writes, and the bar says so. With HEAD detached, saves
+are plain writes too, and the bar says so.
+
+Forge notes. The host comes from the origin URL: `github.com` is GitHub, a host
+with `gitlab` in its name is GitLab, and anything else gets no request command.
+gh is the tool on GitHub (`gh pr create --base <base> --head <branch> --fill`),
+and glab on GitLab (`glab mr create --source-branch <branch> --target-branch
+<base> --fill --yes`).
+
+Custom views (`planning/views/<name>.html`) save through the same checks, with
+`window.nikos.op(op, target, args, expect)` as well as the older `save` kinds.
+
+Editable snapshots. `nikos planning serve --export plan.html --editable` writes one
+offline page with editing on, and `--with-linked` also embeds the copies of the plans
+above and below, read-only. (`nikos serve` takes the same flags.) The page queues each
+change as an op, shows the queue, and "Download changes" saves
+`<plan>-changes-<date>.nikos.json`. Nothing is sent anywhere, and the page writes no
+files. The page checks each field with the same rules the commands use (`rules.ts` is
+embedded as source, so they can't drift), and says that the full check runs at
+`nikos apply`. The views still show the plan as it was exported.
+
+- By default the file holds this level's own files only. Links to other plans stay as
+  text (`repo#id`), and there are no `upstream` or `downstream` keys. `--with-linked`
+  needs each plan above to be synced (`nikos planning sync`), and says how many other
+  plans it includes.
+- Team status is never in a snapshot: story status reads "not in this snapshot".
+- `source` records the commit the file was made from, and whether the nikOS files had
+  changes not in it. Outside git it records no commit, with a warning.
+- The name typed in the page is attribution only (`made_by`). Nothing checks it.
+
+The change file (`schemas/planning/changes.schema.json`). A JSON object with `format`
+("nikos-planning-changes"), `format_version` (1), `plan` (level and name), `source`
+(commit, dirty, exported), `operations` and, optionally, `made_by` and `with_linked`. Each
+operation is `op` (one of the names in `OP_LEVELS`), `target` (ids by kind: kr, bet, story,
+activity, step, release, map, team), `args` and `expect` (the 16-character hash of the file
+the page loaded). The schema refuses every other field, so a file can't carry a token, a
+password, a url or a command. It does nothing on its own.
+
+`nikos apply <file> [--dir <repo>] [--commit] [--pr]` applies it:
+
+1. Checks the file against the schema, that its level is this repo's level, that it isn't a
+   team repo, that this is a git repo, and that planning/, maps/ and intent/ have no
+   uncommitted changes. Other dirty files get a warning.
+2. Runs every operation against an in-memory copy, through the same write path as the
+   dashboard. An operation whose `expect` matches the file as it is, or the file as it was
+   after an earlier operation in this change, applies. Any other is skipped, with
+   "changed since the snapshot was made; export again". A refusal from a command is
+   skipped with the command's own message, and the rest still apply.
+3. Checks the repo before and after. If the applied operations add a validation error,
+   nothing is written and no branch is made.
+4. Creates `nikos/plan-<level>-<date>` (with `-2`, `-3` when taken), writes the changed
+   files and lists them.
+5. Commits only the changed paths, and only with `--commit` or a typed y. A pull or merge
+   request is only opened with `--pr` or a typed y, and only after a second confirm. The
+   branch is pushed only at that confirm. Without a terminal and without `--pr`, the
+   commands are printed, not run.
+
+Exit codes: 0, every operation applied. 2, some were skipped and the rest applied (or none
+applied). 1, the file, the level, the repo or the checks refused, or a commit or request
+didn't finish; a failed commit or request leaves its changes on the branch and says so.
+
+Branches and pending changes from the dashboard are the same as for `nikos apply`: saves
+go on a nikos branch, and nothing is committed or pushed without its button.
 
 ## views/&lt;name&gt;.html
 

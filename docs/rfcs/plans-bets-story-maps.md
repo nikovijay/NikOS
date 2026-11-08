@@ -1,6 +1,71 @@
 # RFC: plans, bets, story maps and team assignments
 
-**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, and PR 4 (status flowing back) as described in "PR 4 status".
+**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, PR 4 (status flowing back) as described in "PR 4 status", and PR 5 (views, editing from the dashboard, editable snapshots and `nikos apply`) as described in "PR 5 status".
+
+## PR 5 status
+
+Built: the three views (OKRs and bets, OKR ladder, and Bets and story maps for a group), editing
+from the dashboard for each level through one write path (`src/planning/ops.ts`, behind
+`POST /api/op`), the rules the page and the commands share (`src/planning/rules.ts`), saves on a
+nikOS branch in a git repo with Commit, Push and Open pull request buttons that each act only on
+their own click, the rollout fix, editable snapshots (`nikos planning serve --export <file>
+--editable [--with-linked]`), the change file (`schemas/planning/changes.schema.json`) and
+`nikos apply <file>` (`src/planning/apply.ts`). The apply path is covered by
+`test/planning-apply.test.ts` and the snapshot by `test/planning-export.test.ts`.
+
+Deferred, as decided: objective editing (objectives stay read-only, and key results are grouped by
+their objective text), the period picker, activity and step removal (rename only), team status in
+rollout (a group's bet under a department bet shows the group's own state, with "team status is not
+read here"), and approval gating for planning changes (none: the pull request review is the gate).
+The ops for releases, `map new`, `setting set` and `downstream add` exist in `/api/op`, but the
+dashboard has no forms for them yet.
+
+Where the build differs from this RFC:
+
+- **Strict is one level up.** `runOp(..., { strict: true })` (used by `/api/op`) first tries the op on
+  an in-memory copy and refuses a new validation error before anything is written. The commands
+  keep warning only, so `nikos` output is unchanged.
+- **Legacy saves are checked first.** `/api/checkin`, `/api/bet` and `/api/review` keep their bodies
+  and status codes. Each one is checked as its op (team repo, level, ids, stale expect) before a
+  branch is made, then written by the command as before. `/api/bet` still accepts `outcome`.
+  `/api/op` refuses it: only a review sets an outcome.
+- **`bet krs` is at company and department level,** as the RFC's company row says which key
+  results each bet aims at.
+- **Teams are named by their repo path.** `assign` and `unassign` take the team's repo path (or `.`) as
+  the target. The team's name is an argument, since names like "Checkout web" aren't ids.
+- **Renames of activities and steps** refuse with "<id> is not an activity in <map>" and "<id> is not a
+  step in <map>".
+- **Forge commands.** `gh pr create --base <base> --head <branch> --fill` is checked against the
+  installed `gh --help` (gh 2.87.3). `glab` isn't installed where this was built, so
+  `glab mr create --source-branch <branch> --target-branch <base> --fill --yes` is not checked
+  against a real glab. Without a tool, the command is shown to copy.
+- **Commit** stages only the planning, maps and intent paths, and commits only those. Anything else
+  that is changed stays unstaged, and the pending bar says so.
+- **A failed rollout fetch keeps the last good copy.** The copy is shown with state unreachable and a
+  note with the date it was read. A plan that has never been fetched stays unreachable with no copy.
+- **Apply always branches**, even from a nikos branch, and never writes unless every check passes
+  (the apply report says so). A file's operations chain: a second op on a file may use the hash the
+  first one replaced (`runOps` with `chain`).
+- **Snapshots carry no team status.** Story status reads "not in this snapshot". Without
+  `--with-linked` there are no `upstream` or `downstream` keys at all. Plain `--export` is unchanged.
+- **The page checks fields only** (the rules in `rules.ts`, embedded as source). Ids, titles, dates,
+  numbers and decisions are checked on the page; the rest is checked by `nikos apply`.
+- **Queued changes don't show in the views** of the snapshot they were made in. The views show the
+  plan as it was exported, until the changes are applied and the plan is exported again.
+- **Review is the only gate.** Nothing waits for an approval before a change is written (D2). A
+  pull or merge request is the review, and `nikos apply` names the branch it wrote to.
+- **Deferred:** objective editing, activity and step removal, the period picker, team status in
+  the snapshot, and forms for release ops and `map new` (they work through `/api/op` and apply).
+- **The two OKR views are drawn as linked cards.** OKRs and bets reads left to right: the key
+  results above (with their progress and plan), this plan's key results by objective, its bets
+  ("Own bet" or "Aligns up"), and the bets above, joined by curved lines. The ladder uses the same
+  cards, with the plan's chain in full and the rest faded. The plan and period are shown above the
+  view, not picked there.
+- **Forge flags.** The `gh pr create` flags are the ones checked against gh's help in part 1. The
+  `glab mr create` flags are not checked against a real glab.
+
+Resolved from PR 4: a group bet aligned to a department bet is listed under the department's OKRs
+and bets page, as delivery only. `rollout` no longer deletes a plan's last good copy when a fetch fails.
 
 ## PR 4 status
 
@@ -29,15 +94,14 @@ Where the build differs from this RFC:
   keeps its own. A group copy that doesn't read is named by `nikos doctor` and skipped.
 - **Department rollout doesn't read group teams.** A group's copy under `.nikos/downstream/` has no
   team cache, so its bets keep the group's own numbers and say `team status not read here: run nikos
-  map status in <group>`. Aligned group bets under a department bet aren't listed in the rollout yet.
+  map status in <group>`. Aligned group bets under a department bet are listed in PR 5's OKRs and bets view (see "PR 5 status").
 - **Intent approvals are read only.** No command writes a group's approval for a team's story yet.
   In `--repo .` the delivery approval and the intent approval share one file, so the group shows it as
   intent only.
 - **A move is remembered by the old holder.** The index keeps the team that held a story until the new
   holder has its own status for it, so "moved" and the old team's last status show until then.
 - **Cache is per machine.** A new machine shows "previous team not fetched" for moves made elsewhere.
-- **`rollout` still deletes a plan's last good copy when a fetch fails** (`src/planning/rollout.ts`).
-  Not changed here; fix in PR 5 or before.
+- **`rollout` deleted a plan's last good copy when a fetch failed.** Fixed in PR 5 (see "PR 5 status").
 
 ## PR 3 status
 

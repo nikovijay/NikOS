@@ -4,8 +4,10 @@
 // and reports for each: has it joined, when did it last sync this plan, how is its delivery
 // going, and which of its key results and bets point up here. Nothing is written to their repos.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { store } from "../lib/store.js";
+import { dirname, join } from "node:path";
 import { parse, parseDocument } from "yaml";
 import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
@@ -16,7 +18,8 @@ import { decisionEntries } from "../commands/decisions.js";
 import { delivery, describeDelivery, teamsHolding } from "./delivery.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
-import { git, ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
+import { fetchCopy } from "../lib/fetch-copy.js";
+import { ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
 import { alignsList } from "./levels.js";
 import { ownRepo } from "../lib/git.js";
 
@@ -222,23 +225,38 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     if (seen.has(e.repo)) continue;
     seen.add(e.repo);
     const dir = copyOf(root, e.repo);
+    let fetchedError: string | undefined;
     if (!opts.offline) {
-      rmSync(dir, { recursive: true, force: true });
-      const clone = git(["clone", "--quiet", "--depth", "1", "--branch", e.ref, e.url, dir]);
-      if (clone.status !== 0) {
-        rmSync(dir, { recursive: true, force: true });
-        delete index[e.repo];
-        plans.push({ ...base, repo: e.repo, state: "unreachable", reason: (clone.stderr || "clone failed").trim().split("\n").pop()! });
-        continue;
+      // Fetch into a scratch folder and swap it in only when the fetch works, so a failed fetch keeps the last good copy.
+      const scratch = join(cache(root), ".fetch-rollout", `${e.repo.replace(/[^A-Za-z0-9._-]/g, "-")}-${randomBytes(4).toString("hex")}`);
+      try {
+        const got = fetchCopy(e.url, e.ref, scratch);
+        if ("error" in got) {
+          fetchedError = got.error;
+          if (!existsSync(dir)) {
+            plans.push({ ...base, repo: e.repo, state: "unreachable", reason: got.error });
+            continue;
+          }
+        } else {
+          rmSync(dir, { recursive: true, force: true });
+          mkdirSync(dirname(dir), { recursive: true });
+          renameSync(scratch, dir);
+          index[e.repo] = { commit: got.commit, fetched: today() };
+        }
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
       }
-      index[e.repo] = { commit: git(["rev-parse", "HEAD"], dir).stdout.trim(), fetched: today() };
-      rmSync(join(dir, ".git"), { recursive: true, force: true }); // a plain copy: nothing to push back
     } else if (!existsSync(dir)) {
       plans.push({ ...base, repo: e.repo, state: "unreachable", reason: "not fetched yet: run nikos planning rollout" });
       continue;
     }
     // A plan further down joins the one that listed it, not this repo.
     const plan = { ...base, ...read(root, dir, e.repo, depth === 1 ? self : parent), ...(index[e.repo] ? { fetched: index[e.repo].fetched } : {}) };
+    if (fetchedError !== undefined) {
+      // The last good copy is shown, and the note says when it was read.
+      const last = index[e.repo]?.fetched;
+      Object.assign(plan, { state: "unreachable", reason: `${fetchedError}${last ? `; showing the copy fetched ${last}` : ""}` });
+    }
     if (depth > 1 && plan.synced) {
       const above = index[parent]?.commit;
       if (above) plan.synced.current = plan.synced.commit === above;
@@ -413,8 +431,9 @@ export function addDownstream(root: string, input: { name: string; repo?: string
   if ((input.host || input.url) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
   const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
   if (input.repo) repoEntry(entry, "planning/downstream.yaml"); // a bad repo path or host fails before anything is written
+  // Through the store, so a dry run (runOps) keeps the change in memory and the change set lists it.
   const p = join(root, "planning", "downstream.yaml");
-  const doc = parseDocument(existsSync(p) ? readFileSync(p, "utf8") : "# The departments and teams that plan against this one: name, and their repo once they have one.\n[]\n");
+  const doc = parseDocument(store().exists(p) ? store().read(p) : "# The departments and teams that plan against this one: name, and their repo once they have one.\n[]\n");
   if (!doc.contents || !("items" in (doc.contents as any))) doc.contents = doc.createNode([]) as any;
   (doc.contents as any).flow = false;
   const items = (doc.contents as any).items as any[];
@@ -424,7 +443,6 @@ export function addDownstream(root: string, input: { name: string; repo?: string
   });
   if (at >= 0) items[at] = doc.createNode(entry);
   else items.push(doc.createNode(entry));
-  mkdirSync(join(root, "planning"), { recursive: true });
-  writeFileSync(p, doc.toString({ lineWidth: 0 }));
+  store().write(p, doc.toString({ lineWidth: 0 }));
   return { name, ...(input.repo ? { repo: input.repo } : {}), added: at < 0 };
 }

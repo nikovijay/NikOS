@@ -108,7 +108,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | Command | What it does |
 | --- | --- |
 | `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
-| `nikos serve` | Open the dashboard: the plan's key results, bets and rollout, and the story map |
+| `nikos serve` | Open the dashboard: the plan's key results, bets, OKR ladder and story maps. `--export <file> --editable` writes an offline page that queues changes |
+| `nikos apply <file>` | Apply a change file from an editable export to this repo, on a new nikos branch (`--commit`, `--pr`) |
 | `nikos init` | Create `intent/` in this repo |
 | `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |

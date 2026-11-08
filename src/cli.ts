@@ -27,6 +27,7 @@ import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
 import { runPlanning } from "./planning/cli.js";
 import { runServeCommand } from "./commands/serve.js";
+import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
 import { runTeam } from "./commands/team.js";
 import { runTeamSync } from "./team/sync.js";
@@ -64,6 +65,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   export: runExport,
   planning: runPlanning,
   serve: runServeCommand,
+  apply: runApply,
   assign: runAssign,
   team: runTeam,
   sync: runTeamSync,
@@ -73,12 +75,13 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
 function teamRefusal(cmd: string): string {
   if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release" || cmd === "map") return TEAM_REPO_STORIES;
   if (cmd === "assign") return "this is a team repo: assignments are made in the group repo";
+  if (cmd === "apply") return "this is a team repo: changes are made in the group repo";
   if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
 }
 
 /** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
-const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "assign", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout"]);
+const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "assign", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout", "apply"]);
 
 const help = `nikos — spec-driven development for AI coding agents
 
@@ -88,7 +91,10 @@ Commands:
   start            Set this repo up in one go: intent/, a scenario runner for its stack
                    and CI for its host, each only if it's missing (--name, --key).
                    In a terminal without --name, asks what you're setting up first
-  serve            Open the dashboard for this repo: the plan, and the story map (--port)
+  serve            Open the dashboard for this repo: the plan, and the story map (--port,
+                   --export <file> [--editable [--with-linked]] for an offline page)
+  apply <file>     Apply a change file from an editable planning export to this repo, on a new
+                   nikos branch (--dir, --commit, --pr). Nothing is pushed unless you say so
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   story add "<title>"  Add a story to the map, state and a starter feature

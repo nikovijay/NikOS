@@ -45,7 +45,7 @@ export function dropFromLock(root: string, repo: string): void {
 
 /** The commit a group's branch is at now, or undefined when it can't be reached. */
 export function lsRemoteCommit(entry: UpstreamEntry): string | undefined {
-  const r = git(["ls-remote", entry.url, entry.ref]);
+  const r = git(["ls-remote", "--", entry.url, entry.ref]);
   return r.status === 0 ? r.stdout.split(/\s+/)[0] || undefined : undefined;
 }
 

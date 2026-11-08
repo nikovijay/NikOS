@@ -2,7 +2,8 @@
 // check-ins that are only ever added to. Revising the target keeps the original.
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
-import { DATE, checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
+import { checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
+import { dateProblem, krFieldProblems } from "./rules.js";
 import { alignmentProblems, alignsValue, krLevelProblem, levelOf } from "./levels.js";
 
 export interface KrInput {
@@ -29,7 +30,7 @@ export function newKr(input: KrInput, root: string): string {
   if (!input.title?.trim()) throw new Error("A key result needs a title (--title)");
   if (!input.owner?.trim()) throw new Error("A key result needs an owner (--owner)");
   if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a numeric --baseline and --target");
-  if (!DATE.test(input.by ?? "")) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
+  if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
   const level = levelOf(root);
   const refused = krLevelProblem(level);
   if (refused) throw new Error(refused);
@@ -60,6 +61,7 @@ export function checkIn(
   c: { value: number; note?: string; evidence?: string; date?: string; expect?: string },
 ): string {
   if (!Number.isFinite(c.value)) throw new Error("A check-in needs a numeric value");
+  if (c.date !== undefined && dateProblem(c.date)) throw new Error("The check-in date is not a date (YYYY-MM-DD)");
   const kr = loadKr(root, id);
   const data = structuredClone(kr.data);
   data.checkins = [
@@ -76,6 +78,19 @@ export function reviseTarget(root: string, id: string, target: number, expect?: 
   const data = structuredClone(kr.data);
   data.original_target ??= data.target;
   data.target = target;
+  return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: expect ?? kr.hash });
+}
+
+/** Change a key result's fields. An empty optional field (or null) deletes it. Baseline and target aren't here: kr target moves the target. */
+export function editKr(root: string, id: string, fields: Record<string, unknown>, expect?: string): string {
+  const problem = krFieldProblems(fields, "edit")[0];
+  if (problem) throw new Error(problem);
+  const kr = loadKr(root, id);
+  const data = structuredClone(kr.data);
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === "" || v === null || v === undefined) delete data[k];
+    else data[k] = typeof v === "string" && (k === "title" || k === "owner" || k === "unit" || k === "objective") ? v.trim() : v;
+  }
   return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: expect ?? kr.hash });
 }
 

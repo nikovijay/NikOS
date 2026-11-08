@@ -2,6 +2,7 @@
 // JS draw the views, so the live dashboard and the offline export are the same page. A
 // read-only render leaves out the save code and the token altogether.
 import { esc } from "../commands/map.js";
+import * as rules from "./rules.js";
 
 const CSS = `
 :root { --ground: #F2F3EF; --surface: #FFFFFF; --ink: #111411; --ink-2: #3F453F; --muted: #5C625C; --faint: #9AA19A; --line: #DCDFD8; --line-2: #B9BEB6; --accent: #14823E; --accent-soft: #E2EFE5; --amber: #A86A00; --amber-soft: #FBF1DC; --blue: #1F5FA8; --blue-soft: #E3ECF7; --grey-soft: #ECEEEA; --red: #8A2E1F; }
@@ -41,6 +42,26 @@ a.card:hover { border-color: var(--line-2); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 14px 0; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.viewbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 0 0 14px; }
+.viewbar .field { display: inline-flex; gap: 8px; align-items: center; }
+.pill { border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); padding: 4px 10px; font-size: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg a { padding: 4px 12px; font-size: 14px; color: var(--ink-2); text-decoration: none; }
+.seg a + a { border-left: 1px solid var(--line-2); }
+.seg a[aria-current] { background: var(--grey-soft); color: var(--ink); font-weight: 600; }
+.tree { overflow-x: auto; }
+.tree svg { display: block; min-width: 520px; font-family: inherit; }
+.t-head { font-size: 12px; fill: var(--muted); }
+.t-card rect { stroke-width: 1; }
+.t-title { font-size: 14px; font-weight: 600; }
+.t-sub { font-size: 12px; fill: var(--muted); }
+.t-card.up rect { fill: #F1EFEA; stroke: #B9B4A8; } .t-card.up .t-title { fill: #44413A; } .t-card.up .t-sub { fill: #5F5B52; }
+.t-card.kr rect { fill: #EEEDFB; stroke: #A9A2E8; } .t-card.kr .t-title { fill: #3B3194; } .t-card.kr .t-sub { fill: #5B4FC7; }
+.t-card.bet rect { fill: var(--accent-soft); stroke: #7DBF97; } .t-card.bet .t-title { fill: #0E5A2B; } .t-card.bet .t-sub { fill: var(--accent); }
+.t-card.dim { opacity: .4; }
+a .t-card:hover rect { stroke-width: 2; }
+.t-link { fill: none; stroke-width: 1.5; }
+.t-link.kr { stroke: #7F77DD; opacity: .8; } .t-link.bet { stroke: #1D9E75; opacity: .75; } .t-link.dim { opacity: .45; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
 .box { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .box.delivery { background: #F6F7F3; }
@@ -95,6 +116,13 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .toast { position: fixed; right: 20px; bottom: 20px; max-width: 360px; background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; font-size: 14px; }
 .toast.show { opacity: 1; }
 .toast.bad { background: var(--red); }
+.pending { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.pending .row { gap: 10px; }
+.pending code { font-size: 12px; }
+details { margin-bottom: 12px; }
+details > summary { cursor: pointer; color: var(--ink-2); }
+details .panel { margin-top: 8px; }
+.form input[type=checkbox] { width: auto; }
 @media (max-width: 720px) {
   .shell { grid-template-columns: 1fr; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); position: static; height: auto; }
@@ -113,6 +141,7 @@ var TODAY = D.today;
 var DAY = 86400000;
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var main = document.getElementById('main');
+var NOTICE = '';
 
 function ts(d) { return Date.parse(d + 'T00:00:00Z'); }
 function addDays(d, n) { return new Date(ts(d) + n * DAY).toISOString().slice(0, 10); }
@@ -127,19 +156,24 @@ function chip(text, cls) { return '<span class="chip ' + cls + '">' + esc(text) 
 function krById(id) { for (var i = 0; i < D.krs.length; i++) if (D.krs[i].id === id) return D.krs[i]; return null; }
 function outcomeClass(o) { return o === 'won' ? 'green' : o === 'awaiting evidence' ? 'amber' : o === 'open' ? 'blue' : ''; }
 function barClass(o) { return o === 'won' ? 'won' : o === 'awaiting evidence' ? 'awaiting' : (o === 'lost' || o === 'stopped') ? 'closed' : ''; }
+function defaultRoute() { return D.plan && D.plan.level === 'group' ? '#/groupmaps' : '#/krs'; }
 function render() {
-  var p = (location.hash || '#/krs').replace(/^#\/?/, '').split('/');
-  var section = p[0] === 'kr' ? 'krs' : (p[0] || 'krs');
+  var p = (location.hash || defaultRoute()).replace(/^#\/?/, '').split('/');
+  var section = p[0] === 'kr' ? 'krs' : (p[0] || (D.plan && D.plan.level === 'group' ? 'groupmaps' : 'krs'));
   var links = document.querySelectorAll('[data-nav]');
   for (var i = 0; i < links.length; i++) links[i].classList.toggle('on', links[i].getAttribute('data-nav') === section);
   var html;
   if (p[0] === 'kr' && p[1]) html = krDetail(p[1]);
+  else if (p[0] === 'okrs') html = okrsView();
+  else if (p[0] === 'ladder') html = ladderView();
+  else if (p[0] === 'groupmaps') html = groupMapsView();
   else if (p[0] === 'bets') html = betsView();
   else if (p[0] === 'timeline') html = timelineView();
   else if (p[0] === 'guide') html = guideView();
-  else if (p[0] === 'rollout') html = rolloutView();
   else html = krsView();
-  main.innerHTML = (D.problems && D.problems.length ? '<div class="notice">Some planning files could not be read: ' + esc(D.problems.join('; ')) + '</div>' : '') + html;
+  var notes = (D.problems && D.problems.length ? '<div class="notice">Some planning files could not be read: ' + esc(D.problems.join('; ')) + '</div>' : '') + (NOTICE ? '<div class="notice">' + NOTICE + '</div>' : '');
+  main.innerHTML = notes + html;
+  if (p[0] === 'bets' && p[1]) { var el = document.getElementById('bet-' + p[1]); if (el && el.scrollIntoView) el.scrollIntoView(); }
 }
 
 window.addEventListener('hashchange', render);
@@ -162,12 +196,12 @@ function guideView() {
       '<span class="muted">its own repo, planning/</span></div><div class="muted">' + l[2] + '</div></div>';
   }).join('') +
     '<div class="alt-arrow" aria-hidden="true">↑ specs a bet</div>' +
-    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ in the repo that builds it</span></div><div class="muted">Specs a bet as stories, organised by activity and step. Story status comes from the work itself.</div></div>';
+    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ or maps/ in the repo that builds it</span></div><div class="muted">Specs a bet as stories, organised by activity and step. Story status comes from the work itself.</div></div>';
   var steps = [
     ['Plan the period', 'Ask your agent to plan the quarter. It asks for the level, pillars, objectives and key results, and shows a draft. Nothing is written until you approve.'],
     ['Align upward', 'List the plans above you in planning/upstream.yaml. nikos planning sync keeps a read-only copy, so a key result can align to key results above, and a bet to bets above, by reference, without ever writing to that repo.'],
     ['Frame bets', 'A bet says what you believe will move a key result, and why, with the evidence. It has a review date, not a deadline.'],
-    ['Deliver through the story map', 'A release in intent/storymap.yaml names the bets it delivers. Delivery status (Not started, Building, Shipped) is worked out from its stories.'],
+    ['Deliver through the story map', 'A release in the story map names the bets it delivers. A group keeps one map per bet, under maps/. Delivery status (Not started, Building, Shipped) is worked out from its stories.'],
     ['Check in', 'Record the key result value as it moves, by chat or here. A key result with no recent check-in is flagged stale.'],
     ['Review and call the outcome', 'On the review date, continue, change, stop or complete the bet, with the reason. The outcome (won, lost) comes only from key result evidence: shipped is not won.']
   ].map(function (s, i) { return '<li><strong>' + esc(s[0]) + '.</strong> ' + esc(s[1]) + '</li>'; }).join('');
@@ -184,49 +218,171 @@ function guideView() {
     '<h2 style="margin:20px 0 10px">What nikOS adds</h2><div class="cards">' + value + '</div>';
 }
 
-function rolloutView() {
-  var r = D.downstream;
-  if (!r || !r.plans.length) return '<h1>Rollout</h1><p class="muted">No plans below this one yet. List departments and teams in planning/downstream.yaml.</p>';
-  var joined = r.plans.filter(function (p) { return p.state === 'joined'; }).length;
-  var cls = { 'joined': 'green', 'not joined': 'amber', 'unreachable': '', 'no repo yet': '' };
-  var cards = r.plans.map(function (p) {
-    var rows = [];
-    if (p.synced) rows.push('Synced ' + esc(p.synced.on) + ' at <code>' + esc(p.synced.commit.slice(0, 7)) + '</code>' + (p.synced.current === false ? ', behind ' + esc(p.via || 'this plan') + ': ask them to run nikos planning sync' : ''));
-    else if (p.state === 'joined') rows.push('Not synced yet');
-    if (p.delivery) {
-      var pct = p.delivery.stories ? Math.round(p.delivery.done / p.delivery.stories * 100) : 0;
-      rows.push(esc(p.delivery.done) + ' of ' + esc(p.delivery.stories) + ' stories done' + (p.delivery.approved ? ', ' + esc(p.delivery.approved) + ' approved' : '') + '<div class="progress"><div style="width:' + pct + '%"></div></div>');
-    }
-    if (p.next) rows.push('<span class="muted">Next</span> ' + esc(p.next.id) + ' ' + esc(p.next.title));
-    (p.blockers || []).forEach(function (b) { rows.push(chip('Blocked', 'amber') + ' ' + esc(b.story) + ' ' + esc(b.title) + '<div class="muted">' + b.blockers.map(esc).join('; ') + '</div>'); });
-    if ((p.decisions || []).length) rows.push('<span class="muted">Latest decisions</span><ul class="checkins">' + p.decisions.map(function (d) { return '<li>' + esc(d.title) + '</li>'; }).join('') + '</ul>');
-    var refs = p.krs.map(function (k) { return '<li>KR ' + esc(k.title) + ', ' + Math.round(k.progress * 100) + '%' + (!k.checkedIn ? ' ' + chip('No check-ins yet', '') : k.stale ? ' ' + chip('Stale', 'amber') : '') + ((k.aligns_to || []).length ? ' <span class="muted">→ ' + esc([].concat(k.aligns_to).join(', ')) + '</span>' : '') + '</li>'; })
-      .concat(p.bets.map(function (b) { return '<li>Bet ' + esc(b.id) + ', ' + esc(b.delivery) + (b.krs.length ? ' <span class="muted">→ ' + esc(b.krs.join(', ')) + '</span>' : '') + ((b.aligns_to || []).length ? ' <span class="muted">· aligns to ' + esc(b.aligns_to.join(', ')) + '</span>' : '') + '</li>'; }));
-    return '<div class="card"><div class="row"><strong>' + esc(p.name) + '</strong>' + chip(p.state, cls[p.state] || '') + '</div>' +
-      (p.repo ? '<div class="muted">' + esc(p.repo) + (p.via ? ' · below ' + esc(p.via) : '') + (p.fetched ? ' · read ' + esc(p.fetched) : '') + '</div>' : '') +
-      (p.reason ? '<div class="muted" style="margin-top:6px">' + esc(p.reason) + '</div>' : '') +
-      rows.map(function (x) { return '<div style="margin-top:8px">' + x + '</div>'; }).join('') +
-      (refs.length ? '<ul class="checkins" style="margin-top:8px">' + refs.join('') + '</ul>' : '') + '</div>';
+function opFieldHtml(f) {
+  var attrs = ' data-field="' + esc(f.name) + '"' + (f.kind ? ' data-kind="' + esc(f.kind) + '"' : '') + (f.targetKey ? ' data-target-key="' + esc(f.targetKey) + '"' : '') + (f.multiple ? ' multiple' : '');
+  var val = f.value === undefined || f.value === null ? '' : String(f.value);
+  var input;
+  if (f.options) {
+    var picked = [].concat(f.value === undefined || f.value === null ? [] : f.value).map(String);
+    input = '<select' + attrs + '>' + (f.multiple ? '' : '<option value="">-</option>') + f.options.map(function (o) {
+      var v = typeof o === 'object' ? o.value : o;
+      var label = typeof o === 'object' ? o.label : o;
+      var on = f.multiple ? picked.indexOf(String(v)) >= 0 : String(v) === val;
+      return '<option value="' + esc(v) + '"' + (on ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('') + '</select>';
+  } else if (f.area) input = '<textarea' + attrs + ' rows="2">' + esc(val) + '</textarea>';
+  else input = '<input' + attrs + ' type="' + (f.kind === 'number' ? 'number' : f.kind === 'date' ? 'date' : 'text') + '" step="any" value="' + esc(val) + '"' + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '') + '>';
+  return '<label>' + esc(f.label) + input + '</label>';
+}
+// A form that makes one op: its fields are read on submit, and an empty optional field deletes it.
+function opForm(op, target, expect, fields, label, foot, extra) {
+  return '<div class="panel form" data-op-form="' + esc(op) + '" data-target="' + esc(JSON.stringify(target || {})) + '" data-expect="' + esc(expect || '') + '"><h3>' + esc(label) + '</h3>' +
+    '<div class="fields">' + fields.map(opFieldHtml).join('') + '</div>' + (extra || '') +
+    '<div class="actions"><button class="primary" data-op-submit>' + esc(label) + '</button>' + (foot ? '<span class="muted">' + esc(foot) + '</span>' : '') + '</div></div>';
+}
+function upstreamOptions(kind) {
+  var out = [];
+  (D.upstream || []).forEach(function (u) {
+    (u[kind] || []).forEach(function (x) { out.push({ value: u.repo + '#' + x.id, label: u.repo + '#' + x.id + ' · ' + (x.title || x.id) }); });
+  });
+  return out;
+}
+function ownKrOptions() { return D.krs.map(function (k) { return { value: k.id, label: k.id + ' · ' + k.title }; }); }
+// What an align control says when there is nothing above to pick from: the live page syncs, a snapshot needs --with-linked.
+function noAbove() { return LIVE ? 'Sync the plan above to align here.' : 'Export with --with-linked to choose from the plan above.'; }
+function ownBetOptions() { return D.bets.map(function (b) { return { value: b.id, label: b.id }; }); }
+
+// A tree of cards in columns, joined by curved lines: the OKRs and bets page and the OKR ladder.
+// cols: [{ head, items: [{ key, title, sub, tone, href, group, dim }], empty }]; links: [[fromKey, toKey, tone, dim]].
+var TREE = { w: 170, gap: 34, h: 48, step: 58, top: 34 };
+function cut(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+function tree(cols, links) {
+  var pos = {}, out = '', H = 60, width = cols.length * TREE.w + (cols.length - 1) * TREE.gap;
+  cols.forEach(function (c, i) {
+    var x = i * (TREE.w + TREE.gap), y = TREE.top, last = null;
+    out += '<text class="t-head" x="' + x + '" y="16">' + esc(cut(c.head, 28)) + '</text>';
+    if (!c.items.length) out += '<text class="t-sub" x="' + x + '" y="' + (y + 18) + '">' + esc(cut(c.empty, 30)) + '</text>';
+    c.items.forEach(function (it) {
+      if (it.group && it.group !== last) { out += '<text class="t-sub" x="' + x + '" y="' + (y + 10) + '"><title>' + esc(it.group) + '</title>' + esc(cut(it.group, 26)) + '</text>'; y += 20; last = it.group; }
+      pos[it.key] = { x: x, y: y };
+      var card = '<g class="t-card ' + it.tone + (it.dim ? ' dim' : '') + '"><title>' + esc(it.title) + '</title><rect x="' + x + '" y="' + y + '" width="' + TREE.w + '" height="' + TREE.h + '" rx="8"/>' +
+        '<text class="t-title" x="' + (x + 10) + '" y="' + (y + 19) + '">' + esc(cut(it.title, 21)) + '</text><text class="t-sub" x="' + (x + 10) + '" y="' + (y + 36) + '">' + esc(cut(it.sub, 26)) + '</text></g>';
+      out += it.href ? '<a href="' + esc(it.href) + '">' + card + '</a>' : card;
+      y += TREE.step;
+    });
+    H = Math.max(H, y);
+  });
+  var lines = links.map(function (l) {
+    var a = pos[l[0]], b = pos[l[1]];
+    if (!a || !b) return '';
+    var x1 = a.x + TREE.w, y1 = a.y + TREE.h / 2, x2 = b.x, y2 = b.y + TREE.h / 2, mx = (x1 + x2) / 2;
+    return '<path class="t-link ' + l[2] + (l[3] ? ' dim' : '') + '" d="M' + x1 + ' ' + y1 + 'C' + mx + ' ' + y1 + ',' + mx + ' ' + y2 + ',' + x2 + ' ' + y2 + '"/>';
   }).join('');
-  return '<h1>Rollout</h1><p class="muted">' + joined + ' of ' + r.plans.length + ' plans below this one have joined. Read from copies fetched by nikos planning rollout.</p>' + alignmentTree(r.tree) + ownDecisions(r.decisions) + '<div class="cards">' + cards + '</div>';
+  return '<div class="tree"><svg viewBox="0 0 ' + width + ' ' + (H + 4) + '" style="width:100%;max-width:' + width + 'px" role="img" aria-label="Key results and bets, linked across plans">' + lines + out + '</svg></div>';
+}
+function pct(p) { return typeof p === 'number' && isFinite(p) ? Math.round(p * 100) + '%' : 'No check-in'; }
+// The plan and period this page shows, and the two views of it.
+function viewBar(on, v) {
+  var label = (v.name || 'This plan') + (D.plan && D.plan.level ? ' (' + D.plan.level + ')' : '');
+  return '<div class="viewbar"><span class="field"><span class="muted">Plan</span><span class="pill">' + esc(label) + '</span></span>' +
+    (D.plan && D.plan.period ? '<span class="field"><span class="muted">Period</span><span class="pill">' + esc(D.plan.period) + '</span></span>' : '') +
+    '<span class="seg"><a href="#/okrs"' + (on === 'okrs' ? ' aria-current="page"' : '') + '>OKRs and bets</a><a href="#/ladder"' + (on === 'ladder' ? ' aria-current="page"' : '') + '>OKR ladder</a></span></div>';
 }
 
-function ownDecisions(ds) {
-  if (!ds || !ds.length) return '';
-  return '<div class="panel"><h3>Latest decisions here</h3><ul class="checkins">' + ds.map(function (d) { return '<li>' + esc(d.title) + '</li>'; }).join('') + '</ul></div>';
-}
-
-// Links only: a key result's place in the tree says nothing about how it is doing.
-function alignmentTree(t) {
-  if (!t || (!t.roots.length && !t.unaligned.length)) return '';
-  function node(n) {
-    var label = n.kind === 'kr' ? '<span class="kind">KR</span>' + esc(n.title) : '<span class="kind">Bet</span>' + esc(n.id);
-    return '<li>' + label + ' <span class="muted">' + esc(n.plan) + ((n.aligns_to || []).length ? ' · points at ' + esc([].concat(n.aligns_to).join(', ')) + ', not in this rollout' : '') + '</span>' +
-      (n.children.length ? '<ul>' + n.children.map(node).join('') + '</ul>' : '') + '</li>';
+// The OKRs and bets page: the key results above this plan's align to, its key results by objective,
+// its bets, and the bets above they align to, left to right. Group bets aligned here sit below.
+function okrsView() {
+  var v = D.pages.okrsAndBets;
+  var name = v.name || 'This plan', up = v.aboveName || 'the plan above', top = v.level === 'company';
+  var cols = [], links = [];
+  if (!top) cols.push({ head: 'Above: ' + up + ' KRs', empty: v.noneAbove, items: v.above.map(function (a) {
+    return { key: 'k:' + a.ref, title: a.title || a.id, sub: a.found ? pct(a.progress) + ' · ' + (a.plan || a.repo) : 'Not in the synced copy yet', tone: 'up' };
+  }) });
+  var krItems = [];
+  v.byObjective.forEach(function (g) {
+    g.krs.forEach(function (k) {
+      krItems.push({ key: 'k:' + k.id, title: k.title, sub: pct(k.progress) + ' this period', tone: 'kr', href: '#/kr/' + k.id, group: g.objective });
+      k.aligned.forEach(function (ref) { links.push(['k:' + ref, 'k:' + k.id, 'kr']); });
+    });
+  });
+  cols.push({ head: name + ' KRs', empty: 'No key results yet.', items: krItems });
+  cols.push({ head: name + ' bets', empty: 'No bets yet.', items: v.bets.map(function (b) {
+    b.krs.forEach(function (k) { links.push(['k:' + k, 'b:' + b.id, 'bet']); });
+    b.alignsTo.forEach(function (ref) { links.push(['b:' + b.id, 'b:' + ref, 'bet', true]); });
+    return { key: 'b:' + b.id, title: b.title || b.id, sub: b.tag === 'aligned' ? 'Aligns up' : 'Own bet', tone: 'bet', href: '#/bets/' + b.id };
+  }) });
+  if (!top) cols.push({ head: 'Above: ' + up + ' bets', empty: 'Not aligned to a bet above yet.', items: v.betsAbove.map(function (b) {
+    return { key: 'b:' + b.ref, title: b.title || b.id, sub: b.found ? (b.plan || b.repo) + ' bet' : 'Not in the synced copy yet', tone: 'up' };
+  }) });
+  var groupNote = v.groupBetsNote ? '<div class="notice">' + esc(v.groupBetsNote) + '</div>' : '';
+  var groupBets = v.groupBets.length ? '<ul class="checkins">' + v.groupBets.map(function (g) {
+    return '<li><strong>' + esc(g.id) + '</strong> <span class="muted">' + esc(g.plan) + ' · aligns to ' + esc(g.aligns_to) + '</span><div class="muted">' + esc(g.delivery) + '</div></li>';
+  }).join('') + '</ul>' : '<p class="muted">No group bets aligned here yet.</p>';
+  var forms = '';
+  if (EDIT && D.plan && D.plan.level !== 'company') {
+    if (!upstreamOptions('bets').length) forms = '<p class="muted">' + noAbove() + '</p>';
+    else forms = D.bets.map(function (b) {
+      return opForm('bet.align', { bet: b.id }, b.hash, [{ name: 'aligns_to', label: 'Aligns to (bets above)', options: upstreamOptions('bets'), multiple: true, value: b.aligns_to }], 'Save alignment', 'Writes ' + b.file);
+    }).join('');
   }
-  return '<div class="panel"><h3>Alignment</h3><div class="muted">Key results here, the ones below that align to them, and the bets on each. It shows links only: progress stays with each key result and never adds up from the ones below.</div>' +
-    (t.roots.length ? '<ul class="tree" style="margin-top:8px">' + t.roots.map(node).join('') + '</ul>' : '') +
-    (t.unaligned.length ? '<h4>Not aligned to a key result in this rollout</h4><ul class="tree">' + t.unaligned.map(node).join('') + '</ul>' : '') + '</div>';
+  return viewBar('okrs', v) + '<h1>OKRs and bets</h1><p class="muted">' + esc(v.foot) + '</p>' +
+    '<div class="panel">' + tree(cols, links) + '</div>' +
+    (top ? '' : '<div class="panel"><h3>Group bets aligned to a bet here</h3><div class="muted">Delivery only. Team status is not read here.</div>' + groupNote + groupBets + '</div>') +
+    (EDIT && forms ? '<div class="panel"><h3>Align bets</h3>' + forms + '</div>' : '');
+}
+
+// The OKR ladder: the key results of the plan above in one column and this plan's in the other,
+// with this plan's chain up to the company highlighted and the rest faded.
+function ladderView() {
+  var v = D.pages.okrLadder;
+  var company = D.plan && D.plan.level === 'company', links = [];
+  var cols = [];
+  if (!company) cols.push({ head: (v.aboveName || 'Above this plan') + ' KRs', empty: v.emptyAbove, items: v.above.map(function (a) {
+    return { key: 'k:' + a.ref, title: a.title || a.id, sub: pct(a.progress) + ' · ' + (a.onChain ? a.note : 'own check-ins'), tone: a.onChain ? 'up' : 'up', dim: !a.onChain };
+  }) });
+  cols.push({ head: (v.name || 'This plan') + ' KRs', empty: 'No key results yet.', items: v.own.map(function (k) {
+    k.aligned.forEach(function (ref) { links.push(['k:' + ref, 'k:' + k.id, 'kr']); });
+    return { key: 'k:' + k.id, title: k.title, sub: pct(k.progress) + (k.onChain ? ' · on the chain' : ' · not aligned yet'), tone: 'kr', href: '#/kr/' + k.id, dim: !company && !k.onChain };
+  }) });
+  return viewBar('ladder', v) + '<h1>OKR ladder</h1><p class="muted">' + esc(v.foot) + '</p><div class="panel">' + tree(cols, links) + '</div>';
+}
+
+// The group's page: each bet, with the story maps that spec it under it, and each map's parts and story rows.
+function groupMapsView() {
+  var v = D.pages.betsAndStoryMaps;
+  var mapPanel = function (m) {
+    var parts = m.parts.map(function (p) {
+      var what = p.releases ? 'releases ' + p.releases.join(', ') : p.activities ? 'activities ' + p.activities.join(', ') : p.stories ? 'stories ' + p.stories.join(', ') : 'the whole map';
+      return '<li>' + esc(p.team) + ' <span class="muted">' + esc(p.repo) + ' · ' + esc(what) + '</span>' +
+        (EDIT ? ' <button data-op-unassign="' + esc(p.repo) + '" data-map="' + esc(m.id) + '">Take back this part</button>' : '') + '</li>';
+    }).join('');
+    var rows = m.stories.map(function (s) {
+      var done = s.status === 'done' || s.status === 'approved';
+      // The map id goes with the rename, so a group with several maps knows which one the story is in.
+      var rename = EDIT ? opForm('story.rename', { story: s.id }, s.hash, [{ name: 'title', label: 'Title', value: s.title }], 'Rename', '',
+        '<input type="hidden" data-field="map" value="' + esc(m.id) + '">' + (done ? '<label class="muted"><input type="checkbox" data-confirm style="width:auto"> A team has finished this: rename it anyway</label>' : '')) : '';
+      return '<li><span class="sid">' + esc(s.id) + '</span>' + esc(s.title) + ' <span class="muted">' + esc(s.team || 'no team') + ' · ' + esc(String(s.status).replace(/_/g, ' ')) + ' · ' + esc(s.reason) + '</span>' +
+        (EDIT ? '<details><summary class="muted">Rename</summary>' + rename + '</details>' : '') + '</li>';
+    }).join('');
+    return '<div class="panel"><h3>' + esc(m.title) + ' <span class="muted">' + esc(m.key) + '</span></h3>' +
+      (m.problem ? '<div class="notice">' + esc(m.problem) + '</div>' : '') +
+      (parts ? '<h4>Teams</h4><ul class="checkins">' + parts + '</ul>' : '<p class="muted">No team has a part yet. Assign one with nikos assign.</p>') +
+      (rows ? '<h4>Stories</h4><ul class="checkins">' + rows + '</ul>' : '<p class="muted">No stories yet.</p>') +
+      (EDIT ? opForm('assign', { team: '' }, '', [
+        { name: 'team', targetKey: 'team', label: 'Team repo (owner/repo, or .)' }, { name: 'name', label: 'Team name' },
+        { name: 'map', label: 'Map', value: m.id }, { name: 'releases', kind: 'list', label: 'Releases (blank for the whole map)' }
+      ], 'Assign', 'Writes ' + m.id + ' assignments') : '') + '</div>';
+  };
+  var block = function (b) {
+    var mine = v.maps.filter(function (m) { return m.bet === b.id; });
+    return '<div class="bet-block"><a class="card" href="#/bets/' + esc(b.id) + '"><div class="row"><strong>' + esc(b.id) + '</strong>' + chip(b.outcome, outcomeClass(b.outcome)) + '</div>' +
+      '<div class="muted">' + esc(b.hypothesis) + '</div><div style="margin-top:8px">' + esc(b.delivery) + '</div>' +
+      (b.alignsTo.length ? '<div class="muted">Aligns to ' + esc(b.alignsTo.join(', ')) + '</div>' : '') + '</a>' +
+      (mine.length ? mine.map(mapPanel).join('') : '<p class="muted">No story map for this bet yet.</p>') + '</div>';
+  };
+  var bets = v.bets.length ? v.bets.map(block).join('') : '<p class="muted">No bets yet. Write one with nikos planning bet new.</p>';
+  var orphans = v.maps.filter(function (m) { return !v.bets.some(function (b) { return b.id === m.bet; }); });
+  return '<h1>Bets and story maps</h1><p class="muted">' + esc(v.foot) + '</p>' + bets + (orphans.length ? '<h2>Story maps with no bet here</h2>' + orphans.map(mapPanel).join('') : '');
 }
 
 function krCard(k) {
@@ -244,8 +400,18 @@ function krCard(k) {
 }
 
 function krsView() {
-  if (!D.krs.length) return '<h1>Key results</h1><p class="muted">No key results yet. Add one with nikos planning kr new.</p>';
-  return '<h1>Key results</h1><p class="muted">Progress runs from the baseline to the target.</p><div class="cards">' + D.krs.map(krCard).join('') + '</div>';
+  var lv = D.plan && D.plan.level;
+  var add = EDIT && (lv === 'company' || lv === 'department')
+    ? '<details class="panel"><summary>New key result</summary>' + opForm('kr.new', {}, '', [
+        { name: 'kr', targetKey: 'kr', label: 'Id (lowercase words)', placeholder: 'checkout-conversion' },
+        { name: 'title', label: 'Title' }, { name: 'owner', label: 'Owner' },
+        { name: 'baseline', kind: 'number', label: 'Baseline' }, { name: 'target', kind: 'number', label: 'Target' },
+        { name: 'by', kind: 'date', label: 'By (YYYY-MM-DD)' }, { name: 'unit', label: 'Unit' }, { name: 'objective', label: 'Objective' },
+        ...(lv === 'department' && upstreamOptions('krs').length ? [{ name: 'aligns_to', label: 'Aligns to (key results above)', options: upstreamOptions('krs'), multiple: true }] : [])
+      ], 'Add key result', '') + '</details>'
+    : '';
+  if (!D.krs.length) return '<h1>Key results</h1><p class="muted">No key results yet. Add one with nikos planning kr new.</p>' + add;
+  return '<h1>Key results</h1><p class="muted">Progress runs from the baseline to the target.</p><div class="cards">' + D.krs.map(krCard).join('') + '</div>' + add;
 }
 
 function chartSvg(k) {
@@ -287,6 +453,18 @@ function krDetail(id) {
     return '<li><span class="muted">' + esc(c.date) + '</span> <strong>' + esc(num(c.value, k.unit)) + '</strong>' +
       (c.note ? ' · ' + esc(c.note) : '') + (c.evidence ? ' · <span class="muted">' + esc(c.evidence) + '</span>' : '') + '</li>';
   }).join('');
+  var lv = D.plan && D.plan.level;
+  var editing = EDIT ? (opForm('kr.edit', { kr: k.id }, k.hash, [
+      { name: 'title', label: 'Title', value: k.title }, { name: 'owner', label: 'Owner', value: k.owner },
+      { name: 'by', kind: 'date', label: 'By', value: k.by }, { name: 'unit', label: 'Unit', value: k.unit },
+      { name: 'objective', label: 'Objective', value: k.objective }, { name: 'stale_after_days', kind: 'number', label: 'Stale after (days)', value: k.stale_after_days }
+    ], 'Save details', 'Writes ' + k.file) +
+    opForm('kr.target', { kr: k.id }, k.hash, [{ name: 'target', kind: 'number', label: 'New target', value: k.target }], 'Move target', 'The original target stays recorded.') +
+    (lv !== 'group' && upstreamOptions('krs').length ? opForm('kr.align', { kr: k.id }, k.hash, [{ name: 'aligns_to', label: 'Aligns to (key results above)', options: upstreamOptions('krs'), multiple: true, value: k.aligns_to }], 'Save alignment', 'Writes ' + k.file) : (EDIT && lv === 'department' ? '<p class="muted">' + noAbove() + '</p>' : '')) +
+    opForm('checkin', { kr: k.id }, k.hash, [
+      { name: 'value', kind: 'number', label: 'Value' + (k.unit ? ' (' + k.unit + ')' : ''), value: k.latest ? k.latest.value : k.baseline },
+      { name: 'evidence', label: 'Evidence link (optional)' }, { name: 'note', label: 'Note (optional)', area: true }
+    ], 'Check in', 'Writes ' + k.file)) : '';
   return '<a class="back" href="#/krs">← Key results</a>' +
     '<h1>' + esc(k.title) + '</h1>' +
     '<div class="muted">' + esc(k.objective) + (k.objective ? ' · ' : '') + 'Owner ' + esc(k.owner) + ' · by ' + esc(k.by) + '</div>' +
@@ -296,22 +474,23 @@ function krDetail(id) {
       '<div class="stat"><div class="label">Status</div><div class="val">' + (k.stale ? chip('Stale: no recent check-in', 'amber') : chip('Checked in recently', 'green')) + '</div></div>' +
     '</div>' + upstream +
     '<div class="panel"><h3>Over time</h3>' + chartSvg(k) + '</div>' +
-    (LIVE ? checkinForm(k) : '') +
+    editing +
     '<div class="panel"><h3>Check-ins</h3>' + (checkins ? '<ul class="checkins">' + checkins + '</ul>' : '<p class="muted">No check-ins yet.</p>') + '</div>';
 }
 
-function checkinForm(k) {
-  var last = k.latest ? k.latest.value : k.baseline;
-  return '<div class="panel form" data-form="checkin" data-id="' + esc(k.id) + '" data-hash="' + esc(k.hash) + '"><h3>Check in</h3>' +
-    '<div class="fields"><label>Value' + (k.unit ? ' (' + esc(k.unit) + ')' : '') + '<input name="value" type="number" step="any" value="' + esc(last) + '"></label>' +
-    '<label>Evidence link (optional)<input name="evidence" type="text"></label></div>' +
-    '<label>Note (optional)<textarea name="note" rows="2"></textarea></label>' +
-    '<div class="actions"><button class="primary" data-act="checkin">Check in</button><span class="muted">Writes ' + esc(k.file) + '</span></div></div>';
-}
-
 function betsView() {
-  if (!D.bets.length) return '<h1>Bets</h1><p class="muted">No bets yet. Write one with nikos planning bet new.</p>';
-  return '<h1>Bets</h1><p class="muted">What we believe, what is delivered, and what it moved.</p>' + D.bets.map(betCard).join('');
+  var lv = D.plan && D.plan.level;
+  var add = EDIT && lv !== 'team'
+    ? '<details class="panel"><summary>New bet</summary>' + opForm('bet.new', {}, '', [
+        { name: 'bet', targetKey: 'bet', label: 'Id (lowercase words)', placeholder: 'faster-checkout' },
+        { name: 'owner', label: 'Owner' }, { name: 'hypothesis', label: 'Hypothesis', area: true },
+        { name: 'review_on', kind: 'date', label: 'Review on (YYYY-MM-DD)' }, { name: 'team', label: 'Team (optional)' },
+        { name: 'primary', label: 'Key result it moves', options: ownKrOptions().concat(upstreamOptions('krs')) },
+        ...(lv !== 'company' && upstreamOptions('bets').length ? [{ name: 'aligns_to', label: 'Aligns to (bets above)', options: upstreamOptions('bets'), multiple: true }] : [])
+      ], 'Add bet', 'Writes planning/bets') + '</details>'
+    : '';
+  if (!D.bets.length) return '<h1>Bets</h1><p class="muted">No bets yet. Write one with nikos planning bet new.</p>' + add;
+  return '<h1>Bets</h1><p class="muted">What we believe, what is delivered, and what it moved.</p>' + add + D.bets.map(betCard).join('');
 }
 
 function betCard(b) {
@@ -332,6 +511,19 @@ function betCard(b) {
   var reviews = b.reviews.length ? '<ol class="reviews">' + b.reviews.slice().reverse().map(function (r) {
     return '<li><span class="muted">' + esc(r.date) + '</span> <strong>' + esc(r.decision) + '</strong>' + (r.outcome ? ' (' + esc(r.outcome) + ')' : '') + ': ' + esc(r.reason) + '</li>';
   }).join('') + '</ol>' : '<p class="muted">No reviews yet.</p>';
+  var edit = EDIT ? opForm('bet.edit', { bet: b.id }, b.hash, [
+      { name: 'owner', label: 'Owner', value: b.owner }, { name: 'team', label: 'Team', value: b.team },
+      { name: 'hypothesis', label: 'Hypothesis', value: b.hypothesis, area: true },
+      { name: 'starts', kind: 'date', label: 'Starts', value: b.starts }, { name: 'review_on', kind: 'date', label: 'Review on', value: b.review_on },
+      { name: 'deadline', kind: 'date', label: 'Deadline', value: b.deadline },
+      { name: 'confidence', label: 'Confidence', value: b.confidence, options: ['low', 'medium', 'high'] },
+      { name: 'dependencies', kind: 'list', label: 'Dependencies (comma-separated)', value: b.dependencies.join(', ') }
+    ], 'Save bet', 'Writes ' + b.file) : '';
+  var review = EDIT ? opForm('bet.review', { bet: b.id }, b.hash, [
+      { name: 'decision', label: 'Decision', value: 'continue', options: ['continue', 'change', 'stop', 'complete'] },
+      { name: 'outcome', label: 'Outcome, when completing', options: ['won', 'lost'] },
+      { name: 'reason', label: 'Reason', area: true }
+    ], 'Save review', 'Writes ' + b.file) : '';
   return '<article class="card" id="bet-' + esc(b.id) + '" style="cursor:default">' +
     '<div class="row"><h2>' + esc(b.id) + '</h2>' + chip(b.outcome, outcomeClass(b.outcome)) + chip('Confidence ' + b.confidence, '') + '</div>' +
     '<p class="hyp">' + esc(b.hypothesis) + '</p>' +
@@ -344,7 +536,7 @@ function betCard(b) {
     ((b.aligns_to || []).length ? '<div class="muted" style="margin-top:8px">Aligns to ' + b.aligns_to.map(function (r) { return chip(r, 'lock'); }).join(' ') + '</div>' : '') +
     (b.body ? '<div class="prose">' + prose(b.body) + '</div>' : '') +
     '<h4>Reviews</h4>' + reviews +
-    (LIVE ? reviewForm(b) : '') +
+    (EDIT ? '<details><summary class="muted">Edit this bet</summary>' + edit + '</details><details><summary class="muted">Review this bet</summary>' + review + '</details>' : '') +
     '</article>';
 }
 
@@ -354,14 +546,6 @@ function prose(text) {
   return text.trim().split('\n').map(function (l) {
     return /^#{2,3} /.test(l) ? '<h4>' + esc(l.replace(/^#+ /, '')) + '</h4>' : esc(l);
   }).join('\n').replace(/\n*(<h4>)/g, '$1').replace(/(<\/h4>)\n*/g, '$1');
-}
-
-function reviewForm(b) {
-  return '<div class="panel form" data-form="review" data-id="' + esc(b.id) + '" data-hash="' + esc(b.hash) + '"><h3>Review</h3>' +
-    '<div class="fields"><label>Decision<select name="decision"><option>continue</option><option>change</option><option>stop</option><option>complete</option></select></label>' +
-    '<label>Outcome, when completing<select name="outcome"><option value="">-</option><option value="won">won</option><option value="lost">lost</option></select></label></div>' +
-    '<label>Reason<textarea name="reason" rows="2"></textarea></label>' +
-    '<div class="actions"><button class="primary" data-act="review">Save review</button><span class="muted">Writes ' + esc(b.file) + '</span></div></div>';
 }
 
 function timelineView() {
@@ -414,8 +598,8 @@ function timelineView() {
 }
 `;
 
-// Live-only code: saving, reloading after a save, and the toast. Absent from the export.
-const SAVE_JS = String.raw`
+// The form code, shared by the live dashboard and an editable snapshot: toasts, reading a form, and the clicks.
+const FORM_JS = String.raw`
 var toastEl = document.getElementById('toast');
 function toast(text, bad) {
   toastEl.textContent = text;
@@ -423,51 +607,246 @@ function toast(text, bad) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(function () { toastEl.className = 'toast'; }, 4000);
 }
-function reload() {
-  return fetch('/api/data').then(function (r) { return r.json(); }).then(function (d) { D = d; render(); });
+function closest(el, sel) {
+  while (el && el.nodeType === 1) {
+    if (el.matches && el.matches(sel)) return el;
+    el = el.parentNode;
+  }
+  return null;
 }
-function save(kind, payload) {
-  var path = { checkin: '/api/checkin', bet: '/api/bet', review: '/api/review' }[kind];
-  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Nikos-Token': TOKEN }, body: JSON.stringify(payload) })
-    .then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
-    })
+// Reads a form's fields into the op's target and args. An empty optional field is sent as "", which deletes it on edit.
+function submitForm(form) {
+  var op = form.getAttribute('data-op-form');
+  var target = JSON.parse(form.getAttribute('data-target') || '{}');
+  var expect = form.getAttribute('data-expect') || '';
+  var args = {};
+  var els = form.querySelectorAll('[data-field]');
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    var name = el.getAttribute('data-field');
+    var kind = el.getAttribute('data-kind');
+    var value;
+    if (el.multiple) value = Array.prototype.map.call(el.selectedOptions, function (o) { return o.value; });
+    else if (kind === 'list') value = el.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    else if (kind === 'number') {
+      if (el.value.trim() === '') { if (!el.getAttribute('data-target-key')) args[name] = ''; continue; }
+      value = Number(el.value);
+      if (!isFinite(value)) return toast('Enter a number for ' + name, true);
+    } else value = el.value.trim();
+    if (el.getAttribute('data-target-key')) target[el.getAttribute('data-target-key')] = value;
+    else args[name] = value;
+  }
+  var box = form.querySelector('[data-confirm]');
+  if (box && box.checked) args.confirm = true;
+  return apiOp(op, target, args, expect);
+}
+// The clicks on forms, the unassign button, the reload button, the git buttons and copy.
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  var submit = closest(t, '[data-op-submit]');
+  if (submit) return submitForm(closest(submit, '[data-op-form]'));
+  var un = closest(t, '[data-op-unassign]');
+  if (un) return apiOp('unassign', { team: un.getAttribute('data-op-unassign') }, { map: un.getAttribute('data-map') }, '');
+  var act = closest(t, '[data-act]');
+  if (act && act.getAttribute('data-act') === 'reload') { NOTICE = ''; return reload(); }
+  var git = closest(t, '[data-git]');
+  if (git) return gitAction(git.getAttribute('data-git'));
+  var copy = closest(t, '[data-copy]');
+  if (copy && navigator.clipboard) navigator.clipboard.writeText(copy.getAttribute('data-copy')).then(function () { toast('Copied'); }, function () { toast('Copy did not work: select the command and copy it', true); });
+});
+`;
+
+// Live-only code: saving through /api/op, the pending bar and its git buttons. Absent from the export.
+const SAVE_JS = String.raw`
+try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* the token is already in the page */ }
+function parseReply(r) {
+  return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
+}
+function postJson(path, body) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Nikos-Token': TOKEN }, body: JSON.stringify(body) }).then(parseReply);
+}
+function reload() {
+  return fetch('/api/data').then(function (r) { return r.json(); }).then(function (d) { D = d; render(); pendingRefresh(); });
+}
+// One change, through the same write path as the command line. 409: the file moved on since it was loaded.
+function apiOp(op, target, args, expect) {
+  return postJson('/api/op', { op: op, target: target || {}, args: args || {}, expect: expect || '' })
     .then(function (res) {
-      if (res.ok) { toast('Wrote ' + res.body.wrote); return reload(); }
+      if (res.ok) {
+        NOTICE = '';
+        toast(res.body.message || 'Saved');
+        return reload();
+      }
+      if (res.status === 409) {
+        NOTICE = 'This changed since you loaded this. <button data-act="reload">Reload</button>';
+        render();
+      }
       toast(res.body.error || 'Save failed', true);
-      if (res.status === 409) return reload();
     })
     .catch(function (err) { toast('Could not save: ' + err.message, true); });
 }
-main.addEventListener('click', function (e) {
-  var btn = e.target.closest ? e.target.closest('[data-act]') : null;
-  if (!btn) return;
-  var form = btn.closest('[data-form]');
-  var val = function (name) { var el = form.querySelector('[name="' + name + '"]'); return el ? el.value : ''; };
-  var id = form.getAttribute('data-id');
-  var expect = form.getAttribute('data-hash');
-  if (btn.getAttribute('data-act') === 'checkin') {
-    if (val('value').trim() === '' || !isFinite(Number(val('value')))) return toast('Enter a number for the value', true);
-    save('checkin', { id: id, expect: expect, value: Number(val('value')), evidence: val('evidence'), note: val('note') });
-  } else if (btn.getAttribute('data-act') === 'review') {
-    if (!val('reason').trim()) return toast('A review needs a reason', true);
-    save('review', { id: id, expect: expect, decision: val('decision'), reason: val('reason').trim(), outcome: val('outcome') || undefined });
+// The pending bar: what's saved but not committed, and the git buttons. Each button is its own click.
+var PENDING = null;
+function pendingRefresh() {
+  return fetch('/api/pending', { headers: { 'X-Nikos-Token': TOKEN } }).then(function (r) { return r.json(); }).then(function (p) { PENDING = p; drawPending(); }).catch(function () {});
+}
+function drawPending() {
+  var box = document.getElementById('pending');
+  if (!box || !PENDING) return;
+  var p = PENDING;
+  if (!p.git) { box.innerHTML = '<div class="muted">' + esc(p.message) + '</div>'; return; }
+  var n = p.files.length;
+  var html = '<div class="row"><span>' + (n ? n + (n === 1 ? ' change' : ' changes') + (p.branch ? ' on branch ' + esc(p.branch) : '') + ', not committed.' : 'No unsaved planning changes.') + '</span>';
+  if (n && p.branch) html += '<button data-git="commit">Commit</button>';
+  if (p.branch && !p.onBase && p.hasOrigin) html += '<button data-git="push">Push branch</button>';
+  if (p.branch && !p.onBase && p.hasOrigin && !p.forge.pushed) html += '<span class="muted">Push the branch first, then open the request</span>';
+  if (p.branch && !p.onBase && p.forge.prCommand && p.forge.pushed) {
+    if (p.forge.tool) html += '<button class="primary" data-git="pr">' + esc(p.forge.requestLabel) + '</button>';
+    else html += '<span class="muted">' + esc(p.forge.prCommand) + '</span><button data-copy="' + esc(p.forge.prCommand) + '">Copy this command</button>';
   }
+  html += '</div>';
+  if (n && p.paths && p.paths.length) html += '<details class="muted"><summary>' + n + (n === 1 ? ' file' : ' files') + ' to commit</summary>' + p.paths.map(esc).join('<br>') + '</details>';
+  if (p.notice) html += '<div class="muted">' + esc(p.notice) + '</div>';
+  if (p.warning) html += '<div class="notice">' + esc(p.warning) + '</div>';
+  box.innerHTML = html;
+}
+function gitAction(name) {
+  var path = name === 'commit' ? '/api/git/commit' : name === 'push' ? '/api/git/push' : '/api/git/pr';
+  var body = name === 'pr' ? { confirm: true } : {};
+  return postJson(path, body).then(function (res) {
+    if (res.ok) {
+      if (name === 'commit') toast('Committed ' + String(res.body.committed || '').slice(0, 7));
+      else if (name === 'push') toast('Pushed ' + res.body.pushed);
+      else if (res.body.ran === false) toast(res.body.message || 'The request was not opened', true);
+      else toast(res.body.output || 'Request opened');
+    } else toast(res.body.error || 'Could not do that', true);
+    return pendingRefresh();
+  });
+}
+pendingRefresh();
+`;
+
+// An editable snapshot's changes: each form queues an op here instead of saving it. Nothing is
+// sent anywhere. The page checks the fields with the shared rules, and downloads the change file.
+const QUEUE_JS = String.raw`
+var QUEUE = [];
+var MADE_BY = '';
+var KINDS = { kr: 'kr', bet: 'bet', story: 'story', activity: 'activity', step: 'step', release: 'release', map: 'map', team: 'team' };
+// The field rules the commands share, checked here too. Ids and fields only: the full check runs at nikos apply.
+function pageProblem(op, t, a) {
+  var keys = Object.keys(t || {});
+  for (var i = 0; i < keys.length; i++) {
+    if (!KINDS[keys[i]]) return "'" + keys[i] + "' isn't a kind of target nikOS knows";
+    var p = idProblem(KINDS[keys[i]], t[keys[i]]);
+    if (p) return p;
+  }
+  if (op === 'checkin') return numberProblem('checkin', a.value);
+  if (op === 'kr.new') return krFieldProblems(a, 'new')[0];
+  if (op === 'kr.edit') return krFieldProblems(a, 'edit')[0];
+  if (op === 'kr.target') return numberProblem('target', a.target);
+  if (op === 'bet.edit') return betFieldProblems(a)[0];
+  if (op === 'bet.review') return decisionProblem(a.decision) || reasonProblem(a.reason);
+  if (op === 'story.rename') return titleProblem('story', a.title);
+  if (op === 'activity.rename') return titleProblem('activity', a.title);
+  if (op === 'step.rename') return titleProblem('step', a.title);
+  return undefined;
+}
+function targetText(t) { return Object.keys(t || {}).map(function (k) { return t[k]; }).join(' '); }
+function opLabel(op, t, a) {
+  var rest = Object.keys(a || {}).filter(function (k) { return k !== 'confirm'; }).map(function (k) { return k + ' ' + JSON.stringify(a[k]); }).join(', ');
+  return op + ' ' + targetText(t) + (rest ? ' · ' + (rest.length > 90 ? rest.slice(0, 89) + '…' : rest) : '');
+}
+function fileOf(op, t) {
+  if (t && t.kr) { var k = krById(t.kr); return k ? k.file : ''; }
+  if (t && t.bet) { for (var i = 0; i < D.bets.length; i++) if (D.bets[i].id === t.bet) return D.bets[i].file; }
+  return '';
+}
+function apiOp(op, target, args, expect) {
+  var problem = pageProblem(op, target, args);
+  if (problem) return toast(problem, true);
+  QUEUE.push({ op: op, target: target || {}, args: args || {}, expect: expect || '' });
+  drawChanges();
+  toast('Added to the changes: ' + op);
+}
+function drawChanges() {
+  var box = document.getElementById('pending');
+  if (!box) return;
+  var n = QUEUE.length;
+  var html = '<div class="row"><span>' + (n ? n + (n === 1 ? ' change' : ' changes') + ' ready to download' : 'No changes yet') + '</span>' +
+    '<label class="muted">Your name <input id="made-by" maxlength="100" value="' + esc(MADE_BY) + '" style="width:auto"></label>' +
+    '<button data-download' + (n ? '' : ' disabled') + '>Download changes</button></div>' +
+    '<div class="muted">Attribution only. It is not checked. Checked here: field rules only. The full check runs at nikos apply. The views still show the plan as it was exported.</div>';
+  if (n) html += '<ul class="checkins">' + QUEUE.map(function (c, i) {
+    var f = fileOf(c.op, c.target);
+    return '<li>' + esc(opLabel(c.op, c.target, c.args)) + '<div class="muted">' + (f ? 'File ' + esc(f) + ' · ' : '') + (c.expect ? 'expect ' + esc(c.expect) : 'no expect') +
+      ' · <button data-remove-change="' + i + '">Remove</button></div></li>';
+  }).join('') + '</ul>';
+  box.innerHTML = html;
+}
+function slug(s) { return String(s || 'plan').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'plan'; }
+function downloadChanges() {
+  var plan = D.plan || {};
+  var doc = {
+    format: 'nikos-planning-changes',
+    format_version: 1,
+    plan: { level: plan.level, name: String(plan.name || D.project).slice(0, 100) },
+    source: D.snapshot.source,
+    with_linked: !!D.snapshot.withLinked,
+    operations: QUEUE.map(function (c) {
+      var o = { op: c.op, target: c.target, args: c.args };
+      if (c.expect) o.expect = c.expect;
+      return o;
+    })
+  };
+  if (MADE_BY.trim()) doc.made_by = MADE_BY.trim().slice(0, 100);
+  var name = slug(plan.name || D.project) + '-changes-' + new Date().toISOString().slice(0, 10) + '.nikos.json';
+  var blob = new Blob([JSON.stringify(doc, null, 2) + '\n'], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('Downloaded ' + name);
+}
+document.addEventListener('input', function (e) { if (e.target && e.target.id === 'made-by') MADE_BY = e.target.value; });
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  var rm = closest(t, '[data-remove-change]');
+  if (rm) { QUEUE.splice(Number(rm.getAttribute('data-remove-change')), 1); return drawChanges(); }
+  if (closest(t, '[data-download]')) return downloadChanges();
 });
+drawChanges();
 `;
 
 export interface DashboardOptions {
   data: any;
   token?: string;
+  /** The live dashboard is not read-only. An export is, unless it is editable. */
   readOnly: boolean;
+  /** An export that queues changes for nikos apply. Only with readOnly: its saves are downloads. */
+  editable?: boolean;
+}
+
+/** The sections a plan level shows, in the sidebar. */
+function navFor(level: string | null): string {
+  const items: [string, string][] =
+    level === "group"
+      ? [["groupmaps", "Bets and story maps"], ["bets", "Bets"], ["timeline", "Timeline"]]
+      : level === "company" || level === "department"
+        ? [["krs", "Key results"], ["okrs", "OKRs and bets"], ["ladder", "OKR ladder"], ["bets", "Bets"], ["timeline", "Timeline"]]
+        : [["krs", "Key results"], ["bets", "Bets"], ["timeline", "Timeline"]];
+  return items.map(([id, label]) => `<a data-nav="${id}" href="#/${id}">${label}</a>`).join("") + `<a data-nav="guide" href="#/guide">How it works</a>`;
 }
 
 /** The whole dashboard as one HTML page. Read-only renders carry no save code and no token. */
-export function renderDashboard({ data, token, readOnly }: DashboardOptions): string {
+export function renderDashboard({ data, token, readOnly, editable = false }: DashboardOptions): string {
   const live = !readOnly;
+  // Forms show on the live dashboard and in an editable snapshot. Only the live one saves.
+  const edit = live || editable;
+  const snapshot = edit && !live;
   const json = JSON.stringify(data).replace(/[<\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
-  const nav =
-    `<a data-nav="krs" href="#/krs">Key results</a><a data-nav="bets" href="#/bets">Bets</a><a data-nav="timeline" href="#/timeline">Timeline</a>${data.downstream ? `<a data-nav="rollout" href="#/rollout">Rollout</a>` : ""}<a data-nav="guide" href="#/guide">How it works</a>`;
+  const nav = navFor(data.plan?.level ?? null);
   // The link out appears only in the served dashboard: an export is a closed file with no outside links.
   const links = live
     ? `<div class="links"><a href="https://www.nikovijay.com/connect?from=nikos-planning" target="_blank" rel="noopener">Made by Niko Vijay</a></div>\n`
@@ -478,11 +857,18 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
         ? `<h4>Custom views</h4>${(data.views as string[]).map((v) => `<a href="/views/${esc(v)}">${esc(v)}</a>`).join("")}`
         : "")
     : "";
+  // The page's own field checks: the same functions the commands' rules are, as source.
+  const rulesJs = snapshot ? Object.values(rules).map((f) => (f as Function).toString()).join("\n") : "";
   const script = [
     `var LIVE = ${live};`,
+    `var EDIT = ${edit};`,
+    `var SNAPSHOT = ${snapshot};`,
     live ? `var TOKEN = ${JSON.stringify(token ?? "")};` : "",
+    rulesJs,
     VIEWS_JS,
+    edit ? FORM_JS : "",
     live ? SAVE_JS : "",
+    snapshot ? QUEUE_JS : "",
     "render();",
   ].join("\n");
   return `<!doctype html>
@@ -501,7 +887,8 @@ export function renderDashboard({ data, token, readOnly }: DashboardOptions): st
 <nav>${nav}${extra}</nav>
 ${links}</aside>
 <div class="content">
-<div class="mode">${live ? "Saves write to planning/ in this repo, and nothing else." : "Snapshot, read only. The plans are as they were when this file was made."}</div>
+<div class="mode">${live ? "Saves change this repo's planning, maps and assignments. Nothing is pushed unless you click Push." : snapshot ? "Snapshot, editable. Changes are queued in this page and downloaded as a file. Nothing is written to the repo until nikos apply runs." : "Snapshot, read only. The plans are as they were when this file was made."}</div>
+${edit ? '<div id="pending" class="pending"></div>' : ""}
 <main id="main"></main>
 </div>
 </div>

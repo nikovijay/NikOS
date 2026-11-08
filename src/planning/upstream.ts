@@ -1,3 +1,4 @@
+import { urlProblem } from "../lib/fetch-copy.js";
 // Plans this repo works toward, in other repos. planning/upstream.yaml lists them;
 // `nikos planning sync` fetches a read-only copy of each into .nikos/upstream/<repo path>/
 // (gitignored) and records the commit it read in planning/upstream.lock. This repo only ever
@@ -12,8 +13,9 @@ import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
 import { walk } from "../lib/project.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
+import { store } from "../lib/store.js";
 import { storyMapsOf } from "../lib/maps.js";
-import { betIds, krIds, loadBet, loadKr, paths, today, writePlanning } from "./model.js";
+import { betIds, krIds, loadBet, loadKr, loadPlan, paths, today, writePlanning } from "./model.js";
 
 export interface UpstreamEntry {
   /** The repo's path on its host: owner/repo, or group/subgroup/project. */
@@ -53,7 +55,10 @@ export function repoEntry(e: any, file: string): UpstreamEntry {
     throw new Error(`${file}: '${e?.repo}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
   }
   if (e.host !== undefined && (typeof e.host !== "string" || !HOST.test(e.host))) throw new Error(`${file}: '${e.host}' is not a host name, e.g. gitlab.com`);
-  return { repo: e.repo, ref: e.ref ?? "main", url: e.url ?? `https://${e.host ?? "github.com"}/${e.repo}.git` };
+  const url = e.url ?? `https://${e.host ?? "github.com"}/${e.repo}.git`;
+  const bad = urlProblem(url);
+  if (bad) throw new Error(`${file}: ${bad}`);
+  return { repo: e.repo, ref: e.ref ?? "main", url };
 }
 
 export function readLock(root: string): LockEntry[] {
@@ -65,6 +70,7 @@ const cacheDir = (root: string, repo: string) => join(paths(root).cache, ...repo
 
 /** Make sure .nikos/ is gitignored, so upstream copies are never committed. */
 export function ignoreCache(root: string): void {
+  if (store().memory) return; // a dry run in memory writes nothing to disk
   const p = join(root, ".gitignore");
   const text = existsSync(p) ? readFileSync(p, "utf8") : "";
   if (!/^\/?\.nikos\/?$/m.test(text)) appendFileSync(p, `${text && !text.endsWith("\n") ? "\n" : ""}# nikos planning: read-only copies of upstream plans\n.nikos/\n`);
@@ -149,7 +155,7 @@ export function checkStale(root: string): { stale: { repo: string; locked: strin
   for (const l of readLock(root)) {
     const e = entries.find((x) => x.repo === l.repo);
     if (!e) continue;
-    const r = git(["ls-remote", e.url, e.ref]);
+    const r = git(["ls-remote", "--", e.url, e.ref]);
     const current = r.status === 0 ? r.stdout.split(/\s+/)[0] : "";
     if (!current) out.unresolved.push({ repo: l.repo, reason: (r.stderr || "not reachable").trim().split("\n").pop()! });
     else if (current !== l.commit) out.stale.push({ repo: l.repo, locked: l.commit, current });
@@ -169,7 +175,7 @@ function copiesOnDisk(cache: string, prefix = "", depth = 0): string[] {
 }
 
 /** The read-only copies on disk: each upstream's key results and bets. */
-export function loadUpstream(root: string): { repo: string; commit?: string; krs: any[]; bets: any[] }[] {
+export function loadUpstream(root: string): { repo: string; name?: string; commit?: string; krs: any[]; bets: any[] }[] {
   const lock = readLock(root);
   // Locked repos, plus copies whose lock entry is missing (e.g. placed by hand).
   const repos = new Set<string>([...lock.map((l) => l.repo), ...copiesOnDisk(paths(root).cache)].filter((r) => REPO_PATH.test(r)));
@@ -191,7 +197,13 @@ export function loadUpstream(root: string): { repo: string; commit?: string; krs
         return [];
       }
     });
-    out.push({ repo, commit: lock.find((l) => l.repo === repo)?.commit, krs, bets });
+    let name: string | undefined;
+    try {
+      name = loadPlan(root2)?.name;
+    } catch {
+      name = undefined;
+    }
+    out.push({ repo, ...(name ? { name } : {}), commit: lock.find((l) => l.repo === repo)?.commit, krs, bets });
   }
   return out;
 }

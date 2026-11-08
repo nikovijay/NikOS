@@ -30,9 +30,12 @@ Commands:
                      --url <git url> for any other host, an SSH url or a local repo)
   rollout            How the plans below this one are doing: joined, last synced, delivery, and
                      the key results and bets that point here (--json, --offline, --as <repo path>)
-  serve              Open the local dashboard (--port, --export <file>)`;
+  serve              Open the local dashboard (--port). --export <file> writes it as one offline page;
+                     add --editable to queue changes in that page and download them as a change
+                     file for nikos apply (--with-linked embeds the plans above and below, read-only)`;
 
-export function parseArgs(args: string[]) {
+/** Flags and positional words. A flag takes the next word as its value, unless it's a flag in `bools`, which never takes one. */
+export function parseArgs(args: string[], bools: string[] = []) {
   const positional: string[] = [];
   const flags = new Map<string, string[]>();
   for (let i = 0; i < args.length; i++) {
@@ -40,7 +43,8 @@ export function parseArgs(args: string[]) {
     if (a.startsWith("--")) {
       const name = a.slice(2);
       const next = args[i + 1];
-      const value = next !== undefined && !next.startsWith("--") ? (i++, next) : "true";
+      const takes = next !== undefined && !next.startsWith("--") && !bools.includes(name);
+      const value = takes ? (i++, next) : "true";
       flags.set(name, [...(flags.get(name) ?? []), value]);
     } else positional.push(a);
   }
@@ -72,7 +76,7 @@ export function status(root: string): string {
 }
 
 export async function runPlanning(args: string[]): Promise<number> {
-  const { positional, all, opt, has } = parseArgs(args);
+  const { positional, all, opt, has } = parseArgs(args, ["editable", "with-linked"]);
   const root = findRoot(opt("dir") ?? process.cwd());
   const [cmd, sub, id, extra] = positional;
   try {
@@ -170,7 +174,14 @@ export async function runPlanning(args: string[]): Promise<number> {
         return 0;
       }
       case "serve":
-        return await runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export"), map: opt("map") });
+        if (has("export") && opt("export") === "true") throw new Error("--export needs a file: --export <file>");
+        return await runServe(root, {
+          port: opt("port") ? Number(opt("port")) : undefined,
+          exportTo: opt("export"),
+          map: opt("map"),
+          editable: has("editable"),
+          withLinked: has("with-linked"),
+        });
     }
     console.error(`Unknown planning command.\n\n${help}`);
     return 1;
