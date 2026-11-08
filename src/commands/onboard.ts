@@ -13,6 +13,7 @@ import { teamInit, teamJoin } from "./team.js";
 import { cliCommand, staleCliWarning } from "../lib/cli-version.js";
 import { ownRepo } from "../lib/git.js";
 import { TEAM_FILE } from "../lib/team.js";
+import { KEY } from "../lib/keys.js";
 
 /** Ask one question; an empty answer takes the suggestion. */
 export type Ask = (question: string, suggestion?: string) => Promise<string>;
@@ -53,7 +54,7 @@ const KINDS: Record<string, Kind> = {
   "6": "both",
   both: "both",
 };
-const KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+
 
 /** "Q4 2026", for a date in October to December 2026. */
 export const currentQuarter = (d = new Date()) => `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;

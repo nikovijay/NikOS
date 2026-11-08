@@ -186,7 +186,10 @@ its own `downstream.yaml`, and reports for each:
   from its origin remote, or `--as <path>`)
 - **synced**: when it last ran `nikos planning sync`, and whether it read this
   repo's current commit
-- **delivery**: stories done, approved and in progress, from its story map
+- **delivery**: stories done, approved and in progress, from its story maps'
+  committed `delivery.yaml`
+- **maps**: each of its maps that delivers another plan's bet (a team's map for
+  a company bet), with that map's counts
 - **next**: the story its team builds next, as `nikos next` would say there
 - **blocked**: each story with blockers in its state, and what's blocking it
 - **decisions**: its latest three, newest first, from its `decisions.md`
@@ -196,8 +199,11 @@ It also lists this repo's own latest decisions.
 
 Above those it draws the alignment as a tree: each key result here, the key
 results below that align to it (`aligns_to`), the ones that align to those in
-turn, and the bets that name each one. Key results and bets that point at
-nothing in the rollout are listed after the tree. The tree shows links only. A
+turn, the bets that name each one, and under each bet the maps below that
+deliver it (a team's map for this plan's bet). Key results, bets and maps that
+point at nothing in the rollout are listed after the tree. `nikos planning
+status` gives a bet with no maps here the counts of those maps, as the last
+rollout read them. The tree shows links only. A
 key result's progress comes from its own check-ins and never from the ones
 below it.
 
@@ -260,9 +266,11 @@ Each refusal says what to do. The ones that matter most:
   department's plan, or rewrite it as a bet aimed at a department key result (`krs:`). A team plan
   with none is rewritten to a group plan, keeping its name, pillars and period.
 - **A company or department plan** is refused: a repo holds one plan.
-- **A team repo** (`nikos.team.yaml`) that has `intent/` is refused, not moved: a team repo can't
-  hold a story map. Move `intent/` into a group repo with `nikos migrate maps` there, delete it from
-  the team repo, then `nikos team join`.
+- **A team repo** (`nikos.team.yaml`) that has `intent/` is moved into the team's own `maps/<key>/`,
+  in place. `nikos migrate maps` asks for the team's key (`--team-key`, or `key:` in `nikos.team.yaml`),
+  its home (`--home <repo>`) and its bet (`--bet`, `--new-bet` or `<repo>#<id>`). Its status and
+  approvals move to the team's root (`status/`, `approvals/`), one file per story. A team with no key
+  is told to pass one.
 
 The new layout is checked on a copy before anything is written, with the group's own rules
 (`validateGroup` and the planning checks). A failure there lists what's wrong, and the repo stays as
@@ -294,6 +302,21 @@ nikos team join acme/payments/checkout-group      # take work from a group
 nikos team member add "Priya Shah" --role Lead --handle priya-s
 nikos sync                                        # fetch the assigned stories
 ```
+
+A team can also own a story map of its own, once it has a key (`key: WEB` in
+`nikos.team.yaml`, or `nikos team init --key WEB`) and a home (`nikos join <plan> --home`, a group,
+department or company plan). It writes `maps/<key>/` in its own repo, whose stories are `WEB-INB-1`:
+
+```
+nikos map new --bet acme/company-plan#one-inbox --key INB   # a bet of the company's, or a bet of its own
+nikos assign "iOS team" --repo acme/ios-team --stories WEB-INB-2
+nikos assign "Web team" --repo . --stories WEB-INB-1         # its own share
+nikos map status                                            # its own stories, and the other team's status
+```
+
+Its status and approvals stay in its own `status/` and `approvals/`. `nikos map status` writes
+`maps/inb/delivery.yaml` for the plans above: commit it. A team that takes stories from another team
+runs `nikos team join <that team's repo>`, then `nikos sync`, as it does for a group.
 
 In the group repo, assign the team part of a map:
 
@@ -332,12 +355,13 @@ commit that only moves the team's own status or approvals doesn't count.
 `nikos verify` runs the copies with the team's own step definitions. It lists any
 step in the assigned stories that has no definition yet, as a warning.
 
-A team repo can't also keep `intent/` or `maps/`. The story-writing commands
-(`story`, `step`, `activity`, `release`, `map new`, `tracker import`), the plan
-commands (`join`, `company`, `group`, `decide`) and `assign`, `migrate`, `planning`,
-`start` and `init` are refused there, each with the place to run it instead: stories
-are written in the group repo, and a team takes work with `nikos team join`. A team's
-settings are its own `nikos.settings.yaml`, plus the locks of its group and company.
+A team repo can't keep `intent/`: it moves to the team's own `maps/<key>/` with `nikos migrate maps`.
+Its own maps take stories (`story`, `step`, `activity`, `release`, `map new`), `assign` and `map status`.
+On a copy of a group's or another team's map those are refused, each with the place to run it: stories
+are written in the group repo or the team that owns the map. `planning kr new` (key results) is refused,
+`tracker import`, `init`, `start`, `company`, `group` and `decide` are refused as before. A team joins a
+plan with `nikos join` once it has a key and a home. A team's settings are its own `nikos.settings.yaml`, plus the locks of its
+home's chain (see [settings](settings.md)).
 
 A team's CI runs `nikos sync` before `nikos validate` and `nikos verify`, since the
 assigned stories are gitignored and a fresh checkout has none. `nikos ci setup` adds
@@ -395,9 +419,10 @@ last good copy is shown, and its row says why. The MCP server has the same view 
 A story counts as done in a group's delivery only when its team's status is done,
 current, and its delivery approval holds, or approval isn't required here (`approval.policy` is
 `optional`, the default, or `off`). The bet's delivery (`nikos planning status`,
-the dashboard, the rollout) reads the copies from the last fetch, so it doesn't wait
-on the network: it says how many stories await approval, and how many teams it
-couldn't read.
+the dashboard, the rollout) reads each group's committed `maps/<key>/delivery.yaml`,
+written by `nikos map status` in the group's repo. Rollouts never fetch a team repo: the
+delivery is the owner's summary, and it says how old that summary is. A story the summary
+doesn't list counts as having no summary yet, not as done.
 
 `nikos assign` reads a holder's done state from its copy when it's fetched. The
 refusal names where it read the status and when the copy was fetched. With no copy,

@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import { CROSS_REF } from "../lib/bets.js";
 import { betText, checkBet, checkKr, describeErrors, krText, loadBet, loadKr, paths, writePlanning } from "./model.js";
-import { alignmentProblems, alignsValue, levelOf } from "./levels.js";
+import { alignmentProblems, alignsValue, krTargetProblems, levelOf } from "./levels.js";
 
 /** Replace a key result's or bet's aligns_to with refs (none removes it). expect is the hash it was loaded at. */
 export function setAligns(root: string, kind: "kr" | "bet", id: string, refs: string[], expect?: string): string {
@@ -38,6 +38,8 @@ export function setBetKrs(root: string, id: string, krs: { primary?: string; als
   for (const ref of [primary, ...also].filter((r): r is string => !!r)) {
     if (!CROSS_REF.test(ref)) loadKr(root, ref); // throws the same message as the other key result checks
   }
+  const problem = krTargetProblems(root, [primary, ...also].filter((r): r is string => !!r))[0];
+  if (problem) throw new Error(problem);
   const bet = loadBet(root, id);
   const meta = structuredClone(bet.meta);
   meta.krs = { ...(primary ? { primary } : {}), also };

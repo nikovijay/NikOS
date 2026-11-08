@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { assignedMaps, groupKeyOf, mapDirs, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { assignedMaps, groupKeyOf, keyOfMap, mapDirs, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
@@ -17,6 +17,7 @@ import { TEAM_FILE, clashingGroups, isTeamRepo, openTeam, relPath, storyMapClash
 import { schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
 import { groupStatus } from "../team/sync.js";
+import { upstreamEntries } from "../planning/upstream.js";
 
 export interface Issue {
   file: string;
@@ -161,15 +162,41 @@ function checkMapAssignments(dir: string, id: string, errors: Issue[], warnings:
   }
 }
 
-function validateMap(ref: StoryMapRef): ValidationResult {
+/**
+ * A team's own map names a bet in a plan above it: that plan must be one the team joins, and its
+ * bet must be in the synced copy (a warning when the copy isn't synced yet).
+ */
+function crossBet(root: string, id: string | undefined, bet: string, errors: Issue[], warnings: Issue[]): void {
+  const [repo, betId] = bet.split("#");
+  const file = "storymap.yaml";
+  let joined: string[] = [];
+  try {
+    joined = upstreamEntries(root).map((e) => e.repo);
+  } catch {
+    joined = []; // planning/upstream.yaml that doesn't read is reported by doctor
+  }
+  if (!joined.includes(repo)) {
+    errors.push({ file, message: `maps/${id} names bet ${bet}, but this team doesn't join ${repo}`, hint: `join it first (nikos join ${repo} --home <repo>), or name one of this team's own bets` });
+    return;
+  }
+  const copy = join(root, ".nikos", "upstream", ...repo.split("/"));
+  if (!store().isDir(copy)) {
+    warnings.push({ file, message: `bet ${bet} can't be checked yet: ${repo} isn't synced`, hint: "run nikos planning sync" });
+    return;
+  }
+  if (!store().exists(join(copy, "planning", "bets", `${betId}.md`))) errors.push({ file, message: `maps/${id} names bet ${bet}, which ${repo} doesn't have`, hint: "check the bet's id in that plan" });
+}
+
+export function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
-  // A team's copy has no state.yaml or approvals: the team's status is checked by validateTeam.
-  const team = ref.team === true;
+  // A team's copy has no state.yaml or approvals, and neither has a team's own map: the team's status is checked by validateTeam.
+  const copy = ref.team === true && !ref.own;
+  const team = copy;
 
   const storymap = loadYaml(dir, "storymap.yaml", errors);
-  const state = team ? undefined : loadYaml(dir, "state.yaml", errors);
+  const state = ref.team ? undefined : loadYaml(dir, "state.yaml", errors);
 
   if (storymap !== undefined && !checkStorymap(storymap)) {
     for (const e of checkStorymap.errors ?? []) {
@@ -408,7 +435,12 @@ function validateMap(ref: StoryMapRef): ValidationResult {
       for (const r of storymap.releases ?? []) if (r?.bets !== undefined) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove bets: from release ${r?.number}` });
       for (const id of Object.keys(storymap.story_bets ?? {})) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove story_bets from ${id}` });
       if (typeof storymap.bet !== "string") errors.push({ file: "storymap.yaml", message: `maps/${ref.id}/storymap.yaml has no bet: add bet: <bet-id>, the group bet this map specs` });
-      else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
+      else if (ref.team && CROSS_REF.test(storymap.bet)) {
+        // A team's map names a bet in a plan above it. Its own maps check it against the plan the team joins; a copy was checked where it was written.
+        if (ref.own) crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
+      } else if (ref.team && !ref.own && !store().isDir(betsDir)) {
+        // A copy of another team's map: the team's bets aren't copied, so its bet is checked where the map was written.
+      } else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
     } else {
       if (storymap.bet !== undefined) errors.push({ file: "storymap.yaml", message: "intent/ names bets in releases: bet: is only for maps/<id>", hint: "move the bet to bets: on each release" });
       for (const r of storymap.releases ?? []) check(`release ${r?.number}`, r?.bets);
@@ -437,7 +469,7 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
     errors.push({ file: TEAM_FILE, message: (err as Error).message.replace(`${TEAM_FILE}: `, "") });
   }
   const clash = storyMapClash(root);
-  if (clash) errors.push({ file: "intent/ or maps/", message: clash, hint: "a team repo takes its stories from a group repo; moving a repo that has its own story map isn't supported yet" });
+  if (clash) errors.push({ file: "intent/", message: clash, hint: "a team's own maps go in maps/<key>/: nikos migrate maps moves intent/ there (with a team key and a home)" });
   const nested = clashingGroups(team?.groups.map((g) => g.repo) ?? []);
   if (nested) errors.push({ file: TEAM_FILE, message: `${nested[0]} and ${nested[1]} can't both be groups: one path sits inside the other` });
 
@@ -450,10 +482,39 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
     if (st.moved) warnings.push({ file: TEAM_FILE, message: `group ${g.repo} moved since the last sync`, hint: "run nikos sync" });
   }
 
-  // Each copy is a map, checked as one; a story id can be in one copy only.
+  // A team's own maps: each is checked as a map, its folder is named for its key, and each key is used once here.
   const owner = new Map<string, string>();
   const hashes = new Map<string, string>();
   let releases = 0;
+  const ownKeys = new Map<string, string>();
+  const own = ownMapsOf(root);
+  if (own.length && !team?.key) errors.push({ file: TEAM_FILE, message: "a team that owns a map needs a key (nikos team init --key WEB)" });
+  let joined: string[] = [];
+  try {
+    joined = upstreamEntries(root).map((e) => e.repo);
+  } catch {
+    joined = [];
+  }
+  if ((own.length || joined.length) && team && !team.home) errors.push({ file: TEAM_FILE, message: "a team that joins a plan or owns a map needs one home (nikos join <plan repo> --home)" });
+  for (const ref of own) {
+    const prefix = relPath(root, ref.dir);
+    const r = validateMap(ref);
+    for (const e of r.errors) errors.push({ ...e, file: `${prefix}/${e.file}` });
+    for (const w of r.warnings) warnings.push({ ...w, file: `${prefix}/${w.file}` });
+    releases += r.releases;
+    const key = keyOfMap(ref.dir);
+    if (key && key.toLowerCase() !== ref.id) errors.push({ file: `${prefix}/storymap.yaml`, message: `${prefix} has key '${key}', so its folder should be maps/${key.toLowerCase()}` });
+    if (key && ownKeys.has(key)) errors.push({ file: `${prefix}/storymap.yaml`, message: `${ownKeys.get(key)} and ${prefix} both use key '${key}'`, hint: "give each map a key of its own" });
+    else if (key) ownKeys.set(key, prefix);
+    checkMapAssignments(ref.dir, ref.id!, errors, warnings);
+    for (const f of loadMapData(ref.dir).features) {
+      if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two places in this team`, hint: "keep each story in one map" });
+      owner.set(f.id, prefix);
+      hashes.set(f.id, specHash(f.text));
+    }
+  }
+
+  // Each copy is a map, checked as one; a story id can be in one copy only.
   for (const ref of assignedMaps(root)) {
     const prefix = relPath(root, ref.dir);
     const r = validateMap(ref);

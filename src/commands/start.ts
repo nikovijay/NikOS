@@ -15,6 +15,7 @@ import { createInterface } from "node:readline/promises";
 import { askOnboarding, setUp } from "./onboard.js";
 import { cliCommand } from "../lib/cli-version.js";
 import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
+import { KEY } from "../lib/keys.js";
 import { BELOW, planYaml, type PlanLevel } from "../lib/group-plan.js";
 
 export type { PlanLevel };
@@ -64,7 +65,7 @@ export interface CompanyResult {
 }
 
 /** A group's key: the GROUP in its story ids. */
-const GROUP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+const GROUP_KEY = KEY;
 
 /**
  * Write a plan repo for a company, a department or a group: plan.yaml, settings every level

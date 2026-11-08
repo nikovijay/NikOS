@@ -6,9 +6,11 @@
   "required": ["format_version", "name", "repo"],
   "additionalProperties": false,
   "properties": {
-    "format_version": { "const": 1 },
+    "format_version": { "enum": [1, 2] },
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
     "repo": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$" },
+    "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
+    "home": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$" },
     "groups": {
       "type": "array",
       "items": {

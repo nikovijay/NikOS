@@ -3,12 +3,12 @@ import { betIds, findRoot, krIds, loadBet, loadKr } from "./model.js";
 import { planningIssues } from "./levels.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "./bets.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
-import { delivery, describeDelivery } from "./delivery.js";
+import { delivery } from "./delivery.js";
 import { crossRefs, runSync } from "./upstream.js";
 import { runServe } from "./server.js";
-import { addDownstream, formatRollout, rollout } from "./rollout.js";
+import { addDownstream, betDeliveryText, formatRollout, rollout } from "./rollout.js";
 
-const help = `nikos planning — bets, key results and the planning dashboard
+export const help = `nikos planning — bets, key results and the planning dashboard
 
 Usage: nikos planning <command> [options] [--dir <repo>]
 
@@ -27,7 +27,8 @@ Commands:
   validate           Check planning/ against its schemas and the rules for its level
   sync [--check]     Fetch the plans in planning/upstream.yaml read-only into .nikos/upstream/
   downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com,
-                     --url <git url> for any other host, an SSH url or a local repo)
+                     --url <git url> for any other host, an SSH url or a local repo; --home <repo>
+                     when it is homed in another plan this one doesn't own)
   rollout            How the plans below this one are doing: joined, last synced, delivery, and
                      the key results and bets that point here (--json, --offline, --as <repo path>)
   serve              Open the local dashboard (--port). --export <file> writes it as one offline page;
@@ -60,14 +61,17 @@ export function status(root: string): string {
   out.push(bets.length ? "Bets:" : "Bets: none");
   for (const id of bets) {
     const b = loadBet(root, id).meta;
-    out.push(`  ${id} — delivery: ${describeDelivery(delivery(root, id))} · outcome: ${b.outcome} · review on ${b.review_on}`);
+    // A bet with no stories here can still be delivered by a map below, such as a team's map for this company's bet.
+    out.push(`  ${id} — delivery: ${betDeliveryText(root, id, delivery(root, id))} · outcome: ${b.outcome} · review on ${b.review_on}`);
   }
   const krs = krIds(root);
   out.push(krs.length ? "Key results:" : "Key results: none");
   for (const id of krs) {
     const k = loadKr(root, id).data;
     const last = latest(k);
-    const u = k.unit ?? "";
+    // A word unit (days) gets a space, as in the dashboard; % and $ stay tight to the number.
+    const unit = k.unit ?? "";
+    const u = unit === "" || unit === "%" || unit === "$" ? unit : ` ${unit}`;
     out.push(
       `  ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${isStale(k) ? " · stale" : ""}`,
     );
@@ -163,7 +167,7 @@ export async function runPlanning(args: string[]): Promise<number> {
         return await runSync(root, { check: has("check") });
       case "downstream":
         if (sub === "add" && id) {
-          const r = addDownstream(root, { name: id, repo: opt("repo"), host: opt("host"), url: opt("url") });
+          const r = addDownstream(root, { name: id, repo: opt("repo"), host: opt("host"), url: opt("url"), home: opt("home") });
           console.log(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
           return 0;
         }

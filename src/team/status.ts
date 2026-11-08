@@ -11,7 +11,8 @@ import { fetchCopy } from "../lib/fetch-copy.js";
 import { ASSIGNMENTS, holderOf, loadMapData, mapStoryIds, readAssignments, storiesOf, type Assignment, type MapData } from "../lib/assignments.js";
 import { mapDirs } from "../lib/maps.js";
 import { isDone, specHash } from "../lib/project.js";
-import { loadApprovalEntries, loadStates, type StoryState } from "../lib/state-files.js";
+import { loadApprovalEntries, loadStates, type StoryHome, type StoryState } from "../lib/state-files.js";
+import { isTeamRepo, openTeam } from "../lib/team.js";
 import { loadApprovals, teamApprovalLapse, type Approval, type DeliveryApproval } from "../lib/approvals.js";
 import { ignoreCache, repoEntry, type UpstreamEntry } from "../planning/upstream.js";
 
@@ -81,15 +82,17 @@ export interface GroupMap {
   key: string;
   data: MapData;
   list: Assignment[];
+  /** Where the map's status and approvals are: its folder in a group, the team's root for a map a team owns. */
+  home: StoryHome;
 }
 
-export function loadGroupMap(dir: string): GroupMap {
+export function loadGroupMap(dir: string, home: StoryHome = dir): GroupMap {
   const data = loadMapData(dir);
-  return { dir, id: basename(dir), key: String(data.storymap?.key ?? basename(dir)), data, list: readAssignments(dir) };
+  return { dir, id: basename(dir), key: String(data.storymap?.key ?? basename(dir)), data, list: readAssignments(dir), home };
 }
 
-/** Every map in a group repo, with its assignments. */
-export const groupMaps = (root: string): GroupMap[] => mapDirs(root).map(loadGroupMap);
+/** Every map in a group repo, or each map a team owns (its status and approvals sit at the team's root). */
+export const groupMaps = (root: string): GroupMap[] => mapDirs(root).map((d) => loadGroupMap(d, isTeamRepo(root) ? { team: root } : d));
 
 /** A story's feature fingerprint in a map: what a team has to prove against. */
 export function featureHashIn(data: MapData, id: string): string {
@@ -299,6 +302,8 @@ export interface StoryView {
   fetched?: string;
   /** The delivery approval, as the team's table shows it. */
   delivery: string;
+  /** The name the delivery approval was given (not a verified identity). Set when the approval holds. */
+  approvedBy?: string;
   /** The group's intent approval, as the map shows it. */
   intent: string;
   /** For a moved story: the team that held it before, and its last status. */
@@ -323,7 +328,10 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
   const done = isDone(shown) && (inPlace || v.freshness === "not-fetched" || (current && (!!v.approved || !!v.optional)));
   const awaiting = isDone(shown) && !inPlace && current && !v.approved && !v.optional;
   let delivery = "-";
-  if (inPlace) delivery = "n/a (in place)";
+  // In place, a delivery approval shows only when the team's own share has one that holds for the current feature.
+  const ownApproval = inPlace && isDone(shown) && f.approval && !teamApprovalLapse(f.approval, f.status, f.H) ? f.approval : undefined;
+  const approvedBy = v.approvedBy ?? ownApproval?.by;
+  if (inPlace) delivery = ownApproval ? `approved by ${ownApproval.by}` : "n/a (in place)";
   else if (isDone(shown)) {
     delivery = v.approved
       ? v.approvedBy
@@ -351,6 +359,7 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
     copy,
     ...(fetched ? { fetched } : {}),
     delivery,
+    ...(approvedBy ? { approvedBy } : {}),
     intent,
     ...(from ? { from } : {}),
     done,
@@ -361,6 +370,8 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
 
 /** The group's intent approval for a story, checked against the current feature. */
 function intentOf(map: GroupMap, id: string, H: string): string {
+  // A map a team owns has no intent approval of its own: its delivery approvals are the team's.
+  if (typeof map.home !== "string") return "-";
   const a: Approval | undefined = loadApprovals(map.dir)[id];
   if (!a) return "-";
   return a.spec_hash === H ? `approved by ${a.by}` : "approved for an older spec";
@@ -375,14 +386,16 @@ export function storyView(opts: { root: string; map: GroupMap; id: string; holde
   const intent = intentOf(map, id, H);
   if (!holder) return viewOf(id, { H, policy }, "none", intent);
   if (holder.repo === ".") {
-    const status = loadStates(map.dir)[id];
-    return viewOf(id, { H, holder: holder.team, repo: ".", inPlace: true, status, policy }, "fetched", intent);
+    const status = loadStates(map.home)[id];
+    // A team's own share of its own map is approved here too, in the team's approvals/.
+    const approval = typeof map.home === "object" ? loadApprovalEntries<DeliveryApproval>(map.home)[id] : undefined;
+    return viewOf(id, { H, holder: holder.team, repo: ".", inPlace: true, status, approval, policy }, "fetched", intent);
   }
   const copy = index.teams[holder.repo];
   const good = hasGoodCopy(root, index, holder.repo);
   const read = good ? readTeamStory(root, holder.repo, id, index) : undefined;
   // With no good copy, the group's own state.yaml is the only status there is: shown, and not current.
-  const status = good ? read?.status : loadStates(map.dir)[id];
+  const status = good ? read?.status : loadStates(map.home)[id];
   const old = index.holders[id];
   let prev: Facts["prev"];
   if (old !== undefined && old !== holder.repo) {
@@ -405,8 +418,10 @@ export function storyView(opts: { root: string; map: GroupMap; id: string; holde
 
 /** Every story of a group map (or only the listed ids), as the group sees its teams' work. */
 export function mapViews(root: string, map: GroupMap, index: TeamIndex, ids?: string[], policy?: string): StoryView[] {
+  // A team's own map (its status is at the team's root): a story no assignment gives away is the team's own, so it has a status.
+  const owner: Assignment | undefined = typeof map.home === "object" ? { team: openTeam(root).name, repo: "." } : undefined;
   return (ids ?? mapStoryIds(map.data)).map((id) =>
-    storyView({ root, map, id, holder: holderOf(map.list, map.data, id), index, H: featureHashIn(map.data, id), policy }),
+    storyView({ root, map, id, holder: holderOf(map.list, map.data, id) ?? owner, index, H: featureHashIn(map.data, id), policy }),
   );
 }
 

@@ -25,13 +25,15 @@ import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
-import { runPlanning } from "./planning/cli.js";
+import { help as planningHelp, runPlanning } from "./planning/cli.js";
 import { runServeCommand } from "./commands/serve.js";
 import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
 import { runTeam } from "./commands/team.js";
 import { runTeamSync } from "./team/sync.js";
-import { isTeamRepo, TEAM_REPO_STORIES } from "./lib/team.js";
+import { isTeamRepo, openTeam, TEAM_REPO_STORIES, teamOptedIn } from "./lib/team.js";
+import { store } from "./lib/store.js";
+import { join } from "node:path";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -78,6 +80,21 @@ function teamRefusal(cmd: string): string {
   if (cmd === "apply") return "this is a team repo: changes are made in the group repo";
   if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
+}
+
+/** What a team repo may run from the group-only commands: its own planning, bets, joins and maps (see the amendment, rule 2). */
+const TEAM_PLANNING = new Set(["sync", "status", "validate", "rollout"]);
+function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
+  // A team's first join names its home with --home; after that a team that has opted in may join more.
+  if (cmd === "join") return rest.includes("--home") || teamOptedIn(dir);
+  if (!teamOptedIn(dir)) return false;
+  if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
+  // assign takes a team's own maps only: a copy's assignments are refused where they're made (assign.ts).
+  if (cmd === "assign") return true;
+  // A team writes stories and maps of its own; a copy of a group's or another team's map is refused where it's reached (authoringMap).
+  if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release") return true;
+  if (cmd === "map") return rest[0] === "new";
+  return false;
 }
 
 /** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
@@ -132,9 +149,10 @@ Commands:
   doctor           Check this repo is set up well, and say what to do next (--offline)
   migrate per-story  Give each story its own state and approval file, so parallel
                    branches never conflict (migrate single-file goes back)
-  migrate maps     Move a repo's intent/ story map to maps/<key>/ of a group repo, which is
-                   its own team: planned first, on nikos/migrate-maps (--dry-run, --yes,
-                   --key, --group-key, --bet, --new-bet, --rename-ids, --commit)
+  migrate maps     Move a 0.2.x intent/ story map to maps/<key>/: of a group repo (--key,
+                   --group-key), or of a team repo (--team-key, --home, --bet <id> or
+                   <repo>#<id>, --new-bet). Planned first; --dry-run, --yes, --rename-ids,
+                   --commit, --help for every option
   tracker link|record|sync|import  Keep the story map and a Jira, Linear, GitHub or GitLab
                    tracker in step; the agent reads tickets through the tracker's MCP
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and
@@ -144,24 +162,40 @@ Commands:
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
   map              Write a read-only story map page (--out, default storymap.html, --map)
-  map new          In a group repo, a story map for one of its bets, in maps/<key>/
-  map status       In a group repo, each assigned team's status on its stories: fresh or not,
-                   delivery and intent approvals (--map, --offline, --json)
-                   (--bet <bet-id>, --key <KEY>)
+  map new          In a group repo, or a team repo with a key and a home: a story map for one
+                   bet, in maps/<key>/ (--bet <bet-id | repo#bet>, --key <KEY>)
+  map status       In a repo that owns maps: each assigned team's status on its stories, fresh
+                   or not, delivery and intent approvals; writes maps/<key>/delivery.yaml to
+                   commit (--map, --offline, --json, which writes nothing)
   export --format <prd|linear|jira>  The story map as a PRD or tracker import
                    (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
-  assign "<team>" --repo <path|.>  Give a team all or part of a group's story map
+  assign "<team>" --repo <path|.>  Give a team all or part of a story map this repo owns
                    (--activities, --releases or --stories; --map, --include-done, --url, --ref)
-  team init|join|member|show  A team repo: its name, the groups it takes work from, its members
-                   (team init --repo owner/repo, team join <group repo>, team member add "<name>")
+  team init|join|member|show  A team repo: its name and key, the repos it takes work from,
+                   its members (team init --repo owner/repo --key WEB, team join <group or team
+                   repo>, team member add "<name>"); its home is set with nikos join <plan> --home
   sync             In a team repo: fetch the stories assigned to it, read-only, into
                    .nikos/assigned/ (gitignored)
 
   --version        Print the installed version
 
 Docs: https://nikos.tools`;
+
+/** The lines of the help for one command: its entry, and the lines that continue it. */
+function commandHelp(cmd: string): string {
+  const lines = help.split("\n");
+  const out: string[] = [];
+  let inEntry = false;
+  for (const line of lines) {
+    const entry = /^  \S/.test(line);
+    if (entry) inEntry = line.slice(2).split(/[\s|]/)[0] === cmd;
+    else if (!/^   /.test(line)) inEntry = false;
+    if (inEntry) out.push(line);
+  }
+  return `Usage: nikos ${cmd} [options]\n\n${out.join("\n")}\n\nDocs: https://nikos.tools`;
+}
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
@@ -178,6 +212,12 @@ async function main(argv: string[]): Promise<number> {
     console.error(`Unknown command '${cmd}'.\n\n${help}`);
     return 1;
   }
+  // `<command> --help` prints help and runs nothing: some commands write files whatever their arguments.
+  // `migrate maps` has its own, longer help.
+  if ((rest.includes("--help") || rest.includes("-h")) && !(cmd === "migrate" && rest[0] === "maps")) {
+    console.log(cmd === "planning" ? planningHelp : commandHelp(cmd));
+    return 0;
+  }
   // `nikos map` alone writes the page, which a team can have; `map new` writes a map.
   // `migrate maps` is refused with its own message in a team repo, so it skips the generic one.
   const authoring = GROUP_ONLY.has(cmd) && !(cmd === "map" && rest[0] !== "new") && !(cmd === "migrate" && rest[0] === "maps");
@@ -186,7 +226,8 @@ async function main(argv: string[]): Promise<number> {
     console.error("✗ --dir needs a folder: --dir <path>");
     return 1;
   }
-  if (authoring && isTeamRepo(at >= 0 ? rest[at + 1] : process.cwd())) {
+  const teamDir = at >= 0 ? rest[at + 1] : process.cwd();
+  if (authoring && isTeamRepo(teamDir) && !teamMayRun(cmd, rest, teamDir)) {
     console.error(`✗ ${teamRefusal(cmd)}`);
     return 1;
   }

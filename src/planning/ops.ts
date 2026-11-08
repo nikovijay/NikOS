@@ -8,7 +8,7 @@ import { newActivity, newStep, renameActivity, renameStep } from "../commands/st
 import { newStory, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
 import { assign, unassign } from "../commands/assign.js";
-import { resolveStoryMap, mapDirs } from "../lib/maps.js";
+import { homeOf, resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
 import { isTeamRepo } from "../lib/team.js";
 import { isDone } from "../lib/project.js";
@@ -154,7 +154,7 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   assign: ["name", "activities", "releases", "stories", "replace", "map"],
   unassign: ["stories", "activities", "releases", "map"],
   "setting.set": ["key", "value"],
-  "downstream.add": ["name", "repo"],
+  "downstream.add": ["name", "repo", "home"],
 };
 
 /**
@@ -232,11 +232,12 @@ function checkStoryMap(root: string, map: string | undefined, expect: string | u
 function doneInTeam(root: string, map: string | undefined, id: string): boolean {
   const ref = resolveStoryMap(root, map);
   const holder = holderOf(readAssignments(ref.dir), loadMapData(ref.dir), id);
-  if (!holder || holder.repo === ".") return isDone(loadStates(ref.dir)[id]?.status);
+  // The owner's own state: at the team root for a team's own map, in the map's folder for a group's.
+  if (!holder || holder.repo === ".") return isDone(loadStates(homeOf(ref))[id]?.status);
   const got = readTeamStory(root, holder.repo, id, readTeamIndex(root));
   // No good copy of the team's: fall back to the group's own state, as assign does.
   if (got) return isDone(got.status?.status);
-  return isDone(loadStates(ref.dir)[id]?.status);
+  return isDone(loadStates(homeOf(ref))[id]?.status);
 }
 
 /** Run one op against the store in use. Throws the command's own message. */
@@ -396,7 +397,7 @@ function apply(root: string, op: Op): string {
       return `Set ${key}`;
     }
     case "downstream.add": {
-      const r = addDownstream(root, { name: String(a.name ?? ""), repo: str(a.repo) });
+      const r = addDownstream(root, { name: String(a.name ?? ""), repo: str(a.repo), home: str(a.home) });
       return `${r.added ? "Added" : "Updated"} ${r.name}`;
     }
   }

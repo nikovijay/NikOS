@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendment status", for what is built and where it differs). A team can own story maps, give its stories to other teams, and report their delivery through committed summaries. A repo that doesn't opt in (a 0.3.0 team with no key, home, map or joined plan) behaves as before.
+
+### Added
+
+- A team that has a key can own story maps: `nikos map new --bet <bet-id>|<repo>#<id> --key <KEY>` in a team repo makes `maps/<key>/`, whose story ids are `<TEAM>-<KEY>-n` (e.g. `WEB-INB-1`). Its status and approvals stay at the team's root (`status/`, `approvals/`). `nikos story`, `step`, `activity`, `release`, `state`, `approve`, `validate`, `doctor`, `next`, `show` and `verify` work on its own maps.
+- A team's own bets live in its `planning/bets/`, aimed at company or department key results (`krs: <repo>#<kr-id>`) and optionally aligned to bets in the plans it joins. `planning kr new` stays refused in a team repo.
+- `nikos team join <team repo>` takes stories from another team that owns a map, read-only, as it takes them from a group. Its key names the story ids. `nikos sync` fetches them into `.nikos/assigned/`.
+- `nikos assign "<team>" --repo <path|.>` works in a team repo for its own maps: `--repo .` is its own share, and another team's share is written the way a group writes it, in `maps/<key>/assignments.yaml`.
+- `nikos map status` works in a team repo for its own maps: its own stories are read in place, other teams are fetched as a group fetches them, and `maps/<key>/delivery.yaml` is written for the plans above.
+- `nikos planning downstream add <name> --home <repo>` (and the `add_downstream` tool's `home`) marks a team or group that is homed in another plan. The rollout says "homed in <repo>".
+- `nikos join` and `nikos team join` refuse a key that clashes with a key in the chain's copies, naming both repos. The rollout reports two copies below it with one key as an error line.
+- `nikos doctor` suggests a CODEOWNERS rule for each map's `assignments.yaml`, naming the home plan's lead. The lead is an optional `lead:` in `planning/plan.yaml`; without one the suggestion shows `@<home-lead>`. Nothing is written.
+- `nikos migrate maps` in a team repo moves its `intent/` into the team's `maps/<key>/` in place. The team's key (`--team-key`), its home (`--home <repo>`) and its bet (`--bet`, `--new-bet` or `<repo>#<id>`) come from `nikos.team.yaml` or those flags. The plan is shown first and the layout is checked on a copy, as for a group.
+
+- `nikos team init --key WEB` gives a team its key. A team file with a key or a home is format 2, which 0.3.0 can't read: a team upgraded this way must be upgraded in its groups too. A team with no key keeps format 1.
+- `nikos map status` writes `maps/<key>/delivery.yaml` in the group's repo, one line per story: its team, status, approval (a name, not a verified identity) and when it was read. Commit it: the plans above read it. Rollouts and the bet lines say how old each summary is, and how many stories have no summary yet. Offline reads write nothing.
+- A map below that delivers another plan's bet (a team's map for a company bet) shows in that plan's rollout: under the bet in the alignment tree, and on the copy's line as `map <key> → <repo>#<bet>` with its counts. `nikos planning status` there gives such a bet the maps' counts, as the last rollout read them.
+- `nikos map status` in a team repo shows the team's approval of its own share ("approved by …") and writes it to `delivery.yaml`. The team's own row reads "this team (--repo .)".
+- A bet that aligns to a stopped bet is flagged in the rollout: "aligns to <bet>, which was stopped on <date>". Nothing else changes.
+- A team repo may run `nikos planning bet new`, `planning sync`, `planning status`, `planning validate`, `planning rollout`, and `nikos join`, once it has a key, a home, a map of its own or a plan joined. `planning kr new` there is refused with the key-result wording. A team repo with none of those is refused as in 0.3.0.
+- `nikos join <plan> --home` makes a plan a team's home (a group, department or company plan, with a key that isn't the team's own), records it in `nikos.team.yaml` at format 2, and refuses a second home. A group's `--home` marks the plan in its `planning/upstream.yaml`. `nikos doctor` warns about a team that joins a plan with no home.
+- A team's settings and locks come only from its home's chain. A group marked with a home takes its settings from that plan's chain alone.
+
+### Changed
+
+- A team repo with `intent/` and no key is still refused by `nikos migrate maps`, now with the key to pass (it was refused with a move it couldn't make).
+- `nikos assign` and `nikos map status` in a team repo are refused only when the team has no map of its own, with the 0.3.0 wording kept.
+- Rollouts read a team's delivery from its committed `delivery.yaml` (its own maps), the same as a group's, and never from its `status/`.
+- A team's `nikos.team.yaml` may name a `home` and `key` (format 2): 0.3.0 can't read it.
+- A plan aligns to any plan above it that it joins, not only the one directly above. A group may align a bet to a company bet it joins. The "isn't the plan directly above this one" message is now "isn't a plan this <level> joins".
+- Key-result targets in `krs:` (cross-plan) are checked like `aligns_to`.
+- `nikos state set <id> done` exits 0 once the move is written; a problem found elsewhere is printed as a `!` warning.
+
+### Fixed
+
+- `nikos <command> --help` prints that command's help and runs nothing. `team init --help`, `init --help`, `start --help`, `join <repo> --help` and `planning downstream add --help` used to run the command and write files.
+- `--map` takes the key `map new` prints, case-insensitively (`--map HR` finds `maps/hr`).
+- The rollout's delivery read "0 of 0" for a group with several maps, and "team status not read here" for a bet. Both now come from the owner's summary.
+- The alignment tree printed a group bet twice: under the bet it aligns to, and under the key result. It's now shown under the bet only.
+- A bet aimed at a stopped bet is flagged in the dashboard's OKRs and bets page too, and in the rollout when the stopped bet is in the plan being rolled out.
+- A bet's delivery line says how old the summary it counts is, as the plan line does.
+- The rollout's next story and story titles come from every map of a group, not only a group with one map.
+- `nikos map status` can run twice in one repo: it overwrites `delivery.yaml` instead of failing with EEXIST.
+- `nikos map status --json` writes nothing, so a piped run leaves the group's tree clean.
+- A 0.3.0 team repo with no key or home no longer gets a "team plan" warning from `nikos doctor`.
+- A team's settings no longer include a plan it joined that isn't its home, and a team with a home is no longer read by the generic walk.
+
+### Review fixes
+
+- A 0.3.0 team with no key, home or maps is refused, read and settled as before. A team with a `planning/` folder reads the locks of the plans it joined again, and `nikos doctor` adds no home warning for it. A keyless team can still be made in a group repo with no maps (`nikos team init`); a keyed one can't.
+- `nikos team init --key WEB` gives a team that has no key yet its key (format 2). A key already set is kept.
+- `nikos team join --home` is refused: a home is set with `nikos join <plan> --home`.
+- `nikos.team.yaml` with a `key` must be format 2, as a home already was.
+- `nikos team show` lists the team's key, home and own maps.
+- `nikos assign --repo .` names the team it's run in: another team's name is refused with the repo to use.
+- A team's own map with no assignments gets its `delivery.yaml`, its stories read from the team's status. A rollout reads no team status for next-up or blockers.
+- A bet named as `<repo>#<id>` matches the same bet from the repo it names.
+- `nikos migrate maps` in a team repo writes each story's state and approval to the team's `status/` and `approvals/`, and says "team key" where it means one. `nikos migrate maps --help` prints the usage.
+- `nikos state set` names only the story it changed when an approval has lapsed.
+- `nikos planning status` puts a space before a word unit (12 days) and keeps % tight.
+- `nikos map new` in a team needs its home (as well as its key), and says which join to run.
+
 ## 0.3.0 (2026-11-08)
 
 ### Added

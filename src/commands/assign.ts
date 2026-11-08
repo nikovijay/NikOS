@@ -4,12 +4,15 @@ import { urlProblem } from "../lib/fetch-copy.js";
 // delivered it unless --include-done moves it. Assignments are written to maps/<id>/assignments.yaml.
 import { join, resolve } from "node:path";
 import { isDone } from "../lib/project.js";
-import { mapDirs, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
-import { isTeamRepo, isRepoArg } from "../lib/team.js";
+import { homeOf, mapDirs, ownMapsOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
+import { isTeamRepo, isRepoArg, openTeam } from "../lib/team.js";
 import { loadStates } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { checkAssignments, loadMapData, mapStoryIds, readAssignments, storiesOf, writeAssignments, type Assignment, type MapData } from "../lib/assignments.js";
 import { readTeamIndex, readTeamStory, writeTeamIndex, type TeamIndex } from "../team/status.js";
+
+/** Refused in a team repo with no map of its own: the 0.3.0 wording, kept as it was. */
+const TEAM_ASSIGN = "this is a team repo: assignments are made in the group repo";
 
 export interface AssignOptions {
   repo: string;
@@ -66,11 +69,15 @@ function checkSelectors(map: MapData, opts: AssignOptions, label: string): void 
 /** Assign a team its part of a group's map, moving stories held by other teams where the rules allow. */
 export function assign(dir: string, team: string, opts: AssignOptions): AssignResult {
   const root = resolve(dir);
-  if (isTeamRepo(root)) throw new Error("this is a team repo: assignments are made in the group repo");
-  if (!mapDirs(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
+  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error(TEAM_ASSIGN);
+  if (!mapDirs(root).length && !ownMapsOf(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
   const name = team.trim();
   if (!name) throw new Error("Give the team's name, e.g. nikos assign \"Checkout web\" --repo acme/checkout-web");
   if (!opts.repo || !isRepoArg(opts.repo)) throw new Error("nikos assign needs --repo <path>: the team's repo, as owner/repo, or . when this repo is its own team");
+  // In a team repo, --repo . is this team's own share: the name given must be this team's, or the record names the wrong team.
+  if (opts.repo === "." && isTeamRepo(root) && name !== openTeam(root).name) {
+    throw new Error(`${name} isn't this team (${openTeam(root).name}): --repo . is this team's own share. Use --repo <that team's repo> for ${name}`);
+  }
   const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
   if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");
   if (opts.url) {
@@ -79,6 +86,7 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
   }
 
   const ref: StoryMapRef = resolveStoryMap(root, opts.map);
+  if (isTeamRepo(root) && !ref.own) throw new Error("this is a team's copy of a map: its assignments are made where the map is owned");
   const map = loadMapData(ref.dir);
   const label = `maps/${ref.id}`;
   checkSelectors(map, opts, `${label}/storymap.yaml`);
@@ -97,7 +105,7 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
   const next = storiesOf(map, entry);
   const dropped = before ? storiesOf(map, before).filter((id) => !next.includes(id)) : [];
 
-  const states = loadStates(ref.dir);
+  const states = loadStates(homeOf(ref));
   const index = readTeamIndex(root);
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -116,7 +124,7 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
     const doneIds: string[] = [];
     for (const id of overlap) {
       const h = doneOf(root, index, states, other, id);
-      if (h.fallback) warnings.push(`${id} is held by ${other.team}, which isn't fetched: checked the group's own state.yaml (run nikos map status first)`);
+      if (h.fallback) warnings.push(`${id} is held by ${other.team}, which isn't fetched: checked ${isTeamRepo(root) ? "this team's own status" : "the group's own state.yaml"} (run nikos map status first)`);
       if (!h.done) continue;
       if (!opts.includeDone) throw new Error(h.refusal);
       doneIds.push(id);
@@ -206,11 +214,12 @@ export interface UnassignOptions {
  */
 export function unassign(dir: string, opts: UnassignOptions): { team: string; removed: string[]; left: number } {
   const root = resolve(dir);
-  if (isTeamRepo(root)) throw new Error("this is a team repo: assignments are made in the group repo");
-  if (!mapDirs(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
+  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error(TEAM_ASSIGN);
+  if (!mapDirs(root).length && !ownMapsOf(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
   const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
   if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");
   const ref: StoryMapRef = resolveStoryMap(root, opts.map);
+  if (isTeamRepo(root) && !ref.own) throw new Error("this is a team's copy of a map: its assignments are made where the map is owned");
   const map = loadMapData(ref.dir);
   const list = readAssignments(ref.dir);
   const entry = list.find((a) => a.repo === opts.team);
@@ -219,7 +228,7 @@ export function unassign(dir: string, opts: UnassignOptions): { team: string; re
   const ids = opts.stories ?? (opts.activities ? map.features.filter((f) => opts.activities!.includes(f.activity)).map((f) => f.id) : opts.releases ? opts.releases.flatMap((n) => map.releases.get(n) ?? []) : held);
   for (const id of ids) if (!held.includes(id)) throw new Error(`${id} is not assigned to ${entry.team}`);
   const index = readTeamIndex(root);
-  const states = loadStates(ref.dir);
+  const states = loadStates(homeOf(ref));
   for (const id of ids) {
     const h = doneOf(root, index, states, entry, id);
     if (h.done) throw new Error(h.refusal.replace(" (use --include-done)", ""));

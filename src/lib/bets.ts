@@ -36,8 +36,21 @@ export function betsFor(map: any, story: string): StoryBets {
   return { bets: [], from: "none", release: release?.number };
 }
 
-/** Every story that delivers a bet, after story overrides. */
-export function storiesFor(map: any, bet: string): string[] {
+/**
+ * A bet's canonical name, <repo>#<id>, so a bet named in its own repo and the same bet named from another
+ * repo match (amendment, section 4). A name already canonical is returned as it is.
+ */
+export function canonicalBet(value: string, ownerRepo: string): string {
+  return CROSS_REF.test(value) ? value : `${ownerRepo}#${value}`;
+}
+
+/**
+ * Every story that delivers a bet, after story overrides. With ownerRepo (the repo the map sits in), a bare
+ * bet id and a <repo>#<id> name are compared in canonical form, so a team's map that names the company's bet matches.
+ */
+export function storiesFor(map: any, bet: string, ownerRepo?: string): string[] {
   const all: string[] = (map?.releases ?? []).flatMap((r: any) => r?.stories ?? []);
-  return all.filter((s) => betsFor(map, s).bets.includes(bet));
+  const canon = (b: string) => (ownerRepo ? canonicalBet(b, ownerRepo) : b);
+  const want = canon(bet);
+  return all.filter((s) => betsFor(map, s).bets.some((b) => canon(b) === want));
 }

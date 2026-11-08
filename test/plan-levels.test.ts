@@ -103,17 +103,21 @@ describe("aligning to the plan above", () => {
     expect(() => newBet(bet("x", { alignsTo: ["acme/company-plan#kr-1"] }), dept)).toThrow("acme/company-plan#kr-1 is a key result: a bet aligns to bets, and names key results under krs");
     expect(() => newKr(kr("y", { alignsTo: "acme/company-plan#one-tap-pay" }), dept)).toThrow("acme/company-plan#one-tap-pay is a bet: a key result aligns to key results");
     expect(() => newBet(bet("z", { alignsTo: ["acme/other-plan#one-tap-pay"] }), dept)).toThrow(
-      "acme/other-plan#one-tap-pay: acme/other-plan isn't the plan directly above this one (planning/upstream.yaml lists acme/company-plan)",
+      "acme/other-plan#one-tap-pay: acme/other-plan isn't a plan this department joins (planning/upstream.yaml lists acme/company-plan)",
     );
     expect(() => newBet(bet("w", { alignsTo: ["one-tap-pay"] }), dept)).toThrow(/^'one-tap-pay' isn't another plan's bet: write it as <repo>#<id>/);
   });
 
-  it("only aligns one level up, and a company aligns to nothing", () => {
+  it("aligns only to a plan above it, and a company aligns to nothing", () => {
+    // A group may align to any plan it joins above it, company or department (rule 5).
     const group = plan("group", { repo: "acme/company-plan", level: "company", bets: ["one-tap-pay"] });
-    expect(() => newBet(bet("apple-pay", { alignsTo: ["acme/company-plan#one-tap-pay"] }), group)).toThrow(
-      "acme/company-plan#one-tap-pay: acme/company-plan is a company plan, and a group bet aligns to the department plan",
+    newBet(bet("apple-pay", { alignsTo: ["acme/company-plan#one-tap-pay"] }), group);
+    expect(loadBet(group, "apple-pay").meta.aligns_to).toBe("acme/company-plan#one-tap-pay");
+    const dept = plan("department", { repo: "acme/payments-group", level: "group", bets: ["wallets"] });
+    expect(() => newBet(bet("apple-pay", { alignsTo: ["acme/payments-group#wallets"] }), dept)).toThrow(
+      "acme/payments-group#wallets: acme/payments-group is a group plan, and a department bet can only align to a plan above department",
     );
-    const okGroup = plan("group", { repo: "acme/payments-plan", level: "department", bets: ["wallets"] });
+    const okGroup = plan("group", { repo: "acme/payments-plan", level: "department", krs: ["pay-1"], bets: ["wallets"] });
     newBet(bet("apple-pay", { primary: "acme/payments-plan#pay-1", alignsTo: ["acme/payments-plan#wallets"] }), okGroup);
     expect(planningIssues(okGroup)).toEqual([]);
     expect(() => newBet(bet("x", { alignsTo: ["acme/holding#big-bet"] }), plan("company"))).toThrow("A company bet has no plan above it to align to");
@@ -155,8 +159,9 @@ describe("the alignment tree", () => {
     const tree = alignment(co, "acme/company-plan", [payments]);
     const shape = (n: any): any => [`${n.kind} ${n.id}`, ...n.children.map(shape)];
     expect(tree.roots.map(shape)).toEqual([
-      ["kr kr-1", ["kr pay-1", ["bet wallets"]], ["bet one-tap-pay", ["bet wallets"]]],
-      ["kr kr-2", ["kr pay-1", ["bet wallets"]]],
+      // wallets aligns to one-tap-pay, so it is shown only under that bet, not again under pay-1.
+      ["kr kr-1", ["kr pay-1"], ["bet one-tap-pay", ["bet wallets"]]],
+      ["kr kr-2", ["kr pay-1"]],
     ]);
     expect(tree.unaligned).toEqual([]);
     expect(JSON.stringify(tree)).not.toMatch(/progress|checkedIn|stale/);

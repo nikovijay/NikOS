@@ -3,7 +3,7 @@ import { STORY_ID, read, specHash } from "../lib/project.js";
 import { homeOf, storyMapFor } from "../lib/maps.js";
 import { codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
-import { formatResult, validate } from "./validate.js";
+import { validate } from "./validate.js";
 import { verify, type VerifyResult } from "./verify.js";
 
 export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancelled";
@@ -153,9 +153,11 @@ export function runState(args: string[]): number {
     const i = rest.indexOf(`--${n}`);
     return i >= 0 ? rest[i + 1] : undefined;
   };
+  let lapsedFor: string | undefined;
   try {
     const r = setState(story, to as Status, { dir: opt("dir"), map: opt("map"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
+    lapsedFor = r.story;
     if (r.dirty) console.log("! The code has uncommitted changes. The proof is for the last commit, not for them: commit the code, then run its scenarios again.");
   } catch (err) {
     const e = err as StateError;
@@ -165,11 +167,9 @@ export function runState(args: string[]): number {
   }
   const v = validate(opt("dir") ?? process.cwd(), opt("map"), { remote: false });
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
-  for (const w of v.errors.filter((e) => e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
-  const blocking = { ...v, errors: v.errors.filter((e) => !e.lapse) };
-  if (blocking.errors.length) {
-    console.error(formatResult(blocking));
-    return 1;
-  }
+  // Only the story this command changed is named: another story's lapse is still in nikos validate, not repeated on every set.
+  for (const w of v.errors.filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
+  // The move is written, so a problem found elsewhere is a warning here, not a failed command.
+  for (const w of v.errors.filter((e) => !e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   return 0;
 }

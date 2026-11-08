@@ -2,7 +2,7 @@ import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, isDone, read, setFeatureTag, walk } from "../lib/project.js";
-import { authoringMap, resolveStoryMap } from "../lib/maps.js";
+import { authoringMap, homeOf, resolveStoryMap } from "../lib/maps.js";
 import { storyMapOf } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
 import { loadApprovals } from "../lib/approvals.js";
@@ -182,7 +182,7 @@ export function checkRelease(input: { map?: string; number: number; run?: boolea
   const needApproval = resolveSettings(ref.root)["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   // A done story with an approval on file that no longer holds: say so, as validate does.
-  const signedOff = loadApprovals(ref.dir);
+  const signedOff = loadApprovals(homeOf(ref));
   const lapsed = (s: (typeof live)[number]) => s.status === "done" && !!signedOff[s.id];
   const gaps: string[] = [];
   for (const s of live) {

@@ -6,18 +6,20 @@ import { basename, dirname, join, sep } from "node:path";
 import { parse } from "yaml";
 import { store } from "./store.js";
 import { featureStoryIds, findIntentDir, read, walk } from "./project.js";
-import { isTeamRepo, openTeam, relPath, storyMapClash, TEAM_REPO_STORIES } from "./team.js";
+import { isTeamRepo, openTeam, relPath, storyMapClash, TEAM_FILE, TEAM_REPO_STORIES } from "./team.js";
 import type { StoryHome } from "./state-files.js";
 
 export interface StoryMapRef {
-  /** The repo root: the folder with planning/ and intent/ or maps/ in it. A team's repo root, for a copy. */
+  /** The repo root: the folder with planning/ and intent/ or maps/ in it. A team's repo root, for a copy or its own map. */
   root: string;
-  /** The folder holding storymap.yaml: intent/, maps/<id>, or a team's copy of one. */
+  /** The folder holding storymap.yaml: intent/, maps/<id>, or a team's copy or own map of one. */
   dir: string;
-  /** Set only for maps/<id> and a team's copy of one. */
+  /** Set only for maps/<id>, a team's copy of one and a team's own map. */
   id?: string;
-  /** Set for a team's copy of a group's map: the team's status lives in the team repo. */
+  /** Set when the status lives in the team repo: a team's copy of a group's map, or its own map. */
   team?: boolean;
+  /** Set for a map the team owns (maps/<key>/ in its own repo): it's in place, and its status is the team's own. */
+  own?: boolean;
   /** For a team's copy: the copy of the group repo it sits in, which has the planning/ folder. */
   copyRoot?: string;
 }
@@ -41,6 +43,23 @@ export function groupKeyOf(root: string): string | undefined {
   return typeof key === "string" ? key : undefined;
 }
 
+/**
+ * The key that prefixes a repo's story ids: planning/plan.yaml's key for a group or plan, else the
+ * team's key in nikos.team.yaml (WEB, for WEB-INB-1). A team's copy of a group reads the group's.
+ */
+export function keyOf(root: string): string | undefined {
+  const plan = groupKeyOf(root);
+  if (plan) return plan;
+  const path = join(root, TEAM_FILE);
+  if (!store().exists(path)) return undefined;
+  try {
+    const key = (parse(store().read(path)) as { key?: unknown } | null)?.key;
+    return typeof key === "string" ? key : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A map folder: maps/<id> in a group repo. intent/ is never one, even in a repo folder named maps/. */
 function isMapFolder(dir: string): boolean {
   return basename(dir) !== "intent" && basename(dirname(dir)) === "maps";
@@ -59,7 +78,7 @@ function teamOfCopy(dir: string): string | undefined {
 }
 
 /** A story map's key from its storymap.yaml, e.g. CHK. */
-function keyOfMap(dir: string): string | undefined {
+export function keyOfMap(dir: string): string | undefined {
   try {
     const key = (parse(read(join(dir, "storymap.yaml"))) as { key?: unknown } | null)?.key;
     return typeof key === "string" ? key : undefined;
@@ -77,9 +96,11 @@ export function resolveStoryMap(start: string, map?: string): StoryMapRef {
   if (store().exists(join(start, "storymap.yaml")) && isMapFolder(start)) {
     const team = teamOfCopy(start);
     if (team !== undefined) return { root: team, dir: start, id: basename(start), team: true, copyRoot: repoRootOf(start) };
-    return { root: repoRootOf(start), dir: start, id: basename(start) };
+    const root = repoRootOf(start);
+    if (isTeamRepo(root)) return { root, dir: start, id: basename(start), team: true, own: true };
+    return { root, dir: start, id: basename(start) };
   }
-  if (isTeamRepo(start)) return assignedRef(start, map);
+  if (isTeamRepo(start)) return teamRef(start, map);
   const root = start;
   const maps = mapDirs(root);
   if (store().exists(join(root, "intent", "storymap.yaml")) && maps.length) {
@@ -95,17 +116,49 @@ export function resolveStoryMap(start: string, map?: string): StoryMapRef {
   }
   const ids = maps.map((d) => basename(d));
   if (map) {
-    if (!ids.includes(map)) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
-    return { root, dir: join(root, "maps", map), id: map };
+    // Folders are the lowercased map key, so --map HR finds maps/hr.
+    const id = ids.find((i) => i === map.toLowerCase());
+    if (!id) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
+    return { root, dir: join(root, "maps", id), id };
   }
   if (ids.length === 1) return { root, dir: maps[0], id: ids[0] };
   throw new Error(`several story maps in maps/ (${ids.join(", ")}): pass --map <id>`);
 }
 
-/** A team repo is only a team: refused when it also has its own story map. */
+/** A team repo is only a team: refused when it also has intent/ (its own maps are maps/<key>/). */
 function assertTeamOnly(root: string): void {
   const clash = storyMapClash(root);
   if (clash) throw new Error(clash);
+}
+
+/** The maps a team owns: each maps/<key>/ in its own repo, in place. Empty for any other repo. */
+export function ownMapsOf(root: string): StoryMapRef[] {
+  if (!isTeamRepo(root)) return [];
+  return mapDirs(root).map((dir) => ({ root, dir, id: basename(dir), team: true, own: true }));
+}
+
+/** Whether a map (--map's value, or a label like WEB-INB) names this map: its folder, its key, or its full label. */
+function mapMatches(ref: StoryMapRef, map: string): boolean {
+  return ref.id === map.toLowerCase() || keyOfMap(ref.dir) === map.toUpperCase() || labelOf(ref) === map;
+}
+
+/**
+ * The map a team repo works on: one of its own maps, or one of its copies. --map picks by folder,
+ * key or label; a team with one map of its own and no copies needs no flag.
+ */
+function teamRef(root: string, map?: string): StoryMapRef {
+  const own = ownMapsOf(root);
+  if (!own.length) return assignedRef(root, map);
+  assertTeamOnly(root);
+  const copies = assignedMaps(root);
+  if (map) {
+    const hit = own.find((r) => mapMatches(r, map));
+    if (hit) return hit;
+    if (!copies.length) throw new Error(`no story map "${map}" (have: ${own.map(labelOf).join(", ")})`);
+    return assignedRef(root, map);
+  }
+  if (own.length === 1 && !copies.length) return own[0];
+  throw new Error(`several story maps (${[...own, ...copies].map(labelOf).join(", ")}): pass --map <id>`);
 }
 
 /** Whether a folder's repo is one the team takes work from now. Unreadable team files count as no filter. */
@@ -133,9 +186,9 @@ export function assignedMaps(root: string): StoryMapRef[] {
     .filter((ref) => !groups || groups.includes(relPath(assigned, ref.copyRoot!)));
 }
 
-/** GROUP-MAP for a copy, e.g. PAY-CHK: the id its stories carry, in full. */
-function labelOf(ref: StoryMapRef): string {
-  return `${(ref.copyRoot && groupKeyOf(ref.copyRoot)) ?? "?"}-${keyOfMap(ref.dir) ?? ref.id}`;
+/** GROUP-MAP for a copy, e.g. PAY-CHK, or TEAM-MAP for a team's own map: the id its stories carry, in full. */
+export function labelOf(ref: StoryMapRef): string {
+  return `${keyOf(ref.copyRoot ?? ref.root) ?? "?"}-${keyOfMap(ref.dir) ?? ref.id}`;
 }
 
 /** The copy a team works on: --map as GROUP-MAP, or a bare map key when only one copy has it. */
@@ -183,14 +236,21 @@ export function storyMapFor(start: string, opts: { story?: string; map?: string 
   if (opts.story && isTeamRepo(start)) {
     assertTeamOnly(start);
     const id = opts.story;
-    const hit = assignedMaps(start).find((r) => {
+    const under = (r: StoryMapRef) => {
       const prefix = `${labelOf(r)}-`;
       return id.startsWith(prefix) && /^\d+$/.test(id.slice(prefix.length));
-    });
+    };
+    const own = ownMapsOf(start).find(under);
+    if (own) {
+      if (!heldIds(own).has(id)) throw new Error(`${id} is not in maps/${own.id}/features`);
+      return own;
+    }
+    const hit = assignedMaps(start).find(under);
     const moved = (why: string) => {
       const to = reassignedTo(start, id);
       return new Error(to ? `${id} was reassigned to ${to}: this team no longer works on it` : `${id} is not assigned to this team${why}`);
     };
+    if (!hit && ownMapsOf(start).length && !assignedMaps(start).length) throw new Error(`${id} is not in any of this team's maps`);
     if (!hit) throw moved(hasSynced(start) ? ": the group's map doesn't assign it here" : ": run nikos sync");
     // A copy holds the group's map: a story the team no longer has can sit beside the ones it keeps.
     if (!heldIds(hit).has(id)) throw moved(": it's not in this team's copy");
@@ -204,16 +264,21 @@ export function storyMapFor(start: string, opts: { story?: string; map?: string 
  * its stories are authored in the group repo, so a team repo is refused here.
  */
 export function authoringMap(dir: string, map?: string): StoryMapRef {
-  if (isTeamRepo(dir)) throw new Error(TEAM_REPO_STORIES);
+  if (isTeamRepo(dir)) {
+    // A team writes its own maps; a copy of a group's (or another team's) map is authored where it was made.
+    const own = ownMapsOf(dir);
+    if (!own.length || (map && !own.some((r) => mapMatches(r, map)))) throw new Error(TEAM_REPO_STORIES);
+    return teamRef(dir, map);
+  }
   return resolveStoryMap(dir, map);
 }
 
 /** Where a story's state and approvals live for a map: the intent or map folder, or the team repo. */
 export const homeOf = (ref: StoryMapRef): StoryHome => (ref.team ? { team: ref.root } : ref.dir);
 
-/** Every story map in a repo: each maps/<id>, plus the intent/ map if there is one. A team's are its assigned copies. */
+/** Every story map in a repo: each maps/<id>, plus the intent/ map if there is one. A team's are its own maps and its assigned copies. */
 export function storyMapsOf(root: string): StoryMapRef[] {
-  if (isTeamRepo(root)) return assignedMaps(root);
+  if (isTeamRepo(root)) return [...ownMapsOf(root), ...assignedMaps(root)];
   const maps: StoryMapRef[] = mapDirs(root).map((dir) => ({ root, dir, id: basename(dir) }));
   const intent = findIntentDir(root);
   if (store().exists(join(intent, "storymap.yaml"))) maps.push({ root, dir: intent });
@@ -221,16 +286,17 @@ export function storyMapsOf(root: string): StoryMapRef[] {
 }
 
 export const NO_GROUP_KEY = "planning/plan.yaml has no key: add key: <KEY> to it, then retry";
+export const NO_TEAM_KEY = "nikos.team.yaml: a team that owns a map needs a key (nikos team init --key WEB, or key: WEB in nikos.team.yaml)";
 
 /**
  * The prefix on a story's id: the map's key for intent/, or <GROUP>-<MAP> for a map in a group
- * repo, e.g. PAY-CHK, so the id is unique across the company. A team's copy reads the group key
- * from the copy of the group repo.
+ * repo, e.g. PAY-CHK, so the id is unique across the company. A team's own map takes the team's
+ * key (WEB-INB), and a team's copy reads the key of the repo it was copied from.
  */
 export function storyPrefix(ref: StoryMapRef, key: string): string {
   if (!ref.id) return key;
-  const group = groupKeyOf(ref.copyRoot ?? ref.root);
-  if (!group) throw new Error(NO_GROUP_KEY);
+  const group = keyOf(ref.copyRoot ?? ref.root);
+  if (!group) throw new Error(ref.own ? NO_TEAM_KEY : NO_GROUP_KEY);
   return `${group}-${key}`;
 }
 

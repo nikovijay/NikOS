@@ -3,7 +3,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
-import { assignedMaps, mapDirs, mapFlag } from "../lib/maps.js";
+import { assignedMaps, mapDirs, mapFlag, ownMapsOf } from "../lib/maps.js";
 import { isTeamRepo } from "../lib/team.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
@@ -101,7 +101,12 @@ export interface VerifyResult {
  * behave.ini, so only a team repo passes one: its assigned copies. Every other repo keeps the
  * paths its behave.ini names, as it always has.
  */
-const behaveDirs = (root: string) => (isTeamRepo(root) && existsSync(join(root, ".nikos/assigned")) ? [".nikos/assigned"] : []);
+const behaveDirs = (root: string) => {
+  if (!isTeamRepo(root)) return [];
+  // A team's own maps run in place (their features are its own); its copies run from .nikos/assigned.
+  const own = ownMapsOf(root).map((r) => join(relative(root, r.dir), "features")).filter((f) => existsSync(join(root, f)));
+  return [...own, ...(existsSync(join(root, ".nikos/assigned")) ? [".nikos/assigned"] : [])];
+};
 
 /** The runner's environment: tsx lets Node versions without built-in type stripping load .ts steps. */
 function runnerEnv(stack: Stack): NodeJS.ProcessEnv {
@@ -220,8 +225,8 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    // A team's whole-suite run with nothing synced runs no assigned stories: say so before it does.
-    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
+    // A team's whole-suite run with nothing synced (and no map of its own) runs no stories: say so before it does.
+    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length && !ownMapsOf(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
     const r = verify(root, positional[0], { inherit: true, map: mapFlag(args) });
     if (isTeamRepo(root)) printUndefined(undefinedSteps(root, r.stack, positional[0]));
     return r.status;

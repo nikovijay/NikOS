@@ -6,10 +6,12 @@ import { parse } from "yaml";
 import { store } from "../lib/store.js";
 import { loadStates } from "../lib/state-files.js";
 import { storiesFor } from "../lib/bets.js";
+import { ownRepo } from "../lib/git.js";
 import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadMapData, readAssignments, storiesOf } from "../lib/assignments.js";
 import { openTeam } from "../lib/team.js";
+import { readDeliverySummary } from "../lib/delivery-summary.js";
 import { resolveSettings } from "../lib/settings.js";
 import { featureHashIn, loadGroupMap, mapViews, ownView, readTeamIndex, type StoryView, type TeamIndex } from "../team/status.js";
 
@@ -30,6 +32,8 @@ export interface Delivery {
   notFetched: string[];
   /** The oldest good fetch among the teams whose status was read, when any was. */
   asOf?: string;
+  /** The oldest delivery summary read for a copy's maps (copies read the owner's summary, not the teams). */
+  summaryAsOf?: string;
 }
 
 export interface DeliveryOptions {
@@ -38,6 +42,9 @@ export interface DeliveryOptions {
   /** Count the group's own state for every map, even one with assignments: for a copy whose team status isn't read here. */
   groupState?: boolean;
 }
+
+/** A map's delivery summary, when its owner has committed one. */
+const summaryIn = (dir: string) => readDeliverySummary(dir);
 
 const yamlAt = (p: string) => (store().exists(p) ? parse(store().read(p)) : undefined);
 
@@ -58,20 +65,6 @@ const policyIn = (root: string): string | undefined => {
     return undefined;
   }
 };
-
-/** The team repo paths holding a story of a bet in a group's maps. This group's own holds are not listed. */
-export function teamsHolding(root: string, bet: string): string[] {
-  const out = new Set<string>();
-  for (const ref of storyMapsOf(root)) {
-    if (!ref.id || ref.team) continue;
-    const map = yamlAt(join(ref.dir, "storymap.yaml"));
-    const ids = new Set(map ? storiesFor(map, bet) : []);
-    if (!ids.size) continue;
-    const data = loadMapData(ref.dir);
-    for (const a of assignedIn(ref.dir)) if (a.repo !== "." && storiesOf(data, a).some((id) => ids.has(id))) out.add(a.repo);
-  }
-  return [...out];
-}
 
 /** A bet's delivery across every story map in the repo that specs it. */
 export function delivery(root: string, bet: string, opts: DeliveryOptions = {}): Delivery {
@@ -102,14 +95,36 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
     if (v.fetched) dates.push(v.fetched);
   };
 
+  let asOfMin: string | undefined;
+  // This repo's name, for matching a map's bet named as <repo>#<id> (canonicalBet); read once, when a map needs it.
+  let selfRepo: string | undefined | null = null;
+  const self = () => {
+    if (selfRepo === null) selfRepo = ownRepo(root);
+    return selfRepo;
+  };
   for (const ref of storyMapsOf(root)) {
     const map = yamlAt(join(ref.dir, "storymap.yaml"));
-    const ids = map ? storiesFor(map, bet) : [];
+    const ids = map ? storiesFor(map, bet, self()) : [];
     if (!ids.length) continue;
     maps.push(ref.id ?? "intent");
 
-    if (ref.team) {
-      // A team's own copy: its status is its own, judged against the copy's feature.
+    if (ref.id && opts.groupState && (ref.own || summaryIn(ref.dir) || assignedIn(ref.dir).length)) {
+      // A copy's map (a group's, or a team's own): the owner's summary says each story's status. A story it doesn't list has none yet.
+      // Read first, so a rollout never reads a team's live status/ (rule 9): its own map's summary says it.
+      const summary = summaryIn(ref.dir);
+      if (summary?.read_at && (!asOfMin || summary.read_at < asOfMin)) asOfMin = summary.read_at;
+      for (const id of ids) {
+        const s = summary?.stories.find((x) => x.id === id);
+        if (!s) {
+          stories.push({ id, status: "todo", freshness: "no-summary" });
+          continue;
+        }
+        if (s.status === "cancelled") continue;
+        stories.push({ id, status: s.status, freshness: "summary" });
+        if (isDone(s.status)) done++;
+      }
+    } else if (ref.team) {
+      // A team's own map: its status is its own, judged against the map's feature.
       const team = openTeam(ref.root).name;
       const data = loadMapData(ref.dir);
       for (const id of ids) add(ownView(ref.root, team, id, featureHashIn(data, id), policyHere()));
@@ -143,8 +158,69 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
     notCurrent,
     notFetched: [...notFetched],
     ...(dates.length ? { asOf: [...dates].sort()[0] } : {}),
+    ...(asOfMin ? { summaryAsOf: asOfMin } : {}),
   };
 }
+
+/**
+ * Every map a copy holds, summed: each story's status from its owner's delivery summary. A story with
+ * no summary yet is counted in noSummary. A map with no teams (and so no summary) counts its own state.
+ */
+export interface MapDelivery {
+  /** The map's folder name, e.g. inb. */
+  map: string;
+  /** The bets its map names, as <repo>#<id> when it names another repo's. */
+  bets: string[];
+  stories: { id: string; status: string; approval: string }[];
+  noSummary: string[];
+  asOf?: string;
+}
+
+export function mapDeliveryIn(dir: string): { stories: { id: string; status: string; approval: string }[]; noSummary: string[]; releases: number; asOf?: string; maps: MapDelivery[] } {
+  const stories: { id: string; status: string; approval: string }[] = [];
+  const noSummary: string[] = [];
+  const maps: MapDelivery[] = [];
+  let releases = 0;
+  let asOf: string | undefined;
+  for (const ref of storyMapsOf(dir)) {
+    const map = yamlAt(join(ref.dir, "storymap.yaml")) ?? {};
+    const ids: string[] = (map.releases ?? []).flatMap((r: { stories?: string[] }) => r.stories ?? []);
+    releases += (map.releases ?? []).length;
+    const one: MapDelivery = { map: ref.id ?? "intent", bets: [map.bet].flat().filter((b): b is string => typeof b === "string"), stories: [], noSummary: [] };
+    const summary = summaryIn(ref.dir);
+    if (summary) {
+      if (!asOf || summary.read_at < asOf) asOf = summary.read_at;
+      one.asOf = summary.read_at;
+      const byId = new Map(summary.stories.map((s) => [s.id, s]));
+      for (const id of ids) {
+        const s = byId.get(id);
+        if (!s) one.noSummary.push(id);
+        else if (s.status !== "cancelled") one.stories.push({ id, status: s.status, approval: s.approval });
+      }
+    } else if (!ref.team && !assignedIn(ref.dir).length) {
+      // A group's map with no assignments: its own state. A team's map with no summary yet is counted as no summary yet, not from the group's folder.
+      const states = loadStates(ref.dir);
+      for (const id of ids) {
+        const status = states[id]?.status ?? "todo";
+        if (status !== "cancelled") one.stories.push({ id, status, approval: "none" });
+      }
+    } else one.noSummary.push(...ids);
+    stories.push(...one.stories);
+    noSummary.push(...one.noSummary);
+    maps.push(one);
+  }
+  return { stories, noSummary, releases, ...(asOf ? { asOf } : {}), maps };
+}
+
+/** A map's counts, as the rollout prints them. */
+export const mapCounts = (m: MapDelivery) => ({
+  stories: m.stories.length + m.noSummary.length,
+  done: m.stories.filter((s) => isDone(s.status)).length,
+  approved: m.stories.filter((s) => s.approval === "approved").length,
+  inProgress: m.stories.filter((s) => s.status === "in_progress").length,
+  ...(m.noSummary.length ? { noSummary: m.noSummary.length } : {}),
+  ...(m.asOf ? { asOf: m.asOf } : {}),
+});
 
 export const describeDelivery = (d: Delivery) =>
   (d.status === "Building"

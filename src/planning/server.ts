@@ -17,10 +17,10 @@ import { store } from "../lib/store.js";
 import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, onBaseBranch, ownRepo, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
 import { asLine, hostOf, requestArgv, runForge, toolFor } from "../lib/forge.js";
 import { editBet, reviewBet } from "./bets.js";
-import { delivery, describeDelivery } from "./delivery.js";
+import { delivery } from "./delivery.js";
 import { checkIn, isStale, latest, progress } from "./krs.js";
 import { betIds, hash, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
-import { rollout } from "./rollout.js";
+import { betDeliveryText, rollout } from "./rollout.js";
 import { loadUpstream, upstreamEntries } from "./upstream.js";
 import { alignsList } from "./levels.js";
 import { renderDashboard } from "./ui.js";
@@ -244,7 +244,7 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
           body: bet.body.trim(),
           hash: bet.hash,
           file: bet.file,
-          delivery: { ...d, text: describeDelivery(d) },
+          delivery: { ...d, text: betDeliveryText(root, id, d) },
           releases: d.releases.map((n) => ({
             number: n,
             title: story.releases.find((r) => r.number === n)?.title ?? `Release ${n}`,

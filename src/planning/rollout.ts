@@ -10,17 +10,21 @@ import { store } from "../lib/store.js";
 import { dirname, join } from "node:path";
 import { parse, parseDocument } from "yaml";
 import { isDone } from "../lib/project.js";
+import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadStates } from "../lib/state-files.js";
-import { storyMapOf } from "../commands/map.js";
+import { storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
-import { delivery, describeDelivery, teamsHolding } from "./delivery.js";
+import { delivery, describeDelivery, mapCounts, mapDeliveryIn, type Delivery } from "./delivery.js";
+import { summaryAge } from "../lib/delivery-summary.js";
+import { copyKeys, duplicateKeys } from "../lib/keys.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
 import { ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
 import { alignsList } from "./levels.js";
+import { stopDate, stoppedTarget } from "./stops.js";
 import { ownRepo } from "../lib/git.js";
 
 export interface DownstreamPlan {
@@ -29,6 +33,8 @@ export interface DownstreamPlan {
   repo?: string;
   /** For a plan further down: the downstream that listed it. */
   via?: string;
+  /** Set when the plan (a team or group) is homed in another plan: the one its settings come from. */
+  home?: string;
   state: "no repo yet" | "unreachable" | "not joined" | "joined";
   reason?: string;
   /** When this repo's copy of it was fetched. */
@@ -38,7 +44,9 @@ export interface DownstreamPlan {
    * That plan is this repo, or for a plan further down, `via` as rollout fetched it.
    */
   synced?: { on: string; commit: string; current?: boolean };
-  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number };
+  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number; noSummary?: number; asOf?: string };
+  /** Its maps that deliver a bet in another plan (a team's map for a company bet, say), each with its own counts. */
+  maps?: MapFor[];
   /** The story its team builds next, as nikos next would say. */
   next?: { id: string; title: string };
   /** Stories with blockers in their state, and what's blocking each. */
@@ -47,8 +55,26 @@ export interface DownstreamPlan {
   decisions: Decision[];
   /** stale: no check-in within its window. checkedIn: it has had at least one. */
   krs: { id: string; title: string; aligns_to?: string[]; progress: number; stale: boolean; checkedIn: boolean }[];
-  bets: { id: string; outcome: string; delivery: string; krs: string[]; aligns_to?: string[] }[];
+  bets: DownstreamBet[];
 }
+
+/** A map in a plan below that delivers another plan's bet: bet is <repo>#<id>. */
+export interface MapFor {
+  map: string;
+  bet: string;
+  stories: number;
+  done: number;
+  approved: number;
+  inProgress: number;
+  noSummary?: number;
+  asOf?: string;
+}
+
+/** A map's line: its counts, and the age of the summary they come from. */
+export const describeMap = (m: MapFor) =>
+  `${m.done} of ${m.stories} stories done${m.approved ? ` (${m.approved} approved)` : ""}, ${m.inProgress} in progress${m.asOf ? `, ${summaryAge({ read_at: m.asOf })}` : ""}${
+    m.noSummary ? `; ${m.noSummary} with no summary yet` : ""
+  }`;
 
 export interface Blocker {
   story: string;
@@ -75,7 +101,7 @@ export function latestDecisions(dir: string): Decision[] {
 
 /** One key result or bet in the alignment tree, with what aligns to it below. Alignment only: no progress. */
 export interface AlignmentNode {
-  kind: "kr" | "bet";
+  kind: "kr" | "bet" | "map";
   id: string;
   title: string;
   /** The plan it belongs to: a downstream name, or this repo. */
@@ -92,6 +118,8 @@ export interface Rollout {
   /** This repo's own latest decisions. */
   decisions: Decision[];
   plans: DownstreamPlan[];
+  /** Errors the rollout found in the copies below, such as two plans with one key (amendment D5). */
+  problems: string[];
   /**
    * The key results here, with the key results below that align to them and the bets on each, built
    * from aligns_to and bet krs. unaligned: the ones below that point at nothing in this rollout.
@@ -109,9 +137,13 @@ export { ownRepo } from "../lib/git.js";
 interface Listed {
   name: string;
   entry?: UpstreamEntry;
+  home?: string;
 }
 
-/** The plans a repo (or a copy of one) lists in planning/downstream.yaml. */
+/**
+ * The plans a repo (or a copy of one) lists in planning/downstream.yaml. home is the plan a listed
+ * team or group is homed in, when that isn't this one (rule 4): it's how the plan knows where to fetch it.
+ */
 export function downstreamEntries(dir: string): Listed[] {
   const p = join(dir, "planning", "downstream.yaml");
   if (!existsSync(p)) return [];
@@ -120,7 +152,8 @@ export function downstreamEntries(dir: string): Listed[] {
   return list.map((e: any) => {
     const name = typeof e === "string" ? e : String(e?.name ?? e?.repo ?? "");
     if (!name) throw new Error("planning/downstream.yaml: each entry needs a name or a repo");
-    return { name, ...(e?.repo ? { entry: repoEntry(e, "planning/downstream.yaml") } : {}) };
+    if (e?.home !== undefined && (typeof e.home !== "string" || !REPO_PATH.test(e.home))) throw new Error(`planning/downstream.yaml: '${e.home}' is not a repo path for home`);
+    return { name, ...(e?.repo ? { entry: repoEntry(e, "planning/downstream.yaml") } : {}), ...(e?.home ? { home: e.home } : {}) };
   });
 }
 
@@ -139,28 +172,43 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout?.trim();
   let deliv: DownstreamPlan["delivery"];
   let nextUp: DownstreamPlan["next"];
+  let mapsFor: MapFor[] = [];
   const blockers: Blocker[] = [];
   if (storyMapsOf(dir).length) {
     try {
-      const map = storyMapOf(dir);
-      const stories = map.releases.flatMap((r) => r.stories).filter((s) => s.status !== "cancelled");
+      // Every map the copy holds: titles from each, counts summed (storyMapOf is empty for several maps). The owner's summary says the teams' status.
+      const refs = storyMapsOf(dir);
+      const maps = refs.map((ref) => storyMapOfRef(ref));
+      const all = mapDeliveryIn(dir);
       deliv = {
-        stories: stories.length,
-        done: stories.filter((s) => isDone(s.status)).length,
-        approved: stories.filter((s) => s.status === "approved").length,
-        inProgress: stories.filter((s) => s.status === "in_progress").length,
-        releases: map.releases.length,
+        stories: all.stories.length + all.noSummary.length,
+        done: all.stories.filter((s) => isDone(s.status)).length,
+        approved: all.stories.filter((s) => s.approval === "approved").length,
+        inProgress: all.stories.filter((s) => s.status === "in_progress").length,
+        releases: all.releases,
+        ...(all.noSummary.length ? { noSummary: all.noSummary.length } : {}),
+        ...(all.asOf ? { asOf: all.asOf } : {}),
       };
-      const titles = new Map([...stories, ...map.unreleased].map((s) => [s.id, s.title]));
-      const id = (() => {
+      // A map for another plan's bet is shown under that bet: its own bets already carry their delivery.
+      mapsFor = all.maps.flatMap((m) =>
+        m.bets.filter((b) => CROSS_REF.test(b) && !b.startsWith(`${repo}#`)).map((bet) => ({ map: m.map, bet, ...mapCounts(m) })),
+      );
+      const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
+      // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
+      // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
+      for (const ref of refs) {
+        if (ref.team) continue;
         try {
-          return next(dir).story;
+          const id = next(dir, ref.id).story;
+          if (!id) continue;
+          nextUp = { id, title: titles.get(id) ?? id };
+          break;
         } catch {
-          return undefined; // no state.yaml to read a queue from: delivery and blockers still show
+          // no state.yaml or queue in this map: delivery and blockers still show
         }
-      })();
-      if (id) nextUp = { id, title: titles.get(id) ?? id };
-      for (const ref of storyMapsOf(dir)) {
+      }
+      // Blockers are read from a group's own map state only: a team's blockers live in its live status/, which a rollout never reads.
+      for (const ref of storyMapsOf(dir).filter((r) => !r.team)) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
         }
@@ -182,10 +230,24 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     try {
       const m = loadBet(dir, id).meta;
       const up = alignsList(m.aligns_to);
-      // A copy has no team cache, so a bet's delivery here is the group's own state; team status is read in the group.
-      const teams = teamsHolding(dir, id);
-      const note = teams.length ? `; team status not read here: run nikos map status in ${repo}` : "";
-      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id, { groupState: true })) + note, krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean), ...(up.length ? { aligns_to: up } : {}) }];
+      // A copy's bet counts the owner's delivery summary; a story with none yet says so, and the owner's nikos map status fixes it.
+      const d = delivery(dir, id, { groupState: true });
+      const missing = d.stories.filter((s) => s.freshness === "no-summary").length;
+      const note = missing ? `; ${missing} with no summary yet: run nikos map status in ${repo}` : "";
+      // The age of the summary the count reads, as the plan line says it.
+      const age = d.summaryAsOf ? `, ${summaryAge({ read_at: d.summaryAsOf })}` : "";
+      const stop = stopDate(m);
+      return [
+        {
+          id,
+          ref: `${repo}#${id}`,
+          outcome: m.outcome,
+          delivery: describeDelivery(d) + age + note,
+          krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean),
+          ...(up.length ? { aligns_to: up } : {}),
+          ...(stop ? { stoppedOn: stop } : {}),
+        },
+      ];
     } catch {
       return [];
     }
@@ -197,11 +259,42 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     ...(lock ? { synced: { on: lock.synced, commit: lock.commit, ...(head && self ? { current: lock.commit === head } : {}) } } : {}),
     ...(deliv ? { delivery: deliv } : {}),
     ...(nextUp ? { next: nextUp } : {}),
+    ...(mapsFor.length ? { maps: mapsFor } : {}),
     blockers,
     decisions: latestDecisions(dir),
     krs,
     bets,
   };
+}
+
+/** One bet of a plan below, as the rollout shows it. ref is repo#id, the way other plans name it. */
+export interface DownstreamBet {
+  id: string;
+  ref: string;
+  outcome: string;
+  delivery: string;
+  krs: string[];
+  aligns_to?: string[];
+  /** The date of its latest stop review, when it is stopped. */
+  stoppedOn?: string;
+  /** A bet it aligns to that was stopped: the owner decides what to do about it, nothing cascades. */
+  stoppedParent?: { target: string; date: string };
+}
+
+/**
+ * Flag each bet that aligns to a stopped bet (rule 10). Stopping a bet never changes the bets aimed
+ * at it: the rollout and the views say so, and the owner reviews them. own: this repo's stopped
+ * bets, keyed repo#id, since they aren't among the plans below.
+ */
+export function flagStoppedParents(plans: DownstreamPlan[], own: Map<string, string> = new Map()): void {
+  const stopped = new Map(own);
+  for (const p of plans) for (const b of p.bets) if (b.stoppedOn) stopped.set(b.ref, b.stoppedOn);
+  for (const p of plans) {
+    for (const b of p.bets) {
+      const hit = stoppedTarget([...(b.aligns_to ?? []), ...b.krs], stopped);
+      if (hit) b.stoppedParent = hit;
+    }
+  }
 }
 
 /**
@@ -216,7 +309,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
   const seen = new Set<string>();
   while (queue.length) {
     const { listed, depth, via, parent } = queue.shift()!;
-    const base = { name: listed.name, ...(via ? { via } : {}), blockers: [], decisions: [], krs: [], bets: [] };
+    const base = { name: listed.name, ...(via ? { via } : {}), ...(listed.home ? { home: listed.home } : {}), blockers: [], decisions: [], krs: [], bets: [] };
     if (!listed.entry) {
       plans.push({ ...base, state: "no repo yet" });
       continue;
@@ -275,10 +368,54 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     mkdirSync(cache(root), { recursive: true });
     writeFileSync(indexOf(root), JSON.stringify(index, null, 2));
   }
-  return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
+  // This repo's own stopped bets name themselves as repo#id, the way the plans below refer to them. Without an origin they can't be named.
+  const ownStops = new Map<string, string>();
+  if (self) {
+    for (const id of betIds(root)) {
+      try {
+        const d = stopDate(loadBet(root, id).meta);
+        if (d) ownStops.set(`${self}#${id}`, d);
+      } catch {
+        // a bet that doesn't read isn't a stopped parent
+      }
+    }
+  }
+  flagStoppedParents(plans, ownStops);
+  // Two copies below with one key would name their story ids the same: an error, not a warning (amendment D5).
+  const problems = duplicateKeys(copyKeys(cache(root))).map((d) => `key ${d.key} is used by ${d.repos.join(" and ")}: give one of them another key`);
+  return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, problems, tree: alignment(root, self, plans) };
 }
 
-type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[] };
+/**
+ * The maps in the last rollout's copies that deliver one of this repo's bets, e.g. a team's map for a
+ * company bet. Read from .nikos/downstream/ as the last nikos planning rollout fetched it: nothing is fetched here.
+ */
+export function mapsBelow(root: string, self: string | undefined, bet: string): (MapFor & { repo: string })[] {
+  if (!self || !existsSync(indexOf(root))) return [];
+  const index: Record<string, unknown> = JSON.parse(readFileSync(indexOf(root), "utf8"));
+  const want = `${self}#${bet}`;
+  return Object.keys(index).flatMap((repo) => {
+    const dir = copyOf(root, repo);
+    if (!existsSync(dir)) return [];
+    try {
+      return mapDeliveryIn(dir).maps.filter((m) => m.bets.includes(want)).map((m) => ({ repo, map: m.map, bet: want, ...mapCounts(m) }));
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * A bet's delivery as words: its own maps' counts, or for a bet with no stories here (a company bet a
+ * team's map delivers), the maps below it, as the last rollout read them.
+ */
+export function betDeliveryText(root: string, id: string, d: Delivery): string {
+  const below = d.stories.length ? [] : mapsBelow(root, ownRepo(root), id);
+  if (!below.length) return describeDelivery(d);
+  return `in the plans below: ${below.map((m) => `map ${m.map} in ${m.repo}, ${describeMap(m)}`).join("; ")} (from the last nikos planning rollout)`;
+}
+
+type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[]; maps?: MapFor[] };
 
 /** This repo's key results and bets, read the same way as a downstream copy's. */
 function own(root: string, self?: string): Source {
@@ -307,7 +444,7 @@ function own(root: string, self?: string): Source {
  * works out progress from children.
  */
 export function alignment(root: string, self: string | undefined, plans: DownstreamPlan[]): Rollout["tree"] {
-  const sources: Source[] = [own(root, self), ...plans.filter((p) => p.repo).map((p) => ({ plan: p.name, repo: p.repo, krs: p.krs, bets: p.bets }))];
+  const sources: Source[] = [own(root, self), ...plans.filter((p) => p.repo).map((p) => ({ plan: p.name, repo: p.repo, krs: p.krs, bets: p.bets, maps: p.maps }))];
   // Everything is known as repo#id. One from a repo whose path isn't known can't be pointed at.
   const key = (repo: string | undefined, id: string) => (repo ? `${repo}#${id}` : undefined);
   const krAt = new Map<string, { s: Source; k: Source["krs"][number] }>();
@@ -318,6 +455,9 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
   const betsOn = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
   const betsUnder = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
   const placed = new Set<string>();
+  const mapsUnder = new Map<string, { s: Source; m: MapFor }[]>();
+  for (const s of sources.slice(1)) for (const m of s.maps ?? []) if (betAt.has(m.bet)) mapsUnder.set(m.bet, [...(mapsUnder.get(m.bet) ?? []), { s, m }]);
+  const mapNode = (s: Source, m: MapFor): AlignmentNode => ({ kind: "map", id: m.map, title: describeMap(m), plan: s.plan, ...(s.repo ? { repo: s.repo } : {}), children: [] });
   for (const s of sources.slice(1)) {
     for (const k of s.krs) for (const up of k.aligns_to ?? []) if (krAt.has(up)) alignsTo.set(up, [...(alignsTo.get(up) ?? []), { s, k }]);
     for (const b of s.bets) for (const up of b.aligns_to ?? []) if (betAt.has(up)) betsUnder.set(up, [...(betsUnder.get(up) ?? []), { s, b }]);
@@ -340,7 +480,8 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       ...(s.repo ? { repo: s.repo } : {}),
       children: [
         ...(alignsTo.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.k.id)!)).map((c) => krNode(c.s, c.k, next)),
-        ...(betsOn.get(at) ?? []).map(({ s: bs, b }) => betNode(bs, b, next)),
+        // A bet that aligns to another bet is shown under that bet, not again under the key result.
+        ...(betsOn.get(at) ?? []).filter(({ b }) => !(b.aligns_to ?? []).some((r) => betAt.has(r))).map(({ s: bs, b }) => betNode(bs, b, next)),
       ],
     };
   };
@@ -354,7 +495,10 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       title: b.id,
       plan: s.plan,
       ...(s.repo ? { repo: s.repo } : {}),
-      children: (betsUnder.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.b.id)!)).map((c) => betNode(c.s, c.b, next)),
+      children: [
+        ...(betsUnder.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.b.id)!)).map((c) => betNode(c.s, c.b, next)),
+        ...(mapsUnder.get(at) ?? []).map(({ s: ms, m }) => mapNode(ms, m)),
+      ],
     };
   };
   const roots = sources[0].krs.map((k) => krNode(sources[0], k, new Set()));
@@ -377,13 +521,19 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       unaligned.push({ ...betNode(s, b, new Set()), ...(away.length ? { aligns_to: away } : {}) });
     }
   }
+  // A map for a bet that isn't in this rollout still shows, with the bet it names.
+  for (const s of sources.slice(1)) for (const m of s.maps ?? []) if (!betAt.has(m.bet)) unaligned.push({ ...mapNode(s, m), aligns_to: [m.bet] });
   return { roots, unaligned };
 }
 
 /** The alignment tree as indented lines, with box-drawing branches. */
 export function formatTree(tree: Rollout["tree"]): string[] {
   const label = (n: AlignmentNode) =>
-    n.kind === "kr" ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}` : `bet ${n.id} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`;
+    n.kind === "kr"
+      ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`
+      : n.kind === "map"
+        ? `map ${n.id} (${n.plan}): ${n.title}${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`
+        : `bet ${n.id} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`;
   const out: string[] = [];
   const walk = (n: AlignmentNode, lead: string, last: boolean, top: boolean) => {
     out.push(top ? `  ${label(n)}` : `  ${lead}${last ? "└─ " : "├─ "}${label(n)}`);
@@ -407,29 +557,41 @@ export function formatRollout(r: Rollout): string {
   const out: string[] = [];
   const joined = r.plans.filter((p) => p.state === "joined").length;
   out.push(`${joined} of ${r.plans.length} plans below ${r.repo ?? "this one"} have joined.`);
+  for (const p of r.problems) out.push(`✗ ${p}`);
   const tree = formatTree(r.tree);
   if (tree.length) out.push("", ...tree);
   if (r.decisions.length) out.push("", `Latest decisions here:`, ...r.decisions.map((d) => `  ${d.title}`));
   for (const p of r.plans) {
     const mark = p.state === "joined" ? "✓" : p.state === "not joined" ? "!" : "?";
-    out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
+    out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.home ? `, homed in ${p.home}` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
     if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? `, behind ${p.via ?? "this plan"}: ask them to run nikos planning sync` : ""}`);
-    if (p.delivery) out.push(`    delivery: ${p.delivery.done} of ${p.delivery.stories} stories done${p.delivery.approved ? ` (${p.delivery.approved} approved)` : ""}, ${p.delivery.inProgress} in progress`);
+    if (p.delivery) {
+      const d = p.delivery;
+      const age = d.asOf ? `, ${summaryAge({ read_at: d.asOf })}` : "";
+      const missing = d.noSummary ? `; ${d.noSummary} ${d.noSummary === 1 ? "story has" : "stories have"} no summary yet: run nikos map status in ${p.repo}` : "";
+      out.push(`    delivery: ${d.done} of ${d.stories} stories done${d.approved ? ` (${d.approved} approved)` : ""}, ${d.inProgress} in progress${age}${missing}`);
+    }
+    for (const m of p.maps ?? []) out.push(`    map ${m.map} → ${m.bet}: ${describeMap(m)}`);
     if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);
     for (const b of p.blockers) out.push(`    blocked: ${b.story} ${b.title}: ${b.blockers.join("; ")}`);
     for (const d of p.decisions) out.push(`    decision: ${d.title}`);
     for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to.join(", ")}` : ""}`);
-    for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}${b.aligns_to ? `; aligns to ${b.aligns_to.join(", ")}` : ""}`);
+    for (const b of p.bets) {
+      // A bet aimed at a stopped bet says so: the owner reviews it, nothing is changed here.
+      const aligns = b.stoppedParent ? `; aligns to ${b.stoppedParent.target}, which was stopped on ${b.stoppedParent.date}` : b.aligns_to ? `; aligns to ${b.aligns_to.join(", ")}` : "";
+      out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}${aligns}`);
+    }
   }
   return out.join("\n");
 }
 
 /** List a department or team in planning/downstream.yaml, or give an entry already there its repo. */
-export function addDownstream(root: string, input: { name: string; repo?: string; host?: string; url?: string }): { name: string; repo?: string; added: boolean } {
+export function addDownstream(root: string, input: { name: string; repo?: string; host?: string; url?: string; home?: string }): { name: string; repo?: string; added: boolean } {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the department's or team's name");
-  if ((input.host || input.url) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
-  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
+  if ((input.host || input.url || input.home) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
+  if (input.home !== undefined && !REPO_PATH.test(input.home)) throw new Error(`'${input.home}' is not a repo path for --home (owner/repo, or group/subgroup/project on GitLab)`);
+  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.home ? { home: input.home } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
   if (input.repo) repoEntry(entry, "planning/downstream.yaml"); // a bad repo path or host fails before anything is written
   // Through the store, so a dry run (runOps) keeps the change in memory and the change set lists it.
   const p = join(root, "planning", "downstream.yaml");

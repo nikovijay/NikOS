@@ -79,7 +79,7 @@ describe("kr ops", () => {
     const dept = departmentRepo(co);
     newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31" }, dept);
     expect(() => runOp(dept, { op: "kr.align", target: { kr: "pay-1" }, args: { aligns_to: ["acme/other#kr-1"] }, expect: hash(readText(dept, "planning/krs/pay-1.yaml")) })).toThrow(
-      "acme/other#kr-1: acme/other isn't the plan directly above this one (planning/upstream.yaml lists acme/company-plan)",
+      "acme/other#kr-1: acme/other isn't a plan this department joins (planning/upstream.yaml lists acme/company-plan)",
     );
     expect(() => runOp(dept, { op: "kr.align", target: { kr: "pay-1" }, args: { aligns_to: ["acme/company-plan#faster"] }, expect: hash(readText(dept, "planning/krs/pay-1.yaml")) })).toThrow(
       "acme/company-plan#faster is a bet: a key result aligns to key results",

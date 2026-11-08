@@ -8,7 +8,7 @@ import Ajv2020Module from "ajv/dist/2020.js";
 import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { REPO_PATH } from "./bets.js";
-import { isTeamRepo, openTeam } from "./team.js";
+import { isTeamRepo, openTeam, teamOptedIn } from "./team.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -81,6 +81,19 @@ function upstreamsOf(dir: string): string[] {
 }
 
 /**
+ * The plan a group or team is homed in, when its planning/upstream.yaml marks one with home: true.
+ * Its settings and locks come from that plan's chain alone (amendment, rule 5). Without a mark, the
+ * repo takes every plan it joined, as before.
+ */
+function homeUpstreamOf(dir: string): string | undefined {
+  const path = join(dir, "planning", "upstream.yaml");
+  if (!store().exists(path)) return undefined;
+  const list = parse(store().read(path));
+  const home = Array.isArray(list) ? list.find((e: any) => e?.home === true) : undefined;
+  return typeof home?.repo === "string" ? home.repo : undefined;
+}
+
+/**
  * The settings that apply to a repo: defaults, then each level above it from the top down
  * (through the synced copies in .nikos/upstream/), then the repo's own. A level can't change a
  * value a level above it locked. A team repo is different: it takes only the locks from above (see
@@ -92,14 +105,18 @@ export function resolveSettings(root: string): Resolved {
 
 /** resolveSettings, with the problems found in the levels above (a group copy that doesn't read, or two locks that disagree). */
 export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
-  if (isTeamRepo(resolve(root)) && !store().isDir(join(resolve(root), "planning"))) return teamSettings(resolve(root));
+  // A team that has opted in takes its home's locks. Any other team repo with a planning/ folder is a 0.3.0 repo that
+  // reads its joined plans as before, so only a team with no planning/ folder, or one that has opted in, takes teamSettings.
+  const r = resolve(root);
+  if (isTeamRepo(r) && (!store().isDir(join(r, "planning")) || teamOptedIn(r))) return teamSettings(r);
   const cache = join(resolve(root), ".nikos", "upstream");
   const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const visiting = new Set<string>();
   const apply = (dir: string, name: string) => {
     if (visiting.has(dir)) return; // a loop of upstreams: each level counts once
     visiting.add(dir);
-    for (const up of upstreamsOf(dir)) {
+    const home = homeUpstreamOf(dir);
+    for (const up of home ? [home] : upstreamsOf(dir)) {
       const copy = join(cache, ...up.split("/"));
       if (store().exists(copy)) apply(copy, up);
     }
@@ -115,38 +132,44 @@ export function resolveSettingsDetailed(root: string): { resolved: Resolved; pro
 }
 
 /**
- * A team repo's settings: its own file, plus the locks of the levels above it. The levels are the
- * company chain of each group copy (.nikos/upstream), then each group copy in nikos.team.yaml
- * order. Only locks reach a team: a value above that nothing locks doesn't apply here. A level
- * that doesn't read is skipped and named in the problems; the team's own file still applies.
+ * A team repo's settings: its own file, plus the locks of the levels above it. Only locks reach a
+ * team, and only down its home's chain (amendment, rule 1): the home is the group or plan named in
+ * nikos.team.yaml, read from its copy, then that copy's chain up. A team with no home takes its
+ * groups' chains, as it always has. A level that doesn't read is skipped and named in the problems;
+ * the team's own file still applies.
  */
 function teamSettings(root: string): { resolved: Resolved; problems: string[] } {
   const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const problems: string[] = [];
   const cache = join(root, ".nikos", "upstream");
-  const groups = (() => {
+  const team = (() => {
     try {
-      return openTeam(root).groups.map((g) => g.repo);
+      return openTeam(root);
     } catch {
-      return [];
+      return undefined;
     }
   })();
+  const homed = !!team?.home;
+  // A group the team takes work from has its copy in .nikos/assigned; any other plan it joined is in .nikos/upstream.
+  const starts = homed
+    ? [{ repo: team!.home!, dir: team!.groups.some((g) => g.repo === team!.home) ? join(root, ".nikos", "assigned", ...team!.home!.split("/")) : join(cache, ...team!.home!.split("/")) }]
+    : (team?.groups ?? []).map((g) => ({ repo: g.repo, dir: join(root, ".nikos", "assigned", ...g.repo.split("/")) }));
+  const groups = starts.filter((s) => store().exists(s.dir));
+  if (homed && !groups.length) problems.push(`home ${team!.home} isn't synced yet, so its locks don't apply here: run nikos sync`);
   // Each level once, top-down: a group copy's upstream (the company) before the copy itself.
   const levels: { dir: string; name: string }[] = [];
   const visiting = new Set<string>();
   const chain = (dir: string, name: string) => {
     if (visiting.has(dir)) return;
     visiting.add(dir);
-    for (const up of upstreamsOf(dir)) {
+    const home = homeUpstreamOf(dir);
+    for (const up of home ? [home] : upstreamsOf(dir)) {
       const copy = join(cache, ...up.split("/"));
       if (store().exists(copy)) chain(copy, up);
     }
     levels.push({ dir, name });
   };
-  for (const g of groups) {
-    const copy = join(root, ".nikos", "assigned", ...g.split("/"));
-    if (store().exists(copy)) chain(copy, g);
-  }
+  for (const g of groups) chain(g.dir, g.repo);
   const inherited: Record<string, unknown> = {};
   for (const level of levels) {
     let own: ReturnType<typeof readSettings>;

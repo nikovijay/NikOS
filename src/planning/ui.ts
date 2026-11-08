@@ -309,14 +309,14 @@ function okrsView() {
   cols.push({ head: name + ' bets', empty: 'No bets yet.', items: v.bets.map(function (b) {
     b.krs.forEach(function (k) { links.push(['k:' + k, 'b:' + b.id, 'bet']); });
     b.alignsTo.forEach(function (ref) { links.push(['b:' + b.id, 'b:' + ref, 'bet', true]); });
-    return { key: 'b:' + b.id, title: b.title || b.id, sub: b.tag === 'aligned' ? 'Aligns up' : 'Own bet', tone: 'bet', href: '#/bets/' + b.id };
+    return { key: 'b:' + b.id, title: b.title || b.id, sub: (b.tag === 'aligned' ? 'Aligns up' : 'Own bet') + (b.note ? ' · ' + b.note : ''), tone: 'bet', href: '#/bets/' + b.id };
   }) });
   if (!top) cols.push({ head: 'Above: ' + up + ' bets', empty: 'Not aligned to a bet above yet.', items: v.betsAbove.map(function (b) {
-    return { key: 'b:' + b.ref, title: b.title || b.id, sub: b.found ? (b.plan || b.repo) + ' bet' : 'Not in the synced copy yet', tone: 'up' };
+    return { key: 'b:' + b.ref, title: b.title || b.id, sub: (b.found ? (b.plan || b.repo) + ' bet' : 'Not in the synced copy yet') + (b.stoppedOn ? ' · stopped on ' + b.stoppedOn : ''), tone: 'up' };
   }) });
   var groupNote = v.groupBetsNote ? '<div class="notice">' + esc(v.groupBetsNote) + '</div>' : '';
   var groupBets = v.groupBets.length ? '<ul class="checkins">' + v.groupBets.map(function (g) {
-    return '<li><strong>' + esc(g.id) + '</strong> <span class="muted">' + esc(g.plan) + ' · aligns to ' + esc(g.aligns_to) + '</span><div class="muted">' + esc(g.delivery) + '</div></li>';
+    return '<li><strong>' + esc(g.id) + '</strong> <span class="muted">' + esc(g.plan) + ' · aligns to ' + esc(g.aligns_to) + '</span>' + (g.note ? '<div class="notice">' + esc(g.note) + '</div>' : '') + '<div class="muted">' + esc(g.delivery) + '</div></li>';
   }).join('') + '</ul>' : '<p class="muted">No group bets aligned here yet.</p>';
   var forms = '';
   if (EDIT && D.plan && D.plan.level !== 'company') {

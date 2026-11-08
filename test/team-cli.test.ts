@@ -61,7 +61,6 @@ describe("the nikos assign, team and sync commands", () => {
     const t = teamRepo();
     const cli = (...args: string[]) => spawnSync(process.execPath, ["--import", "tsx", join(ROOT, "src/cli.ts"), ...args], { encoding: "utf8" });
     expect(cli("decide", "x", "--dir", t).stderr).toContain("this is a team repo: nikos decide runs in a group or plan repo");
-    expect(cli("join", "acme/payments/checkout-group", "--dir", t).stderr).toContain("nikos team join <group repo>");
     expect(cli("story", "list", "--dir").stderr).toContain("--dir needs a folder");
     expect(cli("story", "list", "--dir").stderr).not.toContain("TypeError");
   });

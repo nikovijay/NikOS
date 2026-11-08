@@ -11,13 +11,14 @@ import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { betIds, krIds } from "../planning/model.js";
-import { levelOf, planningIssues } from "../planning/levels.js";
+import { planningIssues } from "../planning/levels.js";
+import { loadPlan } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { validate, validateGroup } from "./validate.js";
-import { mapDirs } from "../lib/maps.js";
-import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
+import { validate, validateGroup, validateTeam } from "./validate.js";
+import { mapDirs, ownMapsOf } from "../lib/maps.js";
+import { copyDirOf, isTeamRepo, openTeam, storyMapClash, TEAM_FILE, teamOptedIn, type TeamFile } from "../lib/team.js";
 
 /** What a team plan's check says, in every repo it shows up in. */
 const TEAM_PLAN_FOUND = "team plan in planning/plan.yaml";
@@ -34,9 +35,10 @@ const migrateNext = (root: string, intent: string) => {
   return `nikos migrate maps moves it under a group plan. Story ids without the group key stop it unless you pass --rename-ids (${key}-1 becomes ${keyFor(basename(resolve(root)))}-${key}-1). Nothing moves until you confirm.`;
 };
 /** The plan's level, or undefined when planning/plan.yaml doesn't parse: the file's own checks say so, and the rest of doctor still runs. */
+// The level in planning/plan.yaml only: a team repo with no plan.yaml has no plan level (levelOf says team for it).
 const planLevel = (root: string) => {
   try {
-    return levelOf(root);
+    return loadPlan(root)?.level;
   } catch {
     return undefined;
   }
@@ -227,11 +229,41 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     add({ name: "team", status: "fail", found: (err as Error).message.replace(`${TEAM_FILE}: `, ""), next: `Fix ${TEAM_FILE}` });
   }
   const clash = storyMapClash(root);
-  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into a group repo with nikos migrate maps there, then delete it here." });
+  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>." });
   if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
+  // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key and folder, and the team's status.
+  const own = ownMapsOf(root);
+  if (own.length && !clash) {
+    const v = validateTeam(root, {});
+    const mine = v.errors.filter((e) => e.file.startsWith("maps/"));
+    add({ name: "maps", status: mine.length ? "fail" : "ok", found: `${count(own.length, "own map")}${mine.length ? `, ${mine.length} problem${mine.length === 1 ? "" : "s"}` : ""}`, next: mine.length ? "Fix the problems nikos validate lists" : undefined });
+  }
+  // A team's own maps' assignments are the lead's to review: a suggestion for CODEOWNERS, never written (rule 7, D4).
+  if (own.length && !clash) {
+    const owners = codeowners(root);
+    const guarded = !!owners && /assignments\.yaml/.test(read(owners));
+    const lead = homeLead(root, team?.home) ?? "@<home-lead>";
+    const rules = own.map((m) => `maps/${m.id}/assignments.yaml`).join(" ");
+    add({ name: "assignments", status: "ok", found: `${count(own.length, "own map")} with its assignments in maps/<key>/assignments.yaml`, ...(!guarded ? { next: `Suggest: add "${rules} ${lead}" to CODEOWNERS, so the home group's lead reviews every change to a share` } : {}) });
+  }
+  // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
+  // The home checks are for a team that has opted in: a 0.3.0 team with a joined plan and no home reads as it did.
+  if (team && teamOptedIn(root)) {
+    const joined = (() => {
+      try {
+        return upstreamEntries(root).map((u) => u.repo);
+      } catch {
+        return [];
+      }
+    })();
+    if (joined.length && !team.home) add({ name: "home", status: "warn", found: "joins a plan but has no home", next: "Make one of the plans it joined its home: nikos join <plan> --home" });
+    if (team.home && !team.key) add({ name: "key", status: "warn", found: "has a home but no key", next: `Add key: <KEY> to ${TEAM_FILE}` });
+    if (team.home && !joined.includes(team.home) && !team.groups.some((g) => g.repo === team.home)) add({ name: "home", status: "warn", found: `${team.home} is not a plan the team joined`, next: `Join it with nikos join ${team.home} --home` });
+  }
   if (team) {
-    if (!team.groups.length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
+    // A team that owns its maps needn't take work from anyone.
+    if (!team.groups.length && !ownMapsOf(root).length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
     for (const g of team.groups) {
       const st = groupStatus(root, g, { remote: !opts.offline });
       if (!st.synced) {
@@ -272,6 +304,21 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
 
   const stale = staleCliWarning();
   if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
+}
+
+/**
+ * The lead handle of a team's home plan, from the plan's copy the team reads (a group it takes work
+ * from, or a plan it joined). Undefined when the copy has none, so doctor shows a placeholder.
+ */
+function homeLead(root: string, home: string | undefined): string | undefined {
+  if (!home) return undefined;
+  for (const dir of [copyDirOf(root, home), join(root, ".nikos", "upstream", ...home.split("/"))]) {
+    const p = join(dir, "planning", "plan.yaml");
+    if (!existsSync(p)) continue;
+    const lead = (parse(read(p)) as { lead?: unknown } | null)?.lead;
+    if (typeof lead === "string" && lead) return lead.startsWith("@") ? lead : `@${lead}`;
+  }
+  return undefined;
 }
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
