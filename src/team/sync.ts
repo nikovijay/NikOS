@@ -14,9 +14,10 @@ import { storyFiles } from "../lib/state-files.js";
 import { checkSettingsText } from "../lib/settings.js";
 import { TEAM_FILE, clashingGroups, copyDirOf, ignoreAssigned, isTeamRepo, openTeam, parseTeam, storyMapClash, type TeamGroup } from "../lib/team.js";
 import { fetchChain, git, repoEntry, upstreamEntries, type UpstreamEntry } from "../planning/upstream.js";
+import { KEY } from "../lib/keys.js";
 
 /** A group's key: the GROUP in its story ids, e.g. PAY. */
-const GROUP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+const GROUP_KEY = KEY;
 const LOCK = "lock.yaml";
 const today = () => new Date().toISOString().slice(0, 10);
 

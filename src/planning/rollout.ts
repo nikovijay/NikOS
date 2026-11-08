@@ -169,8 +169,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         ...(all.asOf ? { asOf: all.asOf } : {}),
       };
       const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
-      // The next story of the first map with a queue: next can't pick among several maps without one.
+      // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
+      // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
       for (const ref of refs) {
+        if (ref.team) continue;
         try {
           const id = next(dir, ref.id).story;
           if (!id) continue;
@@ -180,7 +182,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
           // no state.yaml or queue in this map: delivery and blockers still show
         }
       }
-      for (const ref of storyMapsOf(dir)) {
+      // Blockers are read from a group's own map state only: a team's blockers live in its live status/, which a rollout never reads.
+      for (const ref of storyMapsOf(dir).filter((r) => !r.team)) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
         }

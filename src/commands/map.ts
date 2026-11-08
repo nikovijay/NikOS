@@ -13,6 +13,7 @@ import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { NO_GROUP_KEY, NO_TEAM_KEY, groupKeyOf, homeOf, keyOfMap, mapDirs, ownMapsOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 import { isTeamRepo, openTeam } from "../lib/team.js";
 import { upstreamEntries } from "../planning/upstream.js";
+import { KEY } from "../lib/keys.js";
 import { runMapStatus } from "./map-status.js";
 
 export interface MapCriterion {
@@ -507,7 +508,7 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 `;
 
 /** A map key: uppercase letters and digits, e.g. CHK. Its folder is the key, lowercased. */
-const MAP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+const MAP_KEY = KEY;
 
 /**
  * A story map for one of a group's bets, as maps/<key lowercased>/, with the folders and files a
@@ -552,9 +553,10 @@ function newTeamMap(input: { bet?: string; key?: string }, dir: string): { id: s
   if (!key) throw new Error("nikos map new needs --key <KEY>");
   const team = openTeam(dir);
   if (!team.key) throw new Error(NO_TEAM_KEY);
+  if (!team.home) throw new Error("nikos.team.yaml: a team that joins a plan or owns a map needs one home: nikos join <plan> --home");
   if (CROSS_REF.test(bet)) {
     const repo = bet.split("#")[0];
-    if (!upstreamEntries(dir).some((e) => e.repo === repo)) throw new Error(`${repo} isn't a plan this team joins: nikos join ${repo} --home <repo> first`);
+    if (!upstreamEntries(dir).some((e) => e.repo === repo)) throw new Error(`${repo} isn't a plan this team joins: nikos join ${repo} first`);
   } else if (!BET_ID.test(bet)) {
     throw new Error(`'${bet}' is not a bet id`);
   } else if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) {

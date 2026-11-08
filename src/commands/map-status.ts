@@ -122,7 +122,9 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
 
   return picked.map((gm) => {
     const base = { map: gm.id, key: gm.key, group, offline: !!opts.offline };
-    if (!gm.list.length) return { ...base, assigned: false, teams: [], stories: [], counts: zeroCounts(), approvers: {} };
+    // A group's map with no assignments has no status to write. A team's own map does: its stories are the team's own.
+    const own = typeof gm.home === "object";
+    if (!gm.list.length && !own) return { ...base, assigned: false, teams: [], stories: [], counts: zeroCounts(), approvers: {} };
     const views: StoryView[] = mapViews(root, gm, index, undefined, policy());
     const counts = zeroCounts();
     for (const v of views) counts[v.freshness]++;

@@ -149,9 +149,10 @@ Commands:
   doctor           Check this repo is set up well, and say what to do next (--offline)
   migrate per-story  Give each story its own state and approval file, so parallel
                    branches never conflict (migrate single-file goes back)
-  migrate maps     Move a repo's intent/ story map to maps/<key>/ of a group repo, which is
-                   its own team: planned first, on nikos/migrate-maps (--dry-run, --yes,
-                   --key, --group-key, --bet, --new-bet, --rename-ids, --commit)
+  migrate maps     Move a 0.2.x intent/ story map to maps/<key>/: of a group repo (--key,
+                   --group-key), or of a team repo (--team-key, --home, --bet <id> or
+                   <repo>#<id>, --new-bet). Planned first; --dry-run, --yes, --rename-ids,
+                   --commit, --help for every option
   tracker link|record|sync|import  Keep the story map and a Jira, Linear, GitHub or GitLab
                    tracker in step; the agent reads tickets through the tracker's MCP
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and

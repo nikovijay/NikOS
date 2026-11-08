@@ -5,7 +5,7 @@ import { urlProblem } from "../lib/fetch-copy.js";
 import { join, resolve } from "node:path";
 import { isDone } from "../lib/project.js";
 import { homeOf, mapDirs, ownMapsOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
-import { isTeamRepo, isRepoArg } from "../lib/team.js";
+import { isTeamRepo, isRepoArg, openTeam } from "../lib/team.js";
 import { loadStates } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { checkAssignments, loadMapData, mapStoryIds, readAssignments, storiesOf, writeAssignments, type Assignment, type MapData } from "../lib/assignments.js";
@@ -74,6 +74,10 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
   const name = team.trim();
   if (!name) throw new Error("Give the team's name, e.g. nikos assign \"Checkout web\" --repo acme/checkout-web");
   if (!opts.repo || !isRepoArg(opts.repo)) throw new Error("nikos assign needs --repo <path>: the team's repo, as owner/repo, or . when this repo is its own team");
+  // In a team repo, --repo . is this team's own share: the name given must be this team's, or the record names the wrong team.
+  if (opts.repo === "." && isTeamRepo(root) && name !== openTeam(root).name) {
+    throw new Error(`${name} isn't this team (${openTeam(root).name}): --repo . is this team's own share. Use --repo <that team's repo> for ${name}`);
+  }
   const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
   if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");
   if (opts.url) {
@@ -120,7 +124,7 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
     const doneIds: string[] = [];
     for (const id of overlap) {
       const h = doneOf(root, index, states, other, id);
-      if (h.fallback) warnings.push(`${id} is held by ${other.team}, which isn't fetched: checked the group's own state.yaml (run nikos map status first)`);
+      if (h.fallback) warnings.push(`${id} is held by ${other.team}, which isn't fetched: checked ${isTeamRepo(root) ? "this team's own status" : "the group's own state.yaml"} (run nikos map status first)`);
       if (!h.done) continue;
       if (!opts.includeDone) throw new Error(h.refusal);
       doneIds.push(id);

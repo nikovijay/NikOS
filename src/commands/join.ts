@@ -31,7 +31,7 @@ function homeIn(path: string): string | undefined {
 
 /** Joining a plan from a team repo: the team has a key and no more than one home, and its first join makes its home. */
 function teamJoinProblem(team: TeamFile, repo: string, home: boolean): string | undefined {
-  if (!team.key) return `this team has no key: add key: <KEY> to ${TEAM_FILE} before it joins a plan (capital letters and digits, e.g. WEB)`;
+  if (!team.key) return `this team has no key: nikos team init --key <KEY> gives it one, before it joins a plan (capital letters and digits, e.g. WEB)`;
   if (home && team.home && team.home !== repo) return `${team.home} is already this team's home: a team has one home`;
   if (!team.home && !home) return "this team has no home yet: nikos join <plan> --home makes that plan its home, where its settings and locks come from";
   return undefined;
@@ -79,6 +79,8 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
   const undo = () => {
     if (before === undefined) store().remove(path);
     else store().write(path, before);
+    // A plan this call didn't add keeps its copy and its lock: only what this call made is taken back.
+    if (!added) return;
     rmSync(copy, { recursive: true, force: true });
     const lock = readLock(root).filter((l) => l.repo !== input.repo);
     store().write(paths(root).lock, `# Written by nikos planning sync: the commit each plan's copy was read at.\n${stringify(lock)}`);
@@ -87,7 +89,9 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
   const fetched = !report.unresolved.some((u) => u.repo === input.repo);
   // Its key must be its own across the chain: this repo's, and the copies already here (amendment D5).
   const fetchedKey = fetched && store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml")))?.key : undefined;
-  const clash = typeof fetchedKey === "string" ? keyClash(root, team ? "team" : "plan", input.repo, fetchedKey, [paths(root).cache]) : undefined;
+  // A team's copies are its own chain (.nikos/upstream) and the groups it takes work from (.nikos/assigned).
+  const copies = team ? [paths(root).cache, join(root, ".nikos", "assigned")] : [paths(root).cache];
+  const clash = typeof fetchedKey === "string" ? keyClash(root, team ? "team" : "plan", input.repo, fetchedKey, copies) : undefined;
   if (clash) {
     undo();
     throw new Error(clash);

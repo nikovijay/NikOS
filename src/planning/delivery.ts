@@ -6,6 +6,7 @@ import { parse } from "yaml";
 import { store } from "../lib/store.js";
 import { loadStates } from "../lib/state-files.js";
 import { storiesFor } from "../lib/bets.js";
+import { ownRepo } from "../lib/git.js";
 import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadMapData, readAssignments, storiesOf } from "../lib/assignments.js";
@@ -65,20 +66,6 @@ const policyIn = (root: string): string | undefined => {
   }
 };
 
-/** The team repo paths holding a story of a bet in a group's maps. This group's own holds are not listed. */
-export function teamsHolding(root: string, bet: string): string[] {
-  const out = new Set<string>();
-  for (const ref of storyMapsOf(root)) {
-    if (!ref.id || ref.team) continue;
-    const map = yamlAt(join(ref.dir, "storymap.yaml"));
-    const ids = new Set(map ? storiesFor(map, bet) : []);
-    if (!ids.size) continue;
-    const data = loadMapData(ref.dir);
-    for (const a of assignedIn(ref.dir)) if (a.repo !== "." && storiesOf(data, a).some((id) => ids.has(id))) out.add(a.repo);
-  }
-  return [...out];
-}
-
 /** A bet's delivery across every story map in the repo that specs it. */
 export function delivery(root: string, bet: string, opts: DeliveryOptions = {}): Delivery {
   const stories: Delivery["stories"] = [];
@@ -109,9 +96,15 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
   };
 
   let asOfMin: string | undefined;
+  // This repo's name, for matching a map's bet named as <repo>#<id> (canonicalBet); read once, when a map needs it.
+  let selfRepo: string | undefined | null = null;
+  const self = () => {
+    if (selfRepo === null) selfRepo = ownRepo(root);
+    return selfRepo;
+  };
   for (const ref of storyMapsOf(root)) {
     const map = yamlAt(join(ref.dir, "storymap.yaml"));
-    const ids = map ? storiesFor(map, bet) : [];
+    const ids = map ? storiesFor(map, bet, self()) : [];
     if (!ids.length) continue;
     maps.push(ref.id ?? "intent");
 
@@ -191,7 +184,8 @@ export function mapDeliveryIn(dir: string): { stories: { id: string; status: str
         if (!s) noSummary.push(id);
         else if (s.status !== "cancelled") stories.push({ id, status: s.status, approval: s.approval });
       }
-    } else if (!assignedIn(ref.dir).length) {
+    } else if (!ref.team && !assignedIn(ref.dir).length) {
+      // A group's map with no assignments: its own state. A team's map with no summary yet is counted as no summary yet, not from the group's folder.
       const states = loadStates(ref.dir);
       for (const id of ids) {
         const status = states[id]?.status ?? "todo";

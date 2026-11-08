@@ -438,7 +438,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       else if (ref.team && CROSS_REF.test(storymap.bet)) {
         // A team's map names a bet in a plan above it. Its own maps check it against the plan the team joins; a copy was checked where it was written.
         if (ref.own) crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
-      } else if (ref.team && !store().isDir(betsDir)) {
+      } else if (ref.team && !ref.own && !store().isDir(betsDir)) {
         // A copy of another team's map: the team's bets aren't copied, so its bet is checked where the map was written.
       } else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
     } else {

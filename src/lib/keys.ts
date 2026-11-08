@@ -6,6 +6,9 @@ import { keyOf } from "./maps.js";
 import { walk } from "./project.js";
 import { TEAM_FILE } from "./team.js";
 
+/** A key for a group, team or map (D6): capital letters and digits, starting with a letter, up to 10. */
+export const KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+
 export interface CopyKey {
   /** The repo path the copy is of, from the folder it sits in. */
   repo: string;

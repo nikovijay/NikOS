@@ -81,8 +81,9 @@ export function parseTeam(text: string): TeamFile {
   const data: any = parse(text) ?? {};
   const problems = schemaProblems("team.schema.json", data);
   if (problems.length) throw new Error(`${TEAM_FILE}: ${problems[0]}`);
-  // A home is part of format 2: a format 1 file with one is refused rather than read as a 0.3.0 team.
+  // A key and a home are part of format 2: a format 1 file with either is refused rather than read as a 0.3.0 team.
   if (data.home !== undefined && data.format_version !== 2) throw new Error(`${TEAM_FILE}: home needs format_version 2`);
+  if (data.key !== undefined && data.format_version !== 2) throw new Error(`${TEAM_FILE}: key needs format_version 2`);
   return { ...data, groups: data.groups ?? [], members: data.members ?? [] };
 }
 

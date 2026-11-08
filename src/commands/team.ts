@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { isSeq, parse, stringify, type Document, type YAMLSeq } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
-import { assignedMaps, keyOf } from "../lib/maps.js";
+import { assignedMaps, keyOf, ownMapsOf } from "../lib/maps.js";
 import { ownRepo } from "../lib/git.js";
 import { read } from "../lib/project.js";
 import { store } from "../lib/store.js";
@@ -13,7 +13,7 @@ import { ignoreAssigned, isTeamRepo, openTeam, parseTeam, saveTeam, teamDocument
 import { storyFiles } from "../lib/state-files.js";
 import { repoEntry } from "../planning/upstream.js";
 import { dropFromLock, groupStatus, teamSync } from "../team/sync.js";
-import { copyKeys, keyClash } from "../lib/keys.js";
+import { copyKeys, KEY, keyClash } from "../lib/keys.js";
 
 /** The team commands that change or read nikos.team.yaml need one. Named once, so each refuses alike. */
 const NO_TEAM = "run nikos team init first";
@@ -30,7 +30,7 @@ const block = <T>(node: T): T => {
 const NOT_A_REPO = "not a repo path (owner/repo, or group/subgroup/project on GitLab)";
 
 /** The team key's shape: the same one group keys have (planning/plan.yaml key). */
-export const TEAM_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+export const TEAM_KEY = KEY;
 
 /** `nikos team init`: write nikos.team.yaml here, naming the team, its repo path and (optionally) its key. */
 export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string } {
@@ -163,7 +163,7 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
   const root = resolve(dir);
   requireTeam(root);
   const team = openTeam(root);
-  const out = [`${team.name} (${team.repo})`];
+  const out = [`${team.name} (${team.repo})${team.key ? `, key ${team.key}` : ""}${team.home ? `, home ${team.home}` : ""}`];
   out.push(team.members.length ? "Members:" : "Members: none yet (nikos team member add)");
   for (const m of team.members) out.push(`  ${m.name}${m.role ? `, ${m.role}` : ""}${m.handle ? ` (@${m.handle})` : ""}`);
   out.push(team.groups.length ? "Groups:" : "Groups: none yet (nikos team join <group repo>)");
@@ -175,6 +175,15 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
     }
     out.push(`  ${g.repo}: synced ${st.entry!.commit.slice(0, 7)} ${st.entry!.synced}`);
     if (st.moved) out.push(`    stale: group moved since the last sync (nikos sync)`);
+  }
+  const own = ownMapsOf(root);
+  if (own.length) {
+    out.push("Own maps:");
+    for (const m of own) {
+      const map = (parse(read(join(m.dir, "storymap.yaml"))) ?? {}) as { key?: string; releases?: { stories?: string[] }[] };
+      const count = (map.releases ?? []).reduce((n, r) => n + (r.stories?.length ?? 0), 0);
+      out.push(`  ${team.key}-${map.key ?? m.id}: ${count} ${count === 1 ? "story" : "stories"}`);
+    }
   }
   const maps = assignedMaps(root);
   if (maps.length) {
@@ -208,6 +217,7 @@ export function runTeam(args: string[]): number {
       const r = teamInit(dir, { repo: flag("repo"), name: flag("name"), key: flag("key") });
       console.log(`✓ Created ${TEAM_FILE} for ${r.name} (${r.repo})\n  Take work from a group next: nikos team join <group repo>`);
     } else if (sub === "join" && positional[0]) {
+      if (rest.includes("--home")) throw new Error("a team's home is set with nikos join <plan> --home: nikos team join takes work from a group, and doesn't set one");
       const r = teamJoin(dir, positional[0], { ref: flag("ref"), host: flag("host"), url: flag("url") });
       if (r.unresolved) {
         console.error(`✗ ${r.repo} can't be reached: ${r.unresolved}. It stays in ${TEAM_FILE}: check its --url or --host, or run nikos sync once it's reachable`);

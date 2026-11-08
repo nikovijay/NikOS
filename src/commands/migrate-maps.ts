@@ -24,6 +24,7 @@ import { newIdFor, renameDecisionHeadings, renameIds, retagFeature, type IdTable
 import { keyFor } from "./init.js";
 import { currentQuarter, type Ask } from "./onboard.js";
 import { interactive } from "./start.js";
+import { KEY } from "../lib/keys.js";
 import { validateMap, validateGroup, validateTeam } from "./validate.js";
 
 const MIGRATE_BRANCH = "nikos/migrate-maps";
@@ -34,7 +35,7 @@ const MOVED = ["storymap.yaml", "features", "state.yaml", "state", "approvals.ya
 const JUNK = [".DS_Store", "Thumbs.db"];
 const KNOWN = [...MOVED, ".gitkeep", ...JUNK];
 const RUNNERS = ["cucumber.mjs", "cucumber.js", "behave.ini"];
-const KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+
 /** The validate error for a release or story that names a bet with no card yet. The bet choice writes it, or refuses. */
 const MISSING_CARD = /, which has no planning\/bets\/[^\s]+\.md$/;
 
@@ -307,7 +308,7 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
   if (stray.length) throw new MigrateError(`Story ${stray.join(", ")} doesn't start with ${storymap.key}-, so it can't be renamed. Rename it by hand, then retry.`);
   if (needs.length && !a.renameIds) {
     throw new MigrateError(
-      `${count(needs.length, "story id")} don't carry the group key (${a.group}): ${needs.join(", ")}.\nRerun with --rename-ids to rename them (${storymap.key}-n becomes ${a.group}-${a.key}-n), or add the group key by hand. Nothing has been moved.`,
+      `${count(needs.length, "story id")} don't carry the ${a.teamFile ? "team" : "group"} key (${a.group}): ${needs.join(", ")}.\nRerun with --rename-ids to rename them (${storymap.key}-n becomes ${a.group}-${a.key}-n), or add the ${a.teamFile ? "team" : "group"} key by hand. Nothing has been moved.`,
     );
   }
   const renames = a.renameIds ? [...table.entries()] : [];
@@ -610,7 +611,6 @@ export function renderPlan(p: MapsPlan, dry: boolean): string[] {
 }
 
 const planLine = (p: MapsPlan) => {
-  if (p.plan === "team") return "";
   if (p.plan === "create") return `level group, key ${p.group}, period ${p.period}`;
   if (p.plan === "team-to-group") return `level team -> group, key ${p.group} (name and pillars kept, period ${p.period})`;
   if (p.plan === "group-key") return `${p.planNote} added`;
@@ -876,6 +876,10 @@ export const unknownFlags = (args: string[]): string[] => args.filter((a) => a.s
 
 /** `nikos migrate maps` from the command line. Returns the exit code. */
 export async function runMigrateMaps(args: string[]): Promise<number> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(MIGRATE_MAPS_USAGE);
+    return 0;
+  }
   const bad = unknownFlags(args);
   if (bad.length) {
     console.error(`✗ Unknown ${bad.length === 1 ? "option" : "options"}: ${bad.join(", ")}\n${MIGRATE_MAPS_USAGE}`);

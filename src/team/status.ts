@@ -12,7 +12,7 @@ import { ASSIGNMENTS, holderOf, loadMapData, mapStoryIds, readAssignments, stori
 import { mapDirs } from "../lib/maps.js";
 import { isDone, specHash } from "../lib/project.js";
 import { loadApprovalEntries, loadStates, type StoryHome, type StoryState } from "../lib/state-files.js";
-import { isTeamRepo } from "../lib/team.js";
+import { isTeamRepo, openTeam } from "../lib/team.js";
 import { loadApprovals, teamApprovalLapse, type Approval, type DeliveryApproval } from "../lib/approvals.js";
 import { ignoreCache, repoEntry, type UpstreamEntry } from "../planning/upstream.js";
 
@@ -413,8 +413,10 @@ export function storyView(opts: { root: string; map: GroupMap; id: string; holde
 
 /** Every story of a group map (or only the listed ids), as the group sees its teams' work. */
 export function mapViews(root: string, map: GroupMap, index: TeamIndex, ids?: string[], policy?: string): StoryView[] {
+  // A team's own map (its status is at the team's root): a story no assignment gives away is the team's own, so it has a status.
+  const owner: Assignment | undefined = typeof map.home === "object" ? { team: openTeam(root).name, repo: "." } : undefined;
   return (ids ?? mapStoryIds(map.data)).map((id) =>
-    storyView({ root, map, id, holder: holderOf(map.list, map.data, id), index, H: featureHashIn(map.data, id), policy }),
+    storyView({ root, map, id, holder: holderOf(map.list, map.data, id) ?? owner, index, H: featureHashIn(map.data, id), policy }),
   );
 }
 
