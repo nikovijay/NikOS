@@ -260,9 +260,11 @@ Each refusal says what to do. The ones that matter most:
   department's plan, or rewrite it as a bet aimed at a department key result (`krs:`). A team plan
   with none is rewritten to a group plan, keeping its name, pillars and period.
 - **A company or department plan** is refused: a repo holds one plan.
-- **A team repo** (`nikos.team.yaml`) that has `intent/` is refused, not moved: a team repo can't
-  hold a story map. Move `intent/` into a group repo with `nikos migrate maps` there, delete it from
-  the team repo, then `nikos team join`.
+- **A team repo** (`nikos.team.yaml`) that has `intent/` is moved into the team's own `maps/<key>/`,
+  in place. `nikos migrate maps` asks for the team's key (`--team-key`, or `key:` in `nikos.team.yaml`),
+  its home (`--home <repo>`) and its bet (`--bet`, `--new-bet` or `<repo>#<id>`). Its status and
+  approvals move to the team's root (`status/`, `approvals/`), one file per story. A team with no key
+  is told to pass one.
 
 The new layout is checked on a copy before anything is written, with the group's own rules
 (`validateGroup` and the planning checks). A failure there lists what's wrong, and the repo stays as
@@ -347,12 +349,13 @@ commit that only moves the team's own status or approvals doesn't count.
 `nikos verify` runs the copies with the team's own step definitions. It lists any
 step in the assigned stories that has no definition yet, as a warning.
 
-A team repo can't also keep `intent/` or `maps/`. The story-writing commands
-(`story`, `step`, `activity`, `release`, `map new`, `tracker import`), the plan
-commands (`join`, `company`, `group`, `decide`) and `assign`, `migrate`, `planning`,
-`start` and `init` are refused there, each with the place to run it instead: stories
-are written in the group repo, and a team takes work with `nikos team join`. A team's
-settings are its own `nikos.settings.yaml`, plus the locks of its group and company.
+A team repo can't keep `intent/`: it moves to the team's own `maps/<key>/` with `nikos migrate maps`.
+Its own maps take stories (`story`, `step`, `activity`, `release`, `map new`), `assign` and `map status`.
+On a copy of a group's or another team's map those are refused, each with the place to run it: stories
+are written in the group repo or the team that owns the map. `planning kr new` (key results) is refused,
+`tracker import`, `init`, `start`, `company`, `group` and `decide` are refused as before. A team joins a
+plan with `nikos join` once it has a key and a home. A team's settings are its own `nikos.settings.yaml`, plus the locks of its
+home's chain (see [settings](settings.md)).
 
 A team's CI runs `nikos sync` before `nikos validate` and `nikos verify`, since the
 assigned stories are gitignored and a fresh checkout has none. `nikos ci setup` adds

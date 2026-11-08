@@ -4,7 +4,7 @@
 
 ## Amendment: teams that own a story map (after 0.3.0)
 
-**Status:** design only, for review. Nothing here is built yet.
+**Status:** built, for review. See "Amendment status" below for what is built and where it differs.
 
 A team can own story maps itself, as well as being assigned parts of a
 group's. It doesn't need a group or department above it. Teams stay
@@ -131,10 +131,23 @@ Where the build differs:
 - **Key checks do not cover every plan above.** The join-time check compares a key with this repo's own key and the copies in its chain (`.nikos/upstream` and `.nikos/assigned`). A plan that isn't synced yet has no key to compare, so the rollout's duplicate check is the one that sees it.
 - **migrate maps in a team asks for flags.** A team repo's key, home and bet come from `--team-key`, `--home`, `--bet`, `--new-bet`, or `nikos.team.yaml`. The terminal doesn't ask for them (a group's questions for period and name don't apply to a team, which has no plan).
 - **Team repos are refused for a key-less `intent/`.** A team with `intent/` and no key is refused with the key to pass. (The 0.3.0 refusal named a move the team couldn't make.)
+- **Team init and a group repo.** `nikos team init` in a group repo with no maps succeeds with no key, as it did in 0.3.0 (the spec refused any plan repo). With `--key` it's refused: the key would be a second plan's.
+- **A team's first join doesn't set its home.** A team's first `nikos join <plan>` without `--home` is refused, and `nikos team join` never sets a home. `nikos join <plan> --home` is the one way to set it. (Section 1 of the spec had the first joined plan become the home.)
+- **`nikos team join --home` is refused,** with the `nikos join <plan> --home` it needs. The home is not set by team join.
+- **Settings for a team that hasn't opted in.** A team with no key, home or maps keeps 0.3.0's settings: with a planning/ folder it reads the locks of the plans it joined, and with none it takes its groups' chains. Only an opted-in team takes its home's chain (rule 1). Team opt-in is a key, a home, or a map of its own.
+- **A team's own map.** A story no assignment gives to another team is the team's own, and its status is read at the team's root. A map with no assignments gets a `delivery.yaml` as a map with assignments does.
+- **Next-up and blockers in a rollout.** A rollout doesn't read next-up or blockers for a team's own map: its status is the team's live file. (Before this fix, next-up read the team's committed `status/`.)
+- **Bet delivery across copies.** `delivery` matches a map's bet to a plan's bet in canonical form (`<repo>#<id>`, `canonicalBet`). A bet's line sums the maps in the repo it's read in. It does not sum the maps held by the teams and groups below it, so a company's bet line doesn't count a team's map that names it. The company rollout's per-copy counts do include them.
+- **Key checks.** The join check compares a key with the copies in `.nikos/upstream` and `.nikos/assigned`. The rollout's duplicate check reads the downstream copies only (a team's assigned copies are not in it).
+- **`nikos map status --json` writes no `delivery.yaml`.** Text runs write it. The CHANGELOG records this.
+- **`storyMapClash` keeps the 0.3.0 text,** "this repo has intent/ or maps/ and nikos.team.yaml: keep one". Tests pin the text, and a team's maps/ no longer clash, so the text is stale for maps/.
+- **`map new` needs a home** as well as a key, as the spec said (`newTeamMap`).
+- **Team migration keeps state per story.** `migrate maps` in a team repo writes each story's state and approval to the team root (`status/<ID>.yaml`, `approvals/<ID>.yaml`), and removes intent/state.yaml and intent/approvals.yaml.
 - **Not built:**
-  - `nikos release check` for a team's own map does not read the team's own approvals; it was not checked in this build.
-  - The playbooks, the nikos-mode skills and the nikos-planning skill router describe the 0.3.0 team layout only; they were not rewritten here. The MCP server's instructions say a team repo works on assigned copies only.
+  - The playbooks `start`, `company` and `index` in `skills/nikos-mode` still describe the 0.3.0 team layout. The onboard playbook, the nikos-planning router and the wizard were rewritten here.
+  - The MCP server's instructions describe a team's own maps (`src/mcp/server.ts`), but its `map_status` tool and the planning tools still refuse a team's own maps: `src/planning/ops.ts` (`TEAM_OPS`) refuses every planning op in a team repo.
   - Team sources and team maps are tested with local repos and `url:`, not with a forge.
+  - The rollout's duplicate check doesn't cover a team's `.nikos/assigned` copies (see Key checks).
 
 ### Decided in review
 

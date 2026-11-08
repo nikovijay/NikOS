@@ -2,6 +2,7 @@
 // joined (a team with a planning/ folder and no key or home), doctor doesn't warn about a home it was
 // never asked to have, and a keyless team can still be made in a group repo. A key can be added later.
 import { describe, it, expect } from "vitest";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -88,5 +89,16 @@ describe("team init can give a keyless team its key", () => {
     const t = teamRepo();
     expect(() => teamInit(t, { key: "web" })).toThrow("is not a team key");
     expect(openTeam(t).format_version).toBe(1);
+  });
+});
+
+describe("the CLI refuses a 0.3.0 team with a joined plan as before", () => {
+  it("planning validate and planning status name the team repo, and exit 1", () => {
+    const t = legacyTeamWithPlanning();
+    for (const cmd of ["validate", "status"]) {
+      const r = spawnSync(process.execPath, ["--import", "tsx", join(__dirname, "../src/cli.ts"), "planning", cmd, "--dir", t], { encoding: "utf8" });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("this is a team repo: nikos planning runs in a group or plan repo");
+    }
   });
 });

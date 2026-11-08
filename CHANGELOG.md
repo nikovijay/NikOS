@@ -46,6 +46,21 @@ Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendmen
 - A 0.3.0 team repo with no key or home no longer gets a "team plan" warning from `nikos doctor`.
 - A team's settings no longer include a plan it joined that isn't its home, and a team with a home is no longer read by the generic walk.
 
+### Review fixes
+
+- A 0.3.0 team with no key, home or maps is refused, read and settled as before. A team with a `planning/` folder reads the locks of the plans it joined again, and `nikos doctor` adds no home warning for it. A keyless team can still be made in a group repo with no maps (`nikos team init`); a keyed one can't.
+- `nikos team init --key WEB` gives a team that has no key yet its key (format 2). A key already set is kept.
+- `nikos team join --home` is refused: a home is set with `nikos join <plan> --home`.
+- `nikos.team.yaml` with a `key` must be format 2, as a home already was.
+- `nikos team show` lists the team's key, home and own maps.
+- `nikos assign --repo .` names the team it's run in: another team's name is refused with the repo to use.
+- A team's own map with no assignments gets its `delivery.yaml`, its stories read from the team's status. A rollout reads no team status for next-up or blockers.
+- A bet named as `<repo>#<id>` matches the same bet from the repo it names.
+- `nikos migrate maps` in a team repo writes each story's state and approval to the team's `status/` and `approvals/`, and says "team key" where it means one. `nikos migrate maps --help` prints the usage.
+- `nikos state set` names only the story it changed when an approval has lapsed.
+- `nikos planning status` puts a space before a word unit (12 days) and keeps % tight.
+- `nikos map new` in a team needs its home (as well as its key), and says which join to run.
+
 ## 0.3.0 (2026-11-08)
 
 ### Added

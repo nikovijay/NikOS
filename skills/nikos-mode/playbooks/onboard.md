@@ -9,7 +9,7 @@ time, and offer a recommended answer with each.
    1. **A company plan:** objectives, key results and bets for the whole company, with departments or groups planning below it (`nikos company init`).
    2. **A department plan:** a department's objectives, aligned to the company plan (`nikos company init --level department`, then `nikos join` the company plan from it).
    3. **A group:** its plan and story maps, one per bet. The group can be its own team, assigned with `--repo .` (`nikos group init`, then `nikos planning bet new` and `nikos map new` in it).
-   4. **A team repo:** the code a group assigns work to. It joins its group with `nikos team init` and `nikos team join`. Teams don't plan.
+   4. **A team repo:** the code a group assigns work to, which can also own story maps of its own. It starts with `nikos team init` and takes work from its group with `nikos team join`. It joins its home plan with `nikos join <plan> --home`. A team has no key results; its own bets aim at company or department key results.
    5. **One product in one repo:** its own story map in `intent/`, with no levels, and a done gate (`nikos start`).
    6. **Both, in one repo:** a company plan and a product repo side by side (the older path).
    Recommend "a company plan" when departments or groups will plan against it, "a group that is its own team" for a small company with one team, and "one product" for a single repo with no plan above it.
@@ -20,7 +20,7 @@ time, and offer a recommended answer with each.
    - a company plan: run the company playbook from its step 2.
    - a department plan: `nikos company init --level department --name "<name>" --period "<period>"`, then `nikos join <company plan repo>` once the company plan exists.
    - a group: `nikos group init --name "<name>" --key <GROUP>`. If the group is its own team, make its first bet and story map with `nikos planning bet new <bet-id>` and `nikos map new --bet <bet-id> --key <MAP>`, then assign the team with `nikos assign "<team>" --repo .`.
-   - a team repo: `nikos team init --repo <owner/repo>` in the repo, then `nikos team join <group repo>`. It never gets its own intent/ or maps/.
+   - a team repo: `nikos team init --repo <owner/repo>` in the repo, then `nikos team join <group repo>` to take work from a group. To own a story map, the team also needs a key (`nikos team init --key WEB`) and a home (`nikos join <plan> --home`); its map is `maps/<key>/`, made with `nikos map new`. It never gets its own intent/.
    - both: `nikos start --name "<name>" --key <KEY>`, then `nikos company init --name "<name>" --period "<period>"` in the same folder, then the planning wizard for this period's objectives and key results.
    A repo that already has an `intent/` story map and should join a group moves it with `nikos migrate maps`, after a dry run the person reads.
 6. Show it: offer to start `nikos serve`, which opens the dashboard for the plan, with the story map a click away. Tell them what they'll see there.
