@@ -172,3 +172,29 @@ describe("a team's own map", () => {
     expect(assignedMaps(t)).toEqual([]);
   });
 });
+
+describe("a team's own bets, approval and next", () => {
+  it("planning bet new in a team repo writes planning/bets/<id>.md", async () => {
+    const { newBet } = await import("../src/planning/bets");
+    const t = teamWithKey();
+    const path = newBet({ id: "one-inbox", owner: "Ada", hypothesis: "One inbox helps", reviewOn: "2027-03-01", alignsTo: [] }, t);
+    expect(path).toBe("planning/bets/one-inbox.md");
+    expect(readFileSync(join(t, path), "utf8")).toContain("id: one-inbox");
+  });
+
+  it("approve records the approval in the team's approvals/, and next lists the team's own stories", async () => {
+    const { approve } = await import("../src/commands/approve");
+    const { next } = await import("../src/commands/next");
+    const t = teamWithKey();
+    newMap({ bet: "faster-checkout", key: "INB" }, t);
+    newStory({ title: "Pay by card", activity: "getting-started" }, t);
+    commitAll(t, "story");
+    expect(next(t).story).toBe("WEB-INB-1");
+    setState("WEB-INB-1", "in_progress", { dir: t, by: "Priya" });
+    setState("WEB-INB-1", "done", { dir: t, by: "Priya" });
+    commitAll(t, "done");
+    approve("WEB-INB-1", { dir: t, by: "Priya", via: "terminal" });
+    expect(parse(readFileSync(join(t, "approvals/WEB-INB-1.yaml"), "utf8"))).toMatchObject({ by: "Priya" });
+    expect(existsSync(join(t, "maps/inb/approvals"))).toBe(false);
+  });
+});

@@ -12,7 +12,7 @@ import { read, walk } from "../lib/project.js";
 import { store } from "../lib/store.js";
 import { storyFiles } from "../lib/state-files.js";
 import { checkSettingsText } from "../lib/settings.js";
-import { TEAM_FILE, clashingGroups, copyDirOf, ignoreAssigned, isTeamRepo, openTeam, storyMapClash, type TeamGroup } from "../lib/team.js";
+import { TEAM_FILE, clashingGroups, copyDirOf, ignoreAssigned, isTeamRepo, openTeam, parseTeam, storyMapClash, type TeamGroup } from "../lib/team.js";
 import { fetchChain, git, repoEntry, upstreamEntries, type UpstreamEntry } from "../planning/upstream.js";
 
 /** A group's key: the GROUP in its story ids, e.g. PAY. */
@@ -66,12 +66,14 @@ export function groupStatus(root: string, g: TeamGroup, opts: { remote?: boolean
   return { entry, synced, moved: now && now !== entry!.commit ? now : undefined };
 }
 
-/** A group repo as fetched: its plan, its maps and their assignments. */
+/** A source a team takes stories from, as fetched: its plan, its maps and their assignments. */
 interface Group {
   entry: UpstreamEntry;
   commit: string;
   dir: string;
   key: string;
+  /** A group plan, or another team that owns maps (its key names the story ids, as a group's does). */
+  kind: "group" | "team";
   maps: { dir: string; id: string; key: string; data: MapData; assignments: Assignment[] }[];
   /** The story ids this team's copy holds. */
   mine: Set<string>;
@@ -101,17 +103,34 @@ export interface TeamSync {
   warnings: string[];
 }
 
-/** Read a fetched group: it must be a group plan with a key. Throws with the reason. */
-function readGroup(dir: string, entry: UpstreamEntry, commit: string): Group {
-  const planPath = join(dir, "planning", "plan.yaml");
-  const plan = existsSync(planPath) ? parse(readFileSync(planPath, "utf8")) : undefined;
-  if (plan?.level !== "group") throw new Error("is not a group plan (planning/plan.yaml's level isn't group)");
-  if (typeof plan.key !== "string" || !GROUP_KEY.test(plan.key)) throw new Error("has no key in planning/plan.yaml");
-  const maps = mapDirs(dir).map((d) => {
+/** The maps a fetched source holds in maps/: each with its storymap, features and assignments. */
+function readMaps(dir: string): Group["maps"] {
+  return mapDirs(dir).map((d) => {
     const data = loadMapData(d);
     return { dir: d, id: basename(d), key: String(data.storymap?.key ?? ""), data, assignments: readAssignments(d) };
   });
-  return { entry, commit, dir, key: plan.key, maps, mine: new Set() };
+}
+
+/**
+ * Read a fetched source a team takes stories from: a group plan with a key, or another team (a
+ * repo with nikos.team.yaml and no plan) with a key. Throws with the reason.
+ */
+function readSource(dir: string, entry: UpstreamEntry, commit: string): Group {
+  const planPath = join(dir, "planning", "plan.yaml");
+  if (!existsSync(planPath) && existsSync(join(dir, TEAM_FILE))) {
+    let team;
+    try {
+      team = parseTeam(readFileSync(join(dir, TEAM_FILE), "utf8"));
+    } catch (err) {
+      throw new Error(`has a ${TEAM_FILE} that doesn't read: ${(err as Error).message.replace(`${TEAM_FILE}: `, "")}`);
+    }
+    if (!team.key || !GROUP_KEY.test(team.key)) throw new Error(`has no key in ${TEAM_FILE}: a team that takes stories from it needs one (nikos team init --key WEB)`);
+    return { entry, commit, dir, key: team.key, kind: "team", maps: readMaps(dir), mine: new Set() };
+  }
+  const plan = existsSync(planPath) ? parse(readFileSync(planPath, "utf8")) : undefined;
+  if (plan?.level !== "group") throw new Error("is not a group plan (planning/plan.yaml's level isn't group)");
+  if (typeof plan.key !== "string" || !GROUP_KEY.test(plan.key)) throw new Error("has no key in planning/plan.yaml");
+  return { entry, commit, dir, key: plan.key, kind: "group", maps: readMaps(dir), mine: new Set() };
 }
 
 /**
@@ -149,7 +168,7 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
         continue;
       }
       try {
-        fetched.push(readGroup(join(scratch, ...entry.repo.split("/")), entry, got.commit));
+        fetched.push(readSource(join(scratch, ...entry.repo.split("/")), entry, got.commit));
       } catch (err) {
         out.groups.push({ repo: g.repo, ref: entry.ref, stories: kept?.stories ?? 0, unresolved: (err as Error).message, invalid: true });
       }
@@ -160,7 +179,9 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
       // The last good settings file, kept when the group's new one doesn't read.
       const priorSettings = store().exists(join(copy, "nikos.settings.yaml")) ? read(join(copy, "nikos.settings.yaml")) : undefined;
       rmSync(copy, { recursive: true, force: true });
-      for (const rel of ["planning/plan.yaml", ...walk(join(group.dir, "planning", "bets"), ".md").map((p) => relative(group.dir, p))]) {
+      // A group's plan and bets come with its copy. A team's copy is its maps only: its key is in nikos.team.yaml, and its bets stay with it.
+      const isTeam = group.kind === "team";
+      for (const rel of isTeam ? [TEAM_FILE] : ["planning/plan.yaml", ...walk(join(group.dir, "planning", "bets"), ".md").map((p) => relative(group.dir, p))]) {
         store().write(join(copy, rel), read(join(group.dir, rel)));
       }
       for (const map of group.maps) {
@@ -176,8 +197,9 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
         for (const id of ids) group.mine.add(id);
       }
       // The group's settings reach the team as locks, and the plans above the group (its company)
-      // are fetched into .nikos/upstream, where the team's settings find them.
-      for (const f of ["nikos.settings.yaml", "planning/upstream.yaml"]) {
+      // are fetched into .nikos/upstream, where the team's settings find them. A team source's
+      // settings and plans stay with it: the team takes its settings from its own home.
+      for (const f of isTeam ? [] : ["nikos.settings.yaml", "planning/upstream.yaml"]) {
         if (!store().exists(join(group.dir, f))) continue;
         const text = read(join(group.dir, f));
         const bad = f === "nikos.settings.yaml" ? checkSettingsText(text) : undefined;
@@ -189,12 +211,14 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
         out.warnings.push(`${group.entry.repo}'s ${bad}. ${priorSettings !== undefined ? "Kept the copy from the last sync" : "Its locks don't reach the team"}`);
       }
       let above: UpstreamEntry[] = [];
-      try {
-        above = upstreamEntries(group.dir);
-      } catch (err) {
-        out.upstream.push({ repo: group.entry.repo, reason: (err as Error).message });
+      if (!isTeam) {
+        try {
+          above = upstreamEntries(group.dir);
+        } catch (err) {
+          out.upstream.push({ repo: group.entry.repo, reason: (err as Error).message });
+        }
+        for (const u of fetchChain(above, join(root, ".nikos", "upstream")).unresolved) out.upstream.push(u);
       }
-      for (const u of fetchChain(above, join(root, ".nikos", "upstream")).unresolved) out.upstream.push(u);
       const stories = group.mine.size;
       out.groups.push({ repo: group.entry.repo, ref: group.entry.ref, commit: group.commit, stories });
       const entry: AssignedLock = { repo: group.entry.repo, ref: group.entry.ref, commit: group.commit, synced: today(), stories };
