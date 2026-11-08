@@ -15,7 +15,12 @@ Node.js (TypeScript)
 
 ## Patterns
 
-_Document recurring patterns as you establish them._
+- Team repos read other repos read-only. `nikos sync` fetches each group repo into
+  `.nikos/assigned/<group repo>/` (gitignored) and rebuilds it every sync, keeping the commit
+  in `.nikos/assigned/lock.yaml`. Nothing is written back to the group.
+- A team's status and delivery approvals live in its own repo, in `status/<id>.yaml` and
+  `approvals/<id>.yaml`. They're keyed by the group's story ids, so two groups' copies can
+  share a map key without clashing.
 
 ## Trade-offs
 
@@ -23,4 +28,11 @@ _Record trade-offs and why._
 
 ## Key files
 
-_Add important files and what they do as you build._
+- `src/lib/maps.ts`: which story map a command works on, including a team's assigned copies
+  (`storyMapFor`, `resolveStoryMap`).
+- `src/lib/state-files.ts`: where a story's state and approvals live: intent/, maps/<id>, or a
+  team repo's `status/` and `approvals/` (`StoryHome`).
+- `src/lib/assignments.ts`: `maps/<id>/assignments.yaml`, which team has which stories.
+- `src/lib/team.ts`: `nikos.team.yaml` and what makes a repo a team repo.
+- `src/team/sync.ts`: `nikos sync`, which builds the copies and marks reassigned stories.
+- `src/commands/assign.ts`, `src/commands/team.ts`: the group-side and team-side commands.
