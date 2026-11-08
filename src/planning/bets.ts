@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
 import { betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
-import { alignmentProblems, alignsValue } from "./levels.js";
+import { alignmentProblems, alignsValue, krTargetProblems } from "./levels.js";
 import { betFieldProblems, dateProblem } from "./rules.js";
 
 export interface BetInput {
@@ -35,7 +35,7 @@ export function newBet(input: BetInput, root: string): string {
   if (!input.hypothesis?.trim()) throw new Error("A bet needs a hypothesis (--hypothesis)");
   if (dateProblem(input.reviewOn)) throw new Error("A bet needs a review date (--review YYYY-MM-DD)");
   const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
-  const problem = alignmentProblems(root, aligns, "bet")[0];
+  const problem = alignmentProblems(root, aligns, "bet")[0] ?? krTargetProblems(root, [input.primary, ...(input.also ?? [])].filter((r): r is string => !!r))[0];
   if (problem) throw new Error(problem);
   const meta = checked({
     id: input.id,

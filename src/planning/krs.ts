@@ -5,6 +5,7 @@ import { BET_ID } from "../lib/bets.js";
 import { checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
 import { dateProblem, krFieldProblems } from "./rules.js";
 import { alignmentProblems, alignsValue, krLevelProblem, levelOf } from "./levels.js";
+import { isTeamRepo } from "../lib/team.js";
 
 export interface KrInput {
   id: string;
@@ -32,7 +33,7 @@ export function newKr(input: KrInput, root: string): string {
   if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a numeric --baseline and --target");
   if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
   const level = levelOf(root);
-  const refused = krLevelProblem(level);
+  const refused = krLevelProblem(level, isTeamRepo(root));
   if (refused) throw new Error(refused);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "kr", level)[0];

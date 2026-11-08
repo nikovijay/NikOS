@@ -80,6 +80,14 @@ function teamRefusal(cmd: string): string {
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
 }
 
+/** What a team repo may run from the group-only commands: its own planning, bets, joins and maps (see the amendment, rule 2). */
+const TEAM_PLANNING = new Set(["sync", "status", "validate", "rollout"]);
+function teamMayRun(cmd: string, rest: string[]): boolean {
+  if (cmd === "join") return true;
+  if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
+  return false;
+}
+
 /** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
 const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "assign", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout", "apply"]);
 
@@ -186,7 +194,7 @@ async function main(argv: string[]): Promise<number> {
     console.error("✗ --dir needs a folder: --dir <path>");
     return 1;
   }
-  if (authoring && isTeamRepo(at >= 0 ? rest[at + 1] : process.cwd())) {
+  if (authoring && isTeamRepo(at >= 0 ? rest[at + 1] : process.cwd()) && !teamMayRun(cmd, rest)) {
     console.error(`✗ ${teamRefusal(cmd)}`);
     return 1;
   }

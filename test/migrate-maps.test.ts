@@ -332,7 +332,7 @@ describe("the plan", () => {
     const dir = legacyRepo({ bets: { "checkout-speed": BET("checkout-speed", "acme/company-plan#one-tap-pay") } });
     const before = hashOf(dir);
     const e = await refusal(migrateMaps(dir, { ...yes }));
-    expect(e.message).toMatch(/^The new layout fails its checks, so nothing was written:\n {2}planning\/bets\/checkout-speed\.md: acme\/company-plan#one-tap-pay: acme\/company-plan isn't the plan directly above this one/);
+    expect(e.message).toMatch(/^The new layout fails its checks, so nothing was written:\n {2}planning\/bets\/checkout-speed\.md: acme\/company-plan#one-tap-pay: acme\/company-plan isn't a plan this group joins/);
     expect(hashOf(dir)).toBe(before);
   });
 });
