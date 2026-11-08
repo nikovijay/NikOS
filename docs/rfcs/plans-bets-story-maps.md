@@ -66,15 +66,17 @@ status/ approvals/          as today, for both kinds
    With this amendment it can move `intent/` to the team's own `maps/<key>/`
    in place, asking for the team key, its home and the bet.
 
-7. **Work from a team's map goes to another team through a group.** A team
-   never assigns stories itself. When part of a team's map should be built by
-   another team, the team moves the map to a group (its home group, or a
-   group it has joined) with `nikos map move <key> --to <group repo>`, and the
-   group assigns it, the original team included, as it assigns any map. The
-   stories keep their ids (`WEB-INB-1`): ids never change, so a group map can
-   hold ids with a team's key once it has been moved in. The team's status
-   and approvals for those stories stay in the team repo and count as the
-   assigned team's from then on.
+7. **Another team can be given stories from a team's map, and the map never
+   moves.** The group decides who builds what. The decision is recorded beside
+   the map, in team A's `maps/<key>/assignments.yaml`. Team A holds its own
+   share there as `--repo .`, and team B's share is named the way a group
+   names a team. A CODEOWNERS rule on that file asks the group's lead to
+   review every change, so team A can't hand out work alone. Team B learns of
+   its stories the way it would from a group: `nikos team join <team A repo>`,
+   then `nikos sync`, which fetches a read-only copy into `.nikos/assigned/`.
+   Team B's status and approvals stay in team B's repo, and team A's `nikos
+   map status` reads them, as a group's does. Story ids never change
+   (`WEB-INB-1`), whoever builds the story.
 8. **A team's own bets aim at company or department key results.** Groups
    have no key results, so a team's bet that relates to a group's work
    aligns to the group's bet instead.
@@ -84,7 +86,7 @@ status/ approvals/          as today, for both kinds
 - Group key results: none. A team's bet aims at company or department key
   results, and may align to a group bet (rule 8).
 - A plan the team joined but isn't homed in lists the team (rule 4).
-- A team's map is handed to other teams through a group (rule 7).
+- Stories on a team's map can be given to another team. The group decides, the assignment sits beside the map in the team's repo, and the map never moves (rule 7).
 
 ## PR 6 status
 
