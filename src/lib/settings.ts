@@ -8,7 +8,7 @@ import Ajv2020Module from "ajv/dist/2020.js";
 import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { REPO_PATH } from "./bets.js";
-import { isTeamRepo, openTeam } from "./team.js";
+import { isTeamRepo, openTeam, teamOptedIn } from "./team.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -105,7 +105,10 @@ export function resolveSettings(root: string): Resolved {
 
 /** resolveSettings, with the problems found in the levels above (a group copy that doesn't read, or two locks that disagree). */
 export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
-  if (isTeamRepo(resolve(root))) return teamSettings(resolve(root));
+  // A team that has opted in takes its home's locks. Any other team repo with a planning/ folder is a 0.3.0 repo that
+  // reads its joined plans as before, so only a team with no planning/ folder, or one that has opted in, takes teamSettings.
+  const r = resolve(root);
+  if (isTeamRepo(r) && (!store().isDir(join(r, "planning")) || teamOptedIn(r))) return teamSettings(r);
   const cache = join(resolve(root), ".nikos", "upstream");
   const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const visiting = new Set<string>();

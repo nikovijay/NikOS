@@ -50,6 +50,21 @@ export interface TeamFile {
 /** Whether this repo is a team repo: it has nikos.team.yaml. */
 export const isTeamRepo = (root: string): boolean => store().exists(join(root, TEAM_FILE));
 
+/**
+ * Whether a team repo has taken up the amendment: a key, a home, or a map of its own. Until it has,
+ * the repo is refused by the team commands and read as in 0.3.0. A joined plan alone doesn't count:
+ * a 0.3.0 group that is also a team can have joined one.
+ */
+export function teamOptedIn(root: string): boolean {
+  try {
+    const team = openTeam(root);
+    if (team.key || team.home) return true;
+  } catch {
+    return false;
+  }
+  return store().isDir(join(root, "maps"));
+}
+
 /** The team repo a folder is in, walking up to nikos.team.yaml, or undefined. */
 export function teamRootOf(dir: string): string | undefined {
   let at = dir;

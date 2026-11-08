@@ -35,12 +35,17 @@ export const TEAM_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 /** `nikos team init`: write nikos.team.yaml here, naming the team, its repo path and (optionally) its key. */
 export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string } {
   const root = resolve(dir);
-  if (isTeamRepo(root)) throw new Error(`${TEAM_FILE} already exists here`);
+  // A team made before it had a key can take one now: its file gains the key and format 2. A key already set is kept.
+  if (isTeamRepo(root)) {
+    if (opts.key === undefined) throw new Error(`${TEAM_FILE} already exists here`);
+    return addTeamKey(root, opts.key);
+  }
   // intent/ is a 0.3.0 group's story map; a team keeps its own maps in maps/<key>/ (after 0.3.0), so only intent/ is refused.
   if (store().isDir(join(root, "intent"))) {
     throw new Error("this repo has its own story map (intent/), and a team repo can't hold one. Move it with nikos migrate maps (a group repo, or a team repo with a key), then nikos team join");
   }
-  if (store().exists(join(root, "planning", "plan.yaml"))) throw new Error("this repo has planning/plan.yaml: a plan repo can't also be a team repo. Make the team in its own repo");
+  // A keyless team stays format 1, so a group repo with planning/plan.yaml can still be given one (as in 0.3.0).
+  if (opts.key !== undefined && store().exists(join(root, "planning", "plan.yaml"))) throw new Error("this repo has planning/plan.yaml: a plan repo can't also be a team repo. Make the team in its own repo");
   const repo = opts.repo ?? ownRepo(root);
   if (!repo) throw new Error("no origin remote to take the team's repo path from: pass --repo owner/repo");
   if (!REPO_PATH.test(repo)) throw new Error(`'${repo}' is ${NOT_A_REPO}`);
@@ -54,6 +59,18 @@ export function teamInit(dir: string, opts: { repo?: string; name?: string; key?
   store().write(join(root, TEAM_FILE), text, { create: true });
   ignoreAssigned(root);
   return { repo, name };
+}
+
+/** Give a team its key on an existing team file (format 2). A team that has one keeps it. */
+function addTeamKey(root: string, key: string): { repo: string; name: string } {
+  const team = openTeam(root);
+  if (team.key) throw new Error(`this team's key is already ${team.key}: edit ${TEAM_FILE} to change it`);
+  if (!TEAM_KEY.test(key)) throw new Error(`'${key}' is not a team key: capital letters and digits, starting with a letter, up to 10 (e.g. WEB)`);
+  const doc = teamDocument(root);
+  doc.set("format_version", 2);
+  doc.set("key", key);
+  saveTeam(root, doc);
+  return { repo: team.repo, name: team.name };
 }
 
 /** The sequence under a key in a team document, made if it isn't there yet, in block style. */

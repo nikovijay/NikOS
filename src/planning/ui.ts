@@ -327,7 +327,7 @@ function okrsView() {
   }
   return viewBar('okrs', v) + '<h1>OKRs and bets</h1><p class="muted">' + esc(v.foot) + '</p>' +
     '<div class="panel">' + tree(cols, links) + '</div>' +
-    (top ? '' : '<div class="panel"><h3>Group bets aligned to a bet here</h3><div class="muted">Delivery comes from the delivery.yaml each map owner commits. The date after each line shows how old it is.</div>' + groupNote + groupBets + '</div>') +
+    (top ? '' : '<div class="panel"><h3>Group bets aligned to a bet here</h3><div class="muted">Delivery only. Team status is not read here.</div>' + groupNote + groupBets + '</div>') +
     (EDIT && forms ? '<div class="panel"><h3>Align bets</h3>' + forms + '</div>' : '');
 }
 

@@ -28,8 +28,10 @@ describe("nikos team init", () => {
     init(withIntent, { name: "Old" });
     expect(() => teamInit(withIntent, { repo: "acme/x" })).toThrow("this repo has its own story map");
 
-    // A group repo (planning/plan.yaml) can't also be a team: its maps/ are the group's, not a team's own (after 0.3.0).
-    expect(() => teamInit(groupRepo(), { repo: "acme/x" })).toThrow("a plan repo can't also be a team repo");
+    // A group repo (planning/plan.yaml) with a key can't also be a team: its key would be a second plan's. A keyless one
+    // stays format 1 and is allowed, as in 0.3.0 (team init --repo . in a group with no maps).
+    expect(() => teamInit(groupRepo(), { repo: "acme/x", key: "PAY" })).toThrow("a plan repo can't also be a team repo");
+    expect(() => teamInit(groupRepo("PAY", mkdtempSync(join(tmpdir(), "nikos-init-"))), { repo: "acme/x" })).not.toThrow();
     expect(() => teamInit(teamRepo(), { repo: "acme/x" })).toThrow("nikos.team.yaml already exists here");
 
     const bare = mkdtempSync(join(tmpdir(), "nikos-init-"));

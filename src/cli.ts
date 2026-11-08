@@ -31,7 +31,7 @@ import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
 import { runTeam } from "./commands/team.js";
 import { runTeamSync } from "./team/sync.js";
-import { isTeamRepo, openTeam, TEAM_REPO_STORIES } from "./lib/team.js";
+import { isTeamRepo, openTeam, TEAM_REPO_STORIES, teamOptedIn } from "./lib/team.js";
 import { store } from "./lib/store.js";
 import { join } from "node:path";
 
@@ -80,20 +80,6 @@ function teamRefusal(cmd: string): string {
   if (cmd === "apply") return "this is a team repo: changes are made in the group repo";
   if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
-}
-
-/**
- * Whether a team repo has taken up the amendment: a key, a home, a map of its own, or a plan joined.
- * Until it has, the repo is refused exactly as in 0.3.0, so an existing team repo behaves as it did.
- */
-function teamOptedIn(dir: string): boolean {
-  try {
-    const team = openTeam(dir);
-    if (team.key || team.home) return true;
-  } catch {
-    return false;
-  }
-  return store().isDir(join(dir, "maps")) || store().exists(join(dir, "planning", "upstream.yaml"));
 }
 
 /** What a team repo may run from the group-only commands: its own planning, bets, joins and maps (see the amendment, rule 2). */

@@ -18,7 +18,7 @@ import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validate, validateGroup, validateTeam } from "./validate.js";
 import { mapDirs, ownMapsOf } from "../lib/maps.js";
-import { copyDirOf, isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
+import { copyDirOf, isTeamRepo, openTeam, storyMapClash, TEAM_FILE, teamOptedIn, type TeamFile } from "../lib/team.js";
 
 /** What a team plan's check says, in every repo it shows up in. */
 const TEAM_PLAN_FOUND = "team plan in planning/plan.yaml";
@@ -248,7 +248,8 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     add({ name: "assignments", status: "ok", found: `${count(own.length, "own map")} with its assignments in maps/<key>/assignments.yaml`, ...(!guarded ? { next: `Suggest: add "${rules} ${lead}" to CODEOWNERS, so the home group's lead reviews every change to a share` } : {}) });
   }
   // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
-  if (team) {
+  // The home checks are for a team that has opted in: a 0.3.0 team with a joined plan and no home reads as it did.
+  if (team && teamOptedIn(root)) {
     const joined = (() => {
       try {
         return upstreamEntries(root).map((u) => u.repo);
