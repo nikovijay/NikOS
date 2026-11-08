@@ -153,9 +153,11 @@ export function runState(args: string[]): number {
     const i = rest.indexOf(`--${n}`);
     return i >= 0 ? rest[i + 1] : undefined;
   };
+  let lapsedFor: string | undefined;
   try {
     const r = setState(story, to as Status, { dir: opt("dir"), map: opt("map"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
+    lapsedFor = r.story;
     if (r.dirty) console.log("! The code has uncommitted changes. The proof is for the last commit, not for them: commit the code, then run its scenarios again.");
   } catch (err) {
     const e = err as StateError;
@@ -165,7 +167,8 @@ export function runState(args: string[]): number {
   }
   const v = validate(opt("dir") ?? process.cwd(), opt("map"), { remote: false });
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
-  for (const w of v.errors.filter((e) => e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
+  // Only the story this command changed is named: another story's lapse is still in nikos validate, not repeated on every set.
+  for (const w of v.errors.filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   // The move is written, so a problem found elsewhere is a warning here, not a failed command.
   for (const w of v.errors.filter((e) => !e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   return 0;

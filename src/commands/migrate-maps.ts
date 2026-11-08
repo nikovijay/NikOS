@@ -353,26 +353,48 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
   }
 
   // State and approvals: keys and the file names. Ticket values stay. Nested files keep their folder.
+  // A team's are different (D1): its status and approvals are one file per story at the team's root, not in the map.
   const stateTexts: string[] = [];
+  const teamFileOf = (folder: string, rel: string) => `${folder}/${renameIds(rel, useTable).text}`;
+  // A team's one state.yaml and approvals.yaml split into a file per story: each is written, and the source removed.
+  const split: string[] = [];
   if (store().exists(join(intent, "state.yaml"))) {
     const t = read(join(intent, "state.yaml"));
     stateTexts.push(t);
-    const r = renameLines(t, useTable);
-    place("intent/state.yaml", `${target}/state.yaml`, r.text, r.count);
+    if (a.teamFile) {
+      for (const [id, entry] of Object.entries<any>(parse(t)?.stories ?? {})) files.set(teamFileOf("status", `${id}.yaml`), stringify(entry));
+      split.push("intent/state.yaml");
+    } else {
+      const r = renameLines(t, useTable);
+      place("intent/state.yaml", `${target}/state.yaml`, r.text, r.count);
+    }
   }
   for (const f of walk(join(intent, "state"), ".yaml")) {
     const t = read(f);
     stateTexts.push(t);
     const rel = under(join(intent, "state"), f);
+    if (a.teamFile) {
+      place(`intent/state/${rel}`, teamFileOf("status", rel), t);
+      continue;
+    }
     const r = renameIds(rel, useTable);
     place(`intent/state/${rel}`, `${target}/state/${r.text}`, t, r.count);
   }
   if (store().exists(join(intent, "approvals.yaml"))) {
-    const r = renameLines(read(join(intent, "approvals.yaml")), useTable);
-    place("intent/approvals.yaml", `${target}/approvals.yaml`, r.text, r.count);
+    if (a.teamFile) {
+      for (const [id, entry] of Object.entries<any>(parse(read(join(intent, "approvals.yaml"))) ?? {})) files.set(teamFileOf("approvals", `${id}.yaml`), stringify(entry));
+      split.push("intent/approvals.yaml");
+    } else {
+      const r = renameLines(read(join(intent, "approvals.yaml")), useTable);
+      place("intent/approvals.yaml", `${target}/approvals.yaml`, r.text, r.count);
+    }
   }
   for (const f of walk(join(intent, "approvals"), ".yaml")) {
     const rel = under(join(intent, "approvals"), f);
+    if (a.teamFile) {
+      place(`intent/approvals/${rel}`, teamFileOf("approvals", rel), read(f));
+      continue;
+    }
     const r = renameIds(rel, useTable);
     place(`intent/approvals/${rel}`, `${target}/approvals/${r.text}`, read(f), r.count);
   }
@@ -484,7 +506,8 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
     if (dest.has(m.to)) throw new MigrateError(`Two files would both move to ${m.to}. Rename one by hand, then retry.`);
     dest.add(m.to);
   }
-  const { removes } = sortIntent(root);
+  const { removes: junk } = sortIntent(root);
+  const removes = [...junk, ...split];
   return {
     root,
     key: a.key,
@@ -591,7 +614,10 @@ export function renderPlan(p: MapsPlan, dry: boolean): string[] {
     const note = item === "storymap.yaml" ? ` (bet: ${p.bet}${p.hadBets ? "; bets: and story_bets: dropped" : ""})` : item === "decisions.md" ? " (created)" : "";
     out.push(`  ${from.padEnd(30)} -> ${to}${note}`);
   }
-  for (const r of p.removes) out.push(`  ${r.padEnd(30)} removed (${basename(r) === ".gitkeep" ? "an empty folder's placeholder" : "a Finder or Explorer file, not part of the map"})`);
+  for (const r of p.removes) {
+    const why = r === "intent/state.yaml" || r === "intent/approvals.yaml" ? "split into status/ and approvals/, one file per story" : basename(r) === ".gitkeep" ? "an empty folder's placeholder" : "a Finder or Explorer file, not part of the map";
+    out.push(`  ${r.padEnd(30)} removed (${why})`);
+  }
   if (p.owner === "team") {
     if (p.teamLine) out.push("Changes", `  ${TEAM_FILE.padEnd(30)} ${p.teamLine}`);
   } else out.push("Creates", `  ${"planning/plan.yaml".padEnd(30)} ${planLine(p)}`);

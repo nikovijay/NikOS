@@ -96,3 +96,17 @@ describe("nikos migrate maps in a team repo", () => {
     expect((clash as MigrateError).message).toBe("nikos.team.yaml's key is WEB, not ACME: pass --team-key WEB");
   });
 });
+
+describe("a team's migrated status and approvals", () => {
+  it("move to the team's own status/ and approvals/, one file per story, so the team commands read them", async () => {
+    const dir = teamWithIntent();
+    write(join(dir, "intent/state.yaml"), "format_version: 1\nstories:\n  HT-1: { status: in_progress }\n  HT-2: { status: todo }\n");
+    commitAll(dir, "state");
+    const res = await migrateMaps(dir, { ...yes, key: "HT", teamKey: "WEB", home: "acme/payments-group", bet: "checkout-speed", renameIds: true });
+    expect(res).toBeDefined();
+    expect(parse(readFileSync(join(dir, "status/WEB-HT-1.yaml"), "utf8"))).toMatchObject({ status: "in_progress" });
+    expect(parse(readFileSync(join(dir, "status/WEB-HT-2.yaml"), "utf8"))).toMatchObject({ status: "todo" });
+    // The map keeps no state of its own: the team's status is the only one.
+    expect(existsSync(join(dir, "maps/ht/state.yaml"))).toBe(false);
+  });
+});

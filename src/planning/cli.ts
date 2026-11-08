@@ -68,7 +68,9 @@ export function status(root: string): string {
   for (const id of krs) {
     const k = loadKr(root, id).data;
     const last = latest(k);
-    const u = k.unit ?? "";
+    // A word unit (days) gets a space, as in the dashboard; % and $ stay tight to the number.
+    const unit = k.unit ?? "";
+    const u = unit === "" || unit === "%" || unit === "$" ? unit : ` ${unit}`;
     out.push(
       `  ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${isStale(k) ? " · stale" : ""}`,
     );

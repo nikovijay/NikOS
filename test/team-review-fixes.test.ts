@@ -15,6 +15,9 @@ import { assign } from "../src/commands/assign";
 import { validate } from "../src/commands/validate";
 import { joinPlan } from "../src/commands/join";
 import { runMigrateMaps } from "../src/commands/migrate-maps";
+import { companyInit } from "../src/commands/start";
+import { newKr } from "../src/planning/krs";
+import { status } from "../src/planning/cli";
 import { git, write, commitAll, groupRepo, teamRepo } from "./team-fixture";
 
 afterEach(() => vi.restoreAllMocks());
@@ -127,5 +130,32 @@ describe("a refused join keeps the plan it didn't add", () => {
     write(join(t, ".nikos/upstream/acme/company-plan/planning/plan.yaml"), "name: Acme\nkey: CO\nperiod: Q1 2027\nlevel: company\npillars: []\n");
     expect(() => joinPlan(t, { repo: "acme/payments-group", url: grp })).toThrow();
     expect(existsSync(join(t, ".nikos/upstream/acme/payments-group"))).toBe(true);
+  });
+});
+
+describe("planning status spaces a word unit from its number", () => {
+  it("prints days after a space, and % tight to the number", () => {
+    const co = mkdtempSync(join(tmpdir(), "nikos-units-"));
+    git(co, "init", "-q", "-b", "main");
+    companyInit(co, { name: "Acme", period: "Q1 2027", repo: "acme/company-plan" });
+    newKr({ id: "close-days", title: "Close the books", owner: "Finance", baseline: 12, target: 7, by: "2027-03-31", unit: "days" }, co);
+    newKr({ id: "retention", title: "Retention", owner: "Product", baseline: 50, target: 60, by: "2027-03-31", unit: "%" }, co);
+    const text = status(co);
+    expect(text).toContain("(baseline 12 days, target 7 days by 2027-03-31)");
+    expect(text).toContain("(baseline 50%, target 60% by 2027-03-31)");
+  });
+});
+
+describe("map new in a team needs a home, and names the join by whether the team has one", () => {
+  it("refuses a team with a key and no home, with the home it needs", () => {
+    const t = mkdtempSync(join(tmpdir(), "nikos-nohome-"));
+    git(t, "init", "-q", "-b", "main");
+    teamInit(t, { repo: "acme/web-team", name: "Web team", key: "WEB" });
+    write(join(t, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
+    expect(() => newMap({ bet: "faster-checkout", key: "INB" }, t)).toThrow("a team that joins a plan or owns a map needs one home: nikos join <plan> --home");
+  });
+  it("names a plain join for a plan the team joins from a bet, once it has its home", () => {
+    const t = teamWithMap();
+    expect(() => newMap({ bet: "acme/company-plan#one-inbox", key: "OTH" }, t)).toThrow("acme/company-plan isn't a plan this team joins: nikos join acme/company-plan first");
   });
 });
