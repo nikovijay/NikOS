@@ -66,13 +66,14 @@ describe("a team's own map: assign and map status", () => {
 
   it("is refused for a team with no map of its own, with the 0.3.0 wording, and a team's copy of a map", () => {
     const plain = teamAt(undefined, "acme/plain-team", "Plain team");
-    expect(() => assign(plain, "x", { repo: "acme/x", stories: ["X-1"] })).toThrow("assignments are made in the group repo");
+    expect(() => assign(plain, "x", { repo: "acme/x", stories: ["X-1"] })).toThrow("this is a team repo: assignments are made in the group repo");
     const a = owner();
     const b = teamAt("IOS", "acme/ios-team", "iOS team");
     assign(a, "iOS team", { repo: "acme/ios-team", stories: ["WEB-INB-2"], url: b });
     commitAll(a, "assign");
     teamJoin(b, "acme/web-team", { url: a });
-    expect(() => assign(b, "x", { repo: "acme/x", stories: ["WEB-INB-2"] })).toThrow("assignments are made in the group repo, or in a team repo for a map it owns");
+    // A team with no map of its own holds only copies: assignments are made where the map is.
+    expect(() => assign(b, "x", { repo: "acme/x", stories: ["WEB-INB-2"] })).toThrow("this is a team repo: assignments are made in the group repo");
   });
 
   it("reads its own stories in place and the other team's status, and writes its delivery.yaml", () => {

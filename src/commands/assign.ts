@@ -11,6 +11,9 @@ import { store } from "../lib/store.js";
 import { checkAssignments, loadMapData, mapStoryIds, readAssignments, storiesOf, writeAssignments, type Assignment, type MapData } from "../lib/assignments.js";
 import { readTeamIndex, readTeamStory, writeTeamIndex, type TeamIndex } from "../team/status.js";
 
+/** Refused in a team repo with no map of its own: the 0.3.0 wording, kept as it was. */
+const TEAM_ASSIGN = "this is a team repo: assignments are made in the group repo";
+
 export interface AssignOptions {
   repo: string;
   activities?: string[];
@@ -66,7 +69,7 @@ function checkSelectors(map: MapData, opts: AssignOptions, label: string): void 
 /** Assign a team its part of a group's map, moving stories held by other teams where the rules allow. */
 export function assign(dir: string, team: string, opts: AssignOptions): AssignResult {
   const root = resolve(dir);
-  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error("this is a team repo: assignments are made in the group repo, or in a team repo for a map it owns");
+  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error(TEAM_ASSIGN);
   if (!mapDirs(root).length && !ownMapsOf(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
   const name = team.trim();
   if (!name) throw new Error("Give the team's name, e.g. nikos assign \"Checkout web\" --repo acme/checkout-web");
@@ -207,7 +210,7 @@ export interface UnassignOptions {
  */
 export function unassign(dir: string, opts: UnassignOptions): { team: string; removed: string[]; left: number } {
   const root = resolve(dir);
-  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error("this is a team repo: assignments are made in the group repo, or in a team repo for a map it owns");
+  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error(TEAM_ASSIGN);
   if (!mapDirs(root).length && !ownMapsOf(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
   const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
   if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");

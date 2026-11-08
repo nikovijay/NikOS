@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { parseTeam, isTeamRepo, storyMapClash } from "../src/lib/team";
 import { teamRepo } from "./team-fixture";
 import { teamShow } from "../src/commands/team";
+import { joinPlan } from "../src/commands/join";
+import { rollout } from "../src/planning/rollout";
+import { companyRepo, departmentRepo } from "./planning-fixture";
+import { readFileSync } from "node:fs";
 
 describe("a 0.3.0 repo keeps working", () => {
   it("a 0.3.0 team file (format 1, no key, no home) parses as it did", () => {
@@ -30,5 +34,14 @@ describe("a 0.3.0 repo keeps working", () => {
     mkdirSync(join(dir, "intent"));
     writeFileSync(join(dir, "intent/story.feature"), "Feature: x\n");
     expect(isTeamRepo(dir)).toBe(false);
+  });
+
+  it("a group with one upstream is unchanged: its join writes no home, and the company rollout lists nothing below", () => {
+    const co = companyRepo();
+    const dept = departmentRepo(co);
+    // A plan joins one plan above it and names no home: the 0.3.0 entry, with no home key added.
+    joinPlan(dept, { repo: "acme/company-plan", url: co });
+    expect(readFileSync(join(dept, "planning/upstream.yaml"), "utf8")).not.toContain("home");
+    expect(rollout(co, { offline: true }).plans).toEqual([]);
   });
 });
