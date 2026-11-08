@@ -115,13 +115,9 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
     if (!ids.length) continue;
     maps.push(ref.id ?? "intent");
 
-    if (ref.team) {
-      // A team's own copy: its status is its own, judged against the copy's feature.
-      const team = openTeam(ref.root).name;
-      const data = loadMapData(ref.dir);
-      for (const id of ids) add(ownView(ref.root, team, id, featureHashIn(data, id), policyHere()));
-    } else if (ref.id && opts.groupState && (summaryIn(ref.dir) || assignedIn(ref.dir).length)) {
-      // A copy of a group's map: the owner's summary says each story's status. A story it doesn't list has none yet.
+    if (ref.id && opts.groupState && (ref.own || summaryIn(ref.dir) || assignedIn(ref.dir).length)) {
+      // A copy's map (a group's, or a team's own): the owner's summary says each story's status. A story it doesn't list has none yet.
+      // Read first, so a rollout never reads a team's live status/ (rule 9): its own map's summary says it.
       const summary = summaryIn(ref.dir);
       if (summary?.read_at && (!asOfMin || summary.read_at < asOfMin)) asOfMin = summary.read_at;
       for (const id of ids) {
@@ -134,6 +130,11 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
         stories.push({ id, status: s.status, freshness: "summary" });
         if (isDone(s.status)) done++;
       }
+    } else if (ref.team) {
+      // A team's own map: its status is its own, judged against the map's feature.
+      const team = openTeam(ref.root).name;
+      const data = loadMapData(ref.dir);
+      for (const id of ids) add(ownView(ref.root, team, id, featureHashIn(data, id), policyHere()));
     } else if (ref.id && !opts.groupState && assignedIn(ref.dir).length) {
       // A group's map with assignments: each story is its holder's status, read from the team's copy.
       index ??= readTeamIndex(root);

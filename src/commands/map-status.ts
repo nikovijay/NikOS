@@ -8,6 +8,7 @@ import { basename, join, resolve } from "node:path";
 import { writeDeliverySummary, type DeliverySummary } from "../lib/delivery-summary.js";
 import { headOf, ownRepo } from "../lib/git.js";
 import { isTeamRepo } from "../lib/team.js";
+import { ownMapsOf } from "../lib/maps.js";
 import { repoEntry } from "../planning/upstream.js";
 import { ASSIGNMENTS, mapStoryIds, type Assignment } from "../lib/assignments.js";
 import { isDone } from "../lib/project.js";
@@ -102,7 +103,8 @@ const zeroCounts = (): Record<Freshness, number> => Object.fromEntries(FRESHNESS
  * Teams are fetched once, for all the maps, unless offline (then the last fetch is read).
  */
 export function mapStatus(root: string, opts: { map?: string; offline?: boolean } = {}): MapStatus[] {
-  if (isTeamRepo(root)) throw new Error("this is a team repo: run nikos map status in the group repo");
+  // A team reads only its own maps: the copies of a group's or another team's map are read where they're owned.
+  if (isTeamRepo(root) && !ownMapsOf(root).length) throw new Error("this is a team repo: run nikos map status in the group repo");
   const maps = groupMaps(root);
   if (!maps.length) throw new Error("no story maps in maps/: nikos map status runs in a group repo (nikos map new --bet <bet-id> --key <KEY> makes one)");
   const want = opts.map?.toLowerCase();

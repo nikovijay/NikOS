@@ -18,7 +18,7 @@ import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validate, validateGroup, validateTeam } from "./validate.js";
 import { mapDirs, ownMapsOf } from "../lib/maps.js";
-import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
+import { copyDirOf, isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
 
 /** What a team plan's check says, in every repo it shows up in. */
 const TEAM_PLAN_FOUND = "team plan in planning/plan.yaml";
@@ -239,6 +239,14 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     const mine = v.errors.filter((e) => e.file.startsWith("maps/"));
     add({ name: "maps", status: mine.length ? "fail" : "ok", found: `${count(own.length, "own map")}${mine.length ? `, ${mine.length} problem${mine.length === 1 ? "" : "s"}` : ""}`, next: mine.length ? "Fix the problems nikos validate lists" : undefined });
   }
+  // A team's own maps' assignments are the lead's to review: a suggestion for CODEOWNERS, never written (rule 7, D4).
+  if (own.length && !clash) {
+    const owners = codeowners(root);
+    const guarded = !!owners && /assignments\.yaml/.test(read(owners));
+    const lead = homeLead(root, team?.home) ?? "@<home-lead>";
+    const rules = own.map((m) => `maps/${m.id}/assignments.yaml`).join(" ");
+    add({ name: "assignments", status: "ok", found: `${count(own.length, "own map")} with its assignments in maps/<key>/assignments.yaml`, ...(!guarded ? { next: `Suggest: add "${rules} ${lead}" to CODEOWNERS, so the home group's lead reviews every change to a share` } : {}) });
+  }
   // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
   if (team) {
     const joined = (() => {
@@ -294,6 +302,21 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
 
   const stale = staleCliWarning();
   if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
+}
+
+/**
+ * The lead handle of a team's home plan, from the plan's copy the team reads (a group it takes work
+ * from, or a plan it joined). Undefined when the copy has none, so doctor shows a placeholder.
+ */
+function homeLead(root: string, home: string | undefined): string | undefined {
+  if (!home) return undefined;
+  for (const dir of [copyDirOf(root, home), join(root, ".nikos", "upstream", ...home.split("/"))]) {
+    const p = join(dir, "planning", "plan.yaml");
+    if (!existsSync(p)) continue;
+    const lead = (parse(read(p)) as { lead?: unknown } | null)?.lead;
+    if (typeof lead === "string" && lead) return lead.startsWith("@") ? lead : `@${lead}`;
+  }
+  return undefined;
 }
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */

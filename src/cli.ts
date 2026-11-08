@@ -103,6 +103,8 @@ function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
   if (cmd === "join") return rest.includes("--home") || teamOptedIn(dir);
   if (!teamOptedIn(dir)) return false;
   if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
+  // assign takes a team's own maps only: a copy's assignments are refused where they're made (assign.ts).
+  if (cmd === "assign") return true;
   // A team writes stories and maps of its own; a copy of a group's or another team's map is refused where it's reached (authoringMap).
   if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release") return true;
   if (cmd === "map") return rest[0] === "new";
