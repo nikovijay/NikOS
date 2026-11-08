@@ -2,6 +2,117 @@
 
 **Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, PR 4 (status flowing back) as described in "PR 4 status", PR 5 (views, editing from the dashboard, editable snapshots and `nikos apply`) as described in "PR 5 status", and PR 6 (migration and onboarding) as described in "PR 6 status".
 
+## Amendment: teams that own a story map (after 0.3.0)
+
+**Status:** design only, for review. Nothing here is built yet.
+
+A team can own story maps itself, as well as being assigned parts of a
+group's. It doesn't need a group or department above it. Teams stay
+plan-free: they never have objectives or key results, and `nikos planning kr
+new` in a team repo is refused with the same "Key results stop at department
+level" message a group gets.
+
+### What a team may hold
+
+A team can own several story maps. Each one specs exactly one bet, like any
+map. That bet is one of:
+
+- **a company, department or group bet**, named directly from the team's map:
+  `bet: acme/company-plan#one-inbox`; or
+- **a bet of the team's own**, in the team repo's `planning/bets/`, aimed at
+  company or department key results (`krs: acme/company-plan#close-days`),
+  and optionally aligned to company, department or group bets.
+
+A team repo with its own maps looks like this:
+
+```
+nikos.team.yaml             name, key (new: key: WEB), home (new), members, groups
+planning/upstream.yaml      every plan the team plans against, at any level
+planning/bets/<id>.md       the team's own bets, if any: no objectives, no key results
+maps/<key>/                 each map the team owns, verified in place
+.nikos/assigned/...         maps assigned by groups, as today
+status/ approvals/          as today, for both kinds
+```
+
+### Rules
+
+1. **One home, many plans.** A team is homed in exactly one plan: a specific
+   group, department or company (`home: acme/payments-plan` in
+   `nikos.team.yaml`). Its home plan lists it in `planning/downstream.yaml`,
+   and settings and locks reach the team down its home's chain only. Beyond
+   its home, a team can take part in several plans at any level: it joins
+   each one (`nikos join`, listed in `planning/upstream.yaml`) and its maps and
+   bets may align to bets and key results in any plan it has joined. It still
+   takes work from groups, as today.
+2. **Story ids stay company-unique.** A team-owned map's ids carry the team's
+   key and the map's key: `WEB-INB-1`. A team's key is chosen at `nikos team
+   init --key` and checked unique across the company when the team joins its
+   home. Groups' and teams' keys share one set of names. A map's key is unique
+   within its team.
+3. **A team's own maps are in place.** Their status and approvals are the
+   team's own files, so they are committed and travel with the team repo.
+   There is no `.nikos/assigned` copy and no `nikos map status` fetch for them.
+4. **Every plan a team joined lists it.** The home plan lists the team in
+   `planning/downstream.yaml` as usual. A plan the team joined but isn't homed
+   in lists it too, marked `home: <repo>`, so that plan knows where to fetch
+   the team from. Its rollout shows which of the team's maps and bets align
+   to its bets and key results, and the delivery of those maps, read from the
+   team's committed status. Settings and locks still come only from the home.
+5. **Groups have one home and many plans too.** "The smallest setup" already
+   says a group can align to company bets when there are no departments.
+   0.3.0 refuses that (a group bet must align to a department). The rule
+   becomes the team's rule 1: a group is homed in one company or department
+   plan, where its settings and locks come from, and can join other plans at
+   any level above it. Its bets may align to bets in any plan it has joined,
+   and aim at key results in any of them. Every plan it joins lists it.
+6. **Migration.** `nikos migrate maps` refuses a team repo with `intent/` today.
+   With this amendment it can move `intent/` to the team's own `maps/<key>/`
+   in place, asking for the team key, its home and the bet.
+
+7. **Another team can be given stories from a team's map, and the map never
+   moves.** The group decides who builds what. The decision is recorded beside
+   the map, in team A's `maps/<key>/assignments.yaml`. Team A holds its own
+   share there as `--repo .`, and team B's share is named the way a group
+   names a team. A CODEOWNERS rule on that file asks the group's lead to
+   review every change, so team A can't hand out work alone. Team B learns of
+   its stories the way it would from a group: `nikos team join <team A repo>`,
+   then `nikos sync`, which fetches a read-only copy into `.nikos/assigned/`.
+   Team B's status and approvals stay in team B's repo, and team A's `nikos
+   map status` reads them, as a group's does. Story ids never change
+   (`WEB-INB-1`), whoever builds the story.
+8. **A team's own bets aim at company or department key results.** Groups
+   have no key results, so a team's bet that relates to a group's work
+   aligns to the group's bet instead.
+9. **Delivery reaches the plans above through a committed summary.** In
+   0.3.0, `nikos map status` keeps what it reads from teams in `.nikos/`, which
+   is gitignored, so a department's or company's rollout never sees team
+   delivery and prints "0 of 2 done". Instead, `nikos map status` writes a
+   dated summary beside each map it reads (`maps/<key>/delivery.yaml`: per
+   story, the team, status, freshness and approval, and when it was read). The
+   map's owner commits it like any other file, and every rollout above reads
+   it, saying how old it is. This covers a group's maps, a team's own maps,
+   and stories another team builds from a team's map. A rollout never fetches
+   team repos itself.
+10. **A stopped bet doesn't stop the bets aimed at it.** Each level owns its
+    bets, so stopping a department bet leaves a group or team bet aligned to
+    it open. The rollout and the views flag it: "aligns to manual-queue, which
+    was stopped on <date>", so the owner can review it.
+11. **Approvals name a person, not a verified identity.** An approval records
+    who approved it (the git name, or the name given in chat) until the
+    verified-approvals RFC is built. Nothing presents that name as checked by
+    the forge.
+
+### Decided in review
+
+- Group key results: none. A team's bet aims at company or department key
+  results, and may align to a group bet (rule 8).
+- A plan the team joined but isn't homed in lists the team (rule 4).
+- Stories on a team's map can be given to another team. The group decides, the assignment sits beside the map in the team's repo, and the map never moves (rule 7).
+- A group, like a team, can join many plans, homed in one (rule 5).
+- Delivery travels up as a committed summary written by `nikos map status` (rule 9).
+- A stopped bet leaves the bets aimed at it open, and the rollout flags them (rule 10).
+- Approvals stay names until verified approvals are built (rule 11).
+
 ## PR 6 status
 
 Built: `nikos migrate maps` (`src/commands/migrate-maps.ts`), which moves a 0.2.x `intent/` into
@@ -197,7 +308,9 @@ proposes the model nikOS should follow instead:
 - **Groups create story maps, one or more per bet.** A story map specs exactly
   one bet. No plan owns a story map directly.
 - **Teams are assigned work.** A team gets a whole story map, or specific
-  activities or releases of one. Teams have no plan of their own.
+  activities or releases of one. Teams have no objectives or key results.
+  Since the amendment above, a team may also own story maps for company,
+  department or group bets, or for bets of its own.
 - **Teams prove their stories in their own repos.** Each team repo fetches a
   read-only copy of the stories assigned to it, runs their scenarios against
   its code, and reports status back. Nothing is ever written to another repo.
@@ -223,6 +336,8 @@ erDiagram
   RELEASE ||--o{ STORY : contains
   ACTIVITY ||--o{ STORY : groups
   TEAM ||--o{ ASSIGNMENT : "is given"
+  TEAM ||--o{ STORY_MAP : "may own (amendment)"
+  TEAM ||--o{ BET : "may own, no key results (amendment)"
   ASSIGNMENT }o--|| STORY_MAP : "whole map, activities or releases"
 ```
 
@@ -231,7 +346,7 @@ erDiagram
 | Company | Yes | Yes, each aimed at company key results | No |
 | Department | Yes. A key result may align to a company one, or be the department's own | Yes. May align to a company bet, or stand alone | No |
 | Group | No | Yes. May align to a department bet, or stand alone, and aims at department or company key results | Yes, one or more per bet |
-| Team | No | No | No: assigned all or part of a group's story map |
+| Team | No | Since the amendment: its own, aimed at company or department key results | Assigned all or part of a group's map. Since the amendment, may also own several maps, each for a company, department, group or own bet |
 
 Two rules from today carry over unchanged:
 
