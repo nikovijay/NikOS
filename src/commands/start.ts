@@ -15,6 +15,9 @@ import { createInterface } from "node:readline/promises";
 import { askOnboarding, setUp } from "./onboard.js";
 import { cliCommand } from "../lib/cli-version.js";
 import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
+import { BELOW, planYaml, type PlanLevel } from "../lib/group-plan.js";
+
+export type { PlanLevel };
 
 export interface StartResult {
   /** One line per thing start did, or found already done. */
@@ -26,6 +29,7 @@ export interface StartResult {
 
 export function start(root: string, opts: { name?: string; key?: string } = {}): StartResult {
   if (isTeamRepo(root)) throw new Error(TEAM_REPO_STORIES);
+  if (store().isDir(join(root, "maps"))) throw new Error("This repo has maps/ (group story maps). Add a product's story map with nikos map new, not start.");
   const done: string[] = [];
   const ask: string[] = [];
   if (store().exists(join(root, "intent", "storymap.yaml"))) done.push("intent/ is already set up");
@@ -59,13 +63,8 @@ export interface CompanyResult {
   join: string;
 }
 
-export type PlanLevel = "company" | "department" | "group";
-
 /** A group's key: the GROUP in its story ids. */
 const GROUP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
-
-/** Who plans against each level, for its README and join line. */
-const BELOW: Record<PlanLevel, string> = { company: "Departments", department: "Groups", group: "Teams" };
 
 /**
  * Write a plan repo for a company, a department or a group: plan.yaml, settings every level
@@ -73,7 +72,7 @@ const BELOW: Record<PlanLevel, string> = { company: "Departments", department: "
  * objectives and key results; a group plan only makes bets, aimed at the department's key
  * results, since OKRs stop at department level. None of them has a story map of its own.
  */
-export function companyInit(dir: string, opts: { name: string; key?: string; period?: string; departments?: string[]; repo?: string; host?: string; level?: PlanLevel }): CompanyResult {
+export function companyInit(dir: string, opts: { name: string; key?: string; period?: string; departments?: string[]; repo?: string; host?: string; level?: PlanLevel; groupsDirect?: boolean }): CompanyResult {
   const level: PlanLevel = opts.level ?? "company";
   const name = opts.name?.trim();
   if (!name) throw new Error(`Give the ${level}'s name`);
@@ -83,10 +82,11 @@ export function companyInit(dir: string, opts: { name: string; key?: string; per
   const root = resolve(dir);
   const repo = opts.repo ?? `<owner>/${basename(root)}`;
   const join_ = `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
-  const below = BELOW[level];
+  // A company with no departments between it and its groups: they plan against it directly.
+  const below = opts.groupsDirect && level === "company" ? "Groups" : BELOW[level];
   const holds = level === "group" ? "bets, aimed at the department's key results" : "objectives, key results and bets";
   const files: Record<string, string> = {
-    "planning/plan.yaml": `# ${name}'s plan: its ${holds}.${level === "group" ? " OKRs stop at department level, so it has no key results of its own." : ` ${below} align their ${level === "company" ? "key results and bets" : "bets"} to it.`}\n${stringify({ name, ...(key ? { key } : {}), period: opts.period ?? "Set the period, e.g. Q1 2027", level, pillars: [] })}`,
+    "planning/plan.yaml": planYaml({ name, key, period: opts.period, level, below }),
     "nikos.settings.yaml": `# Settings every level that joins this plan inherits.
 # Lock a key so the levels below can't change it. To hold every level to the approval policy,
 # lock its routes with it: locked: [approval.policy, approval.routes]
@@ -133,7 +133,7 @@ Nothing in your repo moves.
 }
 
 /** A person at a terminal, not an agent, a pipe or CI: the only time start asks questions. */
-const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY && !process.env.CI;
+export const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY && !process.env.CI;
 
 export async function runStart(args: string[]): Promise<number> {
   const flag = (n: string) => {

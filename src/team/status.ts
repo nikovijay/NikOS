@@ -339,7 +339,7 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
               ? "approved for an older feature"
               : "not approved";
   }
-  const from = v.freshness === "moved" && f.prev ? { team: f.prev.team ?? f.prev.repo, repo: f.prev.repo, ...(f.prev.status ? { status: f.prev.status.status } : {}) } : undefined;
+  const from = v.freshness === "moved" && f.prev ? { team: f.prev.repo === "." ? "this group" : (f.prev.team ?? f.prev.repo), repo: f.prev.repo, ...(f.prev.status ? { status: f.prev.status.status } : {}) } : undefined;
   return {
     id,
     ...(f.repo !== undefined ? { repo: f.repo } : {}),

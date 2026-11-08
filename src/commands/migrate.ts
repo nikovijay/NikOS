@@ -3,13 +3,15 @@
 // intent/state.yaml keeps format_version and the run queue; each story gets intent/state/<ID>.yaml
 // and, once approved, intent/approvals/<ID>.yaml. `nikos migrate single-file` moves them back.
 // Both layouts read and write the same through lib/state-files.ts.
-import { join, relative } from "node:path";
+import { relative } from "node:path";
 import { parse, parseDocument, stringify } from "yaml";
 import { count, read } from "../lib/project.js";
 import { repoRootOf, resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { approvalsDir, approvalsFile, stateDir, statePath, storyApprovalPath, storyFiles, storyStatePath } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { validate } from "./validate.js";
+import { MIGRATE_MAPS_USAGE, runMigrateMaps } from "./migrate-maps.js";
+import { codeownersFile } from "../lib/codeowners.js";
 
 export type Layout = "per-story" | "single-file";
 
@@ -21,11 +23,9 @@ export interface MigrateResult {
   codeowners?: string;
 }
 
-const CODEOWNERS = ["CODEOWNERS", ".github/CODEOWNERS", ".gitlab/CODEOWNERS", "docs/CODEOWNERS"];
-
 /** Give a CODEOWNERS rule on approvals.yaml a matching rule on approvals/, or the other way round. */
 function carryCodeowners(root: string, to: Layout, rel: string): string | undefined {
-  const file = CODEOWNERS.map((f) => join(root, f)).find((f) => store().exists(f));
+  const file = codeownersFile(root);
   if (!file) return undefined;
   const text = read(file);
   // rel is the story map's folder from the root: intent, or maps/<id> in a group repo.
@@ -90,12 +90,13 @@ export function migrate(dir: string, to: Layout, mapId?: string): MigrateResult 
   return { layout: to, states, approvals, ...(codeowners ? { codeowners } : {}) };
 }
 
-export function runMigrate(args: string[]): number {
+export function runMigrate(args: string[]): number | Promise<number> {
+  if (args[0] === "maps") return runMigrateMaps(args.slice(1));
   const i = args.indexOf("--dir");
   const dir = i >= 0 ? args[i + 1] : process.cwd();
   const to = args.find((a, n) => !a.startsWith("--") && (i < 0 || n !== i + 1));
   if (to !== "per-story" && to !== "single-file") {
-    console.error("Usage: nikos migrate per-story | single-file [--dir <path>]\n  per-story    each story's state and approval in its own file, so parallel branches don't conflict\n  single-file  back to intent/state.yaml and intent/approvals.yaml");
+    console.error(`Usage: nikos migrate per-story | single-file | maps [--dir <path>]\n  per-story    each story's state and approval in its own file, so parallel branches don't conflict\n  single-file  back to intent/state.yaml and intent/approvals.yaml\n  maps         move intent/ into maps/<key>/ of a group repo (${MIGRATE_MAPS_USAGE.replace("Usage: nikos migrate maps ", "")})`);
     return 1;
   }
   try {

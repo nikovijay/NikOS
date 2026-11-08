@@ -1,7 +1,9 @@
 // `nikos doctor`: is this repo set up the way nikOS works best? Each check says what it found
 // and, when something's missing, the next thing to do, in words an agent can act on.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { parse } from "yaml";
+import { keyFor } from "./init.js";
 import { count, decisionsPath, findIntentDir, isPlanOnly } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
@@ -9,13 +11,36 @@ import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { betIds, krIds } from "../planning/model.js";
-import { planningIssues } from "../planning/levels.js";
+import { levelOf, planningIssues } from "../planning/levels.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
 import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
+
+/** What a team plan's check says, in every repo it shows up in. */
+const TEAM_PLAN_FOUND = "team plan in planning/plan.yaml";
+const TEAM_PLAN_NEXT = "Team plans are going away. Move each key result to the department's plan, or rewrite it as a bet aimed at a department key result (krs: <department repo>#<kr-id>). Nothing is deleted.";
+/** The migrate hint, with this repo's own ids: the map's key, and the group key migrate suggests (from the folder name). */
+const migrateNext = (root: string, intent: string) => {
+  let key = "HT";
+  try {
+    const k = parse(read(join(intent, "storymap.yaml")))?.key;
+    if (typeof k === "string" && k) key = k;
+  } catch {
+    // validate reports a storymap that doesn't parse; the hint keeps its example ids.
+  }
+  return `nikos migrate maps moves it under a group plan. Story ids without the group key stop it unless you pass --rename-ids (${key}-1 becomes ${keyFor(basename(resolve(root)))}-${key}-1). Nothing moves until you confirm.`;
+};
+/** The plan's level, or undefined when planning/plan.yaml doesn't parse: the file's own checks say so, and the rest of doctor still runs. */
+const planLevel = (root: string) => {
+  try {
+    return levelOf(root);
+  } catch {
+    return undefined;
+  }
+};
 import { read } from "../lib/project.js";
 import { storyFiles } from "../lib/state-files.js";
 import { groupStatus } from "../team/sync.js";
@@ -51,6 +76,12 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
     planChecks(root, add);
     teamStatusChecks(root, add);
     const v = validateGroup(root);
+    const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
+    if (runner && !runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." });
+    // A group that is its own team (or just runs validate in CI) keeps the runner and CI lines it had as an intent/ repo.
+    if (runner && runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "ok", found: runner });
+    const ci = CI_FILES.find((f) => existsSync(join(root, f)));
+    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "validate and scenarios don't run on pull or merge requests", next: "Add the pipeline with nikos ci setup" });
     add(
       v.errors.length
         ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in maps/`, next: "Run nikos validate and fix what it lists" }
@@ -61,16 +92,22 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
     return checks;
   } else {
     const v = validate(root);
+    const teamPlan = planLevel(root) === "team";
+    // A 0.2.x repo is fine as it is: the migration is a hint on its story map, never a failure.
+    // The hints go on the warn case too, so a repo with a warning still hears about the move.
+    const hints = [teamPlan ? TEAM_PLAN_NEXT : "", migrateNext(root, intent)].filter(Boolean).join(" ");
     add(
       v.errors.length
         ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in intent/`, next: "Run nikos validate and fix what it lists" }
-        : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(v.releases, "release")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, ...(v.warnings.length ? { next: "Run nikos validate to see the warnings" } : {}) },
+        : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(v.releases, "release")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, next: [v.warnings.length ? "Run nikos validate to see the warnings" : "", hints].filter(Boolean).join(" ") },
     );
-
+    // A team plan here is a hint on the story map, so the checks an intent/ repo already has keep their names.
     const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
     add(
       runner
-        ? { name: "scenario runner", status: "ok", found: runner }
+        ? runsFolder(root, runner, "intent/features")
+          ? { name: "scenario runner", status: "ok", found: runner }
+          : { name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." }
         : { name: "scenario runner", status: "fail", found: detectStack(root) ? "no Cucumber runner yet" : "no runner, and the stack isn't clear", next: "Set one up with nikos verify setup, so stories can be proved done" },
     );
 
@@ -145,6 +182,19 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 }
 
 /**
+ * Whether a runner config runs the folder of stories: intent/features, or a maps/ folder for a group.
+ * Comments don't count, so the template's header can't make a stale path look right. A config with no
+ * paths of its own runs its defaults, so it passes.
+ */
+const runsFolder = (root: string, file: string, folder: string) => {
+  const live = read(join(root, file))
+    .split("\n")
+    .filter((l) => !/^\s*(#|;|\/\/)/.test(l))
+    .join("\n");
+  return !/\bpaths\b/.test(live) || live.includes(folder);
+};
+
+/**
  * A group with assignments: each assigned team's status fetch. A team never fetched, or whose last
  * fetch failed, is a warning; a group with no assignments gets no lines here.
  */
@@ -177,7 +227,8 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     add({ name: "team", status: "fail", found: (err as Error).message.replace(`${TEAM_FILE}: `, ""), next: `Fix ${TEAM_FILE}` });
   }
   const clash = storyMapClash(root);
-  if (clash) add({ name: "team", status: "fail", found: clash, next: "keep one: a team repo takes its stories from a group repo" });
+  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into a group repo with nikos migrate maps there, then delete it here." });
+  if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
   if (team) {
     if (!team.groups.length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
@@ -197,7 +248,15 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
   else if (runner !== "behave.ini" && !read(join(root, runner)).includes(".nikos/assigned")) {
     // behave takes its folders from nikos verify, which passes .nikos/assigned when it's there.
     add({ name: "scenario runner", status: "warn", found: `${runner} doesn't run the assigned stories`, next: `Add ".nikos/assigned/**/features/**/*.feature" to paths in ${runner}` });
-  } else add({ name: "scenario runner", status: "ok", found: runner });
+  } else {
+    // A team keeps its own step definitions: python's in steps/, cucumber's in test/steps (the template's import).
+    const steps = runner === "behave.ini" ? "steps" : "test/steps";
+    add(
+      existsSync(join(root, steps))
+        ? { name: "scenario runner", status: "ok", found: runner }
+        : { name: "scenario runner", status: "warn", found: `${runner} has no ${steps}/ folder of step definitions`, next: `Add the step definitions in ${steps}/: a team keeps its own, and the runner reads them there` },
+    );
+  }
 
   const ignore = existsSync(join(root, ".gitignore")) && /^\/?\.nikos\/?$/m.test(read(join(root, ".gitignore")));
   add(ignore ? { name: "copies", status: "ok", found: ".nikos/ is gitignored" } : { name: "copies", status: "warn", found: ".nikos/ isn't gitignored", next: "Run nikos sync to add it" });
@@ -218,6 +277,10 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
 function planChecks(root: string, add: (c: Check) => void) {
   const found = planningIssues(root);
+  // A group repo with maps/ is a group, not a plan-only repo: its story maps are the next check.
+  const grouped = mapDirs(root).length > 0;
+  const planShape = grouped ? "group" : "plan-only repo";
+  const planTail = grouped ? "story maps in maps/" : "no story map needed";
   const issues = found.filter((i) => !i.warning);
   add(
     issues.length
@@ -225,7 +288,7 @@ function planChecks(root: string, add: (c: Check) => void) {
       : {
           name: "plan",
           status: found.length ? "warn" : "ok",
-          found: `plan-only repo: ${count(krIds(root).length, "key result")}, ${count(betIds(root).length, "bet")}; no story map needed${found.length ? `, ${count(found.length, "warning")}` : ""}`,
+          found: `${planShape}: ${count(krIds(root).length, "key result")}, ${count(betIds(root).length, "bet")}; ${planTail}${found.length ? `, ${count(found.length, "warning")}` : ""}`,
           ...(found.length ? { next: "Run nikos planning validate to see the warnings" } : {}),
         },
   );

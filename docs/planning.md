@@ -230,6 +230,58 @@ maps/chk/              one story map per bet: storymap.yaml (key: CHK, bet: fast
   group repo can't see other companies' keys.
 - Team repos, assignments and status from teams: see [Teams](#teams).
 
+## Moving from 0.2.x
+
+A repo with `intent/` keeps working as it did until someone runs `nikos migrate maps`. Nothing moves
+on its own, and `nikos doctor` only says what the move would do.
+
+```
+nikos migrate maps --dry-run                 # show the plan, write nothing
+nikos migrate maps --yes --group-key PAY      # write it, on nikos/migrate-maps, uncommitted
+nikos migrate maps --yes --commit ...         # or commit it, the migration's paths only
+```
+
+It moves `intent/` to `maps/<key>/` (the key is the map's own, `--key` to change it), makes the repo
+a group with `planning/plan.yaml` at `level: group` and `--group-key` as its key (asked for in a
+terminal, suggested from the folder name), and assigns the repo's own team with `--repo .`. The
+plan lists every move, every created file, the ids it renames and what to check by hand. A dry run
+changes nothing. A run without a terminal needs `--yes` or `--dry-run`.
+
+Each refusal says what to do. The ones that matter most:
+
+- **Story ids** that don't carry the group key (`HT-1` in a group `PAY`) stop the migration.
+  `--rename-ids` renames them to `PAY-HT-1`, rewriting their tags and the state, approval and plan
+  files. Body text that mentions an id is not rewritten (it would change the spec hash and lapse
+  the approval); the plan lists the other files that mention a renamed id.
+- **Bets.** A map names one bet, `bet: <id>`, so the releases' `bets:` and `story_bets:` are dropped.
+  The map's bet is the one the releases name, or `--bet <id>` (or `--new-bet <id>` for a stub). Any
+  other bet a release named is listed in the plan: add it to the bet's card by hand.
+- **A team plan with key results or objectives** is refused. Move each key result to the
+  department's plan, or rewrite it as a bet aimed at a department key result (`krs:`). A team plan
+  with none is rewritten to a group plan, keeping its name, pillars and period.
+- **A company or department plan** is refused: a repo holds one plan.
+- **A team repo** (`nikos.team.yaml`) that has `intent/` is refused, not moved: a team repo can't
+  hold a story map. Move `intent/` into a group repo with `nikos migrate maps` there, delete it from
+  the team repo, then `nikos team join`.
+
+The new layout is checked on a copy before anything is written, with the group's own rules
+(`validateGroup` and the planning checks). A failure there lists what's wrong, and the repo stays as
+it was.
+
+### Key results in a group
+
+A group plan has no key results, so `nikos planning validate` reports one as an error (not a
+warning, as the RFC first said). Its bets aim at the department's key results instead, with
+`krs:`. Team plans keep a warning for key results, since they're going away. This is the rule the
+migration checks: a team's key results move up to the department, or become a bet aimed at one.
+
+### The smallest setup
+
+A group that is also its team's code repo needs no `intent/` and no `nikos.team.yaml` of its own
+for its stories to be verified in place. The onboarding wizard (`nikos start`, choice 3) writes the
+group plan and prints the three commands: `nikos planning bet new <bet-id>`, `nikos map new --bet
+<bet-id> --key <MAP>`, and `nikos assign "<team>" --repo .`.
+
 ## Teams
 
 A team repo is its code, plus `nikos.team.yaml`. It takes the stories assigned to

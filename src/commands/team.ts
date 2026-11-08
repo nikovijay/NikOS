@@ -33,7 +33,7 @@ export function teamInit(dir: string, opts: { repo?: string; name?: string }): {
   const root = resolve(dir);
   if (isTeamRepo(root)) throw new Error(`${TEAM_FILE} already exists here`);
   if (store().isDir(join(root, "intent")) || store().isDir(join(root, "maps"))) {
-    throw new Error("this repo has its own story map (intent/ or maps/): a team repo can't also be a group repo yet");
+    throw new Error("this repo has its own story map (intent/ or maps/), and a team repo can't hold one. Move it to a group repo with nikos migrate maps there, then nikos team join");
   }
   const repo = opts.repo ?? ownRepo(root);
   if (!repo) throw new Error("no origin remote to take the team's repo path from: pass --repo owner/repo");

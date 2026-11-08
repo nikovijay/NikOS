@@ -4,6 +4,11 @@
 
 ### Added
 
+- `nikos migrate maps` moves a 0.2.x repo's `intent/` story map to `maps/<key>/` of a group, and makes the repo its own team (`nikos assign <team> --repo .`). It shows the whole plan first (`--dry-run`), checks the new layout on a copy of the repo, and writes nothing until confirmed (or `--yes`). The changes are left uncommitted on `nikos/migrate-maps`, or committed with `--commit`, which commits only the paths it wrote; nothing is pushed. If a write or the check fails, the repo is put back as it was. Files under `intent/` that migrate doesn't move (other than `.gitkeep` and Finder or Explorer files) stop it before any write, and an unknown `--option` is a usage error. Story ids keep their names unless `--rename-ids` is given (`KEY-n` becomes `GROUP-KEY-n`, and tags are rewritten above `Feature:` only). Bet links that a map can't keep are listed as dropped, with what to add by hand. Team repos with `intent/` are refused, with the steps to move it.
+- `nikos doctor` explains a 0.2.x repo's layout and points at `nikos migrate maps`. It warns about a team plan (`planning/plan.yaml` at `level: team`) in any repo, and about a runner config that doesn't list the story's folder. A 0.2.x repo is never failed for either.
+- Onboarding levels. `nikos start` (in a terminal) asks what's being set up: 1 a company plan, 2 a department plan, 3 a group (with its key, and whether it's its own team, with `--repo .`), 4 a team repo that joins a group, 5 one product in one repo, 6 both. A team repo is refused before any question when its folder has `intent/` or `maps/`.
+- The `migrate` command's usage text lists `maps`, and `nikos migrate maps` is not exposed through the MCP server.
+
 - Editable snapshots. `nikos planning serve --export plan.html --editable` (and `nikos serve`) writes one offline page that queues changes, shows them, and downloads `<plan>-changes-<date>.nikos.json`. It holds this level's own files, with team status left out. `--with-linked` also embeds the copies of the plans above and below, read-only. Nothing in the page is sent anywhere.
 - `nikos apply <file>` applies a change file from an editable snapshot to the repo, on a new `nikos/plan-<level>-<date>` branch, through the same checks as the dashboard. Operations that no longer apply are listed with the reason and the rest still apply (exit 2). It commits only with `--commit` (or a typed y), and opens a pull or merge request only with `--pr` after a second confirm. Nothing is pushed unless asked for. `--dir` picks the repo.
 - The change file format, `schemas/planning/changes.schema.json`: operations and their `expect` hashes, with no field that could carry a token, a password, a url or a command.
@@ -19,6 +24,11 @@
 - `nikos doctor` in a group repo warns when an assigned team has never been fetched, or its last fetch failed; in a team repo it names settings problems in the group copies.
 
 ### Changed
+
+- Breaking, for scripts that pipe answers into the terminal wizard: its menu is now six choices (see the onboarding note above). The old `1` (a team's product) is now `5`, `2` (a company plan) is now `1`, and `3` (both) is now `6`. Flags and non-terminal runs are unchanged.
+- `nikos start` refuses a repo that has `maps/` (a group's story maps): add a product's story map with `nikos map new` there.
+- The behave runner template's header now says what it runs. behave takes folders, not globs: `nikos verify setup` in a group repo lists one `maps/<key>/features` folder per map (a multi-line `paths =`), and keeps `paths = intent/features` in a 0.2.x repo.
+- `nikos doctor`'s runner check warns when a runner config lists paths but not the story folder. A config with no paths of its own still passes.
 
 - The dashboard's Rollout tab and its alignment tree are replaced by the views above. The rollout's list of plans below (joined, last synced, delivery) stays in `nikos planning rollout`; the dashboard doesn't show it.
 - Behaviour change in git repos: the first save from the dashboard on the base branch now creates a `nikos/plan-<level>-<date>` branch. Plain writes remain for folders that aren't git repos, and with HEAD detached.

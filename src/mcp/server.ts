@@ -151,12 +151,12 @@ export function createServer(repo: string): McpServer {
     const r = importTickets(a.tickets, root, { release: a.release, map: a.map });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
   });
-  tool("start", "Set this repo up in one go: intent/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("start", "Set this repo up in one go as a product's repo: intent/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A group repo with maps/ isn't set up this way: its story maps are made with nikos map new in the terminal. Companies and departments use company_init.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = startRepo(root, a);
     return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
   });
   tool("add_activity", "Add an activity to the story map.", { title: z.string(), id: z.string().optional(), map: z.string().optional() }, (a) => text(`Activity ${newActivity(a, root)}`));
-  tool("company_init", "Write a company plan repo in this folder: plan.yaml, settings every level inherits, departments, and a README on joining.", {
+  tool("company_init", "Write a company or department plan repo in this folder: plan.yaml, settings every level inherits, departments or groups, and a README on joining. A group's own repo, with its story maps in maps/, is set up with nikos group init in the terminal.", {
     name: z.string(), period: z.string().optional(), departments: z.array(z.string()).optional(), repo: z.string().optional(), host: z.string().optional(),
   }, (a) => {
     const r = companyInit(root, a);
@@ -180,7 +180,7 @@ export function createServer(repo: string): McpServer {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
   });
-  tool("init", "Set up nikOS in this repo: intent/ with a starter story.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("init", "Set up nikOS in this repo as a product's single repo: intent/ with a starter story. In a group repo, story maps live in maps/ (one per bet), and a repo with intent/ moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
     return text(`Created ${r.created.length} files in intent/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
   });

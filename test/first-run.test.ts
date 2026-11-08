@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { askOnboarding, currentQuarter, setUp, type Ask } from "../src/commands/onboard";
+import { start } from "../src/commands/start";
+import { parse } from "yaml";
 import { runServeCommand } from "../src/commands/serve";
 import { nodeWarning } from "../src/commands/verify";
 import { cliCommand, compareVersions, ownVersion, staleCliWarning } from "../src/lib/cli-version";
@@ -23,7 +25,7 @@ const scripted = (answers: string[]) => {
 describe("the onboarding wizard", () => {
   it("won't set up in the home folder, and asks the key apart from the name", async () => {
     const home = mkdtempSync(join(tmpdir(), "nikos-home-"));
-    const { ask, asked } = scripted(["3", "Acme Robotics", "", "", "", ""]);
+    const { ask, asked } = scripted(["6", "Acme Robotics", "", "", "", ""]);
     const a = await askOnboarding(home, ask, home);
     expect(a).toEqual({ kind: "both", dir: join(home, "acme-robotics"), name: "Acme Robotics", key: "AR", period: currentQuarter(), gitInit: true });
     expect(asked.map((x) => x.q.split("\n")[0])).toEqual([
@@ -48,9 +50,9 @@ describe("the onboarding wizard", () => {
 
   it("asks again on an answer it can't use, and sets a company plan up in this folder", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-co-"));
-    const { ask, asked } = scripted(["4", "company", "Acme", "Q1 2027", "Payments, Growth", "n"]);
+    const { ask, asked } = scripted(["x", "1", "Acme", "Q1 2027", "y", "Payments, Growth", "n"]);
     const a = await askOnboarding(dir, ask, "/nowhere");
-    expect(asked[1].q).toMatch(/^Please choose 1, 2 or 3\. What are you setting up\?/);
+    expect(asked[1].q).toMatch(/^Please choose 1 to 6\. What are you setting up\?/);
     expect(a).toEqual({ kind: "company", dir, name: "Acme", period: "Q1 2027", departments: ["Payments", "Growth"], gitInit: false });
     const lines = setUp(a, dir);
     expect(existsSync(join(dir, "intent"))).toBe(false);
@@ -61,11 +63,68 @@ describe("the onboarding wizard", () => {
   it("checks before setting up on top of another project, and rejects a bad key", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-busy-"));
     writeFileSync(join(dir, "notes.txt"), "mine\n");
-    const { ask, asked } = scripted(["1", "Tip Calc", "", "", "9X", "tc", "n"]);
+    const { ask, asked } = scripted(["5", "Tip Calc", "", "", "9X", "tc", "n"]);
     const a = await askOnboarding(dir, ask, "/nowhere");
     expect(asked[2].q).toContain("This folder already has files in it");
-    expect(a).toMatchObject({ kind: "team", dir: join(dir, "tip-calc"), key: "TC" });
+    expect(a).toMatchObject({ kind: "product", dir: join(dir, "tip-calc"), key: "TC" });
     expect(asked[5].q).toMatch(/^Letters and digits/);
+  });
+
+  it("asks a group's key, and makes its own team with the smallest setup when it is its own team", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-group-wiz-"));
+    const { ask, asked } = scripted(["3", "Checkout Group", "PAY", "Q1 2027", "y", "n"]);
+    const a = await askOnboarding(dir, ask, "/nowhere");
+    expect(asked.map((x) => x.q.split("\n")[0])).toContain("The group's key is the prefix of every story id in its maps (PAY-HT-1). Letters and numbers, starting with a letter.");
+    expect(a).toEqual({ kind: "group", dir, name: "Checkout Group", key: "PAY", period: "Q1 2027", sameTeam: true, gitInit: false });
+    const lines = setUp(a, dir);
+    const plan = parse(readFileSync(join(dir, "planning/plan.yaml"), "utf8"));
+    expect(plan).toMatchObject({ level: "group", key: "PAY", period: "Q1 2027" });
+    expect(lines.join("\n")).toContain('assign "Checkout Group" --repo .');
+    expect(lines.join("\n")).toContain("planning bet new <bet-id>");
+    expect(existsSync(join(dir, "intent"))).toBe(false);
+    expect(existsSync(join(dir, "nikos.team.yaml"))).toBe(false);
+  });
+
+  it("a group that isn't its own team says teams join it later, and makes no team file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-group-nt-"));
+    const { ask } = scripted(["3", "Checkout Group", "PAY", "Q1 2027", "n", "n"]);
+    const a = await askOnboarding(dir, ask, "/nowhere");
+    expect(a).toMatchObject({ kind: "group", sameTeam: false });
+    const lines = setUp(a, dir);
+    expect(lines.join("\n")).toContain("Teams join later with nikos team init in each team repo, then nikos team join.");
+    expect(existsSync(join(dir, "nikos.team.yaml"))).toBe(false);
+  });
+
+  it("a team repo is refused before any question when its folder has intent/, and joins with teamInit otherwise", async () => {
+    const busy = mkdtempSync(join(tmpdir(), "nikos-team-busy-"));
+    mkdirSync(join(busy, "intent"));
+    const refused = scripted(["4"]);
+    await expect(askOnboarding(busy, refused.ask, "/nowhere")).rejects.toThrow("this repo has its own story map (intent/ or maps/), and a team repo can't hold one. Move it to a group repo with nikos migrate maps, or pick another option");
+    expect(refused.asked.length).toBe(1);
+
+    const dir = mkdtempSync(join(tmpdir(), "nikos-team-wiz-"));
+    const { ask } = scripted(["4", "Checkout Web", "", "n"]);
+    const a = await askOnboarding(dir, ask, "/nowhere");
+    expect(a).toMatchObject({ kind: "team", name: "Checkout Web" });
+    setUp(a, dir);
+    expect(existsSync(join(dir, "nikos.team.yaml"))).toBe(true);
+    expect(existsSync(join(dir, "intent"))).toBe(false);
+  });
+
+  it("a product keeps its own path: the same start, and a See it line", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-product-wiz-"));
+    const { ask } = scripted(["5", "Tip Calc", "TC", "n"]);
+    const a = await askOnboarding(dir, ask, "/nowhere");
+    const lines = setUp(a, dir);
+    expect(existsSync(join(dir, "intent/storymap.yaml"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("See it: "))).toBe(true);
+    expect(lines.join("\n")).toContain("nikos migrate maps moves an intent/ story map into one.");
+  });
+
+  it("start refuses a repo that has maps/", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-start-maps-"));
+    mkdirSync(join(dir, "maps"));
+    expect(() => start(dir)).toThrow("This repo has maps/ (group story maps). Add a product's story map with nikos map new, not start.");
   });
 
   it("is only for a person at a terminal: start with flags never asks", () => {
