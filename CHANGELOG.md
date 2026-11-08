@@ -4,6 +4,14 @@
 
 ### Added
 
+- Editable snapshots. `nikos planning serve --export plan.html --editable` (and `nikos serve`) writes one offline page that queues changes, shows them, and downloads `<plan>-changes-<date>.nikos.json`. It holds this level's own files, with team status left out. `--with-linked` also embeds the copies of the plans above and below, read-only. Nothing in the page is sent anywhere.
+- `nikos apply <file>` applies a change file from an editable snapshot to the repo, on a new `nikos/plan-<level>-<date>` branch, through the same checks as the dashboard. Operations that no longer apply are listed with the reason and the rest still apply (exit 2). It commits only with `--commit` (or a typed y), and opens a pull or merge request only with `--pr` after a second confirm. Nothing is pushed unless asked for. `--dir` picks the repo.
+- The change file format, `schemas/planning/changes.schema.json`: operations and their `expect` hashes, with no field that could carry a token, a password, a url or a command.
+- Dashboard views. A company or department plan has *OKRs and bets* (the key results above and by objective, its bets and the bets above them, with group bets aligned to one of its bets shown as delivery only) and an *OKR ladder*. A group plan has *Bets and story maps*, with each team's status from its last `nikos map status` on this machine. The views never fetch on render.
+- Editing from the dashboard. Key results, check-ins, bets (fields, review, alignment), story titles, activity and step titles, and team assignments are saved through `POST /api/op`, which runs each change through the command the CLI uses. The same checks refuse a save with the same message.
+- Saves on a branch. In a git repo, the first save on the base branch makes `nikos/plan-<level>-<date>`. A pending bar shows the changes not yet committed, with Commit, Push branch, and Open pull request (GitHub with `gh`, GitLab with `glab`, or the command to copy). Nothing is committed, pushed or opened without its click. Commit stages only `planning/`, `maps/` and `intent/`.
+- `nikos` story and map commands gained the functions the dashboard uses (`renameStory`, `removeStory`, `renameActivity`, `renameStep`, `newMap`, `unassign`); their output is unchanged.
+
 - Status flowing back. In a group repo, `nikos map status [--map <id>] [--offline] [--json]` shows each assigned team's status on each story: the team's repo is fetched read-only (its `status/`, `approvals/` and `nikos.team.yaml` only), and a story's status counts only when the team proved it against the story's current feature. Each story shows its freshness (current, changed, behind, unverified, moved, unassigned, not-fetched, no-status or in-place), its delivery approval and the group's intent approval. A team that can't be fetched shows its last good copy and says why; the command still exits 0. The MCP server has it as `map_status`.
 - A bet's delivery in a group repo counts a team's done stories only when they're current and their delivery approval holds, and says how many await approval and how many teams aren't fetched. A team repo's own delivery now counts its own status (it used to read the group's empty state and show 0 of N).
 - `nikos assign` checks a holder team's done state in its fetched copy, and names where it read it. With no copy, it checks the group's own `state.yaml` and warns. `--url` and `--ref` record a team's repo and branch when they're not the default.
@@ -11,6 +19,13 @@
 - `nikos doctor` in a group repo warns when an assigned team has never been fetched, or its last fetch failed; in a team repo it names settings problems in the group copies.
 
 ### Changed
+
+- The dashboard's Rollout tab and its alignment tree are replaced by the views above. The rollout's list of plans below (joined, last synced, delivery) stays in `nikos planning rollout`; the dashboard doesn't show it.
+- Behaviour change in git repos: the first save from the dashboard on the base branch now creates a `nikos/plan-<level>-<date>` branch. Plain writes remain for folders that aren't git repos, and with HEAD detached.
+- Saves from the dashboard in a git repo go on a branch, not on the base branch (see Added).
+- `/api/op` refuses to set a bet's outcome: only a bet review sets it. The older `/api/bet` still accepts `outcome`.
+- POST requests to the dashboard need a JSON content type, and are refused when their Origin or Sec-Fetch-Site comes from another site (403), or the body is not JSON (415). A token in the dashboard address is removed from the address bar after the page loads.
+- Story ids in `/api/op` are checked by the kind of id they are, so a group's story ids (`PAY-CHK-12`) work.
 
 - A team's `state set` writes `spec_hash` on every status write, not only on done, so a team's status shows which feature it was written against.
 - Release note: where `approval.policy` is `required-for-release`, a group's done stories with no delivery approval count as awaiting approval, so its bets can show Building where they showed Shipped. Under `optional` (the default) and `off`, done stories count without an approval.
@@ -52,6 +67,11 @@
   `aligned`, every key result it aligns to. `upstream` is still the first.
 - The dashboard's guide shows company, department and group, with the story map
   under a bet.
+
+
+### Fixed
+
+- `nikos planning rollout` no longer deletes a plan's last good copy when a fetch fails: the copy is shown with a note saying when it was read.
 
 ## 0.2.4 (2026-11-07)
 

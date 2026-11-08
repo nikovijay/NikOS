@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
+import { checkHash } from "../planning/model.js";
+import { holderOf, loadMapData, readAssignments } from "../lib/assignments.js";
 import { authoringMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
-import { createStoryState, loadStates } from "../lib/state-files.js";
+import { createStoryState, loadStates, perStory, statePath, storyStatePath } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -50,6 +52,7 @@ function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
 export function newStory(input: StoryInput, dir: string): StoryResult {
   const title = input.title?.trim();
   if (!title) throw new Error("A story needs a title");
+  if (/[\r\n]/.test(title)) throw new Error("A title is one line (no line breaks)");
   const priority = input.priority ?? "must";
   if (!PRIORITIES.includes(priority)) throw new Error(`'${priority}' is not a priority (must, should, could)`);
 
@@ -129,4 +132,65 @@ export function runStory(args: string[]): number {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
+}
+
+/** The label a map is known by in messages: maps/<id>, or intent for a repo's own map. */
+export const mapLabel = (ref: StoryMapRef) => (ref.id ? `maps/${ref.id}` : "intent");
+
+/** The feature file of a story in a map, or undefined when no feature in it has that id. */
+export function featureOf(ref: StoryMapRef, id: string): string | undefined {
+  return walk(join(ref.dir, "features"), ".feature").find((f) => featureStoryIds(read(f))[0] === id);
+}
+
+/** Change a story's title: the Feature line only. Its tags, and the rest of the feature, stay as they are. */
+export function renameStory(dir: string, input: { map?: string; id: string; title: string }, expect?: string): { file: string; validation: ValidationResult } {
+  const title = input.title?.trim();
+  if (!title) throw new Error("A story needs a title");
+  if (/[\r\n]/.test(title)) throw new Error("A title is one line (no line breaks)");
+  const ref = authoringMap(dir, input.map);
+  const file = featureOf(ref, input.id);
+  if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
+  const text = read(file);
+  checkHash(input.id, text, expect);
+  store().write(file, text.replace(/^(\s*Feature:)[^\n]*/m, (_all, head: string) => `${head} ${title}`));
+  return { file, validation: validate(ref.dir) };
+}
+
+/** Drop a story's state entry from its map: its own file, or its line in state.yaml. */
+function dropState(dir: string, id: string): void {
+  if (perStory(dir) && store().exists(storyStatePath(dir, id))) store().remove(storyStatePath(dir, id));
+  const path = statePath(dir);
+  if (!store().exists(path)) return;
+  const doc = parseDocument(read(path));
+  if (!doc.hasIn(["stories", id])) return;
+  doc.deleteIn(["stories", id]);
+  store().write(path, doc.toString(yamlOpts));
+}
+
+/**
+ * Remove a story that has never been started: its feature, its place in its release, and its state.
+ * Refused when a team holds it (unassign first), or when any work is recorded against it.
+ */
+export function removeStory(dir: string, input: { map?: string; id: string }, expect?: string): { removed: string; validation: ValidationResult } {
+  const ref = authoringMap(dir, input.map);
+  const file = featureOf(ref, input.id);
+  if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
+  checkHash(input.id, read(file), expect);
+  const holder = holderOf(readAssignments(ref.dir), loadMapData(ref.dir), input.id);
+  if (holder) throw new Error(`${input.id} is assigned to ${holder.team}: unassign it first`);
+  const status = loadStates(ref.dir)[input.id]?.status ?? "todo";
+  if (status !== "todo") throw new Error(`${input.id} has work done: remove it from the CLI`);
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const map = parseDocument(read(mapPath));
+  const releases = map.get("releases", true);
+  if (releases instanceof YAMLSeq) {
+    for (const r of releases.items as any[]) {
+      const stories = r?.get?.("stories", true);
+      if (stories instanceof YAMLSeq) stories.items = stories.items.filter((s: any) => String(s?.value ?? s) !== input.id);
+    }
+  }
+  store().write(mapPath, map.toString(yamlOpts));
+  store().remove(file);
+  dropState(ref.dir, input.id);
+  return { removed: input.id, validation: validate(ref.dir) };
 }

@@ -20,10 +20,10 @@ const skillDirs = readdirSync(join(root, "skills"), { withFileTypes: true })
   .filter((d) => d.isDirectory())
   .map((d) => d.name);
 
-/** Every SKILL.md under the repo, outside node_modules and test output. */
+/** Every SKILL.md under the repo, outside node_modules, test output and .claude (local worktrees and their copies). */
 function allSkillFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (["node_modules", ".git", "dist", ".evals-out"].includes(entry.name)) continue;
+    if (["node_modules", ".git", "dist", ".evals-out", ".claude"].includes(entry.name)) continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) allSkillFiles(path, out);
     else if (entry.name === "SKILL.md") out.push(path);

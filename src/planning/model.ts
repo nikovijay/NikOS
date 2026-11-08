@@ -62,8 +62,9 @@ export function inside(root: string, ...parts: string[]): string {
 }
 
 export class StaleError extends Error {
-  constructor(file: string) {
-    super(`${file} changed on disk since it was loaded; reload and try again`);
+  /** The message as given when it was already built (a dry run hands it back), else built from the file. */
+  constructor(file: string, message?: string) {
+    super(message ?? `${file} changed on disk since it was loaded; reload and try again`);
   }
 }
 
@@ -82,6 +83,11 @@ export function writePlanning(root: string, path: string, text: string, opts: { 
     throw err;
   }
   return rel;
+}
+
+/** Refuse when the text on hand isn't the version the caller loaded (expect is its hash). */
+export function checkHash(label: string, text: string, expect: string | undefined): void {
+  if (expect !== undefined && hash(text) !== expect) throw new StaleError(label);
 }
 
 export interface Bet {

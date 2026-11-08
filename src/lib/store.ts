@@ -17,6 +17,8 @@ export interface Store {
   append(path: string, text: string): void;
   /** Delete a file, if it's there. */
   remove(path: string): void;
+  /** True for a store held in memory: nothing it does reaches the disk. */
+  memory?: boolean;
 }
 
 export const diskStore: Store = {
@@ -35,6 +37,7 @@ export const diskStore: Store = {
 
 /** A repo held in memory: files by absolute path. changes() lists what nikOS wrote. */
 export class MemoryStore implements Store {
+  readonly memory = true;
   private files = new Map<string, string>();
   private changed = new Set<string>();
   private removed = new Set<string>();

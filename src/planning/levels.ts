@@ -65,7 +65,8 @@ export function alignmentProblems(root: string, refs: string[], kind: "kr" | "be
     const isKr = krIds(copy).includes(id);
     const isBet = betIds(copy).includes(id);
     if (kind === "kr" && !isKr && isBet) out.push(`${ref} is a bet: a key result aligns to key results`);
-    if (kind === "bet" && !isBet && isKr) out.push(`${ref} is a key result: a bet aligns to bets, and names key results under krs`);
+    else if (kind === "bet" && !isBet && isKr) out.push(`${ref} is a key result: a bet aligns to bets, and names key results under krs`);
+    else if (kind === "kr" ? !isKr : !isBet) out.push(`${ref} isn't a ${noun} in ${repo}: check the id, and run nikos planning sync if it was just added`);
   }
   return out;
 }

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { isMap, isSeq, parseDocument } from "yaml";
 import { read } from "../lib/project.js";
 import { authoringMap, mapFlag } from "../lib/maps.js";
+import { checkHash } from "../planning/model.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -88,4 +89,44 @@ export function runStep(args: string[]): number {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
+}
+
+/** Change an activity's title. Its id, and the stories under it, stay as they are. */
+export function renameActivity(dir: string, input: { map?: string; id: string; title: string }, expect?: string): { validation: ValidationResult } {
+  const title = input.title?.trim();
+  if (!title) throw new Error("An activity needs a title");
+  const ref = authoringMap(dir, input.map);
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const text = read(mapPath);
+  checkHash("storymap.yaml", text, expect);
+  const map = parseDocument(text);
+  const activities = map.get("activities", true);
+  const found = isSeq(activities) ? activities.items.filter(isMap).find((a) => a.get("id") === input.id) : undefined;
+  if (!found) throw new Error(`${input.id} is not an activity in ${ref.id ? `maps/${ref.id}` : "intent"}`);
+  found.set("title", title);
+  store().write(mapPath, map.toString(yamlOpts));
+  return { validation: validate(ref.dir) };
+}
+
+/** Change a step's title, in the activity it belongs to (or the one given). Its id stays as it is. */
+export function renameStep(dir: string, input: { map?: string; id: string; title: string; activity?: string }, expect?: string): { validation: ValidationResult } {
+  const title = input.title?.trim();
+  if (!title) throw new Error("A step needs a title");
+  const ref = authoringMap(dir, input.map);
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const text = read(mapPath);
+  checkHash("storymap.yaml", text, expect);
+  const map = parseDocument(text);
+  const activities = map.get("activities", true);
+  const list = isSeq(activities) ? activities.items.filter(isMap) : [];
+  const steps = list
+    .filter((a) => !input.activity || a.get("id") === input.activity)
+    .flatMap((a) => {
+      const s = a.get("steps", true);
+      return isSeq(s) ? s.items.filter(isMap).filter((st) => st.get("id") === input.id) : [];
+    });
+  if (!steps.length) throw new Error(`${input.id} is not a step in ${ref.id ? `maps/${ref.id}` : "intent"}`);
+  steps[0].set("title", title);
+  store().write(mapPath, map.toString(yamlOpts));
+  return { validation: validate(ref.dir) };
 }

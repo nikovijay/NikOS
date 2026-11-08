@@ -508,8 +508,39 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 const MAP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 
 /**
- * `nikos map new --bet <bet-id> --key <KEY>`: a story map for one of this group's bets, as
- * maps/<key lowercased>/, with the folders and files a new intent/ has.
+ * A story map for one of a group's bets, as maps/<key lowercased>/, with the folders and files a
+ * new intent/ has. Refuses with the same messages the command line gives.
+ */
+export function newMap(input: { bet?: string; key?: string }, dir: string): { id: string; key: string; group: string; dir: string } {
+  const bet = input.bet;
+  const key = input.key;
+  if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
+  if (!key) throw new Error("nikos map new needs --key <KEY>");
+  if (!BET_ID.test(bet)) {
+    if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
+    throw new Error(`'${bet}' is not a bet id`);
+  }
+  if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
+  if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
+  const plan = store().exists(join(dir, "planning", "plan.yaml")) ? (parse(read(join(dir, "planning", "plan.yaml"))) as { level?: string }) : undefined;
+  if (plan?.level !== "group") throw new Error("planning/plan.yaml is not a group plan");
+  const group = groupKeyOf(dir);
+  if (!group) throw new Error(NO_GROUP_KEY);
+  const taken = mapDirs(dir).find((d) => (parse(read(join(d, "storymap.yaml"))) as { key?: string })?.key === key);
+  if (taken) throw new Error(`map key ${key} is already used by maps/${basename(taken)}`);
+  const id = key.toLowerCase();
+  const mapDir = join(dir, "maps", id);
+  if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
+  const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
+  store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
+  store().write(join(mapDir, "state.yaml"), "format_version: 1\nstories: {}\n", { create: true });
+  for (const sub of ["features", "plans", "approvals"]) store().write(join(mapDir, sub, ".gitkeep"), "", { create: true });
+  return { id, key, group, dir: mapDir };
+}
+
+/**
+ * `nikos map new --bet <bet-id> --key <KEY>`: the command line over newMap, which prints the
+ * folder it made and the story ids it will give.
  */
 export function runMapNew(args: string[]): number {
   const flag = (name: string) => {
@@ -517,31 +548,10 @@ export function runMapNew(args: string[]): number {
     return i >= 0 ? args[i + 1] : undefined;
   };
   const bet = flag("--bet");
-  const key = flag("--key");
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
-    if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
-    if (!key) throw new Error("nikos map new needs --key <KEY>");
-    if (!BET_ID.test(bet)) {
-      if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
-      throw new Error(`'${bet}' is not a bet id`);
-    }
-    if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
-    if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
-    const plan = store().exists(join(dir, "planning", "plan.yaml")) ? (parse(read(join(dir, "planning", "plan.yaml"))) as { level?: string }) : undefined;
-    if (plan?.level !== "group") throw new Error("planning/plan.yaml is not a group plan");
-    const group = groupKeyOf(dir);
-    if (!group) throw new Error(NO_GROUP_KEY);
-    const taken = mapDirs(dir).find((d) => (parse(read(join(d, "storymap.yaml"))) as { key?: string })?.key === key);
-    if (taken) throw new Error(`map key ${key} is already used by maps/${basename(taken)}`);
-    const id = key.toLowerCase();
-    const mapDir = join(dir, "maps", id);
-    if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
-    const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
-    store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
-    store().write(join(mapDir, "state.yaml"), "format_version: 1\nstories: {}\n", { create: true });
-    for (const sub of ["features", "plans", "approvals"]) store().write(join(mapDir, sub, ".gitkeep"), "", { create: true });
-    console.log(`Created maps/${id} for bet ${bet}, story ids ${group}-${key}-n`);
+    const r = newMap({ bet, key: flag("--key") }, dir);
+    console.log(`Created maps/${r.id} for bet ${bet}, story ids ${r.group}-${r.key}-n`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

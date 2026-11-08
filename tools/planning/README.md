@@ -57,5 +57,7 @@ Ask your agent:
 | `nikos planning validate` | Check `planning/` |
 | `nikos planning sync [--check]` | Fetch upstream plans read-only, or check whether they've moved |
 | `nikos planning serve [--export <file>]` | Open the local dashboard, or write a read-only snapshot |
+| `nikos planning serve --export <file> --editable [--with-linked]` | Write a snapshot that queues changes and downloads them as a change file |
+| `nikos apply <file> [--commit] [--pr]` | Apply a change file on a new nikos branch, with the same checks |
 
 The file format: [docs/planning.md](../../docs/planning.md).

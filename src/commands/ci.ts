@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { isTeamRepo } from "../lib/team.js";
 
-export type Host = "github" | "gitlab";
+import { hostOf, type Host } from "../lib/forge.js";
+
+export type { Host };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const version = (): string => {
@@ -23,9 +25,7 @@ const version = (): string => {
 /** github or gitlab, from the origin remote's url; undefined when it's neither or there's no remote. */
 export function detectHost(root: string): Host | undefined {
   const url = spawnSync("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8" }).stdout?.trim() ?? "";
-  if (/github\.com[:/]/.test(url)) return "github";
-  if (/gitlab/i.test(url)) return "gitlab";
-  return undefined;
+  return hostOf(url);
 }
 
 /** The shell steps that install the project and its scenario runner, for a stack. */

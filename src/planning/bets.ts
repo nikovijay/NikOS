@@ -2,8 +2,9 @@
 // when we review it, and every review decision since.
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
-import { DATE, betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
+import { betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
 import { alignmentProblems, alignsValue } from "./levels.js";
+import { betFieldProblems, dateProblem } from "./rules.js";
 
 export interface BetInput {
   id: string;
@@ -32,7 +33,7 @@ export function newBet(input: BetInput, root: string): string {
   if (!BET_ID.test(input.id)) throw new Error(`'${input.id}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`);
   if (!input.owner?.trim()) throw new Error("A bet needs an owner (--owner)");
   if (!input.hypothesis?.trim()) throw new Error("A bet needs a hypothesis (--hypothesis)");
-  if (!DATE.test(input.reviewOn ?? "")) throw new Error("A bet needs a review date (--review YYYY-MM-DD)");
+  if (dateProblem(input.reviewOn)) throw new Error("A bet needs a review date (--review YYYY-MM-DD)");
   const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "bet")[0];
   if (problem) throw new Error(problem);
@@ -84,6 +85,10 @@ const EDITABLE = ["owner", "team", "hypothesis", "starts", "review_on", "deadlin
 
 /** Change a bet's fields (not its reviews or id). `expect` is the hash of the version being edited. */
 export function editBet(root: string, id: string, fields: Record<string, unknown>, expect?: string): string {
+  // The same rules the dashboard and bet.edit apply, so the CLI refuses an empty owner the same way.
+  const { outcome: _outcome, ...rest } = fields;
+  const problem = betFieldProblems(rest)[0];
+  if (problem) throw new Error(problem);
   const bet = loadBet(root, id);
   const meta = structuredClone(bet.meta);
   for (const [k, v] of Object.entries(fields)) {

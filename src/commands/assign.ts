@@ -1,3 +1,4 @@
+import { urlProblem } from "../lib/fetch-copy.js";
 // `nikos assign "<team>" --repo <path>`: give a team all or part of a group's story map. Run in the
 // group repo. It adds to what the team already has, and --replace redefines its part. Each story belongs to at most one team. A done story stays with the team that
 // delivered it unless --include-done moves it. Assignments are written to maps/<id>/assignments.yaml.
@@ -72,6 +73,10 @@ export function assign(dir: string, team: string, opts: AssignOptions): AssignRe
   if (!opts.repo || !isRepoArg(opts.repo)) throw new Error("nikos assign needs --repo <path>: the team's repo, as owner/repo, or . when this repo is its own team");
   const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
   if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");
+  if (opts.url) {
+    const bad = urlProblem(opts.url);
+    if (bad) throw new Error(bad);
+  }
 
   const ref: StoryMapRef = resolveStoryMap(root, opts.map);
   const map = loadMapData(ref.dir);
@@ -152,7 +157,7 @@ const urlOf = (a: Assignment): Partial<Assignment> => ({ ...(a.url ? { url: a.ur
  * when it's fetched; otherwise the group's own state.yaml is the fallback, and the caller warns.
  * refusal is the message when the story is done and must not move.
  */
-function doneOf(root: string, index: TeamIndex, states: Record<string, { status?: string }>, holder: Assignment, id: string): { done: boolean; fallback?: boolean; refusal: string } {
+export function doneOf(root: string, index: TeamIndex, states: Record<string, { status?: string }>, holder: Assignment, id: string): { done: boolean; fallback?: boolean; refusal: string } {
   if (holder.repo === ".") {
     const done = isDone(states[id]?.status);
     return { done, refusal: `${id} is done and held by ${holder.team}: assign won't move a done story (use --include-done)` };
@@ -183,6 +188,58 @@ function combine(map: MapData, before: Assignment, asked: Assignment): Assignmen
   const ids = new Set([...storiesOf(map, before), ...storiesOf(map, asked)]);
   out.stories = mapStoryIds(map).filter((id) => ids.has(id));
   return out;
+}
+
+export interface UnassignOptions {
+  /** The team's repo path, or "." for this group. */
+  team: string;
+  map?: string;
+  stories?: string[];
+  activities?: string[];
+  releases?: number[];
+}
+
+/**
+ * Take stories back from a team: the whole of its part, or the stories, activities or releases
+ * named. A done story is refused, the same as assign refuses to move one (no override here).
+ * The stories left with the team stay as explicit story ids.
+ */
+export function unassign(dir: string, opts: UnassignOptions): { team: string; removed: string[]; left: number } {
+  const root = resolve(dir);
+  if (isTeamRepo(root)) throw new Error("this is a team repo: assignments are made in the group repo");
+  if (!mapDirs(root).length) throw new Error("nikos assign needs a group repo with maps/: nikos group init, then nikos map new");
+  const selected = [opts.activities, opts.releases, opts.stories].filter((x) => x !== undefined).length;
+  if (selected > 1) throw new Error("give one of --activities, --releases or --stories, not several");
+  const ref: StoryMapRef = resolveStoryMap(root, opts.map);
+  const map = loadMapData(ref.dir);
+  const list = readAssignments(ref.dir);
+  const entry = list.find((a) => a.repo === opts.team);
+  if (!entry) throw new Error(`${opts.team} has no part of maps/${ref.id ?? "intent"} to give up`);
+  const held = storiesOf(map, entry);
+  const ids = opts.stories ?? (opts.activities ? map.features.filter((f) => opts.activities!.includes(f.activity)).map((f) => f.id) : opts.releases ? opts.releases.flatMap((n) => map.releases.get(n) ?? []) : held);
+  for (const id of ids) if (!held.includes(id)) throw new Error(`${id} is not assigned to ${entry.team}`);
+  const index = readTeamIndex(root);
+  const states = loadStates(ref.dir);
+  for (const id of ids) {
+    const h = doneOf(root, index, states, entry, id);
+    if (h.done) throw new Error(h.refusal.replace(" (use --include-done)", ""));
+  }
+  const rest = held.filter((id) => !ids.includes(id));
+  const out: Assignment[] = [];
+  for (const a of list) {
+    if (a !== entry) out.push(a);
+    else if (rest.length) out.push({ team: entry.team, repo: entry.repo, stories: rest, ...(entry.url ? { url: entry.url } : {}), ...(entry.ref ? { ref: entry.ref } : {}) });
+  }
+  const check = checkAssignments(map, out, `maps/${ref.id ?? "intent"}`);
+  if (check.errors.length) throw new Error(check.errors[0]);
+  writeAssignments(ref.dir, out);
+  // A story given up by everyone drops its old holder, so it isn't later shown as moved.
+  if (ids.some((id) => index.holders[id] !== undefined)) {
+    const holders = { ...index.holders };
+    for (const id of ids) delete holders[id];
+    writeTeamIndex(root, { ...index, holders });
+  }
+  return { team: entry.team, removed: ids, left: rest.length };
 }
 
 export function runAssign(args: string[]): number {
