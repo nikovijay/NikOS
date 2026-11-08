@@ -4,7 +4,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { detectHost, setupCi } from "../src/commands/ci";
+import { detectHost, githubWorkflow, setupCi } from "../src/commands/ci";
+import { teamRepo } from "./team-fixture";
 
 const { version } = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8"));
 const repo = (files: Record<string, string>, origin?: string) => {
@@ -79,3 +80,13 @@ describe("ci setup", () => {
     expect(existsSync(join(root, ".github"))).toBe(false);
   });
 });
+
+describe("ci in a team repo", () => {
+  it("fetches the assigned stories before it validates and verifies them", () => {
+    const workflow = githubWorkflow("js", teamRepo());
+    const sync = workflow.search(/nikos@[^\s]+ sync/);
+    expect(sync).toBeGreaterThan(-1);
+    expect(sync).toBeLessThan(workflow.search(/nikos@[^\s]+ validate/));
+  });
+});
+

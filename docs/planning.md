@@ -226,7 +226,70 @@ maps/chk/              one story map per bet: storymap.yaml (key: CHK, bet: fast
 - Keys are checked unique within the group. Checking that a group key is unique
   across the company is deferred: `nikos join` doesn't check plan keys today, and a
   group repo can't see other companies' keys.
-- Team repos, assignments and status from teams are not in this version.
+- Team repos, assignments and status from teams: see [Teams](#teams).
+
+## Teams
+
+A team repo is its code, plus `nikos.team.yaml`. It takes the stories assigned to
+it from one or more group repos, proves them against its own code, and keeps its
+status where it can be read. Nothing is written to another repo.
+
+```
+nikos team init --name "Checkout web"             # in the team's repo; repo path from origin
+nikos team join acme/payments/checkout-group      # take work from a group
+nikos team member add "Priya Shah" --role Lead --handle priya-s
+nikos sync                                        # fetch the assigned stories
+```
+
+In the group repo, assign the team part of a map:
+
+```
+nikos assign "Checkout web" --repo acme/checkout-web --releases 1
+nikos assign "Checkout web" --repo . --map chk     # the group repo is its own team
+```
+
+`--activities`, `--releases` and `--stories` pick the part; with none, the team has
+the whole map. Assigning a team more adds to what it has; `--replace` redefines its
+part, and lists the stories it gave up. A story belongs to one team. Assigning a story another team holds
+moves it only if it isn't done, and a done story moves only with `--include-done`.
+The new team starts it at todo. `nikos validate` in the group repo lists the
+stories nobody holds yet.
+
+`nikos sync` copies what the team holds into `.nikos/assigned/<group repo>/`:
+the map's storymap (releases keep only the team's stories), the features, the
+bets, and the group's intent approvals. Plans, state and the group's settings
+aren't copied. Each copy is gitignored, and `nikos sync` rebuilds it. A group
+that can't be reached keeps its last copy. When a story moves to another team,
+the old team's `status/` for it gets `reassigned_to`, and the story leaves its
+`nikos next`.
+
+In a team repo, `nikos next`, `nikos state set`, `nikos verify`, `nikos approve`
+and `nikos show` work on the assigned stories, by story id, so the same map key in
+two groups never clashes. Status is written to `status/<id>.yaml`, and a delivery
+approval to `approvals/<id>.yaml`. `done` records the commit the scenarios ran
+at, and `approve` refuses when the code has changed since that commit or has
+uncommitted changes. `nikos show` and `nikos validate` warn when code has changed
+since an approval was tested, but an existing approval isn't lapsed by it: a
+commit that only moves the team's own status or approvals doesn't count.
+
+`nikos verify` runs the copies with the team's own step definitions. It lists any
+step in the assigned stories that has no definition yet, as a warning.
+
+A team repo can't also keep `intent/` or `maps/`. The story-writing commands
+(`story`, `step`, `activity`, `release`, `map new`, `tracker import`), the plan
+commands (`join`, `company`, `group`, `decide`) and `assign`, `migrate`, `planning`,
+`start` and `init` are refused there, each with the place to run it instead: stories
+are written in the group repo, and a team takes work with `nikos team join`. A team's
+settings are its own `nikos.settings.yaml` for now.
+
+A team's CI runs `nikos sync` before `nikos validate` and `nikos verify`, since the
+assigned stories are gitignored and a fresh checkout has none. `nikos ci setup` adds
+that step to a team repo. The CI job also needs git read access to each group repo: a
+private group needs a token that can clone it, which the job's default token may not
+be. `nikos verify` with no story id says when nothing is synced.
+
+`nikos doctor` in a team repo says which groups are synced, which have moved on,
+and suggests a CODEOWNERS rule for the lead's approvals.
 
 ## A plan-only repo
 

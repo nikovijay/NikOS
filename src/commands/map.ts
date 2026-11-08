@@ -6,11 +6,11 @@ import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { approvalLapse, loadApprovals } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
-import { NO_GROUP_KEY, groupKeyOf, mapDirs, resolveStoryMap } from "../lib/maps.js";
+import { NO_GROUP_KEY, groupKeyOf, homeOf, mapDirs, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 
 export interface MapCriterion {
   id: string;
@@ -105,15 +105,20 @@ function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
 export function storyMapOf(dir: string, mapId?: string): StoryMap {
   // Several maps and none picked: an empty map, so the dashboard and MCP still answer.
   if (!mapId && mapDirs(dir).length > 1) return { project: "", key: "", personas: [], activities: [], releases: [], unreleased: [] };
-  const intent = resolveStoryMap(dir, mapId).dir;
+  return storyMapOfRef(resolveStoryMap(dir, mapId));
+}
+
+/** The story map a resolved reference points at: its storymap, features and every story's status. */
+export function storyMapOfRef(ref: StoryMapRef): StoryMap {
+  const intent = ref.dir;
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
   const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
-    loadStates(intent);
-  const approvals = loadApprovals(intent);
+    loadStates(homeOf(ref));
+  const approvals = loadApprovals(homeOf(ref));
   // Approved is shown as a status: done, plus an approval that still holds.
   const approvedBy = (id: string, hash?: string) => {
     const a = approvals[id];
-    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
+    return a && !(ref.team ? teamApprovalLapse(a as DeliveryApproval, states[id], hash) : approvalLapse(a, states[id], hash)) ? a.by : "";
   };
   const stateOf = (id: string, deps: string[], hash?: string) => {
     const st = states[id] ?? {};

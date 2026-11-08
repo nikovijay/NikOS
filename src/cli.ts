@@ -27,6 +27,10 @@ import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
 import { runPlanning } from "./planning/cli.js";
 import { runServeCommand } from "./commands/serve.js";
+import { runAssign } from "./commands/assign.js";
+import { runTeam } from "./commands/team.js";
+import { runTeamSync } from "./team/sync.js";
+import { isTeamRepo, TEAM_REPO_STORIES } from "./lib/team.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -60,7 +64,21 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   export: runExport,
   planning: runPlanning,
   serve: runServeCommand,
+  assign: runAssign,
+  team: runTeam,
+  sync: runTeamSync,
 };
+
+/** Why a team repo refuses a command that writes a group's stories or plan: each names where the work is done. */
+function teamRefusal(cmd: string): string {
+  if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release" || cmd === "map") return TEAM_REPO_STORIES;
+  if (cmd === "assign") return "this is a team repo: assignments are made in the group repo";
+  if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
+  return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
+}
+
+/** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
+const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "assign", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout"]);
 
 const help = `nikos — spec-driven development for AI coding agents
 
@@ -123,6 +141,12 @@ Commands:
                    (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
+  assign "<team>" --repo <path|.>  Give a team all or part of a group's story map
+                   (--activities, --releases or --stories; --map, --include-done)
+  team init|join|member|show  A team repo: its name, the groups it takes work from, its members
+                   (team init --repo owner/repo, team join <group repo>, team member add "<name>")
+  sync             In a team repo: fetch the stories assigned to it, read-only, into
+                   .nikos/assigned/ (gitignored)
 
   --version        Print the installed version
 
@@ -141,6 +165,17 @@ async function main(argv: string[]): Promise<number> {
   const run = commands[cmd];
   if (!run) {
     console.error(`Unknown command '${cmd}'.\n\n${help}`);
+    return 1;
+  }
+  // `nikos map` alone writes the page, which a team can have; `map new` writes a map.
+  const authoring = GROUP_ONLY.has(cmd) && !(cmd === "map" && rest[0] !== "new");
+  const at = rest.indexOf("--dir");
+  if (at >= 0 && !rest[at + 1]) {
+    console.error("✗ --dir needs a folder: --dir <path>");
+    return 1;
+  }
+  if (authoring && isTeamRepo(at >= 0 ? rest[at + 1] : process.cwd())) {
+    console.error(`✗ ${teamRefusal(cmd)}`);
     return 1;
   }
   return run(rest);

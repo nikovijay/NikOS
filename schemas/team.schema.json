@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/team.schema.json",
+  "title": "nikOS team",
+  "type": "object",
+  "required": ["format_version", "name", "repo"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "repo": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$" },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["repo"],
+        "additionalProperties": false,
+        "properties": {
+          "repo": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$" },
+          "ref": { "type": "string", "minLength": 1 },
+          "host": { "type": "string", "pattern": "^[A-Za-z0-9.-]+(:[0-9]+)?$" },
+          "url": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[^@]+$" },
+          "role": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "handle": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,38}$" }
+        }
+      }
+    }
+  }
+}

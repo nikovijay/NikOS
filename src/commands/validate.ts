@@ -7,16 +7,23 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { groupKeyOf, mapDirs, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { assignedMaps, groupKeyOf, mapDirs, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
 import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
+import { ASSIGNMENTS, checkAssignments, loadMapData, mapStoryIds, readAssignments, storiesOf } from "../lib/assignments.js";
+import { TEAM_FILE, clashingGroups, isTeamRepo, openTeam, relPath, storyMapClash, type TeamFile } from "../lib/team.js";
+import { schemaProblems } from "../lib/schema.js";
+import { codeChangedSince } from "../lib/git.js";
+import { groupStatus } from "../team/sync.js";
 
 export interface Issue {
   file: string;
   message: string;
   hint?: string;
+  /** A delivery approval that no longer holds: `state set` reports it as a warning, since the move itself worked. */
+  lapse?: boolean;
 }
 
 export interface ValidationResult {
@@ -81,8 +88,12 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
   }
 }
 
-/** Check one story map: intent/, or maps/<id> with --map (or the group's only map). */
-export function validate(start: string, map?: string): ValidationResult {
+/**
+ * Check one story map: intent/, or maps/<id> with --map (or the group's only map). A team repo is
+ * checked as a team: its group copies, its status and its delivery approvals.
+ */
+export function validate(start: string, map?: string, opts: { remote?: boolean } = {}): ValidationResult {
+  if (isTeamRepo(start)) return validateTeam(start, opts);
   return validateMap(resolveStoryMap(start, map));
 }
 
@@ -118,17 +129,47 @@ export function validateGroup(root: string): ValidationResult {
     warnings.push(...r.warnings);
     stories += r.stories;
     releases += r.releases;
+    checkMapAssignments(dir, id, errors, warnings);
   }
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
+}
+
+/**
+ * A map's assignments.yaml, when it has one: its schema, each selector against the map, and a
+ * story held by two teams. Stories nobody holds yet are warnings: a new map has no file at all.
+ */
+function checkMapAssignments(dir: string, id: string, errors: Issue[], warnings: Issue[]): void {
+  const file = `maps/${id}/${ASSIGNMENTS}`;
+  if (!store().exists(join(dir, ASSIGNMENTS))) return;
+  let list;
+  try {
+    list = readAssignments(dir);
+  } catch (err) {
+    errors.push({ file, message: (err as Error).message.replace(`${ASSIGNMENTS}: `, "") });
+    return;
+  }
+  let map;
+  try {
+    map = loadMapData(dir);
+  } catch {
+    return; // validateMap reports the storymap's own problems
+  }
+  for (const message of checkAssignments(map, list, `maps/${id}`).errors) errors.push({ file, message });
+  const held = new Set(list.flatMap((a) => storiesOf(map, a)));
+  for (const story of mapStoryIds(map)) {
+    if (!held.has(story)) warnings.push({ file, message: `${story} has no team yet`, hint: `nikos assign "<team>" --repo <path> --map ${id}` });
+  }
 }
 
 function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
+  // A team's copy has no state.yaml or approvals: the team's status is checked by validateTeam.
+  const team = ref.team === true;
 
   const storymap = loadYaml(dir, "storymap.yaml", errors);
-  const state = loadYaml(dir, "state.yaml", errors);
+  const state = team ? undefined : loadYaml(dir, "state.yaml", errors);
 
   if (storymap !== undefined && !checkStorymap(storymap)) {
     for (const e of checkStorymap.errors ?? []) {
@@ -295,7 +336,7 @@ function validateMap(ref: StoryMapRef): ValidationResult {
 
   // Approvals are optional: approvals.yaml (or approvals/<ID>.yaml) appears with the first sign-off.
   const signoffs: { id: string; a: Approval; file: string; key: string }[] = [];
-  if (store().exists(join(dir, "approvals.yaml"))) {
+  if (!team && store().exists(join(dir, "approvals.yaml"))) {
     const approvals = loadYaml(dir, "approvals.yaml", errors);
     if (approvals !== undefined && !checkApprovals(approvals)) {
       for (const e of checkApprovals.errors ?? []) {
@@ -306,7 +347,7 @@ function validateMap(ref: StoryMapRef): ValidationResult {
       for (const [id, a] of Object.entries(approvals.approvals ?? {}) as [string, Approval][]) signoffs.push({ id, a, file: "approvals.yaml", key: `approvals.${id}` });
     }
   }
-  for (const f of storyFiles(approvalsDir(dir))) {
+  for (const f of team ? [] : storyFiles(approvalsDir(dir))) {
     const file = `approvals/${f.id}.yaml`;
     const a = loadYaml(dir, file, errors);
     if (a === undefined) continue;
@@ -336,6 +377,7 @@ function validateMap(ref: StoryMapRef): ValidationResult {
     const file = featureIds.get(id)!;
     for (const dep of deps) {
       if (dep === id) errors.push({ file, message: `${id} depends on itself` });
+      else if (!featureIds.has(dep) && !mapStories.has(dep) && team) warnings.push({ file, message: `${id} depends on ${dep}, which isn't in this team's assigned stories`, hint: `nikos next doesn't wait on ${dep} here: check with the team that holds it` });
       else if (!featureIds.has(dep) && !mapStories.has(dep)) errors.push({ file, message: `@depends-${dep} names a story that doesn't exist` });
       else if (statusOf(dep) === "cancelled" && !isDone(statusOf(id))) warnings.push({ file, message: `${id} depends on ${dep}, which is cancelled`, hint: `drop the @depends-${dep} tag, or bring ${dep} back with nikos state set ${dep} todo` });
       else if ((mapStories.get(dep) ?? 0) > (mapStories.get(id) ?? Infinity)) {
@@ -380,6 +422,96 @@ function validateMap(ref: StoryMapRef): ValidationResult {
   return { dir, errors, warnings, stories: mapStories.size, releases: storymap?.releases?.length ?? 0 };
 }
 
+/**
+ * A team repo: its nikos.team.yaml, each group it takes work from (synced or not), the copies of
+ * the assigned stories, and the team's own status and delivery approvals for them. remote also
+ * asks each group whether it has moved on since the last sync.
+ */
+export function validateTeam(root: string, opts: { remote?: boolean } = {}): ValidationResult {
+  const errors: Issue[] = [];
+  const warnings: Issue[] = [];
+  let team: TeamFile | undefined;
+  try {
+    team = openTeam(root);
+  } catch (err) {
+    errors.push({ file: TEAM_FILE, message: (err as Error).message.replace(`${TEAM_FILE}: `, "") });
+  }
+  const clash = storyMapClash(root);
+  if (clash) errors.push({ file: "intent/ or maps/", message: clash, hint: "a team repo takes its stories from a group repo; moving a repo that has its own story map isn't supported yet" });
+  const nested = clashingGroups(team?.groups.map((g) => g.repo) ?? []);
+  if (nested) errors.push({ file: TEAM_FILE, message: `${nested[0]} and ${nested[1]} can't both be groups: one path sits inside the other` });
+
+  for (const g of team?.groups ?? []) {
+    const st = groupStatus(root, g, { remote: opts.remote });
+    if (!st.synced) {
+      warnings.push({ file: TEAM_FILE, message: `group ${g.repo}: not synced yet`, hint: "run nikos sync" });
+      continue;
+    }
+    if (st.moved) warnings.push({ file: TEAM_FILE, message: `group ${g.repo} moved since the last sync`, hint: "run nikos sync" });
+  }
+
+  // Each copy is a map, checked as one; a story id can be in one copy only.
+  const owner = new Map<string, string>();
+  const hashes = new Map<string, string>();
+  let releases = 0;
+  for (const ref of assignedMaps(root)) {
+    const prefix = relPath(root, ref.dir);
+    const r = validateMap(ref);
+    for (const e of r.errors) errors.push({ ...e, file: `${prefix}/${e.file}` });
+    for (const w of r.warnings) warnings.push({ ...w, file: `${prefix}/${w.file}` });
+    releases += r.releases;
+    for (const f of loadMapData(ref.dir).features) {
+      if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two synced copies`, hint: "run nikos sync, or assign the story to one team" });
+      owner.set(f.id, prefix);
+      hashes.set(f.id, specHash(f.text));
+    }
+  }
+
+  for (const f of storyFiles(join(root, "status"))) {
+    const file = `status/${f.id}.yaml`;
+    const entry = loadYaml(root, file, errors);
+    if (entry === undefined) continue;
+    const statusProblems = schemaProblems("status.schema.json", entry);
+    if (statusProblems.length) {
+      for (const message of statusProblems) errors.push({ file, message });
+      continue;
+    }
+    if (!owner.has(f.id)) {
+      // A story that moved to another team is kept as history, marked; nothing else to say.
+      if (!entry.reassigned_to) warnings.push({ file, message: `${f.id} has status but isn't in any synced copy`, hint: "nikos sync will mark it reassigned, if another team has it" });
+      continue;
+    }
+    const hash = hashes.get(f.id);
+    if (isDone(entry.status) && entry.spec_hash && hash && entry.spec_hash !== hash) {
+      warnings.push({ file, message: `${f.id} changed after it was ${entry.status}`, hint: `if the change matters, move it back: nikos state set ${f.id} needs_rework` });
+    }
+  }
+
+  const members = new Set((team?.members ?? []).map((m) => m.name));
+  for (const f of storyFiles(join(root, "approvals"))) {
+    const file = `approvals/${f.id}.yaml`;
+    const a = loadYaml(root, file, errors);
+    if (a === undefined) continue;
+    const deliveryProblems = schemaProblems("delivery-approval.schema.json", a);
+    if (deliveryProblems.length) {
+      for (const message of deliveryProblems) errors.push({ file, message });
+      continue;
+    }
+    const st = loadYaml(root, `status/${f.id}.yaml`, []);
+    const tested = st?.evidence?.commit;
+    if (tested !== a.tested_commit) {
+      errors.push({ file, message: `approval is for commit ${a.tested_commit.slice(0, 7)}, but the story was tested at ${tested ? String(tested).slice(0, 7) : "no commit"}`, hint: `approve it again after the story is done at this commit`, lapse: true });
+    }
+    const hash = hashes.get(f.id);
+    if (hash && a.spec_hash !== hash) errors.push({ file, message: `approval is for spec ${a.spec_hash}, the story is now ${hash}`, hint: `once it's done again, approve it again`, lapse: true });
+    // The approval holds for the code it tested; code committed after that is what approve refuses, so show it here too.
+    if (codeChangedSince(root, a.tested_commit)) warnings.push({ file, message: `${f.id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${f.id} needs_rework, then done, then approve` });
+    if (!members.has(a.by)) warnings.push({ file, message: `approved by ${a.by}, who isn't listed in nikos.team.yaml`, hint: "add them with nikos team member add, or check who approved it" });
+  }
+
+  return { dir: root, errors, warnings, stories: owner.size, releases, label: TEAM_FILE };
+}
+
 /** Each dependency loop once, starting from its first story in file order. */
 function dependencyLoops(deps: Map<string, string[]>): string[][] {
   const loops: string[][] = [];
@@ -416,8 +548,12 @@ export function runValidate(args: string[]): number {
   const i = args.indexOf("--map");
   const start = args[0] && !args[0].startsWith("--") ? args[0] : process.cwd();
   try {
-    // A group with maps/ and no --map checks every map, and the group's own rules.
-    const r = !(i >= 0) && mapDirs(start).length ? validateGroup(start) : validate(start, i >= 0 ? args[i + 1] : undefined);
+    // A team checks its copies and status; a group with maps/ and no --map checks every map and the group's own rules.
+    const r = isTeamRepo(start)
+      ? validateTeam(start, { remote: true })
+      : !(i >= 0) && mapDirs(start).length
+        ? validateGroup(start)
+        : validate(start, i >= 0 ? args[i + 1] : undefined);
     console.log(formatResult(r));
     return r.errors.length ? 1 : 0;
   } catch (err) {

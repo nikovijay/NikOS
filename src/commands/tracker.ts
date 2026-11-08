@@ -4,13 +4,13 @@
 // - a ticket can approve a story (when tracker.approvals is on) or cancel it, never mark it
 //   done: done still means the story's scenarios pass;
 // - for everything else, nikOS says which tickets should move, and the agent moves them.
-import { resolveStoryMap } from "../lib/maps.js";
+import { authoringMap, homeOf, resolveStoryMap, storyMapFor, type StoryMapRef } from "../lib/maps.js";
 import { STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { approve } from "./approve.js";
-import { storyMapOf } from "./map.js";
+import { storyMapOfRef } from "./map.js";
 import { setState, StateError } from "./state.js";
 import { newStory } from "./story.js";
 import { newActivity } from "./step.js";
@@ -27,16 +27,24 @@ function trackerOf(root: string) {
   };
 }
 
-const rootOf = (dir: string, mapId?: string) => resolveStoryMap(dir, mapId).root;
-
-/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in state.yaml. */
+/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in state.yaml (or the team's status/). */
 export function linkTicket(input: { id: string; ticket: string; map?: string }, dir: string) {
   if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const ticket = input.ticket.trim();
   if (!ticket) throw new Error("Give the ticket's key or number, e.g. PAY-123");
-  const intent = resolveStoryMap(dir, input.map).dir;
-  if (!storyState(intent, input.id)) throw new Error(noEntry(intent, input.id));
-  updateStory(intent, input.id, (doc, at) => doc.setIn([...at, "ticket"], ticket));
+  const ref = storyMapFor(dir, { story: input.id, map: input.map });
+  const home = homeOf(ref);
+  if (!storyState(home, input.id) && !ref.team) throw new Error(noEntry(home, input.id));
+  updateStory(
+    home,
+    input.id,
+    (doc, at) => {
+      // A team's first link creates its status file, which starts at todo.
+      if (!doc.getIn([...at, "status"])) doc.setIn([...at, "status"], "todo");
+      doc.setIn([...at, "ticket"], ticket);
+    },
+    { create: !!ref.team },
+  );
   return { id: input.id, ticket };
 }
 
@@ -56,28 +64,29 @@ export interface RecordResult {
  * compared, because nikOS's own status comes from the story's scenarios.
  */
 export function recordTicket(input: { id: string; status: string; by?: string; on?: string; map?: string }, dir: string): RecordResult {
-  const root = rootOf(dir, input.map);
+  const ref = storyMapFor(dir, { story: input.id, map: input.map });
+  const root = ref.root;
   const t = trackerOf(root);
   if (t.system === "none") throw new Error("No tracker is set up here: set tracker.system first (nikos settings set tracker.system jira)");
   const means = t.statuses[input.status];
   if (!means) {
     throw new Error(`'${input.status}' isn't mapped to a nikOS status. Mapped: ${Object.keys(t.statuses).join(", ") || "none"}. Map it first: nikos settings set tracker.statuses '{"${input.status}": "done"}'`);
   }
-  const story = storyMapOf(root, input.map).releases.flatMap((r) => r.stories).find((s) => s.id === input.id);
+  const story = storyMapOfRef(ref).releases.flatMap((r) => r.stories).find((s) => s.id === input.id);
   if (!story) throw new Error(`${input.id} is not in any release in storymap.yaml`);
-  const ticket = storyTicket(root, input.id, input.map);
+  const ticket = storyTicket(ref, input.id);
   const base = { id: input.id, ...(ticket ? { ticket } : {}), means };
 
   if (means === "approved") {
     if (!t.approvals) return { ...base, outcome: "ignored", message: `${t.system} says approved, but tracker approvals don't count here (tracker.approvals is off)` };
     if (story.status === "approved") return { ...base, outcome: "in step", message: `${input.id} is already approved` };
     if (!input.by) throw new Error(`Say who moved the ticket to '${input.status}' (--by), as the tracker's history shows it`);
-    approve(input.id, { dir, by: input.by, date: input.on, via: "tracker" });
+    approve(input.id, { dir, map: input.map, by: input.by, date: input.on, via: "tracker" });
     return { ...base, outcome: "approved", message: `${input.id} approved by ${input.by} in ${t.system}${ticket ? ` (${ticket})` : ""}` };
   }
   if (means === "cancelled") {
     if (story.status === "cancelled") return { ...base, outcome: "in step", message: `${input.id} is already cancelled` };
-    setState(input.id, "cancelled", { dir, reason: `Cancelled in ${t.system}${ticket ? ` (${ticket})` : ""}${input.by ? ` by ${input.by}` : ""}`, date: input.on });
+    setState(input.id, "cancelled", { dir, map: input.map, reason: `Cancelled in ${t.system}${ticket ? ` (${ticket})` : ""}${input.by ? ` by ${input.by}` : ""}`, date: input.on });
     return { ...base, outcome: "cancelled", message: `${input.id} cancelled, as ${t.system} says` };
   }
   const nikos = story.status === "approved" ? "done" : story.status;
@@ -89,8 +98,8 @@ export function recordTicket(input: { id: string; status: string; by?: string; o
   };
 }
 
-function storyTicket(root: string, id: string, mapId?: string): string | undefined {
-  const v = storyState(resolveStoryMap(root, mapId).dir, id)?.ticket;
+function storyTicket(ref: StoryMapRef, id: string): string | undefined {
+  const v = storyState(homeOf(ref), id)?.ticket;
   return typeof v === "string" ? v : undefined;
 }
 
@@ -104,13 +113,13 @@ export interface TicketMove {
 
 /** For each linked story, the tracker status its ticket should be in. The agent moves the tickets. */
 export function ticketMoves(dir: string, mapId?: string): TicketMove[] {
-  const root = rootOf(dir, mapId);
-  const t = trackerOf(root);
-  const stories = storyMapOf(root, mapId).releases.flatMap((r) => r.stories);
+  const ref = resolveStoryMap(dir, mapId);
+  const t = trackerOf(ref.root);
+  const stories = storyMapOfRef(ref).releases.flatMap((r) => r.stories);
   const statusFor = (s: NikosStatus) => Object.entries(t.statuses).find(([, v]) => v === s)?.[0] ?? (s === "approved" ? Object.entries(t.statuses).find(([, v]) => v === "done")?.[0] : undefined);
   const out: TicketMove[] = [];
   for (const s of stories) {
-    const ticket = storyTicket(root, s.id, mapId);
+    const ticket = storyTicket(ref, s.id);
     const status = statusFor(s.status as NikosStatus);
     if (ticket && status) out.push({ id: s.id, ticket, nikos: s.status as NikosStatus, status });
   }
@@ -131,8 +140,9 @@ export interface ImportedTicket {
  * linked are skipped. Stories start as todo: their scenarios still have to be written.
  */
 export function importTickets(tickets: ImportedTicket[], dir: string, opts: { release?: number; map?: string } = {}) {
-  const root = rootOf(dir, opts.map);
-  const linked = new Set(storyMapOf(root, opts.map).releases.flatMap((r) => r.stories).map((s) => storyTicket(root, s.id, opts.map)).filter(Boolean));
+  // Tickets become stories, which are authored in the group repo: a team repo is refused before anything is read.
+  const ref = authoringMap(dir, opts.map);
+  const linked = new Set(storyMapOfRef(ref).releases.flatMap((r) => r.stories).map((s) => storyTicket(ref, s.id)).filter(Boolean));
   const added: { id: string; ticket: string }[] = [];
   const skipped: string[] = [];
   for (const t of tickets) {

@@ -120,6 +120,9 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
+| `nikos team init\|join\|member\|show` | Make a code repo a team repo, take work from a group, manage its members ([docs/planning.md](docs/planning.md#teams)) |
+| `nikos assign "<team>" --repo <path>` | In a group repo, give a team all or part of a story map |
+| `nikos sync` | In a team repo, fetch the stories assigned to it, read-only |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |

@@ -1,9 +1,10 @@
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
-import { resolveStoryMap } from "../lib/maps.js";
+import { homeOf, storyMapFor } from "../lib/maps.js";
+import { codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
-import { verify } from "./verify.js";
+import { verify, type VerifyResult } from "./verify.js";
 
 export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancelled";
 
@@ -27,6 +28,8 @@ export interface StateResult {
   failing: string[];
   /** The runner's output when it gated the move. */
   output?: string;
+  /** A team repo with changes not yet committed: the proof is for the commit, not these changes. */
+  dirty?: boolean;
 }
 
 /** Scenario names from a cucumber-js or behave run that didn't pass. */
@@ -80,17 +83,19 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   if ((to as string) === "approved") throw new StateError(`Approval isn't a status: a person approves ${story} with nikos approve, or by reviewing a change to intent/approvals.yaml`);
   if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (${Object.keys(MOVES).join(", ")})`);
   if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
-  const ref = resolveStoryMap(opts.dir ?? process.cwd(), opts.map);
-  const intentDir = ref.dir;
-  const from = storyState(intentDir, story)?.status as Status | undefined;
-  if (!from) throw new StateError(noEntry(intentDir, story));
+  const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
+  const home = homeOf(ref);
+  // In a team repo a story with no status file is todo: its first move creates the file.
+  const from = (storyState(home, story)?.status ?? (ref.team ? "todo" : undefined)) as Status | undefined;
+  if (!from) throw new StateError(noEntry(home, story));
   if (!MOVES[from]?.includes(to)) {
     throw new StateError(`${story} can't move from ${from} to ${to}. From ${from} it can move to: ${MOVES[from].join(", ")}`);
   }
 
   const result: StateResult = { story, from, to, failing: [] };
+  let run: VerifyResult | undefined;
+  let commit: string | undefined;
   if (to === "done") {
-    let run;
     try {
       run = verify(ref.root, story, { map: ref.id });
     } catch (err) {
@@ -106,11 +111,17 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
       throw new StateError(`${story} stays ${from}: its scenarios don't all pass${list}`, result);
     }
     result.output = run.output;
+    if (ref.team) {
+      // The proof is for the commit it ran at, so approval can check nothing has changed since.
+      commit = headOf(ref.root);
+      if (!commit) throw new StateError(`${story} stays ${from}: this team repo has no commit yet. Commit first, so the proof has a commit to point at`, result);
+      result.dirty = codeIsDirty(ref.root);
+    }
   }
 
   const feature = featureFor(story, ref.root, ref.id);
   // A Document keeps comments and the order of everything we don't touch.
-  updateStory(intentDir, story, (doc, entry) => {
+  updateStory(home, story, (doc, entry) => {
     doc.setIn([...entry, "status"], to);
     if (opts.by && to === "in_progress") doc.setIn([...entry, "claimed_by"], opts.by);
     if (to === "done") {
@@ -118,11 +129,15 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
       // marks this done, so an approval of an earlier done doesn't carry over.
       if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
       doc.setIn([...entry, "done_at"], opts.now ?? new Date().toISOString());
+      if (ref.team && commit && run) {
+        doc.setIn([...entry, "tested_commit"], commit);
+        doc.setIn([...entry, "evidence"], { run_at: opts.now ?? new Date().toISOString(), runner: run.stack === "python" ? "behave" : "cucumber", commit, ok: true });
+      }
     }
     if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
     else doc.deleteIn([...entry, "cancelled_reason"]);
     doc.setIn([...entry, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
-  });
+  }, { create: !!ref.team });
   return result;
 }
 
@@ -139,15 +154,19 @@ export function runState(args: string[]): number {
   try {
     const r = setState(story, to as Status, { dir: opt("dir"), map: opt("map"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
+    if (r.dirty) console.log("! The code has uncommitted changes. The proof is for the last commit, not for them: commit the code, then run its scenarios again.");
   } catch (err) {
     const e = err as StateError;
     if (e.result?.output && !e.result.failing.length) console.error(e.result.output);
     console.error(`✗ ${e.message}`);
     return 1;
   }
-  const v = validate(opt("dir") ?? process.cwd(), opt("map"));
-  if (v.errors.length) {
-    console.error(formatResult(v));
+  const v = validate(opt("dir") ?? process.cwd(), opt("map"), { remote: false });
+  // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
+  for (const w of v.errors.filter((e) => e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
+  const blocking = { ...v, errors: v.errors.filter((e) => !e.lapse) };
+  if (blocking.errors.length) {
+    console.error(formatResult(blocking));
     return 1;
   }
   return 0;

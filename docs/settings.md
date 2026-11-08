@@ -82,6 +82,10 @@ department's company plan, so company settings reach every level. Each copy is
 read-only, in `.nikos/upstream/` (gitignored), and `planning/upstream.lock`
 records the commit each one was read at.
 
+A team repo (`nikos.team.yaml`, see [Teams](planning.md#teams)) is separate from
+that chain. It reads only its own `nikos.settings.yaml` for now, so company and
+group locks don't reach it until a later release.
+
 Resolution goes from the top down: the defaults, then each level from the
 company down, then this repo. A locked value stays as the level that locked it
 set it.

@@ -1,6 +1,37 @@
 # RFC: plans, bets, story maps and team assignments
 
-**Status:** draft, for review. Design only: nothing here is built yet.
+**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below.
+
+## PR 3 status
+
+Built: `nikos team init|join|member|show`, `nikos assign`, `nikos sync`, team-side `next`,
+`state set`, `approve`, `show`, `verify` and the tracker, team `validate` and `doctor`, and the
+runner paths. Not in PR 3: `nikos map status` and the group reading team status (PR 4), bets
+delivered from team status (PR 4), the dashboard's editing (PR 5), `nikos migrate maps`, and team
+repos with `intent/` (PR 6).
+
+Where the build differs from this RFC:
+
+- **`groups:` is a list** in `nikos.team.yaml`, since a team can take work from several groups.
+- **`stories:` is a selector** next to `activities:` and `releases:`, so a held part of a map can
+  be split by story. Still at most one selector per entry.
+- **The team's identity is `repo:`** in `nikos.team.yaml`, and assignments match on that path.
+  `--repo .` means the group repo is its own team: its stories are verified in place, with no copy
+  and no `status/`. Its state and approvals are the group map's own, so intent and delivery
+  approval share one file there.
+- **Changing an assignment** records the old team's mark in its committed `status/` file
+  (`reassigned_to`, `reassigned_on`), not in the gitignored copy, which is rebuilt each sync.
+- **Approval is gated on the code, not the HEAD.** `nikos approve` refuses when code (outside a
+  team's own `status/`, `approvals/` and `.nikos/`) has changed since the commit the scenarios ran
+  at. Requiring HEAD to equal that commit would refuse every approval made after the status file
+  was committed.
+- **The runners.** A folder given to behave on the command line replaces the paths in its config.
+  So a team repo's `nikos verify` passes its assigned copies (`.nikos/assigned`), and every other
+  repo keeps the paths its behave.ini names, as before. The cucumber configs list the new glob in
+  `paths`.
+- **A team repo can't keep `intent/` or `maps/`** until PR 6 moves them.
+- **Team settings are the team's own file** for now: company and group locks don't reach a team
+  until PR 4.
 
 ## Summary
 

@@ -15,11 +15,13 @@
 import { spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
-import { approvalLapse, doneMark, loadApprovals } from "../lib/approvals.js";
+import { approvalLapse, doneMark, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
 import { noEntry, storyState, writeApproval } from "../lib/state-files.js";
 import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
-import { resolveStoryMap } from "../lib/maps.js";
+import { homeOf, storyMapFor } from "../lib/maps.js";
+import { codeChangedSince, codeIsDirty, headOf } from "../lib/git.js";
+import { isTeamRepo } from "../lib/team.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
@@ -41,8 +43,8 @@ export type Via = "terminal" | "chat" | "app" | "tracker";
 
 export function approve(story: string, opts: { dir?: string; map?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const ref = resolveStoryMap(opts.dir ?? process.cwd(), opts.map);
-  const intentDir = ref.dir;
+  const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
+  const home = homeOf(ref);
   const settings = resolveSettings(ref.root);
   const policy = settings["approval.policy"];
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
@@ -53,8 +55,9 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (via !== "tracker" && !(routes.value as ApprovalRoute[]).includes(via)) {
     throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
   }
-  const entry = storyState(intentDir, story);
-  if (!entry) throw new StateError(noEntry(intentDir, story));
+  // A team's story with no status file is todo, so it's refused below as not done.
+  const entry = storyState(home, story) ?? (ref.team ? { status: "todo" } : undefined);
+  if (!entry) throw new StateError(noEntry(home, story));
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
   const feature = featureFor(story, ref.root, ref.id);
   const hash = feature ? specHash(read(feature)) : undefined;
@@ -62,8 +65,21 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (entry.spec_hash && entry.spec_hash !== hash) {
     throw new StateError(`${story}'s feature changed after it was done. Move it to needs_rework and through done again before approving`);
   }
-  const existing = loadApprovals(intentDir)[story];
-  if (existing && !approvalLapse(existing, entry, hash)) throw new StateError(`${story} is already approved (by ${existing.by} on ${existing.on})`);
+  // A team approves the code it tested: no code may have changed since the commit the proof ran at.
+  // A commit that only moves the team's own status or approvals doesn't count.
+  const tested = entry.evidence?.commit ?? entry.tested_commit;
+  // Uncommitted code isn't any commit: the proof ran on it, so it can't be approved at a commit.
+  if (ref.team && codeIsDirty(ref.root)) {
+    throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again with nikos state set ${story} needs_rework, then done`);
+  }
+  if (ref.team && (!tested || codeChangedSince(ref.root, tested))) {
+    const head = headOf(ref.root);
+    throw new StateError(`${story} was tested at ${tested?.slice(0, 7) ?? "no commit"}, and the code has changed since (HEAD is ${head?.slice(0, 7) ?? "no commit"}): run its scenarios again with nikos state set ${story} needs_rework, then done`);
+  }
+  const existing = loadApprovals(home)[story];
+  if (existing && !(ref.team ? teamApprovalLapse(existing as DeliveryApproval, entry, hash) : approvalLapse(existing, entry, hash))) {
+    throw new StateError(`${story} is already approved (by ${existing.by} on ${existing.on})`);
+  }
 
   let run;
   try {
@@ -77,7 +93,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   }
 
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
-  writeApproval(intentDir, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry) });
+  writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(ref.team ? { tested_commit: tested } : {}) });
   return { story, by: opts.by, on };
 }
 
@@ -118,7 +134,9 @@ export async function runApprove(args: string[]): Promise<number> {
   for (const story of stories) {
     try {
       approve(story, { dir, map, by, via });
-      console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (intent/approvals.yaml)`);
+      // A team's approval is per story, in approvals/; a repo's own sits in intent/approvals.yaml.
+      const where = isTeamRepo(dir) ? `approvals/${story}.yaml` : "intent/approvals.yaml";
+      console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (${where})`);
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);
       failed++;

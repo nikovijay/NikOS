@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { featureStoryIds, read, rel, walk } from "../lib/project.js";
-import { resolveStoryMap, mapFlag } from "../lib/maps.js";
+import { storyMapFor, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 
 export type CheckName = "Clear" | "Lean" | "Executable" | "Accurate" | "Responsible";
@@ -97,7 +97,7 @@ export function formatClear(results: CheckResult[]): string {
 
 /** Find the feature file that carries a story id. */
 export function featureFor(story: string, dir: string, map?: string): string | undefined {
-  return walk(join(resolveStoryMap(dir, map).dir, "features"), ".feature").find((f) => featureStoryIds(read(f)).includes(story));
+  return walk(join(storyMapFor(dir, { story, map }).dir, "features"), ".feature").find((f) => featureStoryIds(read(f)).includes(story));
 }
 
 export function runClear(args: string[]): number {
