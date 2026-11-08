@@ -21,6 +21,12 @@
       "name": "nikos-planning",
       "source": "./tools/planning",
       "description": "The nikOS Planning pack: key results and bets linked to your story map, with check-ins and a local dashboard."
+    },
+    {
+      "name": "nikos-ux",
+      "displayName": "nikOS UX",
+      "source": "./tools/ux",
+      "description": "The nikOS UX pack: a component library page and agent brief, made from the components and tokens you already have."
     }
   ]
 }
