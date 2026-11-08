@@ -95,8 +95,10 @@ export function resolveStoryMap(start: string, map?: string): StoryMapRef {
   }
   const ids = maps.map((d) => basename(d));
   if (map) {
-    if (!ids.includes(map)) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
-    return { root, dir: join(root, "maps", map), id: map };
+    // Folders are the lowercased map key, so --map HR finds maps/hr.
+    const id = ids.find((i) => i === map.toLowerCase());
+    if (!id) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
+    return { root, dir: join(root, "maps", id), id };
   }
   if (ids.length === 1) return { root, dir: maps[0], id: ids[0] };
   throw new Error(`several story maps in maps/ (${ids.join(", ")}): pass --map <id>`);

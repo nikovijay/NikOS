@@ -56,6 +56,13 @@ describe("story map resolver", () => {
     expect(() => resolveStoryMap(two, "ret")).toThrow('no story map "ret" in maps/ (have: chk, pay)');
   });
 
+  it("takes --map case-insensitively, the key map new prints (HR finds maps/hr)", () => {
+    const two = groupRepo(["am", "hr"]);
+    expect(resolveStoryMap(two, "HR").dir).toBe(join(two, "maps", "hr"));
+    expect(resolveStoryMap(two, "HR").id).toBe("hr");
+    expect(() => resolveStoryMap(two, "ret")).toThrow('no story map "ret" in maps/ (have: am, hr)');
+  });
+
   it("takes a map folder passed directly", () => {
     const two = groupRepo(["chk", "pay"]);
     const ref = resolveStoryMap(join(two, "maps", "pay"));

@@ -101,7 +101,8 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
   if (isTeamRepo(root)) throw new Error("this is a team repo: run nikos map status in the group repo");
   const maps = groupMaps(root);
   if (!maps.length) throw new Error("no story maps in maps/: nikos map status runs in a group repo (nikos map new --bet <bet-id> --key <KEY> makes one)");
-  const picked = opts.map ? maps.filter((m) => m.id === opts.map) : maps;
+  const want = opts.map?.toLowerCase();
+  const picked = want ? maps.filter((m) => m.id === want) : maps;
   if (!picked.length) throw new Error(`no story map "${opts.map}" in maps/ (have: ${maps.map((m) => m.id).join(", ")})`);
   const group = { repo: ownRepo(root) ?? basename(resolve(root)), commit: headOf(root) };
   const index = picked.some((m) => m.list.length) ? fetchTeams(root, { offline: opts.offline }) : readTeamIndex(root);

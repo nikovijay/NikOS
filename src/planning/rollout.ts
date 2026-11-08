@@ -340,7 +340,8 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       ...(s.repo ? { repo: s.repo } : {}),
       children: [
         ...(alignsTo.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.k.id)!)).map((c) => krNode(c.s, c.k, next)),
-        ...(betsOn.get(at) ?? []).map(({ s: bs, b }) => betNode(bs, b, next)),
+        // A bet that aligns to another bet is shown under that bet, not again under the key result.
+        ...(betsOn.get(at) ?? []).filter(({ b }) => !(b.aligns_to ?? []).some((r) => betAt.has(r))).map(({ s: bs, b }) => betNode(bs, b, next)),
       ],
     };
   };

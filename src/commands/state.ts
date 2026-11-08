@@ -3,7 +3,7 @@ import { STORY_ID, read, specHash } from "../lib/project.js";
 import { homeOf, storyMapFor } from "../lib/maps.js";
 import { codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
-import { formatResult, validate } from "./validate.js";
+import { validate } from "./validate.js";
 import { verify, type VerifyResult } from "./verify.js";
 
 export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancelled";
@@ -166,10 +166,7 @@ export function runState(args: string[]): number {
   const v = validate(opt("dir") ?? process.cwd(), opt("map"), { remote: false });
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
   for (const w of v.errors.filter((e) => e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
-  const blocking = { ...v, errors: v.errors.filter((e) => !e.lapse) };
-  if (blocking.errors.length) {
-    console.error(formatResult(blocking));
-    return 1;
-  }
+  // The move is written, so a problem found elsewhere is a warning here, not a failed command.
+  for (const w of v.errors.filter((e) => !e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   return 0;
 }

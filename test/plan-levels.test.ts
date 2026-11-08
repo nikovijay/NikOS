@@ -155,8 +155,9 @@ describe("the alignment tree", () => {
     const tree = alignment(co, "acme/company-plan", [payments]);
     const shape = (n: any): any => [`${n.kind} ${n.id}`, ...n.children.map(shape)];
     expect(tree.roots.map(shape)).toEqual([
-      ["kr kr-1", ["kr pay-1", ["bet wallets"]], ["bet one-tap-pay", ["bet wallets"]]],
-      ["kr kr-2", ["kr pay-1", ["bet wallets"]]],
+      // wallets aligns to one-tap-pay, so it is shown only under that bet, not again under pay-1.
+      ["kr kr-1", ["kr pay-1"], ["bet one-tap-pay", ["bet wallets"]]],
+      ["kr kr-2", ["kr pay-1"]],
     ]);
     expect(tree.unaligned).toEqual([]);
     expect(JSON.stringify(tree)).not.toMatch(/progress|checkedIn|stale/);
