@@ -122,6 +122,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos team init\|join\|member\|show` | Make a code repo a team repo, take work from a group, manage its members ([docs/planning.md](docs/planning.md#teams)) |
 | `nikos assign "<team>" --repo <path>` | In a group repo, give a team all or part of a story map |
+| `nikos map status [--map <id>] [--offline] [--json]` | In a group repo, each assigned team's status on each story: fresh or not, its delivery approval, and the group's intent approval |
 | `nikos sync` | In a team repo, fetch the stories assigned to it, read-only |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |

@@ -5,8 +5,8 @@
 // GitHub by default, GitLab (with nested groups) or a self-managed host through `host:`, and
 // anything else through `url:`.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { parse, stringify } from "yaml";
 import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
@@ -79,28 +79,33 @@ export interface SyncReport {
 const MAX_DEPTH = 6;
 
 /**
- * Fetch every upstream plan read-only, and the plans above those: a team that names its
- * department also gets the department's company, so settings and plans reach every level.
- * Unreachable ones are reported, never fatal.
+ * Fetch each upstream plan read-only into the cache, and the plans above those: a team that names
+ * its department also gets the department's company, so settings and plans reach every level.
+ * Returns what was read and what wasn't; writes no lock. Unreachable ones are reported, never fatal.
  */
-export function sync(root: string): SyncReport {
-  ignoreCache(root);
+export function fetchChain(entries: UpstreamEntry[], cache: string, previous: LockEntry[] = []): SyncReport {
   const report: SyncReport = { synced: [], unresolved: [] };
-  const previous = readLock(root);
-  const queue: { entry: UpstreamEntry; depth: number; via?: string }[] = upstreamEntries(root).map((entry) => ({ entry, depth: 1 }));
+  const entryDir = (repo: string) => join(cache, ...repo.split("/"));
+  const queue: { entry: UpstreamEntry; depth: number; via?: string }[] = entries.map((entry) => ({ entry, depth: 1 }));
   const seen = new Set(queue.map((q) => q.entry.repo));
+  const scratch = join(cache, ".fetch");
   while (queue.length) {
     const { entry: e, depth, via } = queue.shift()!;
-    const dir = cacheDir(root, e.repo);
-    const fetched = fetchCopy(e.url, e.ref, dir);
+    const dir = entryDir(e.repo);
+    // Fetch into a scratch folder and swap it in only on success: a failed fetch keeps the last good copy.
+    const fetched = fetchCopy(e.url, e.ref, join(scratch, ...e.repo.split("/")));
     if ("error" in fetched) {
       report.unresolved.push({ repo: e.repo, reason: fetched.error });
       const kept = previous.find((l) => l.repo === e.repo);
-      if (kept) report.synced.push(kept); // keep the last good lock entry; its copy is gone, so refs show as unresolved
-      continue;
+      if (kept) report.synced.push(kept); // the last good lock entry, with the copy it was read at
+    } else {
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(dirname(dir), { recursive: true });
+      renameSync(join(scratch, ...e.repo.split("/")), dir);
+      report.synced.push({ repo: e.repo, ref: e.ref, commit: fetched.commit, synced: today(), ...(via ? { via } : {}) });
     }
-    report.synced.push({ repo: e.repo, ref: e.ref, commit: fetched.commit, synced: today(), ...(via ? { via } : {}) });
-    if (depth >= MAX_DEPTH) continue;
+    // The copy on disk (new, or the last good one) names the plans above it.
+    if (depth >= MAX_DEPTH || !existsSync(dir)) continue;
     let above: UpstreamEntry[] = [];
     try {
       above = upstreamEntries(dir);
@@ -113,6 +118,17 @@ export function sync(root: string): SyncReport {
       queue.push({ entry: up, depth: depth + 1, via: e.repo });
     }
   }
+  rmSync(scratch, { recursive: true, force: true });
+  return report;
+}
+
+/**
+ * Fetch every upstream plan read-only, and the plans above those, into .nikos/upstream/, and
+ * record the commits read in planning/upstream.lock.
+ */
+export function sync(root: string): SyncReport {
+  ignoreCache(root);
+  const report = fetchChain(upstreamEntries(root), paths(root).cache, readLock(root));
   writePlanning(root, paths(root).lock, `# Written by nikos planning sync: the upstream commit each plan was read at.\n${stringify(report.synced)}`);
   return report;
 }

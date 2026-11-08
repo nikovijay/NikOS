@@ -505,7 +505,7 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
     const hash = hashes.get(f.id);
     if (hash && a.spec_hash !== hash) errors.push({ file, message: `approval is for spec ${a.spec_hash}, the story is now ${hash}`, hint: `once it's done again, approve it again`, lapse: true });
     // The approval holds for the code it tested; code committed after that is what approve refuses, so show it here too.
-    if (codeChangedSince(root, a.tested_commit)) warnings.push({ file, message: `${f.id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${f.id} needs_rework, then done, then approve` });
+    if (codeChangedSince(root, a.tested_commit)) warnings.push({ file, message: `${f.id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${f.id} needs_rework, then in_progress, then done, then approve` });
     if (!members.has(a.by)) warnings.push({ file, message: `approved by ${a.by}, who isn't listed in nikos.team.yaml`, hint: "add them with nikos team member add, or check who approved it" });
   }
 

@@ -249,7 +249,9 @@ nikos assign "Checkout web" --repo . --map chk     # the group repo is its own t
 ```
 
 `--activities`, `--releases` and `--stories` pick the part; with none, the team has
-the whole map. Assigning a team more adds to what it has; `--replace` redefines its
+the whole map. `--url` and `--ref` say where the team's repo is and which branch to
+read, when it isn't `https://github.com/<repo>.git` on `main`. They're stored in
+`assignments.yaml` only when given, and a later `nikos assign` keeps them. Assigning a team more adds to what it has; `--replace` redefines its
 part, and lists the stories it gave up. A story belongs to one team. Assigning a story another team holds
 moves it only if it isn't done, and a done story moves only with `--include-done`.
 The new team starts it at todo. `nikos validate` in the group repo lists the
@@ -257,8 +259,9 @@ stories nobody holds yet.
 
 `nikos sync` copies what the team holds into `.nikos/assigned/<group repo>/`:
 the map's storymap (releases keep only the team's stories), the features, the
-bets, and the group's intent approvals. Plans, state and the group's settings
-aren't copied. Each copy is gitignored, and `nikos sync` rebuilds it. A group
+bets, and the group's intent approvals. Plans and state aren't copied. The
+group's `nikos.settings.yaml` and its `planning/upstream.yaml` are, so its locks
+reach the team (see [Settings](settings.md)). Each copy is gitignored, and `nikos sync` rebuilds it. A group
 that can't be reached keeps its last copy. When a story moves to another team,
 the old team's `status/` for it gets `reassigned_to`, and the story leaves its
 `nikos next`.
@@ -280,7 +283,7 @@ A team repo can't also keep `intent/` or `maps/`. The story-writing commands
 commands (`join`, `company`, `group`, `decide`) and `assign`, `migrate`, `planning`,
 `start` and `init` are refused there, each with the place to run it instead: stories
 are written in the group repo, and a team takes work with `nikos team join`. A team's
-settings are its own `nikos.settings.yaml` for now.
+settings are its own `nikos.settings.yaml`, plus the locks of its group and company.
 
 A team's CI runs `nikos sync` before `nikos validate` and `nikos verify`, since the
 assigned stories are gitignored and a fresh checkout has none. `nikos ci setup` adds
@@ -290,6 +293,72 @@ be. `nikos verify` with no story id says when nothing is synced.
 
 `nikos doctor` in a team repo says which groups are synced, which have moved on,
 and suggests a CODEOWNERS rule for the lead's approvals.
+
+### Reading team status
+
+A group repo sees its teams' work with `nikos map status`. It fetches each assigned
+team's repo read-only, takes only its `status/`, `approvals/` and `nikos.team.yaml`,
+and keeps them in `.nikos/teams/<repo>/` (gitignored). Nothing is written to a team's
+repo. For each story it shows the holder's status, and whether the team proved it
+against the story's current feature:
+
+| Freshness | Meaning | What to do |
+| --- | --- | --- |
+| current | The team's status matches the feature. Done stories also show their delivery approval | Nothing. Where approval is required, a done story with no approval is awaiting one |
+| changed | The team proved it done against an older feature | The team runs `nikos sync`, then `nikos state set <id> needs_rework`, then `in_progress`, then `done` |
+| behind | Work in progress was written against an older feature | Run `nikos sync` in the team repo, then `nikos state set <id> needs_rework`, then `in_progress` |
+| unverified | The status has no spec hash, from before hashes were written | Run `nikos sync` in the team repo, then `nikos state set <id> needs_rework`, then `in_progress` |
+| moved | Another team holds it now | The old team runs `nikos sync` to record the move |
+| unassigned | No team holds it | `nikos assign` gives it to a team |
+| not-fetched | The team's repo couldn't be read | Check the repo, then run `nikos map status` |
+| no-status | The team has no status for it yet | The team runs `nikos sync` and starts it with `nikos state set` |
+| in-place | The group holds it itself (`--repo .`) | Nothing: its state is the group's own |
+
+```
+$ nikos map status
+Map chk in acme/payments/checkout-group at 1a2b3c4 (3 stories, 2 teams)
+
+Teams
+  web  acme/checkout-web  fetched 2026-11-08 at 9f8e7d6
+  pay  acme/checkout-pay  fetch failed: repository not found; showing copy from 2026-11-02 at 5c4b3a2
+
+Stories
+  STORY      TEAM  STATUS                              TICKET  DELIVERY         INTENT
+  PAY-CHK-1  web   done, approved by ana 2026-11-03    PAY-12  approved by ana  approved by ana
+  PAY-CHK-2  web   in_progress                         -       -                approved by ana
+  PAY-CHK-3  pay   done (changed)                      -       not approved     -
+
+Needs attention
+  PAY-CHK-3  pay   proved it against an older feature: pay re-verifies and sets done again
+```
+
+Stories with no note are current. `--map <id>` reads one map; `--offline` reads the
+copies from the last fetch, and never asks git; `--json` prints the same data for
+an agent or a script. A team that can't be fetched doesn't fail the command: its
+last good copy is shown, and its row says why. The MCP server has the same view as
+`map_status`.
+
+A story counts as done in a group's delivery only when its team's status is done,
+current, and its delivery approval holds, or approval isn't required here (`approval.policy` is
+`optional`, the default, or `off`). The bet's delivery (`nikos planning status`,
+the dashboard, the rollout) reads the copies from the last fetch, so it doesn't wait
+on the network: it says how many stories await approval, and how many teams it
+couldn't read.
+
+`nikos assign` reads a holder's done state from its copy when it's fetched. The
+refusal names where it read the status and when the copy was fetched. With no copy,
+it checks the group's own `state.yaml` and warns.
+
+Limits:
+
+- A team's copy keeps its feature text as it was, so a change to a feature in the
+  group shows as `changed` or `behind` only once the team has written its status
+  again. An assignment-only change (a story given to another team) shows as moved or
+  no-status, not as behind.
+- The cache is per machine. A new machine has no record of earlier moves, so a move
+  shows as "previous team not fetched" until the first `nikos map status` there.
+- Intent approvals are read, never written, for stories a team holds: a group's
+  approval is `nikos approve` in the group, for its own stories.
 
 ## A plan-only repo
 

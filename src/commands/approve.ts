@@ -70,11 +70,11 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   const tested = entry.evidence?.commit ?? entry.tested_commit;
   // Uncommitted code isn't any commit: the proof ran on it, so it can't be approved at a commit.
   if (ref.team && codeIsDirty(ref.root)) {
-    throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again with nikos state set ${story} needs_rework, then done`);
+    throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
   if (ref.team && (!tested || codeChangedSince(ref.root, tested))) {
     const head = headOf(ref.root);
-    throw new StateError(`${story} was tested at ${tested?.slice(0, 7) ?? "no commit"}, and the code has changed since (HEAD is ${head?.slice(0, 7) ?? "no commit"}): run its scenarios again with nikos state set ${story} needs_rework, then done`);
+    throw new StateError(`${story} was tested at ${tested?.slice(0, 7) ?? "no commit"}, and the code has changed since (HEAD is ${head?.slice(0, 7) ?? "no commit"}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
   const existing = loadApprovals(home)[story];
   if (existing && !(ref.team ? teamApprovalLapse(existing as DeliveryApproval, entry, hash) : approvalLapse(existing, entry, hash))) {

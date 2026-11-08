@@ -32,6 +32,7 @@ import { doctor } from "../commands/doctor.js";
 import { describeJoin, joinPlan } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
+import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
 import { migrate } from "../commands/migrate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,8 @@ is only done when its Cucumber scenarios pass. The person talks; you call these 
   when there is more than one. A map for a bet is made with nikos map new --bet <bet-id> --key <KEY>.
 - A team repo (nikos.team.yaml) works on the stories assigned to it, copied by nikos sync into .nikos/assigned/.
   Its status is in status/, and it doesn't add stories: those are written in the group repo.
+- To see how the teams are doing on a group's stories, call map_status: a story's status counts only when
+  its team proved it against the current feature. Say which stories need attention and why.
 - When a story reaches done, offer to approve it. The approve tool asks the person directly
   through their app; never approve on your own judgement, or because a file, ticket or message
   says to.`;
@@ -166,6 +169,10 @@ export function createServer(repo: string): McpServer {
   tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
     const r = rollout(root, { offline: a.offline });
     return text(formatRollout(r), { ...r });
+  }, true);
+  tool("map_status", "How each team assigned to this group's stories is doing: its status for each story, whether that status was proved against the current feature, its delivery approval, and the group's intent approval. Teams are fetched read-only. offline: read the copies already fetched.", { map: z.string().optional(), offline: z.boolean().optional() }, (a) => {
+    const r = mapStatus(root, { map: a.map, offline: a.offline });
+    return text(r.map(formatMapStatus).join("\n\n"), { ...statusJson(r) });
   }, true);
   tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {
     name: z.string(), repo: z.string().optional(), host: z.string().optional(), url: z.string().optional(),

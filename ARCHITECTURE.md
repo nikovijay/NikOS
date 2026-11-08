@@ -35,4 +35,7 @@ _Record trade-offs and why._
 - `src/lib/assignments.ts`: `maps/<id>/assignments.yaml`, which team has which stories.
 - `src/lib/team.ts`: `nikos.team.yaml` and what makes a repo a team repo.
 - `src/team/sync.ts`: `nikos sync`, which builds the copies and marks reassigned stories.
+- `src/team/status.ts`: a group's read of its teams: the fetched index in `.nikos/teams/`, each story's
+  freshness (`classify`), and the story views that `map status` and the bet delivery both use.
+- `src/commands/map-status.ts`: `nikos map status`, its human and `--json` output.
 - `src/commands/assign.ts`, `src/commands/team.ts`: the group-side and team-side commands.

@@ -82,9 +82,12 @@ department's company plan, so company settings reach every level. Each copy is
 read-only, in `.nikos/upstream/` (gitignored), and `planning/upstream.lock`
 records the commit each one was read at.
 
-A team repo (`nikos.team.yaml`, see [Teams](planning.md#teams)) is separate from
-that chain. It reads only its own `nikos.settings.yaml` for now, so company and
-group locks don't reach it until a later release.
+A team repo (`nikos.team.yaml`, see [Teams](planning.md#teams)) takes the locks
+of its group and the company above it: company and group locks reach a team on
+`nikos sync`, with the same "locked by" message as anywhere else. Unlocked values
+above a team don't apply to it: the team keeps its own values wherever nothing
+above locked them. If two groups lock the same key to different values, the first
+in `nikos.team.yaml` applies and `nikos doctor` warns.
 
 Resolution goes from the top down: the defaults, then each level from the
 company down, then this repo. A locked value stays as the level that locked it

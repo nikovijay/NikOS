@@ -123,6 +123,8 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   // A Document keeps comments and the order of everything we don't touch.
   updateStory(home, story, (doc, entry) => {
     doc.setIn([...entry, "status"], to);
+    // A team's status says which feature it was written against, so the group can tell a stale one.
+    if (ref.team && feature && to !== "done") doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
     if (opts.by && to === "in_progress") doc.setIn([...entry, "claimed_by"], opts.by);
     if (to === "done") {
       // What the scenarios proved: validate warns if the feature changes afterwards. done_at
