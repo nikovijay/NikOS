@@ -262,7 +262,8 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     if (team.home && !joined.includes(team.home) && !team.groups.some((g) => g.repo === team.home)) add({ name: "home", status: "warn", found: `${team.home} is not a plan the team joined`, next: `Join it with nikos join ${team.home} --home` });
   }
   if (team) {
-    if (!team.groups.length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
+    // A team that owns its maps needn't take work from anyone.
+    if (!team.groups.length && !ownMapsOf(root).length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
     for (const g of team.groups) {
       const st = groupStatus(root, g, { remote: !opts.offline });
       if (!st.synced) {

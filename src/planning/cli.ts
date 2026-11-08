@@ -3,12 +3,12 @@ import { betIds, findRoot, krIds, loadBet, loadKr } from "./model.js";
 import { planningIssues } from "./levels.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "./bets.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
-import { delivery, describeDelivery } from "./delivery.js";
+import { delivery } from "./delivery.js";
 import { crossRefs, runSync } from "./upstream.js";
 import { runServe } from "./server.js";
-import { addDownstream, formatRollout, rollout } from "./rollout.js";
+import { addDownstream, betDeliveryText, formatRollout, rollout } from "./rollout.js";
 
-const help = `nikos planning — bets, key results and the planning dashboard
+export const help = `nikos planning — bets, key results and the planning dashboard
 
 Usage: nikos planning <command> [options] [--dir <repo>]
 
@@ -61,7 +61,8 @@ export function status(root: string): string {
   out.push(bets.length ? "Bets:" : "Bets: none");
   for (const id of bets) {
     const b = loadBet(root, id).meta;
-    out.push(`  ${id} — delivery: ${describeDelivery(delivery(root, id))} · outcome: ${b.outcome} · review on ${b.review_on}`);
+    // A bet with no stories here can still be delivered by a map below, such as a team's map for this company's bet.
+    out.push(`  ${id} — delivery: ${betDeliveryText(root, id, delivery(root, id))} · outcome: ${b.outcome} · review on ${b.review_on}`);
   }
   const krs = krIds(root);
   out.push(krs.length ? "Key results:" : "Key results: none");

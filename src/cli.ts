@@ -25,7 +25,7 @@ import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
-import { runPlanning } from "./planning/cli.js";
+import { help as planningHelp, runPlanning } from "./planning/cli.js";
 import { runServeCommand } from "./commands/serve.js";
 import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
@@ -162,24 +162,40 @@ Commands:
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
   map              Write a read-only story map page (--out, default storymap.html, --map)
-  map new          In a group repo, a story map for one of its bets, in maps/<key>/
-  map status       In a group repo, each assigned team's status on its stories: fresh or not,
-                   delivery and intent approvals (--map, --offline, --json)
-                   (--bet <bet-id>, --key <KEY>)
+  map new          In a group repo, or a team repo with a key and a home: a story map for one
+                   bet, in maps/<key>/ (--bet <bet-id | repo#bet>, --key <KEY>)
+  map status       In a repo that owns maps: each assigned team's status on its stories, fresh
+                   or not, delivery and intent approvals; writes maps/<key>/delivery.yaml to
+                   commit (--map, --offline, --json, which writes nothing)
   export --format <prd|linear|jira>  The story map as a PRD or tracker import
                    (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
-  assign "<team>" --repo <path|.>  Give a team all or part of a group's story map
+  assign "<team>" --repo <path|.>  Give a team all or part of a story map this repo owns
                    (--activities, --releases or --stories; --map, --include-done, --url, --ref)
-  team init|join|member|show  A team repo: its name, the groups it takes work from, its members
-                   (team init --repo owner/repo, team join <group repo>, team member add "<name>")
+  team init|join|member|show  A team repo: its name and key, the repos it takes work from,
+                   its members (team init --repo owner/repo --key WEB, team join <group or team
+                   repo>, team member add "<name>"); its home is set with nikos join <plan> --home
   sync             In a team repo: fetch the stories assigned to it, read-only, into
                    .nikos/assigned/ (gitignored)
 
   --version        Print the installed version
 
 Docs: https://nikos.tools`;
+
+/** The lines of the help for one command: its entry, and the lines that continue it. */
+function commandHelp(cmd: string): string {
+  const lines = help.split("\n");
+  const out: string[] = [];
+  let inEntry = false;
+  for (const line of lines) {
+    const entry = /^  \S/.test(line);
+    if (entry) inEntry = line.slice(2).split(/[\s|]/)[0] === cmd;
+    else if (!/^   /.test(line)) inEntry = false;
+    if (inEntry) out.push(line);
+  }
+  return `Usage: nikos ${cmd} [options]\n\n${out.join("\n")}\n\nDocs: https://nikos.tools`;
+}
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
@@ -195,6 +211,12 @@ async function main(argv: string[]): Promise<number> {
   if (!run) {
     console.error(`Unknown command '${cmd}'.\n\n${help}`);
     return 1;
+  }
+  // `<command> --help` prints help and runs nothing: some commands write files whatever their arguments.
+  // `migrate maps` has its own, longer help.
+  if ((rest.includes("--help") || rest.includes("-h")) && !(cmd === "migrate" && rest[0] === "maps")) {
+    console.log(cmd === "planning" ? planningHelp : commandHelp(cmd));
+    return 0;
   }
   // `nikos map` alone writes the page, which a team can have; `map new` writes a map.
   // `migrate maps` is refused with its own message in a team repo, so it skips the generic one.

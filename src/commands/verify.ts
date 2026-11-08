@@ -225,8 +225,8 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    // A team's whole-suite run with nothing synced runs no assigned stories: say so before it does.
-    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
+    // A team's whole-suite run with nothing synced (and no map of its own) runs no stories: say so before it does.
+    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length && !ownMapsOf(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
     const r = verify(root, positional[0], { inherit: true, map: mapFlag(args) });
     if (isTeamRepo(root)) printUndefined(undefinedSteps(root, r.stack, positional[0]));
     return r.status;

@@ -328,7 +328,10 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
   const done = isDone(shown) && (inPlace || v.freshness === "not-fetched" || (current && (!!v.approved || !!v.optional)));
   const awaiting = isDone(shown) && !inPlace && current && !v.approved && !v.optional;
   let delivery = "-";
-  if (inPlace) delivery = "n/a (in place)";
+  // In place, a delivery approval shows only when the team's own share has one that holds for the current feature.
+  const ownApproval = inPlace && isDone(shown) && f.approval && !teamApprovalLapse(f.approval, f.status, f.H) ? f.approval : undefined;
+  const approvedBy = v.approvedBy ?? ownApproval?.by;
+  if (inPlace) delivery = ownApproval ? `approved by ${ownApproval.by}` : "n/a (in place)";
   else if (isDone(shown)) {
     delivery = v.approved
       ? v.approvedBy
@@ -356,7 +359,7 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
     copy,
     ...(fetched ? { fetched } : {}),
     delivery,
-    ...(v.approvedBy ? { approvedBy: v.approvedBy } : {}),
+    ...(approvedBy ? { approvedBy } : {}),
     intent,
     ...(from ? { from } : {}),
     done,
@@ -384,7 +387,9 @@ export function storyView(opts: { root: string; map: GroupMap; id: string; holde
   if (!holder) return viewOf(id, { H, policy }, "none", intent);
   if (holder.repo === ".") {
     const status = loadStates(map.home)[id];
-    return viewOf(id, { H, holder: holder.team, repo: ".", inPlace: true, status, policy }, "fetched", intent);
+    // A team's own share of its own map is approved here too, in the team's approvals/.
+    const approval = typeof map.home === "object" ? loadApprovalEntries<DeliveryApproval>(map.home)[id] : undefined;
+    return viewOf(id, { H, holder: holder.team, repo: ".", inPlace: true, status, approval, policy }, "fetched", intent);
   }
   const copy = index.teams[holder.repo];
   const good = hasGoodCopy(root, index, holder.repo);

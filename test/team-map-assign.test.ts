@@ -104,6 +104,24 @@ describe("a team's own map: assign and map status", () => {
     expect(status(a, "WEB-INB-1")).toMatchObject({ status: "todo" });
   });
 
+  it("shows the team's approval of its own share, and writes it to delivery.yaml", () => {
+    const a = owner();
+    assign(a, "Web team", { repo: ".", stories: ["WEB-INB-1"] });
+    commitAll(a, "assign");
+    setState("WEB-INB-1", "in_progress", { dir: a, by: "Ada" });
+    setState("WEB-INB-1", "done", { dir: a, by: "Ada" });
+    commitAll(a, "done");
+    // Done with no approval yet: still in place, nothing to approve shown.
+    expect(mapStatus(a)[0].stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place", delivery: "n/a (in place)" });
+    approve("WEB-INB-1", { dir: a, by: "Ada Lovelace", date: "2027-01-06" });
+    commitAll(a, "approved");
+    const [m] = mapStatus(a);
+    expect(m.own).toBe(true);
+    expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place", delivery: "approved by Ada Lovelace" });
+    writeSummaries(a, [m]);
+    expect(readDeliverySummary(join(a, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ team: ".", status: "done", approval: "approved", approved_by: "Ada Lovelace" });
+  });
+
   it("doctor suggests a CODEOWNERS rule for the assignments, naming the home's lead or a placeholder", () => {
     const a = owner();
     const line = () => doctor(a, { offline: true }).find((c) => c.name === "assignments");

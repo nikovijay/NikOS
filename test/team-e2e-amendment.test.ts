@@ -21,6 +21,7 @@ import { mapStatus, writeSummaries } from "../src/commands/map-status";
 import { validate } from "../src/commands/validate";
 import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { newBet } from "../src/planning/bets";
+import { status as planningStatus } from "../src/planning/cli";
 import { verify } from "../src/commands/verify";
 import { companyRepo, departmentRepo } from "./planning-fixture";
 import { commitAll, git, groupRepo, write } from "./team-fixture";
@@ -136,6 +137,12 @@ describe("the amendment, end to end", () => {
     expect(text.split("\n    bet inbox-speed:").length - 1).toBe(1);
     expect(text.split("bet faster-checkout (").length - 1).toBe(1);
     expect(text.split("\n    bet faster-checkout:").length - 1).toBe(1);
+
+    // Team A's map is for the company's bet: it shows under that bet in the tree, on team A's line, and in the company's status.
+    expect(byName("Web team").maps).toEqual([{ map: "inb", bet: "acme/company-plan#one-inbox", stories: 2, done: 1, approved: 1, inProgress: 0, asOf: expect.any(String) }]);
+    expect(text).toContain("    map inb → acme/company-plan#one-inbox: 1 of 2 stories done (1 approved), 0 in progress");
+    expect(text).toContain("  ├─ bet one-inbox (acme/company-plan)\n  │  └─ map inb (Web team): 1 of 2 stories done (1 approved)");
+    expect(planningStatus(company)).toContain("one-inbox — delivery: in the plans below: map inb in acme/web-team, 1 of 2 stories done (1 approved)");
 
     // Both teams keep a valid file.
     expect(validate(a).errors).toEqual([]);

@@ -10,13 +10,13 @@ import { store } from "../lib/store.js";
 import { dirname, join } from "node:path";
 import { parse, parseDocument } from "yaml";
 import { isDone } from "../lib/project.js";
-import { REPO_PATH } from "../lib/bets.js";
+import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadStates } from "../lib/state-files.js";
 import { storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
-import { delivery, describeDelivery, mapDeliveryIn } from "./delivery.js";
+import { delivery, describeDelivery, mapCounts, mapDeliveryIn, type Delivery } from "./delivery.js";
 import { summaryAge } from "../lib/delivery-summary.js";
 import { copyKeys, duplicateKeys } from "../lib/keys.js";
 import { progress, isStale } from "./krs.js";
@@ -45,6 +45,8 @@ export interface DownstreamPlan {
    */
   synced?: { on: string; commit: string; current?: boolean };
   delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number; noSummary?: number; asOf?: string };
+  /** Its maps that deliver a bet in another plan (a team's map for a company bet, say), each with its own counts. */
+  maps?: MapFor[];
   /** The story its team builds next, as nikos next would say. */
   next?: { id: string; title: string };
   /** Stories with blockers in their state, and what's blocking each. */
@@ -55,6 +57,24 @@ export interface DownstreamPlan {
   krs: { id: string; title: string; aligns_to?: string[]; progress: number; stale: boolean; checkedIn: boolean }[];
   bets: DownstreamBet[];
 }
+
+/** A map in a plan below that delivers another plan's bet: bet is <repo>#<id>. */
+export interface MapFor {
+  map: string;
+  bet: string;
+  stories: number;
+  done: number;
+  approved: number;
+  inProgress: number;
+  noSummary?: number;
+  asOf?: string;
+}
+
+/** A map's line: its counts, and the age of the summary they come from. */
+export const describeMap = (m: MapFor) =>
+  `${m.done} of ${m.stories} stories done${m.approved ? ` (${m.approved} approved)` : ""}, ${m.inProgress} in progress${m.asOf ? `, ${summaryAge({ read_at: m.asOf })}` : ""}${
+    m.noSummary ? `; ${m.noSummary} with no summary yet` : ""
+  }`;
 
 export interface Blocker {
   story: string;
@@ -81,7 +101,7 @@ export function latestDecisions(dir: string): Decision[] {
 
 /** One key result or bet in the alignment tree, with what aligns to it below. Alignment only: no progress. */
 export interface AlignmentNode {
-  kind: "kr" | "bet";
+  kind: "kr" | "bet" | "map";
   id: string;
   title: string;
   /** The plan it belongs to: a downstream name, or this repo. */
@@ -152,6 +172,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout?.trim();
   let deliv: DownstreamPlan["delivery"];
   let nextUp: DownstreamPlan["next"];
+  let mapsFor: MapFor[] = [];
   const blockers: Blocker[] = [];
   if (storyMapsOf(dir).length) {
     try {
@@ -168,6 +189,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         ...(all.noSummary.length ? { noSummary: all.noSummary.length } : {}),
         ...(all.asOf ? { asOf: all.asOf } : {}),
       };
+      // A map for another plan's bet is shown under that bet: its own bets already carry their delivery.
+      mapsFor = all.maps.flatMap((m) =>
+        m.bets.filter((b) => CROSS_REF.test(b) && !b.startsWith(`${repo}#`)).map((bet) => ({ map: m.map, bet, ...mapCounts(m) })),
+      );
       const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
       // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
       // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
@@ -234,6 +259,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     ...(lock ? { synced: { on: lock.synced, commit: lock.commit, ...(head && self ? { current: lock.commit === head } : {}) } } : {}),
     ...(deliv ? { delivery: deliv } : {}),
     ...(nextUp ? { next: nextUp } : {}),
+    ...(mapsFor.length ? { maps: mapsFor } : {}),
     blockers,
     decisions: latestDecisions(dir),
     krs,
@@ -360,7 +386,36 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
   return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, problems, tree: alignment(root, self, plans) };
 }
 
-type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[] };
+/**
+ * The maps in the last rollout's copies that deliver one of this repo's bets, e.g. a team's map for a
+ * company bet. Read from .nikos/downstream/ as the last nikos planning rollout fetched it: nothing is fetched here.
+ */
+export function mapsBelow(root: string, self: string | undefined, bet: string): (MapFor & { repo: string })[] {
+  if (!self || !existsSync(indexOf(root))) return [];
+  const index: Record<string, unknown> = JSON.parse(readFileSync(indexOf(root), "utf8"));
+  const want = `${self}#${bet}`;
+  return Object.keys(index).flatMap((repo) => {
+    const dir = copyOf(root, repo);
+    if (!existsSync(dir)) return [];
+    try {
+      return mapDeliveryIn(dir).maps.filter((m) => m.bets.includes(want)).map((m) => ({ repo, map: m.map, bet: want, ...mapCounts(m) }));
+    } catch {
+      return [];
+    }
+  });
+}
+
+/**
+ * A bet's delivery as words: its own maps' counts, or for a bet with no stories here (a company bet a
+ * team's map delivers), the maps below it, as the last rollout read them.
+ */
+export function betDeliveryText(root: string, id: string, d: Delivery): string {
+  const below = d.stories.length ? [] : mapsBelow(root, ownRepo(root), id);
+  if (!below.length) return describeDelivery(d);
+  return `in the plans below: ${below.map((m) => `map ${m.map} in ${m.repo}, ${describeMap(m)}`).join("; ")} (from the last nikos planning rollout)`;
+}
+
+type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[]; maps?: MapFor[] };
 
 /** This repo's key results and bets, read the same way as a downstream copy's. */
 function own(root: string, self?: string): Source {
@@ -389,7 +444,7 @@ function own(root: string, self?: string): Source {
  * works out progress from children.
  */
 export function alignment(root: string, self: string | undefined, plans: DownstreamPlan[]): Rollout["tree"] {
-  const sources: Source[] = [own(root, self), ...plans.filter((p) => p.repo).map((p) => ({ plan: p.name, repo: p.repo, krs: p.krs, bets: p.bets }))];
+  const sources: Source[] = [own(root, self), ...plans.filter((p) => p.repo).map((p) => ({ plan: p.name, repo: p.repo, krs: p.krs, bets: p.bets, maps: p.maps }))];
   // Everything is known as repo#id. One from a repo whose path isn't known can't be pointed at.
   const key = (repo: string | undefined, id: string) => (repo ? `${repo}#${id}` : undefined);
   const krAt = new Map<string, { s: Source; k: Source["krs"][number] }>();
@@ -400,6 +455,9 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
   const betsOn = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
   const betsUnder = new Map<string, { s: Source; b: Source["bets"][number] }[]>();
   const placed = new Set<string>();
+  const mapsUnder = new Map<string, { s: Source; m: MapFor }[]>();
+  for (const s of sources.slice(1)) for (const m of s.maps ?? []) if (betAt.has(m.bet)) mapsUnder.set(m.bet, [...(mapsUnder.get(m.bet) ?? []), { s, m }]);
+  const mapNode = (s: Source, m: MapFor): AlignmentNode => ({ kind: "map", id: m.map, title: describeMap(m), plan: s.plan, ...(s.repo ? { repo: s.repo } : {}), children: [] });
   for (const s of sources.slice(1)) {
     for (const k of s.krs) for (const up of k.aligns_to ?? []) if (krAt.has(up)) alignsTo.set(up, [...(alignsTo.get(up) ?? []), { s, k }]);
     for (const b of s.bets) for (const up of b.aligns_to ?? []) if (betAt.has(up)) betsUnder.set(up, [...(betsUnder.get(up) ?? []), { s, b }]);
@@ -437,7 +495,10 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       title: b.id,
       plan: s.plan,
       ...(s.repo ? { repo: s.repo } : {}),
-      children: (betsUnder.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.b.id)!)).map((c) => betNode(c.s, c.b, next)),
+      children: [
+        ...(betsUnder.get(at) ?? []).filter((c) => !next.has(key(c.s.repo, c.b.id)!)).map((c) => betNode(c.s, c.b, next)),
+        ...(mapsUnder.get(at) ?? []).map(({ s: ms, m }) => mapNode(ms, m)),
+      ],
     };
   };
   const roots = sources[0].krs.map((k) => krNode(sources[0], k, new Set()));
@@ -460,13 +521,19 @@ export function alignment(root: string, self: string | undefined, plans: Downstr
       unaligned.push({ ...betNode(s, b, new Set()), ...(away.length ? { aligns_to: away } : {}) });
     }
   }
+  // A map for a bet that isn't in this rollout still shows, with the bet it names.
+  for (const s of sources.slice(1)) for (const m of s.maps ?? []) if (!betAt.has(m.bet)) unaligned.push({ ...mapNode(s, m), aligns_to: [m.bet] });
   return { roots, unaligned };
 }
 
 /** The alignment tree as indented lines, with box-drawing branches. */
 export function formatTree(tree: Rollout["tree"]): string[] {
   const label = (n: AlignmentNode) =>
-    n.kind === "kr" ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}` : `bet ${n.id} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`;
+    n.kind === "kr"
+      ? `KR ${n.id}: ${n.title} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`
+      : n.kind === "map"
+        ? `map ${n.id} (${n.plan}): ${n.title}${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`
+        : `bet ${n.id} (${n.plan})${n.aligns_to ? ` → ${n.aligns_to.join(", ")}, not in this rollout` : ""}`;
   const out: string[] = [];
   const walk = (n: AlignmentNode, lead: string, last: boolean, top: boolean) => {
     out.push(top ? `  ${label(n)}` : `  ${lead}${last ? "└─ " : "├─ "}${label(n)}`);
@@ -504,6 +571,7 @@ export function formatRollout(r: Rollout): string {
       const missing = d.noSummary ? `; ${d.noSummary} ${d.noSummary === 1 ? "story has" : "stories have"} no summary yet: run nikos map status in ${p.repo}` : "";
       out.push(`    delivery: ${d.done} of ${d.stories} stories done${d.approved ? ` (${d.approved} approved)` : ""}, ${d.inProgress} in progress${age}${missing}`);
     }
+    for (const m of p.maps ?? []) out.push(`    map ${m.map} → ${m.bet}: ${describeMap(m)}`);
     if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);
     for (const b of p.blockers) out.push(`    blocked: ${b.story} ${b.title}: ${b.blockers.join("; ")}`);
     for (const d of p.decisions) out.push(`    decision: ${d.title}`);

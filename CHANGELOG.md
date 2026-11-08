@@ -18,6 +18,8 @@ Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendmen
 
 - `nikos team init --key WEB` gives a team its key. A team file with a key or a home is format 2, which 0.3.0 can't read: a team upgraded this way must be upgraded in its groups too. A team with no key keeps format 1.
 - `nikos map status` writes `maps/<key>/delivery.yaml` in the group's repo, one line per story: its team, status, approval (a name, not a verified identity) and when it was read. Commit it: the plans above read it. Rollouts and the bet lines say how old each summary is, and how many stories have no summary yet. Offline reads write nothing.
+- A map below that delivers another plan's bet (a team's map for a company bet) shows in that plan's rollout: under the bet in the alignment tree, and on the copy's line as `map <key> → <repo>#<bet>` with its counts. `nikos planning status` there gives such a bet the maps' counts, as the last rollout read them.
+- `nikos map status` in a team repo shows the team's approval of its own share ("approved by …") and writes it to `delivery.yaml`. The team's own row reads "this team (--repo .)".
 - A bet that aligns to a stopped bet is flagged in the rollout: "aligns to <bet>, which was stopped on <date>". Nothing else changes.
 - A team repo may run `nikos planning bet new`, `planning sync`, `planning status`, `planning validate`, `planning rollout`, and `nikos join`, once it has a key, a home, a map of its own or a plan joined. `planning kr new` there is refused with the key-result wording. A team repo with none of those is refused as in 0.3.0.
 - `nikos join <plan> --home` makes a plan a team's home (a group, department or company plan, with a key that isn't the team's own), records it in `nikos.team.yaml` at format 2, and refuses a second home. A group's `--home` marks the plan in its `planning/upstream.yaml`. `nikos doctor` warns about a team that joins a plan with no home.
@@ -35,6 +37,7 @@ Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendmen
 
 ### Fixed
 
+- `nikos <command> --help` prints that command's help and runs nothing. `team init --help`, `init --help`, `start --help`, `join <repo> --help` and `planning downstream add --help` used to run the command and write files.
 - `--map` takes the key `map new` prints, case-insensitively (`--map HR` finds `maps/hr`).
 - The rollout's delivery read "0 of 0" for a group with several maps, and "team status not read here" for a bet. Both now come from the owner's summary.
 - The alignment tree printed a group bet twice: under the bet it aligns to, and under the key result. It's now shown under the bet only.

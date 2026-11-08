@@ -33,7 +33,7 @@ const NOT_A_REPO = "not a repo path (owner/repo, or group/subgroup/project on Gi
 export const TEAM_KEY = KEY;
 
 /** `nikos team init`: write nikos.team.yaml here, naming the team, its repo path and (optionally) its key. */
-export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string } {
+export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string; keyAdded?: boolean } {
   const root = resolve(dir);
   // A team made before it had a key can take one now: its file gains the key and format 2. A key already set is kept.
   if (isTeamRepo(root)) {
@@ -54,7 +54,7 @@ export function teamInit(dir: string, opts: { repo?: string; name?: string; key?
   // A key is the one thing that makes this file 0.3.0-incompatible, so a keyless team keeps format 1.
   const key = opts.key ? { key: opts.key } : {};
   const version = opts.key ? 2 : 1;
-  const text = `# The team: who is on it, and the group repos it takes work from. Edit with nikos team.\n${stringify({ format_version: version, name, repo, ...key, groups: [], members: [] })}`;
+  const text = `# The team: who is on it, its key, and the repos it takes work from. Edit with nikos team.\n${stringify({ format_version: version, name, repo, ...key, groups: [], members: [] })}`;
   parseTeam(text); // refuses a bad name before anything is written
   store().write(join(root, TEAM_FILE), text, { create: true });
   ignoreAssigned(root);
@@ -62,7 +62,7 @@ export function teamInit(dir: string, opts: { repo?: string; name?: string; key?
 }
 
 /** Give a team its key on an existing team file (format 2). A team that has one keeps it. */
-function addTeamKey(root: string, key: string): { repo: string; name: string } {
+function addTeamKey(root: string, key: string): { repo: string; name: string; keyAdded: boolean } {
   const team = openTeam(root);
   if (team.key) throw new Error(`this team's key is already ${team.key}: edit ${TEAM_FILE} to change it`);
   if (!TEAM_KEY.test(key)) throw new Error(`'${key}' is not a team key: capital letters and digits, starting with a letter, up to 10 (e.g. WEB)`);
@@ -70,7 +70,7 @@ function addTeamKey(root: string, key: string): { repo: string; name: string } {
   doc.set("format_version", 2);
   doc.set("key", key);
   saveTeam(root, doc);
-  return { repo: team.repo, name: team.name };
+  return { repo: team.repo, name: team.name, keyAdded: true };
 }
 
 /** The sequence under a key in a team document, made if it isn't there yet, in block style. */
@@ -166,7 +166,7 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
   const out = [`${team.name} (${team.repo})${team.key ? `, key ${team.key}` : ""}${team.home ? `, home ${team.home}` : ""}`];
   out.push(team.members.length ? "Members:" : "Members: none yet (nikos team member add)");
   for (const m of team.members) out.push(`  ${m.name}${m.role ? `, ${m.role}` : ""}${m.handle ? ` (@${m.handle})` : ""}`);
-  out.push(team.groups.length ? "Groups:" : "Groups: none yet (nikos team join <group repo>)");
+  out.push(team.groups.length ? "Takes work from:" : ownMapsOf(root).length ? "Takes work from: no other repo" : "Takes work from: none yet (nikos team join <group or team repo>)");
   for (const g of team.groups) {
     const st = groupStatus(root, g, { remote: !opts.offline });
     if (!st.synced) {
@@ -215,7 +215,12 @@ export function runTeam(args: string[]): number {
   try {
     if (sub === "init") {
       const r = teamInit(dir, { repo: flag("repo"), name: flag("name"), key: flag("key") });
-      console.log(`✓ Created ${TEAM_FILE} for ${r.name} (${r.repo})\n  Take work from a group next: nikos team join <group repo>`);
+      const key = flag("key");
+      // A team with a key can own maps once it has a home; any team can take work from a group or another team.
+      const nextSteps = key
+        ? `  Next: give it a home with nikos join <plan> --home, then own a map with nikos map new --bet <bet> --key <MAP>.\n  Or take work from a group or team: nikos team join <repo>`
+        : `  Take work from a group next: nikos team join <group repo>`;
+      console.log(`${r.keyAdded ? `✓ ${r.name} now has key ${key}` : `✓ Created ${TEAM_FILE} for ${r.name} (${r.repo})`}\n${nextSteps}`);
     } else if (sub === "join" && positional[0]) {
       if (rest.includes("--home")) throw new Error("a team's home is set with nikos join <plan> --home: nikos team join takes work from a group, and doesn't set one");
       const r = teamJoin(dir, positional[0], { ref: flag("ref"), host: flag("host"), url: flag("url") });

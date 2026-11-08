@@ -57,6 +57,8 @@ export interface MapStatus {
   counts: Record<Freshness, number>;
   /** The name each approved story's delivery approval was given (not a verified identity). Written to delivery.yaml, not in --json. */
   approvers: Record<string, string>;
+  /** Set for a team's own map: "." is this team, not a group. */
+  own?: boolean;
 }
 
 /** Each team holding a story of the map, in assignment order, then any retired team read for its moved stories. */
@@ -121,9 +123,9 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
   };
 
   return picked.map((gm) => {
-    const base = { map: gm.id, key: gm.key, group, offline: !!opts.offline };
     // A group's map with no assignments has no status to write. A team's own map does: its stories are the team's own.
     const own = typeof gm.home === "object";
+    const base = { map: gm.id, key: gm.key, group, offline: !!opts.offline, ...(own ? { own } : {}) };
     if (!gm.list.length && !own) return { ...base, assigned: false, teams: [], stories: [], counts: zeroCounts(), approvers: {} };
     const views: StoryView[] = mapViews(root, gm, index, undefined, policy());
     const counts = zeroCounts();
@@ -192,10 +194,10 @@ export const statusJson = (rs: MapStatus[]) => {
 };
 
 /** What a story's status column says: its status, and why it isn't current when it isn't. */
-function statusCell(s: StoryRow): string {
+function statusCell(s: StoryRow, own?: boolean): string {
   if (s.freshness === "current" && isDone(s.status)) return s.reason;
-  // A story the group held itself (--repo .) has no team status to show: the move is the news.
-  if (s.freshness === "moved" && s.from?.repo === ".") return "moved from this group";
+  // A story the group (or the team owning the map) held itself (--repo .) has no team status to show: the move is the news.
+  if (s.freshness === "moved" && s.from?.repo === ".") return `moved from this ${own ? "team" : "group"}`;
   if (s.freshness === "moved") return `moved from ${s.from?.team ?? "?"}: ${s.from?.status ?? "no status"}`;
   if (s.freshness === "not-fetched") return `${s.status} (not fetched)`;
   if (s.freshness === "changed" || s.freshness === "behind" || s.freshness === "unverified") return `${s.status} (${s.freshness})`;
@@ -216,10 +218,10 @@ export function formatMapStatus(r: MapStatus): string {
   }
   out.push("", "Teams");
   const width = Math.max(...r.teams.map((t) => t.team.length), 0);
-  for (const t of r.teams) out.push(`  ${t.team.padEnd(width)}  ${t.repo.padEnd(repoWidth(r.teams))}  ${teamLine(t, r.offline)}`);
+  for (const t of r.teams) out.push(`  ${t.team.padEnd(width)}  ${t.repo.padEnd(repoWidth(r.teams))}  ${teamLine(t, r.offline, r.own)}`);
 
   out.push("", "Stories");
-  const rows = r.stories.map((s) => [s.id, s.team ?? "-", statusCell(s), s.ticket ?? "-", s.delivery, s.intent]);
+  const rows = r.stories.map((s) => [s.id, s.team ?? "-", statusCell(s, r.own), s.ticket ?? "-", s.delivery, s.intent]);
   const head = ["STORY", "TEAM", "STATUS", "TICKET", "DELIVERY", "INTENT"];
   const cols = head.map((h, i) => Math.max(h.length, ...rows.map((row) => row[i].length)));
   const line = (cells: string[]) => `  ${cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(cols[i]))).join("  ")}`.trimEnd();
@@ -237,8 +239,8 @@ export function formatMapStatus(r: MapStatus): string {
 const repoWidth = (teams: TeamRow[]) => Math.max(...teams.map((t) => t.repo.length), 0);
 
 /** A team's state in the Teams section: when its copy was fetched, or why it's old or missing. */
-function teamLine(t: TeamRow, offline: boolean): string {
-  if (t.repo === ".") return "this group (--repo .)";
+function teamLine(t: TeamRow, offline: boolean, own?: boolean): string {
+  if (t.repo === ".") return `this ${own ? "team" : "group"} (--repo .)`;
   const tail = t.retired ? "; retired: no stories left, read for the stories it gave up" : "";
   if (t.commit && t.ok) return `${offline ? "copy from" : "fetched"} ${t.fetched} at ${short(t.commit)}${tail}`;
   if (t.commit) return `fetch failed: ${t.error ?? "unknown"}; showing copy from ${t.fetched} at ${short(t.commit)}${tail}`;

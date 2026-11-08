@@ -186,7 +186,10 @@ its own `downstream.yaml`, and reports for each:
   from its origin remote, or `--as <path>`)
 - **synced**: when it last ran `nikos planning sync`, and whether it read this
   repo's current commit
-- **delivery**: stories done, approved and in progress, from its story map
+- **delivery**: stories done, approved and in progress, from its story maps'
+  committed `delivery.yaml`
+- **maps**: each of its maps that delivers another plan's bet (a team's map for
+  a company bet), with that map's counts
 - **next**: the story its team builds next, as `nikos next` would say there
 - **blocked**: each story with blockers in its state, and what's blocking it
 - **decisions**: its latest three, newest first, from its `decisions.md`
@@ -196,8 +199,11 @@ It also lists this repo's own latest decisions.
 
 Above those it draws the alignment as a tree: each key result here, the key
 results below that align to it (`aligns_to`), the ones that align to those in
-turn, and the bets that name each one. Key results and bets that point at
-nothing in the rollout are listed after the tree. The tree shows links only. A
+turn, the bets that name each one, and under each bet the maps below that
+deliver it (a team's map for this plan's bet). Key results, bets and maps that
+point at nothing in the rollout are listed after the tree. `nikos planning
+status` gives a bet with no maps here the counts of those maps, as the last
+rollout read them. The tree shows links only. A
 key result's progress comes from its own check-ins and never from the ones
 below it.
 
