@@ -1,6 +1,6 @@
-// Created by `nikos verify setup`. Runs the stories in intent/ and maps/ as tests.
+// Created by `nikos verify setup`. Runs the stories in intent/, maps/ and the team's assigned copies as tests.
 export default {
-  paths: ["intent/features/**/*.feature", "maps/*/features/**/*.feature"],
+  paths: ["intent/features/**/*.feature", "maps/*/features/**/*.feature", ".nikos/assigned/**/features/**/*.feature"],
   import: ["test/steps/**/*.steps.mjs"],
   format: ["progress"],
 };

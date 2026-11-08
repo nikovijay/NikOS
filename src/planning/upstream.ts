@@ -5,12 +5,13 @@
 // GitHub by default, GitLab (with nested groups) or a self-managed host through `host:`, and
 // anything else through `url:`.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse, stringify } from "yaml";
 import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
 import { walk } from "../lib/project.js";
+import { fetchCopy } from "../lib/fetch-copy.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { betIds, krIds, loadBet, loadKr, paths, today, writePlanning } from "./model.js";
 
@@ -91,18 +92,14 @@ export function sync(root: string): SyncReport {
   while (queue.length) {
     const { entry: e, depth, via } = queue.shift()!;
     const dir = cacheDir(root, e.repo);
-    rmSync(dir, { recursive: true, force: true });
-    const clone = git(["clone", "--quiet", "--depth", "1", "--branch", e.ref, e.url, dir]);
-    if (clone.status !== 0) {
-      rmSync(dir, { recursive: true, force: true });
-      report.unresolved.push({ repo: e.repo, reason: (clone.stderr || "clone failed").trim().split("\n").pop()! });
+    const fetched = fetchCopy(e.url, e.ref, dir);
+    if ("error" in fetched) {
+      report.unresolved.push({ repo: e.repo, reason: fetched.error });
       const kept = previous.find((l) => l.repo === e.repo);
       if (kept) report.synced.push(kept); // keep the last good lock entry; its copy is gone, so refs show as unresolved
       continue;
     }
-    const commit = git(["rev-parse", "HEAD"], dir).stdout.trim();
-    rmSync(join(dir, ".git"), { recursive: true, force: true }); // a plain copy: nothing to push back
-    report.synced.push({ repo: e.repo, ref: e.ref, commit, synced: today(), ...(via ? { via } : {}) });
+    report.synced.push({ repo: e.repo, ref: e.ref, commit: fetched.commit, synced: today(), ...(via ? { via } : {}) });
     if (depth >= MAX_DEPTH) continue;
     let above: UpstreamEntry[] = [];
     try {

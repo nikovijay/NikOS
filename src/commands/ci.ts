@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectStack, type Stack } from "../verify/detect.js";
+import { isTeamRepo } from "../lib/team.js";
 
 export type Host = "github" | "gitlab";
 
@@ -33,9 +34,13 @@ const install = (stack: Stack, root: string): string[] =>
     ? [existsSync(join(root, "requirements.txt")) ? "pip install -r requirements.txt" : "", "pip install behave"].filter(Boolean)
     : [existsSync(join(root, "package-lock.json")) ? "npm ci" : "npm install"];
 
-/** The shell steps that install the runner and run the checks, for a stack. */
+/**
+ * The shell steps that install the runner and run the checks, for a stack. A team repo fetches its
+ * assigned stories first: they're gitignored, so a fresh checkout has none to verify.
+ */
 function steps(stack: Stack, root: string, nikos: string): string[] {
-  return [...install(stack, root), `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
+  const sync = isTeamRepo(root) ? [`npx -y ${nikos} sync`] : [];
+  return [...install(stack, root), ...sync, `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
 }
 
 /** The release check, run by hand with the release number. RELEASE comes in as an env var, never pasted into the script. */

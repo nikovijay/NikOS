@@ -14,6 +14,7 @@ import { setupVerify } from "./verify.js";
 import { createInterface } from "node:readline/promises";
 import { askOnboarding, setUp } from "./onboard.js";
 import { cliCommand } from "../lib/cli-version.js";
+import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
 
 export interface StartResult {
   /** One line per thing start did, or found already done. */
@@ -24,6 +25,7 @@ export interface StartResult {
 }
 
 export function start(root: string, opts: { name?: string; key?: string } = {}): StartResult {
+  if (isTeamRepo(root)) throw new Error(TEAM_REPO_STORIES);
   const done: string[] = [];
   const ask: string[] = [];
   if (store().exists(join(root, "intent", "storymap.yaml"))) done.push("intent/ is already set up");

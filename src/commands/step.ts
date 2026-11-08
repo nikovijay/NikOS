@@ -2,7 +2,7 @@ import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument } from "yaml";
 import { read } from "../lib/project.js";
-import { resolveStoryMap, mapFlag } from "../lib/maps.js";
+import { authoringMap, mapFlag } from "../lib/maps.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -12,7 +12,7 @@ const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 export function newStep(input: { title: string; activity: string; id?: string; map?: string }, dir: string): { id: string; validation: ValidationResult } {
   const title = input.title?.trim();
   if (!title) throw new Error("A step needs a title");
-  const intentDir = resolveStoryMap(dir, input.map).dir;
+  const intentDir = authoringMap(dir, input.map).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
@@ -38,7 +38,7 @@ export function newStep(input: { title: string; activity: string; id?: string; m
 export function newActivity(input: { title: string; id?: string; map?: string }, dir: string): string {
   const title = input.title?.trim();
   if (!title) throw new Error("An activity needs a title");
-  const intentDir = resolveStoryMap(dir, input.map).dir;
+  const intentDir = authoringMap(dir, input.map).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
   const id = input.id ?? slugify(title);

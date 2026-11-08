@@ -3,7 +3,8 @@ import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
-import { mapFlag } from "../lib/maps.js";
+import { assignedMaps, mapFlag } from "../lib/maps.js";
+import { isTeamRepo } from "../lib/team.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
 
@@ -82,6 +83,69 @@ export interface VerifyResult {
   output: string;
 }
 
+/**
+ * The folders behave is given. A folder named on the command line replaces the paths in
+ * behave.ini, so only a team repo passes one: its assigned copies. Every other repo keeps the
+ * paths its behave.ini names, as it always has.
+ */
+const behaveDirs = (root: string) => (isTeamRepo(root) && existsSync(join(root, ".nikos/assigned")) ? [".nikos/assigned"] : []);
+
+/** The runner's environment: tsx lets Node versions without built-in type stripping load .ts steps. */
+function runnerEnv(stack: Stack): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  if (stack === "ts") env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import tsx`.trim();
+  return env;
+}
+
+/** A step with no step definition yet, and the story it's in. */
+export interface UndefinedStep {
+  story: string;
+  text: string;
+}
+
+const STORY_TAG = /^([A-Z][A-Z0-9]{0,9}(?:-[A-Z][A-Z0-9]{0,9})?-[0-9]+)$/;
+
+/**
+ * The steps in a team's assigned stories that no step definition matches yet. Read from the
+ * runner's dry run, which matches steps without running them. undefined when the runner can't
+ * be run or its JSON can't be read: the test run reports them then.
+ */
+export function undefinedSteps(root: string, stack: Stack, story?: string): UndefinedStep[] | undefined {
+  let cmd: string;
+  let args: string[];
+  if (stack === "python") {
+    cmd = process.env.PYTHON ?? "python3";
+    args = ["-m", "behave", "--dry-run", "-f", "json", ...behaveDirs(root), ...(story ? [`--tags=@${story}`] : [])];
+  } else {
+    cmd = join(root, "node_modules/.bin/cucumber-js");
+    if (!existsSync(cmd)) return undefined;
+    args = ["--dry-run", "--format", "json", ...(story ? ["--tags", `@${story}`] : [])];
+  }
+  const r = spawnSync(cmd, args, { cwd: root, env: runnerEnv(stack), encoding: "utf8", stdio: "pipe" });
+  // behave prints a "USING RUNNER" line before its JSON: the JSON starts at the first line that's a bracket.
+  let data: any;
+  try {
+    data = JSON.parse((r.stdout ?? "").slice((r.stdout ?? "").search(/^\[/m)));
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(data)) return undefined;
+  const tagOf = (tags: unknown[] = []) =>
+    tags
+      .map((t: any) => String(typeof t === "string" ? t : t?.name ?? "").replace(/^@/, ""))
+      .find((t) => STORY_TAG.test(t));
+  const out: UndefinedStep[] = [];
+  for (const feature of data) {
+    for (const el of feature?.elements ?? []) {
+      for (const step of el?.steps ?? []) {
+        if (step?.result?.status !== "undefined") continue;
+        out.push({ story: tagOf([...(feature.tags ?? []), ...(el.tags ?? [])]) ?? "", text: String(step.name ?? "") });
+      }
+    }
+  }
+  return out;
+}
+
 /** Run the story's scenarios (or all of them) with the repo's Cucumber runner. */
 export function verify(root: string, story?: string, opts: { inherit?: boolean; map?: string } = {}): VerifyResult {
   const stack = stackOrThrow(root);
@@ -91,18 +155,15 @@ export function verify(root: string, story?: string, opts: { inherit?: boolean; 
 
   let cmd: string;
   let args: string[];
-  const env = { ...process.env };
   if (stack === "python") {
     cmd = process.env.PYTHON ?? "python3";
-    args = ["-m", "behave", ...(story ? [`--tags=@${story}`] : [])];
+    args = ["-m", "behave", ...behaveDirs(root), ...(story ? [`--tags=@${story}`] : [])];
   } else {
     cmd = join(root, "node_modules/.bin/cucumber-js");
     if (!existsSync(cmd)) throw new Error(`cucumber-js isn't installed. Run: ${INSTALL[stack]}`);
     args = story ? ["--tags", `@${story}`] : [];
-    // tsx lets Node versions without built-in type stripping load .ts step files.
-    if (stack === "ts") env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import tsx`.trim();
   }
-  const r = spawnSync(cmd, args, { cwd: root, env, encoding: "utf8", stdio: "pipe" });
+  const r = spawnSync(cmd, args, { cwd: root, env: runnerEnv(stack), encoding: "utf8", stdio: "pipe" });
   if (r.error) throw new Error(`Couldn't run ${cmd}: ${r.error.message}. Run: ${INSTALL[stack]}`);
   // With inherit the output still goes to the terminal, after the run.
   if (opts.inherit) {
@@ -116,6 +177,17 @@ export function verify(root: string, story?: string, opts: { inherit?: boolean; 
   const node = r.status !== 0 ? nodeWarning(stack) : undefined;
   if (node && opts.inherit) console.error(`\n! ${node}`);
   return { stack, command: [cmd, ...args].join(" "), status: r.status ?? 1, output: `${output}${node ? `\n${node}\n` : ""}` };
+}
+
+/** Say which steps in the assigned stories have no definition yet, as a warning. */
+export function printUndefined(steps: UndefinedStep[] | undefined): void {
+  if (steps === undefined) {
+    console.log("! could not list undefined steps: the test run will report them");
+    return;
+  }
+  if (!steps.length) return;
+  console.log(`! ${steps.length} ${steps.length === 1 ? "step" : "steps"} in assigned stories ${steps.length === 1 ? "has" : "have"} no step definition yet:`);
+  for (const s of steps) console.log(`    "${s.text}"${s.story ? ` (${s.story})` : ""}`);
 }
 
 export function runVerify(args: string[]): number {
@@ -132,7 +204,11 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    return verify(root, positional[0], { inherit: true, map: mapFlag(args) }).status;
+    // A team's whole-suite run with nothing synced runs no assigned stories: say so before it does.
+    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
+    const r = verify(root, positional[0], { inherit: true, map: mapFlag(args) });
+    if (isTeamRepo(root)) printUndefined(undefinedSteps(root, r.stack, positional[0]));
+    return r.status;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;

@@ -4,6 +4,13 @@
 
 ### Added
 
+- Teams. A code repo becomes a team repo with `nikos team init` (its name and repo path, in `nikos.team.yaml`), and takes work from a group with `nikos team join <group repo>`. `nikos team member add|remove` and `nikos team show` manage its members, names and roles only.
+- `nikos assign "<team>" --repo <path|.>` in a group repo gives a team all or part of a map: `--activities`, `--releases` or `--stories`, adding to what the team has (`--replace` redefines it). A story belongs to one team; a done story moves only with `--include-done`. `maps/<id>/assignments.yaml` holds the assignments, and `nikos validate` reports overlaps and the stories nobody holds yet.
+- `nikos sync` in a team repo fetches each group read-only and copies the stories assigned to the team into `.nikos/assigned/` (gitignored). A story another team now holds is marked `reassigned_to` in the team's `status/`.
+- Team status and delivery approvals. In a team repo `nikos next`, `state set`, `approve`, `show`, `verify` and the tracker commands work on the assigned stories: status goes to `status/<id>.yaml`, and an approval to `approvals/<id>.yaml`, recorded against the commit the scenarios ran at. Story ids are the group's (`PAY-CHK-12`), so stories from several groups coexist.
+- `nikos verify` in a team repo lists the steps in its assigned stories that have no step definition yet.
+- `nikos doctor` understands a team repo: its groups (synced, moved on, or not yet), its runner, and a CODEOWNERS suggestion for the lead.
+
 - Story maps in group repos: a group keeps one story map per bet under `maps/<id>/`, made with `nikos map new --bet <bet-id> --key <KEY>`. Story ids carry the group and map keys, `GROUP-MAP-n` (e.g. `PAY-CHK-12`), and `nikos group init --key` sets the group key. Repos with `intent/` work as before.
 - Plan levels follow the model in `docs/rfcs/plans-bets-story-maps.md`: OKRs stop
   at department level. Company and department plans set objectives and key
@@ -23,6 +30,7 @@
 
 ### Changed
 
+- The Cucumber runner configs (`cucumber.mjs`, `behave.ini`) read the team's assigned copies: `nikos verify setup` writes the new paths for new repos. An existing config isn't rewritten; add `.nikos/assigned/**/features/**/*.feature` to its `paths` yourself (doctor says so).
 - `nikos map` with `new` makes a map in a group repo. In a repo with `intent/` it no longer writes a page for `nikos map new`: bare `nikos map` still writes `storymap.html`.
  loads with a warning: teams are assigned story maps by
   their group instead. Its key results and objectives are warnings, not errors,

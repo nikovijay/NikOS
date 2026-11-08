@@ -18,6 +18,7 @@ import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { git, ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
 import { alignsList } from "./levels.js";
+import { ownRepo } from "../lib/git.js";
 
 export interface DownstreamPlan {
   name: string;
@@ -100,12 +101,7 @@ const cache = (root: string) => join(root, ".nikos", "downstream");
 const copyOf = (root: string, repo: string) => join(cache(root), ...repo.split("/"));
 const indexOf = (root: string) => join(cache(root), "index.json");
 
-/** This repo's path on its host, from the origin remote: owner/repo, or group/subgroup/project. */
-export function ownRepo(root: string): string | undefined {
-  const url = spawnSync("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8" }).stdout?.trim() ?? "";
-  const m = url.match(/^(?:[a-z+]+:\/\/[^/]+\/|[^@\s]+@[^:\s]+:)(.+?)(?:\.git)?\/?$/);
-  return m?.[1];
-}
+export { ownRepo } from "../lib/git.js";
 
 interface Listed {
   name: string;

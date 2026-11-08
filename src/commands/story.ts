@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
-import { resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { authoringMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 import { createStoryState, loadStates } from "../lib/state-files.js";
 import { slugify } from "./init.js";
@@ -53,7 +53,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const priority = input.priority ?? "must";
   if (!PRIORITIES.includes(priority)) throw new Error(`'${priority}' is not a priority (must, should, could)`);
 
-  const ref = resolveStoryMap(dir, input.map);
+  const ref = authoringMap(dir, input.map);
   const intentDir = ref.dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // Documents keep comments and the order of everything we don't touch.

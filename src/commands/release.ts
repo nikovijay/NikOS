@@ -2,7 +2,7 @@ import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, isDone, read, setFeatureTag, walk } from "../lib/project.js";
-import { resolveStoryMap } from "../lib/maps.js";
+import { authoringMap, resolveStoryMap } from "../lib/maps.js";
 import { storyMapOf } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
 import { loadApprovals } from "../lib/approvals.js";
@@ -20,7 +20,7 @@ interface Opened {
 }
 
 function open(dir: string, mapId?: string): Opened {
-  const intentDir = resolveStoryMap(dir, mapId).dir;
+  const intentDir = authoringMap(dir, mapId).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));

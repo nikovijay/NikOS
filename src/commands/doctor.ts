@@ -15,6 +15,10 @@ import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
+import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
+import { read } from "../lib/project.js";
+import { storyFiles } from "../lib/state-files.js";
+import { groupStatus } from "../team/sync.js";
 
 export interface Check {
   name: string;
@@ -33,6 +37,10 @@ const codeowners = (root: string) => ["CODEOWNERS", ".github/CODEOWNERS", ".gitl
 export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
+  if (isTeamRepo(root)) {
+    teamChecks(root, add, opts);
+    return checks;
+  }
   const intent = findIntentDir(root);
   const planOnly = isPlanOnly(root);
   const maps = mapDirs(root).length;
@@ -131,6 +139,53 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
     }
   }
   return checks;
+}
+
+/**
+ * A team repo: its team file, each group it takes work from (synced, moved on, or not yet), the
+ * runner's glob for the assigned copies, the ignore rule, and a CODEOWNERS suggestion for the lead.
+ */
+function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boolean }) {
+  let team: TeamFile | undefined;
+  try {
+    team = openTeam(root);
+  } catch (err) {
+    add({ name: "team", status: "fail", found: (err as Error).message.replace(`${TEAM_FILE}: `, ""), next: `Fix ${TEAM_FILE}` });
+  }
+  const clash = storyMapClash(root);
+  if (clash) add({ name: "team", status: "fail", found: clash, next: "keep one: a team repo takes its stories from a group repo" });
+  if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
+  if (team) {
+    if (!team.groups.length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
+    for (const g of team.groups) {
+      const st = groupStatus(root, g, { remote: !opts.offline });
+      if (!st.synced) {
+        add({ name: `group ${g.repo}`, status: "warn", found: "not synced yet", next: "Run nikos sync" });
+        continue;
+      }
+      if (st.moved) add({ name: `group ${g.repo}`, status: "warn", found: `moved on since ${st.entry!.commit.slice(0, 7)} (synced ${st.entry!.synced})`, next: "Run nikos sync" });
+      else add({ name: `group ${g.repo}`, status: "ok", found: `synced ${st.entry!.commit.slice(0, 7)} on ${st.entry!.synced}` });
+    }
+  }
+
+  const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
+  if (!runner) add({ name: "scenario runner", status: "warn", found: "no runner config yet", next: "Set one up with nikos verify setup" });
+  else if (runner !== "behave.ini" && !read(join(root, runner)).includes(".nikos/assigned")) {
+    // behave takes its folders from nikos verify, which passes .nikos/assigned when it's there.
+    add({ name: "scenario runner", status: "warn", found: `${runner} doesn't run the assigned stories`, next: `Add ".nikos/assigned/**/features/**/*.feature" to paths in ${runner}` });
+  } else add({ name: "scenario runner", status: "ok", found: runner });
+
+  const ignore = existsSync(join(root, ".gitignore")) && /^\/?\.nikos\/?$/m.test(read(join(root, ".gitignore")));
+  add(ignore ? { name: "copies", status: "ok", found: ".nikos/ is gitignored" } : { name: "copies", status: "warn", found: ".nikos/ isn't gitignored", next: "Run nikos sync to add it" });
+
+  const approvals = storyFiles(join(root, "approvals")).length;
+  const lead = (team?.members ?? []).find((m) => /lead/i.test(m.role ?? "") && m.handle);
+  const owners = codeowners(root);
+  const guarded = !!owners && /approvals(\/|\.yaml|$)/m.test(read(owners));
+  add({ name: "approvals", status: "ok", found: `${count(approvals, "delivery approval")} in approvals/`, ...(lead && !guarded ? { next: `Suggest: add "/approvals/ @${lead.handle}" to CODEOWNERS, so a delivery approval needs the lead's review` } : {}) });
+
+  const stale = staleCliWarning();
+  if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
 }
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */

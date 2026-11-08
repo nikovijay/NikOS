@@ -1,11 +1,12 @@
 import { store } from "../lib/store.js";
-import { loadStates } from "../lib/state-files.js";
+import { loadStates, type StoryState } from "../lib/state-files.js";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { approvalLapse, loadApprovals } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
 import { STORY_ID, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
-import { resolveStoryMap, mapFlag } from "../lib/maps.js";
+import { homeOf, storyMapFor, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
+import { codeChangedSince } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
@@ -17,8 +18,9 @@ const yamlFile = (path: string) => (store().exists(path) ? parse(read(path)) : u
 /** Everything the intent/ folder says about one story, in plain text. */
 export function show(story: string, dir: string, mapId?: string): string {
   if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const ref = resolveStoryMap(dir, mapId);
+  const ref = storyMapFor(dir, { story, map: mapId });
   const intentDir = ref.dir;
+  const home = homeOf(ref);
   const file = featureFor(story, ref.root, ref.id);
   if (!file) throw new Error(`No feature file is tagged @${story}`);
   const feature = parseFeature(read(file));
@@ -29,8 +31,8 @@ export function show(story: string, dir: string, mapId?: string): string {
   const effort = tags.find((t) => t.startsWith("effort-"))?.slice(7);
   const map = yamlFile(join(intentDir, "storymap.yaml"));
   const release = (map?.releases ?? []).find((r: any) => (r?.stories ?? []).includes(story));
-  const states = loadStates(intentDir);
-  const entry = states[story];
+  const states = loadStates(home);
+  const entry: StoryState | undefined = states[story] ?? (ref.team ? { status: "todo" } : undefined);
   const text = read(file);
 
   const out = [`${story} — ${feature.name}`];
@@ -38,10 +40,14 @@ export function show(story: string, dir: string, mapId?: string): string {
     const extra = [entry.claimed_by && `claimed by ${entry.claimed_by}`, entry.updated && `updated ${entry.updated}`].filter(Boolean);
     out.push(`Status: ${entry.status}${extra.length ? ` (${extra.join(", ")})` : ""}`);
     if (entry.blockers?.length) out.push(`Blockers: ${entry.blockers.join("; ")}`);
-    const approval = loadApprovals(intentDir)[story];
+    const approval = loadApprovals(home)[story];
     if (approval) {
-      const lapse = approvalLapse(approval, entry, specHash(text));
+      const lapse = ref.team ? teamApprovalLapse(approval as DeliveryApproval, entry, specHash(text)) : approvalLapse(approval, entry, specHash(text));
       out.push(lapse ? `! Approved by ${approval.by} on ${approval.on}, but that no longer holds: ${lapse}` : `Approved by ${approval.by} on ${approval.on}`);
+      // A team's approval is for the code it tested: code committed since is what approve refuses, so say so here too.
+      if (!lapse && ref.team && codeChangedSince(ref.root, (approval as DeliveryApproval).tested_commit)) {
+        out.push(`! The code has changed since it was tested: run its scenarios again (nikos state set ${story} needs_rework, then done), then approve`);
+      }
     }
     if (entry.status === "cancelled") out.push(`Cancelled: ${entry.cancelled_reason ?? "no reason given"}`);
     if (isDone(entry.status) && entry.spec_hash && entry.spec_hash !== specHash(text)) out.push(`! The feature changed after it was ${entry.status}: its scenarios no longer prove it`);
@@ -59,7 +65,7 @@ export function show(story: string, dir: string, mapId?: string): string {
   if (personas.length) out.push(`For: ${personas.join(", ")}`);
   const type = featureTags(text, "type")[0];
   if (type) out.push(`Type: ${type}`);
-  out.push("", `Feature: intent/${rel(intentDir, file)}`);
+  out.push("", `Feature: ${rel(ref.root, file)}`);
   for (const line of feature.description.split("\n").map((l) => l.trim()).filter(Boolean)) out.push(`  ${line}`);
   out.push("", "Scenarios:");
   for (const s of scenariosOf(feature)) out.push(`  ${s.name}`);
