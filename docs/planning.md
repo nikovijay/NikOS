@@ -295,6 +295,21 @@ nikos team member add "Priya Shah" --role Lead --handle priya-s
 nikos sync                                        # fetch the assigned stories
 ```
 
+A team can also own a story map of its own, once it has a key (`key: WEB` in
+`nikos.team.yaml`, or `nikos team init --key WEB`) and a home (`nikos join <plan> --home`, a group,
+department or company plan). It writes `maps/<key>/` in its own repo, whose stories are `WEB-INB-1`:
+
+```
+nikos map new --bet acme/company-plan#one-inbox --key INB   # a bet of the company's, or a bet of its own
+nikos assign "iOS team" --repo acme/ios-team --stories WEB-INB-2
+nikos assign "Web team" --repo . --stories WEB-INB-1         # its own share
+nikos map status                                            # its own stories, and the other team's status
+```
+
+Its status and approvals stay in its own `status/` and `approvals/`. `nikos map status` writes
+`maps/inb/delivery.yaml` for the plans above: commit it. A team that takes stories from another team
+runs `nikos team join <that team's repo>`, then `nikos sync`, as it does for a group.
+
 In the group repo, assign the team part of a map:
 
 ```

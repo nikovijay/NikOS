@@ -2,9 +2,19 @@
 
 ## Unreleased
 
-Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so far: alignment, delivery, stopped-bet flags, the team key and home, and the home's settings chain. Not yet: team-owned story maps, team sync sources (a team taking stories from another team), `nikos assign` and `nikos migrate maps` for a team's own map, and the CODEOWNERS suggestion.
+Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendment status", for what is built and where it differs). A team can own story maps, give its stories to other teams, and report their delivery through committed summaries. A repo that doesn't opt in (a 0.3.0 team with no key, home, map or joined plan) behaves as before.
 
 ### Added
+
+- A team that has a key can own story maps: `nikos map new --bet <bet-id>|<repo>#<id> --key <KEY>` in a team repo makes `maps/<key>/`, whose story ids are `<TEAM>-<KEY>-n` (e.g. `WEB-INB-1`). Its status and approvals stay at the team's root (`status/`, `approvals/`). `nikos story`, `step`, `activity`, `release`, `state`, `approve`, `validate`, `doctor`, `next`, `show` and `verify` work on its own maps.
+- A team's own bets live in its `planning/bets/`, aimed at company or department key results (`krs: <repo>#<kr-id>`) and optionally aligned to bets in the plans it joins. `planning kr new` stays refused in a team repo.
+- `nikos team join <team repo>` takes stories from another team that owns a map, read-only, as it takes them from a group. Its key names the story ids. `nikos sync` fetches them into `.nikos/assigned/`.
+- `nikos assign "<team>" --repo <path|.>` works in a team repo for its own maps: `--repo .` is its own share, and another team's share is written the way a group writes it, in `maps/<key>/assignments.yaml`.
+- `nikos map status` works in a team repo for its own maps: its own stories are read in place, other teams are fetched as a group fetches them, and `maps/<key>/delivery.yaml` is written for the plans above.
+- `nikos planning downstream add <name> --home <repo>` (and the `add_downstream` tool's `home`) marks a team or group that is homed in another plan. The rollout says "homed in <repo>".
+- `nikos join` and `nikos team join` refuse a key that clashes with a key in the chain's copies, naming both repos. The rollout reports two copies below it with one key as an error line.
+- `nikos doctor` suggests a CODEOWNERS rule for each map's `assignments.yaml`, naming the home plan's lead. The lead is an optional `lead:` in `planning/plan.yaml`; without one the suggestion shows `@<home-lead>`. Nothing is written.
+- `nikos migrate maps` in a team repo moves its `intent/` into the team's `maps/<key>/` in place. The team's key (`--team-key`), its home (`--home <repo>`) and its bet (`--bet`, `--new-bet` or `<repo>#<id>`) come from `nikos.team.yaml` or those flags. The plan is shown first and the layout is checked on a copy, as for a group.
 
 - `nikos team init --key WEB` gives a team its key. A team file with a key or a home is format 2, which 0.3.0 can't read: a team upgraded this way must be upgraded in its groups too. A team with no key keeps format 1.
 - `nikos map status` writes `maps/<key>/delivery.yaml` in the group's repo, one line per story: its team, status, approval (a name, not a verified identity) and when it was read. Commit it: the plans above read it. Rollouts and the bet lines say how old each summary is, and how many stories have no summary yet. Offline reads write nothing.
@@ -15,6 +25,10 @@ Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so
 
 ### Changed
 
+- A team repo with `intent/` and no key is still refused by `nikos migrate maps`, now with the key to pass (it was refused with a move it couldn't make).
+- `nikos assign` and `nikos map status` in a team repo are refused only when the team has no map of its own, with the 0.3.0 wording kept.
+- Rollouts read a team's delivery from its committed `delivery.yaml` (its own maps), the same as a group's, and never from its `status/`.
+- A team's `nikos.team.yaml` may name a `home` and `key` (format 2): 0.3.0 can't read it.
 - A plan aligns to any plan above it that it joins, not only the one directly above. A group may align a bet to a company bet it joins. The "isn't the plan directly above this one" message is now "isn't a plan this <level> joins".
 - Key-result targets in `krs:` (cross-plan) are checked like `aligns_to`.
 - `nikos state set <id> done` exits 0 once the move is written; a problem found elsewhere is printed as a `!` warning.
