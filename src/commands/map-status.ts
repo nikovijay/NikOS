@@ -39,7 +39,7 @@ export interface StoryRow {
   intent: string;
   /** Done and approval is required here, but none holds yet. */
   awaiting: boolean;
-  from: { team: string; status: string | null } | null;
+  from: { team: string; repo: string; status: string | null } | null;
 }
 
 export interface MapStatus {
@@ -135,7 +135,7 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
         delivery: v.delivery,
         intent: v.intent,
         awaiting: v.awaiting,
-        from: v.from ? { team: v.from.team, status: v.from.status ?? null } : null,
+        from: v.from ? { team: v.from.team, repo: v.from.repo, status: v.from.status ?? null } : null,
       })),
       counts,
     };
@@ -148,6 +148,8 @@ export const statusJson = (rs: MapStatus[]) => (rs.length === 1 ? rs[0] : { maps
 /** What a story's status column says: its status, and why it isn't current when it isn't. */
 function statusCell(s: StoryRow): string {
   if (s.freshness === "current" && isDone(s.status)) return s.reason;
+  // A story the group held itself (--repo .) has no team status to show: the move is the news.
+  if (s.freshness === "moved" && s.from?.repo === ".") return "moved from this group";
   if (s.freshness === "moved") return `moved from ${s.from?.team ?? "?"}: ${s.from?.status ?? "no status"}`;
   if (s.freshness === "not-fetched") return `${s.status} (not fetched)`;
   if (s.freshness === "changed" || s.freshness === "behind" || s.freshness === "unverified") return `${s.status} (${s.freshness})`;

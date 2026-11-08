@@ -1,6 +1,6 @@
 ---
 name: nikos-mode
-description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with an intent/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
+description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, group, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with an intent/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
 ---
 
 # nikos-mode

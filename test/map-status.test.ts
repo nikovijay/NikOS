@@ -88,7 +88,7 @@ describe("nikos map status: freshness", () => {
     let s = story(mapStatus(g), "PAY-CHK-2");
     expect(s.freshness).toBe("moved");
     expect(s.reason).toBe("moved to pay; web hasn't committed the move (last in_progress)");
-    expect(s.from).toEqual({ team: "web", status: "in_progress" });
+    expect(s.from).toEqual({ team: "web", repo: "acme/checkout-web", status: "in_progress" });
     expect(s.status).toBe("todo");
 
     teamSync(web);
@@ -162,6 +162,20 @@ describe("nikos map status: freshness", () => {
     expect(s).toMatchObject({ freshness: "in-place", holder: ".", delivery: "n/a (in place)" });
     expect(s.reason).toBe("held by this group (--repo .)");
   });
+
+  it("a story the group held itself and then gave to a team reads moved from this group", () => {
+    const { g } = setup();
+    assign(g, "group", { repo: ".", stories: ["PAY-CHK-4"] });
+    commitAll(g, "hold");
+    mapStatus(g); // the group records itself as the holder
+    assign(g, "pay", { repo: "acme/checkout-pay", stories: ["PAY-CHK-4"] });
+    commitAll(g, "give");
+    const s = story(mapStatus(g), "PAY-CHK-4");
+    expect(s).toMatchObject({ freshness: "moved", from: { team: "this group", repo: "." } });
+    expect(s.reason).toBe("moved to pay; previously held by this group");
+    expect(formatMapStatus(mapStatus(g)[0])).toContain("moved from this group");
+    expect(formatMapStatus(mapStatus(g)[0])).not.toContain("moved from .");
+  });
 });
 
 describe("moves, releases and retired teams", () => {
@@ -193,7 +207,7 @@ describe("moves, releases and retired teams", () => {
     const s = story(mapStatus(g), "PAY-CHK-1");
     expect(s.freshness).toBe("moved");
     expect(s.reason).toBe("moved to pay; web hasn't committed the move (last done)");
-    expect(s.from).toEqual({ team: "web", status: "done" });
+    expect(s.from).toEqual({ team: "web", repo: "acme/checkout-web", status: "done" });
     expect(readFileSync(join(g, ".gitignore"), "utf8")).toContain(".nikos/");
   });
 

@@ -1,5 +1,7 @@
 # start
 
+This is the product path: one repo, one story map in `intent/`. For work shared by a group, see the group path in onboard.md. `nikos migrate maps` moves an existing `intent/` into a group.
+
 Set nikOS up in a repo and get to a first story that's proved done, in one
 conversation. Ask as little as possible: nikOS takes the name, key, stack and
 host from the repo.

@@ -14,7 +14,7 @@ export const TEAM_FILE = "nikos.team.yaml";
 /** The refusal for stories written in a team repo: they're authored in the group repo. */
 export const TEAM_REPO_STORIES = "this is a team repo: stories are added in the group repo";
 
-/** A team repo can't also keep its own story map (intent/ or maps/) until PR 6 moves them. Returns the refusal, or undefined. */
+/** A team repo can't also keep its own story map (intent/ or maps/): nikos migrate maps refuses it, and the person moves intent/ into a group repo. Returns the refusal, or undefined. */
 export function storyMapClash(root: string): string | undefined {
   if (!store().isDir(join(root, "intent")) && !store().isDir(join(root, "maps"))) return undefined;
   return "this repo has intent/ or maps/ and nikos.team.yaml: keep one";

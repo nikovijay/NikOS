@@ -36,8 +36,7 @@ the dashboard, so the same checks always run.
 
 With no `planning/` folder yet, set one up before planning: for a company or
 department, `nikos company init` in a folder of its own (the nikOS skill's
-onboard playbook walks through it); for a team, `nikos start` and then this
-skill's wizard. Never put company goals in `intent/constitution.md`: that's one
+onboard playbook walks through it); for a team repo, `nikos team init` and `nikos team join` to its group; teams don't plan (see wizard.md). Never put company goals in `intent/constitution.md`: that's one
 product's vision, not the company's plan.
 
 ## How to work

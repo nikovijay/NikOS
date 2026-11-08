@@ -3,7 +3,7 @@
 Plan a period with the person, at their level, and save it to `planning/`
 only once they're happy with it.
 
-1. Establish context. Ask for the planning period (e.g. Q1 2027), the level (company, department or group) and the strategic pillars for that period. Ask one question at a time. OKRs stop at department level: a group plans bets only, and teams don't plan at all (their group assigns them work).
+1. Establish context. Ask for the planning period (e.g. Q1 2027), the level (company, department or group) and the strategic pillars for that period. Ask one question at a time. OKRs stop at department level: a group plans bets only, and teams don't plan at all (their group assigns them work). A team repo joins its group with nikos team init and nikos team join; teams don't plan.
 2. If `planning/upstream.yaml` lists plans above this one, run `nikos planning sync` and read the key results it fetched. If there is none, or a repo is unresolved, say so and carry on: parent alignment is optional, never an entry requirement.
 3. Follow the path for the level:
    - Company: ask whether existing company OKRs should be updated. If there are none, start fresh: the objectives first, then the measurable key results for each (baseline, target, date, owner).

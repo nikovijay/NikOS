@@ -28,6 +28,8 @@ _Record trade-offs and why._
 
 ## Key files
 
+- `intent/` (one product's story map, in a repo with no levels) and `maps/<key>/` (a group's maps)
+  are the two layouts. `src/commands/migrate-maps.ts` (`nikos migrate maps`) is the only move between them.
 - `src/lib/maps.ts`: which story map a command works on, including a team's assigned copies
   (`storyMapFor`, `resolveStoryMap`).
 - `src/lib/state-files.ts`: where a story's state and approvals live: intent/, maps/<id>, or a

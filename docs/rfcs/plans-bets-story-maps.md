@@ -1,6 +1,53 @@
 # RFC: plans, bets, story maps and team assignments
 
-**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, PR 4 (status flowing back) as described in "PR 4 status", and PR 5 (views, editing from the dashboard, editable snapshots and `nikos apply`) as described in "PR 5 status".
+**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, PR 4 (status flowing back) as described in "PR 4 status", PR 5 (views, editing from the dashboard, editable snapshots and `nikos apply`) as described in "PR 5 status", and PR 6 (migration and onboarding) as described in "PR 6 status".
+
+## PR 6 status
+
+Built: `nikos migrate maps` (`src/commands/migrate-maps.ts`), which moves a 0.2.x `intent/` into
+`maps/<key>/` of a group that is its own team. It shows the whole plan first, checks the new layout
+on a copy of the repo (`validateGroup` and the planning checks), and writes only after a yes (or
+`--yes`). The changes stay uncommitted on `nikos/migrate-maps`, or are committed with `--commit`,
+which commits only the paths it wrote. It never pushes. Also built: the `nikos doctor` hints for
+0.2.x repos (the layout, a team plan, a runner that doesn't run the story folder), the onboarding
+wizard's six choices (company, department, group, team repo, product, both), `nikos start`
+refusing a repo with `maps/`, the behave template's header, the playbooks, and the MCP
+descriptions. Tests: `test/migrate-maps.test.ts`, `test/migrate-doctor.test.ts`, and the wizard
+cases in `test/first-run.test.ts`.
+
+Review fixes on top of that build: a failed write or check puts the repo back (snapshot, then restore, and the new branch is deleted when this run made it); the plan is printed before the "Write these changes?" question and before any write; an intent/ file the moves don't pick up stops the migration in preflight (only `.gitkeep` and Finder or Explorer files are removed, and each is listed in the plan); nested state and approvals keep their folder; a release that names a bet with no card is refused with `--new-bet` named (or offered as a stub in a terminal); a flag that disagrees with the plan's period or name is refused; unknown `--options` are a usage error; `nikos verify setup` in a group repo writes the maps' folders into behave.ini; team doctor warns when the runner has no folder of step definitions.
+
+Where the build differs from this RFC:
+
+- **Story ids are renamed only with `--rename-ids`.** Keeping `HT-1` in `maps/` isn't possible:
+  validation requires `<GROUP>-<MAP>-<n>` there, and the RFC's keep-the-ids path would need a schema
+  change, which was rejected. So a migration whose ids lack the group key stops, and lists them.
+  `--rename-ids` renames `KEY-n` to `GROUP-KEY-n`, rewrites tags above `Feature:` and the state,
+  approval and plan files, and leaves body text alone (a changed body would change the spec hash
+  and lapse the approval). The plan lists the other files that mention a renamed id.
+- **Group key results stay an error.** `nikos planning validate` keeps refusing key results in a
+  group plan. The RFC's migration section said "warns"; that's amended here. A team plan with key
+  results or objectives is refused by the migration, with what to do.
+- **Bet links are dropped, and listed.** Validation refuses `bets:` and `story_bets:` in a map, so
+  the map's bet is the one the releases name (or `--bet`, or `--new-bet` for a stub). Other links and
+  cross-repo links are listed in the plan, for the person to add to the bet's card by hand.
+- **Team repos with `intent/` are refused, not moved.** A team repo can't hold a story map, so the
+  refusal says to move `intent/` into a group repo and then join.
+- **Doctor hints are warnings, and fold into existing checks for intent/ repos.** The layout hint
+  and the team-plan hint are the story map check's `next`, and the runner check warns only when a
+  config lists paths without the story folder. This keeps the check names that repos already see.
+  A team plan in a team repo is a `plan` warning.
+- **Changes are uncommitted by default.** `--commit` commits the migration alone.
+- **behave takes folders, not globs.** A group's behave.ini lists each map's `features` folder, as a multi-line `paths =`. A review run with behave 1.3.3 found that form accepted; it was not re-run for this PR, and a single `maps` folder is the alternative, not used here.
+- **Not checked here:** the python undefined-steps listing is parsed from behave's JSON, but no python run was made against a real behave install in this PR.
+- **Wizard choices renumber.** The menu is 1 company, 2 department, 3 group, 4 team repo, 5 product,
+  6 both. Typed `team` is still a product, as before. Scripts that pipe answers break; flags don't.
+- **The smallest setup's company case isn't special-cased.** A group with no department plans
+  against the company's key results with `krs:`, and the alignment rule keeps a group's bet
+  aligned to the plan directly above it, so a group with no department has no bet alignment to
+  the company. The wizard only lists groups directly under a company plan, and writes no alignment.
+- **Not in PR 6:** the PR 5 deferrals, and `migrate maps` is not exposed through MCP (it writes
+  files a person reviews first).
 
 ## PR 5 status
 
@@ -328,6 +375,7 @@ The verified-approvals RFC applies to both.
 | Group | `nikos assign "<team>" --repo <path> [--activities a,b \| --releases 1,2]` | Assign a team all or part of a map |
 | Group | `nikos map status` | Fetch the team repos and show each story's status |
 | Team | `nikos team init` / `nikos team join <group repo>` | Make a code repo a team repo, and take work from a group |
+| Group | `nikos migrate maps` | In a 0.2.x repo with `intent/`: move the story map to `maps/<key>/`, and make the repo its own team (see "PR 6 status") |
 | Team | `nikos sync` | Fetch the assigned stories |
 | Team | `nikos next`, `verify`, `state set`, `approve` | As today, on the assigned stories |
 
@@ -438,11 +486,12 @@ weight:
 
 - **A repo with `intent/` and code:** `nikos migrate maps` moves `intent/` into
   `maps/<key>/`, asks which bet the map specs, and assigns the repo's own team
-  with `--repo .`. Releases' `bets:` and `story_bets:` become the map's `bet`,
-  or stay as a warning when they named several.
-- **Key results in group or team plans:** `nikos planning validate` warns and
-  suggests moving each one to the department, or rewriting it as a bet aimed at
-  a department key result. Nothing is deleted.
+  with `--repo .`. Releases' `bets:` and `story_bets:` are dropped (the map has
+  one `bet`), and the links the map can't keep are listed (see "PR 6 status").
+- **Key results in group plans:** `nikos planning validate` reports them as an
+  error, since a group plan has none. In a team plan they stay a warning, with
+  the suggestion to move each one to the department, or rewrite it as a bet aimed
+  at a department key result. Nothing is deleted.
 - **A team plan** (from the 0.2.4 wizard): flagged by `nikos doctor`, with the
   same suggestion.
 - `nikos doctor` explains each step, and every migration is a commit the person

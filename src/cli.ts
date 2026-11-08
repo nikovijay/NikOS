@@ -132,6 +132,9 @@ Commands:
   doctor           Check this repo is set up well, and say what to do next (--offline)
   migrate per-story  Give each story its own state and approval file, so parallel
                    branches never conflict (migrate single-file goes back)
+  migrate maps     Move a repo's intent/ story map to maps/<key>/ of a group repo, which is
+                   its own team: planned first, on nikos/migrate-maps (--dry-run, --yes,
+                   --key, --group-key, --bet, --new-bet, --rename-ids, --commit)
   tracker link|record|sync|import  Keep the story map and a Jira, Linear, GitHub or GitLab
                    tracker in step; the agent reads tickets through the tracker's MCP
   mcp              Run nikOS as a local MCP server for Claude Desktop, Cursor, Codex and
@@ -176,7 +179,8 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
   // `nikos map` alone writes the page, which a team can have; `map new` writes a map.
-  const authoring = GROUP_ONLY.has(cmd) && !(cmd === "map" && rest[0] !== "new");
+  // `migrate maps` is refused with its own message in a team repo, so it skips the generic one.
+  const authoring = GROUP_ONLY.has(cmd) && !(cmd === "map" && rest[0] !== "new") && !(cmd === "migrate" && rest[0] === "maps");
   const at = rest.indexOf("--dir");
   if (at >= 0 && !rest[at + 1]) {
     console.error("✗ --dir needs a folder: --dir <path>");

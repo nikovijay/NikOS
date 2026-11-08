@@ -1,9 +1,9 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
-import { assignedMaps, mapFlag } from "../lib/maps.js";
+import { assignedMaps, mapDirs, mapFlag } from "../lib/maps.js";
 import { isTeamRepo } from "../lib/team.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
@@ -50,6 +50,18 @@ function stackOrThrow(root: string): Stack {
   return stack;
 }
 
+/**
+ * The behave.ini text for this repo. behave takes folders, not globs, and fails on one that doesn't
+ * exist, so a group repo lists the folder of each map that has features. A 0.2.x repo keeps the template's line.
+ */
+export function behavePaths(root: string, template: string): string {
+  if (existsSync(join(root, "intent"))) return template;
+  const folders = mapDirs(root).filter((m) => existsSync(join(m, "features")));
+  if (!folders.length) return template;
+  const lines = folders.map((m) => `    maps/${basename(m)}/features`);
+  return template.replace(/^paths = intent\/features$/m, ["paths =", ...lines].join("\n"));
+}
+
 /** Write the runner config and step stubs for the repo's stack. Never overwrites a file. */
 export function setupVerify(root: string): SetupResult {
   const stack = stackOrThrow(root);
@@ -69,7 +81,8 @@ export function setupVerify(root: string): SetupResult {
       continue;
     }
     mkdirSync(dirname(dest), { recursive: true });
-    copyFileSync(file, dest);
+    if (rel === "behave.ini") writeFileSync(dest, behavePaths(root, readFileSync(file, "utf8")));
+    else copyFileSync(file, dest);
     created.push(rel);
   }
   const node = nodeWarning(stack);
@@ -122,10 +135,13 @@ export function undefinedSteps(root: string, stack: Stack, story?: string): Unde
     args = ["--dry-run", "--format", "json", ...(story ? ["--tags", `@${story}`] : [])];
   }
   const r = spawnSync(cmd, args, { cwd: root, env: runnerEnv(stack), encoding: "utf8", stdio: "pipe" });
-  // behave prints a "USING RUNNER" line before its JSON: the JSON starts at the first line that's a bracket.
+  // Cucumber's JSON is the whole output. behave prints a line before its JSON and a summary after it: the
+  // JSON is the array from its first line to the bracket that closes it at the start of a line.
+  const stdout = r.stdout ?? "";
+  const block = stdout.match(/^\[(?:[\s\S]*?\n)?\]$/m)?.[0] ?? stdout;
   let data: any;
   try {
-    data = JSON.parse((r.stdout ?? "").slice((r.stdout ?? "").search(/^\[/m)));
+    data = JSON.parse(block);
   } catch {
     return undefined;
   }
