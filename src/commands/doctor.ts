@@ -16,8 +16,8 @@ import { loadPlan } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { validate, validateGroup } from "./validate.js";
-import { mapDirs } from "../lib/maps.js";
+import { validate, validateGroup, validateTeam } from "./validate.js";
+import { mapDirs, ownMapsOf } from "../lib/maps.js";
 import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from "../lib/team.js";
 
 /** What a team plan's check says, in every repo it shows up in. */
@@ -232,6 +232,13 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
   if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into a group repo with nikos migrate maps there, then delete it here." });
   if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
+  // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key and folder, and the team's status.
+  const own = ownMapsOf(root);
+  if (own.length && !clash) {
+    const v = validateTeam(root, {});
+    const mine = v.errors.filter((e) => e.file.startsWith("maps/"));
+    add({ name: "maps", status: mine.length ? "fail" : "ok", found: `${count(own.length, "own map")}${mine.length ? `, ${mine.length} problem${mine.length === 1 ? "" : "s"}` : ""}`, next: mine.length ? "Fix the problems nikos validate lists" : undefined });
+  }
   // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
   if (team) {
     const joined = (() => {

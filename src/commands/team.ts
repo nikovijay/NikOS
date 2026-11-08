@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { isSeq, parse, stringify, type Document, type YAMLSeq } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
-import { assignedMaps, groupKeyOf } from "../lib/maps.js";
+import { assignedMaps, keyOf } from "../lib/maps.js";
 import { ownRepo } from "../lib/git.js";
 import { read } from "../lib/project.js";
 import { store } from "../lib/store.js";
@@ -35,8 +35,9 @@ export const TEAM_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string } {
   const root = resolve(dir);
   if (isTeamRepo(root)) throw new Error(`${TEAM_FILE} already exists here`);
-  if (store().isDir(join(root, "intent")) || store().isDir(join(root, "maps"))) {
-    throw new Error("this repo has its own story map (intent/ or maps/), and a team repo can't hold one. Move it to a group repo with nikos migrate maps there, then nikos team join");
+  // intent/ is a 0.3.0 group's story map; a team keeps its own maps in maps/<key>/ (after 0.3.0), so only intent/ is refused.
+  if (store().isDir(join(root, "intent"))) {
+    throw new Error("this repo has its own story map (intent/), and a team repo can't hold one. Move it with nikos migrate maps (a group repo, or a team repo with a key), then nikos team join");
   }
   if (store().exists(join(root, "planning", "plan.yaml"))) throw new Error("this repo has planning/plan.yaml: a plan repo can't also be a team repo. Make the team in its own repo");
   const repo = opts.repo ?? ownRepo(root);
@@ -60,12 +61,16 @@ function listIn(doc: Document, key: string): YAMLSeq {
   return block(doc.get(key, true) as YAMLSeq);
 }
 
-/** `nikos team join <group repo>`: add the group, then fetch it. A group that isn't a usable group plan is left out. */
+/**
+ * `nikos team join <repo>`: add a source to take stories from, then fetch it. A source is a group
+ * plan or another team that owns maps. One that isn't a usable source is left out.
+ */
 export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?: string; url?: string } = {}): { repo: string; commit?: string; stories: number; unresolved?: string } {
   const root = resolve(dir);
   requireTeam(root);
   if (!REPO_PATH.test(repo)) throw new Error(`'${repo}' is ${NOT_A_REPO}`);
   const team = openTeam(root);
+  if (repo === team.repo) throw new Error(`this team is ${repo}: a team takes stories from another repo`);
   if (team.groups.some((g) => g.repo === repo)) throw new Error(`this team already takes work from ${repo}`);
   const clash = clashingGroups([...team.groups.map((g) => g.repo), repo]);
   if (clash) throw new Error(`${clash[0]} and ${clash[1]} can't both be groups: one path sits inside the other`);
@@ -97,10 +102,13 @@ export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?:
     undo();
     throw new Error(`${repo} ${got.unresolved}`);
   }
-  // Its key must be its own: no other group this team takes work from can use it.
-  // A group that hasn't synced has no copy, so no key to compare.
-  const keyOf = (path: string) => (store().exists(join(path, "planning", "plan.yaml")) ? (parse(read(join(path, "planning", "plan.yaml"))) as { key?: string } | null)?.key : undefined);
+  // Its key must be its own: neither this team's nor any other source this team takes work from can use it.
+  // A source that hasn't synced has no copy, so no key to compare.
   const key = got?.commit ? keyOf(copyDirOf(root, repo)) : undefined;
+  if (key && key === team.key) {
+    undo();
+    throw new Error(`${repo} uses key ${key}, which this team uses: give one of them another key`);
+  }
   const other = team.groups.map((g) => g.repo).find((r2) => key && keyOf(copyDirOf(root, r2)) === key);
   if (other) {
     undo();
@@ -161,7 +169,7 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
     for (const m of maps) {
       const map = (parse(read(join(m.dir, "storymap.yaml"))) ?? {}) as { key?: string; releases?: { stories?: string[] }[] };
       const count = (map.releases ?? []).reduce((n, r) => n + (r.stories?.length ?? 0), 0);
-      out.push(`  ${groupKeyOf(m.copyRoot!)}-${map.key ?? m.id}: ${count} ${count === 1 ? "story" : "stories"}`);
+      out.push(`  ${keyOf(m.copyRoot!)}-${map.key ?? m.id}: ${count} ${count === 1 ? "story" : "stories"}`);
     }
   }
   return out;

@@ -10,7 +10,9 @@ import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval 
 import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
-import { NO_GROUP_KEY, groupKeyOf, homeOf, mapDirs, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
+import { NO_GROUP_KEY, NO_TEAM_KEY, groupKeyOf, homeOf, keyOfMap, mapDirs, ownMapsOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
+import { isTeamRepo, openTeam } from "../lib/team.js";
+import { upstreamEntries } from "../planning/upstream.js";
 import { runMapStatus } from "./map-status.js";
 
 export interface MapCriterion {
@@ -512,6 +514,7 @@ const MAP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
  * new intent/ has. Refuses with the same messages the command line gives.
  */
 export function newMap(input: { bet?: string; key?: string }, dir: string): { id: string; key: string; group: string; dir: string } {
+  if (isTeamRepo(dir)) return newTeamMap(input, dir);
   const bet = input.bet;
   const key = input.key;
   if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
@@ -536,6 +539,37 @@ export function newMap(input: { bet?: string; key?: string }, dir: string): { id
   store().write(join(mapDir, "state.yaml"), "format_version: 1\nstories: {}\n", { create: true });
   for (const sub of ["features", "plans", "approvals"]) store().write(join(mapDir, sub, ".gitkeep"), "", { create: true });
   return { id, key, group, dir: mapDir };
+}
+
+/**
+ * A story map a team owns, as maps/<key>/ in its own repo. Its bet is one of the team's own bets, or
+ * a bet of a plan the team joins (<repo>#<id>). Its story ids take the team's key, e.g. WEB-INB-1.
+ */
+function newTeamMap(input: { bet?: string; key?: string }, dir: string): { id: string; key: string; group: string; dir: string } {
+  const bet = input.bet;
+  const key = input.key;
+  if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
+  if (!key) throw new Error("nikos map new needs --key <KEY>");
+  const team = openTeam(dir);
+  if (!team.key) throw new Error(NO_TEAM_KEY);
+  if (CROSS_REF.test(bet)) {
+    const repo = bet.split("#")[0];
+    if (!upstreamEntries(dir).some((e) => e.repo === repo)) throw new Error(`${repo} isn't a plan this team joins: nikos join ${repo} --home <repo> first`);
+  } else if (!BET_ID.test(bet)) {
+    throw new Error(`'${bet}' is not a bet id`);
+  } else if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) {
+    throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new, or name a bet of a plan this team joins (<repo>#<id>)`);
+  }
+  if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
+  const taken = ownMapsOf(dir).find((r) => keyOfMap(r.dir) === key);
+  if (taken) throw new Error(`map key ${key} is already used by maps/${taken.id}`);
+  const id = key.toLowerCase();
+  const mapDir = join(dir, "maps", id);
+  if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
+  const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
+  store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
+  store().write(join(mapDir, "features", ".gitkeep"), "", { create: true });
+  return { id, key, group: team.key, dir: mapDir };
 }
 
 /**

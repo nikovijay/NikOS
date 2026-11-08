@@ -3,9 +3,9 @@ import { parseDocument, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
 import { checkHash } from "../planning/model.js";
 import { holderOf, loadMapData, readAssignments } from "../lib/assignments.js";
-import { authoringMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { authoringMap, homeOf, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
-import { createStoryState, loadStates, perStory, statePath, storyStatePath } from "../lib/state-files.js";
+import { createStoryState, loadStates, perStory, statePath, storyStatePath, type StoryHome } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -43,7 +43,7 @@ function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
     return Math.max(0, ...releases.flatMap((r) => r?.stories ?? []).map((s: string) => Number(s.slice(key.length + 1)) || 0));
   }
   const ids = new Set<string>(releases.flatMap((r) => r?.stories ?? []));
-  for (const s of Object.keys(loadStates(ref.dir))) ids.add(s);
+  for (const s of Object.keys(loadStates(homeOf(ref)))) ids.add(s);
   for (const f of walk(join(ref.dir, "features"), ".feature")) for (const s of featureStoryIds(read(f))) ids.add(s);
   return Math.max(0, ...[...ids].filter((s) => s.startsWith(`${prefix}-`)).map((s) => Number(s.slice(prefix.length + 1)) || 0));
 }
@@ -105,7 +105,7 @@ Feature: ${title}
 
   store().write(feature, text, { create: true });
   store().write(mapPath, map.toString(yamlOpts));
-  createStoryState(intentDir, id, { status: "todo" });
+  createStoryState(homeOf(ref), id, { status: "todo" });
   return { id, release, feature, validation: validate(intentDir) };
 }
 
@@ -157,7 +157,12 @@ export function renameStory(dir: string, input: { map?: string; id: string; titl
 }
 
 /** Drop a story's state entry from its map: its own file, or its line in state.yaml. */
-function dropState(dir: string, id: string): void {
+function dropState(home: StoryHome, id: string): void {
+  if (typeof home !== "string") {
+    if (store().exists(join(home.team, "status", `${id}.yaml`))) store().remove(join(home.team, "status", `${id}.yaml`));
+    return;
+  }
+  const dir = home;
   if (perStory(dir) && store().exists(storyStatePath(dir, id))) store().remove(storyStatePath(dir, id));
   const path = statePath(dir);
   if (!store().exists(path)) return;
@@ -178,7 +183,7 @@ export function removeStory(dir: string, input: { map?: string; id: string }, ex
   checkHash(input.id, read(file), expect);
   const holder = holderOf(readAssignments(ref.dir), loadMapData(ref.dir), input.id);
   if (holder) throw new Error(`${input.id} is assigned to ${holder.team}: unassign it first`);
-  const status = loadStates(ref.dir)[input.id]?.status ?? "todo";
+  const status = loadStates(homeOf(ref))[input.id]?.status ?? "todo";
   if (status !== "todo") throw new Error(`${input.id} has work done: remove it from the CLI`);
   const mapPath = join(ref.dir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
@@ -191,6 +196,6 @@ export function removeStory(dir: string, input: { map?: string; id: string }, ex
   }
   store().write(mapPath, map.toString(yamlOpts));
   store().remove(file);
-  dropState(ref.dir, input.id);
+  dropState(homeOf(ref), input.id);
   return { removed: input.id, validation: validate(ref.dir) };
 }

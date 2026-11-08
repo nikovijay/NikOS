@@ -22,13 +22,14 @@ describe("nikos team init", () => {
     expect(readFileSync(join(t, ".gitignore"), "utf8")).toContain(".nikos/");
   });
 
-  it("refuses with intent/, with maps/, with a file already there, and with no origin and no --repo", () => {
+  it("refuses with intent/, with a plan, with a file already there, and with no origin and no --repo", () => {
     const withIntent = mkdtempSync(join(tmpdir(), "nikos-init-"));
     git(withIntent, "init", "-q", "-b", "main");
     init(withIntent, { name: "Old" });
     expect(() => teamInit(withIntent, { repo: "acme/x" })).toThrow("this repo has its own story map");
 
-    expect(() => teamInit(groupRepo(), { repo: "acme/x" })).toThrow("this repo has its own story map");
+    // A group repo (planning/plan.yaml) can't also be a team: its maps/ are the group's, not a team's own (after 0.3.0).
+    expect(() => teamInit(groupRepo(), { repo: "acme/x" })).toThrow("a plan repo can't also be a team repo");
     expect(() => teamInit(teamRepo(), { repo: "acme/x" })).toThrow("nikos.team.yaml already exists here");
 
     const bare = mkdtempSync(join(tmpdir(), "nikos-init-"));
