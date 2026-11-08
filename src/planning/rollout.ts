@@ -15,7 +15,8 @@ import { loadStates } from "../lib/state-files.js";
 import { storyMapOf } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
-import { delivery, describeDelivery, teamsHolding } from "./delivery.js";
+import { delivery, describeDelivery, mapDeliveryIn } from "./delivery.js";
+import { summaryAge } from "../lib/delivery-summary.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
@@ -38,7 +39,7 @@ export interface DownstreamPlan {
    * That plan is this repo, or for a plan further down, `via` as rollout fetched it.
    */
   synced?: { on: string; commit: string; current?: boolean };
-  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number };
+  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number; noSummary?: number; asOf?: string };
   /** The story its team builds next, as nikos next would say. */
   next?: { id: string; title: string };
   /** Stories with blockers in their state, and what's blocking each. */
@@ -47,7 +48,7 @@ export interface DownstreamPlan {
   decisions: Decision[];
   /** stale: no check-in within its window. checkedIn: it has had at least one. */
   krs: { id: string; title: string; aligns_to?: string[]; progress: number; stale: boolean; checkedIn: boolean }[];
-  bets: { id: string; outcome: string; delivery: string; krs: string[]; aligns_to?: string[] }[];
+  bets: DownstreamBet[];
 }
 
 export interface Blocker {
@@ -144,12 +145,16 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     try {
       const map = storyMapOf(dir);
       const stories = map.releases.flatMap((r) => r.stories).filter((s) => s.status !== "cancelled");
+      // Every map the copy holds, summed (not storyMapOf, which is empty for several maps); the owner's summary says the teams' status.
+      const all = mapDeliveryIn(dir);
       deliv = {
-        stories: stories.length,
-        done: stories.filter((s) => isDone(s.status)).length,
-        approved: stories.filter((s) => s.status === "approved").length,
-        inProgress: stories.filter((s) => s.status === "in_progress").length,
-        releases: map.releases.length,
+        stories: all.stories.length + all.noSummary.length,
+        done: all.stories.filter((s) => isDone(s.status)).length,
+        approved: all.stories.filter((s) => s.approval === "approved").length,
+        inProgress: all.stories.filter((s) => s.status === "in_progress").length,
+        releases: all.releases,
+        ...(all.noSummary.length ? { noSummary: all.noSummary.length } : {}),
+        ...(all.asOf ? { asOf: all.asOf } : {}),
       };
       const titles = new Map([...stories, ...map.unreleased].map((s) => [s.id, s.title]));
       const id = (() => {
@@ -182,10 +187,22 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     try {
       const m = loadBet(dir, id).meta;
       const up = alignsList(m.aligns_to);
-      // A copy has no team cache, so a bet's delivery here is the group's own state; team status is read in the group.
-      const teams = teamsHolding(dir, id);
-      const note = teams.length ? `; team status not read here: run nikos map status in ${repo}` : "";
-      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id, { groupState: true })) + note, krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean), ...(up.length ? { aligns_to: up } : {}) }];
+      // A copy's bet counts the owner's delivery summary; a story with none yet says so, and the owner's nikos map status fixes it.
+      const d = delivery(dir, id, { groupState: true });
+      const missing = d.stories.filter((s) => s.freshness === "no-summary").length;
+      const note = missing ? `; ${missing} with no summary yet: run nikos map status in ${repo}` : "";
+      const stop = (m.reviews ?? []).filter((r: { decision?: string }) => r.decision === "stop").map((r: { date?: string }) => String(r.date ?? "")).sort().at(-1);
+      return [
+        {
+          id,
+          ref: `${repo}#${id}`,
+          outcome: m.outcome,
+          delivery: describeDelivery(d) + note,
+          krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean),
+          ...(up.length ? { aligns_to: up } : {}),
+          ...(m.outcome === "stopped" && stop ? { stoppedOn: stop } : {}),
+        },
+      ];
     } catch {
       return [];
     }
@@ -202,6 +219,35 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     krs,
     bets,
   };
+}
+
+/** One bet of a plan below, as the rollout shows it. ref is repo#id, the way other plans name it. */
+export interface DownstreamBet {
+  id: string;
+  ref: string;
+  outcome: string;
+  delivery: string;
+  krs: string[];
+  aligns_to?: string[];
+  /** The date of its latest stop review, when it is stopped. */
+  stoppedOn?: string;
+  /** A bet it aligns to that was stopped: the owner decides what to do about it, nothing cascades. */
+  stoppedParent?: { target: string; date: string };
+}
+
+/**
+ * Flag each bet that aligns to a stopped bet (rule 10). Stopping a bet never changes the bets aimed
+ * at it: the rollout and the views say so, and the owner reviews them.
+ */
+export function flagStoppedParents(plans: DownstreamPlan[]): void {
+  const stopped = new Map<string, string>();
+  for (const p of plans) for (const b of p.bets) if (b.stoppedOn) stopped.set(b.ref, b.stoppedOn);
+  for (const p of plans) {
+    for (const b of p.bets) {
+      const target = [...(b.aligns_to ?? []), ...b.krs].find((t) => stopped.has(t));
+      if (target) b.stoppedParent = { target, date: stopped.get(target)! };
+    }
+  }
 }
 
 /**
@@ -275,6 +321,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     mkdirSync(cache(root), { recursive: true });
     writeFileSync(indexOf(root), JSON.stringify(index, null, 2));
   }
+  flagStoppedParents(plans);
   return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
 }
 
@@ -415,12 +462,21 @@ export function formatRollout(r: Rollout): string {
     const mark = p.state === "joined" ? "✓" : p.state === "not joined" ? "!" : "?";
     out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
     if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? `, behind ${p.via ?? "this plan"}: ask them to run nikos planning sync` : ""}`);
-    if (p.delivery) out.push(`    delivery: ${p.delivery.done} of ${p.delivery.stories} stories done${p.delivery.approved ? ` (${p.delivery.approved} approved)` : ""}, ${p.delivery.inProgress} in progress`);
+    if (p.delivery) {
+      const d = p.delivery;
+      const age = d.asOf ? `, ${summaryAge({ read_at: d.asOf })}` : "";
+      const missing = d.noSummary ? `; ${d.noSummary} ${d.noSummary === 1 ? "story has" : "stories have"} no summary yet: run nikos map status in ${p.repo}` : "";
+      out.push(`    delivery: ${d.done} of ${d.stories} stories done${d.approved ? ` (${d.approved} approved)` : ""}, ${d.inProgress} in progress${age}${missing}`);
+    }
     if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);
     for (const b of p.blockers) out.push(`    blocked: ${b.story} ${b.title}: ${b.blockers.join("; ")}`);
     for (const d of p.decisions) out.push(`    decision: ${d.title}`);
     for (const k of p.krs) out.push(`    KR ${k.id}: ${k.title}, ${Math.round(k.progress * 100)}%${!k.checkedIn ? ", no check-ins yet" : k.stale ? ", stale" : ""}${k.aligns_to ? ` → ${k.aligns_to.join(", ")}` : ""}`);
-    for (const b of p.bets) out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}${b.aligns_to ? `; aligns to ${b.aligns_to.join(", ")}` : ""}`);
+    for (const b of p.bets) {
+      // A bet aimed at a stopped bet says so: the owner reviews it, nothing is changed here.
+      const aligns = b.stoppedParent ? `; aligns to ${b.stoppedParent.target}, which was stopped on ${b.stoppedParent.date}` : b.aligns_to ? `; aligns to ${b.aligns_to.join(", ")}` : "";
+      out.push(`    bet ${b.id}: ${b.delivery}, ${b.outcome}${b.krs.length ? ` → ${b.krs.join(", ")}` : ""}${aligns}`);
+    }
   }
   return out.join("\n");
 }

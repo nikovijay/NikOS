@@ -10,6 +10,7 @@ import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadMapData, readAssignments, storiesOf } from "../lib/assignments.js";
 import { openTeam } from "../lib/team.js";
+import { readDeliverySummary } from "../lib/delivery-summary.js";
 import { resolveSettings } from "../lib/settings.js";
 import { featureHashIn, loadGroupMap, mapViews, ownView, readTeamIndex, type StoryView, type TeamIndex } from "../team/status.js";
 
@@ -30,6 +31,8 @@ export interface Delivery {
   notFetched: string[];
   /** The oldest good fetch among the teams whose status was read, when any was. */
   asOf?: string;
+  /** The oldest delivery summary read for a copy's maps (copies read the owner's summary, not the teams). */
+  summaryAsOf?: string;
 }
 
 export interface DeliveryOptions {
@@ -38,6 +41,9 @@ export interface DeliveryOptions {
   /** Count the group's own state for every map, even one with assignments: for a copy whose team status isn't read here. */
   groupState?: boolean;
 }
+
+/** A map's delivery summary, when its owner has committed one. */
+const summaryIn = (dir: string) => readDeliverySummary(dir);
 
 const yamlAt = (p: string) => (store().exists(p) ? parse(store().read(p)) : undefined);
 
@@ -102,6 +108,7 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
     if (v.fetched) dates.push(v.fetched);
   };
 
+  let asOfMin: string | undefined;
   for (const ref of storyMapsOf(root)) {
     const map = yamlAt(join(ref.dir, "storymap.yaml"));
     const ids = map ? storiesFor(map, bet) : [];
@@ -113,6 +120,20 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
       const team = openTeam(ref.root).name;
       const data = loadMapData(ref.dir);
       for (const id of ids) add(ownView(ref.root, team, id, featureHashIn(data, id), policyHere()));
+    } else if (ref.id && opts.groupState && (summaryIn(ref.dir) || assignedIn(ref.dir).length)) {
+      // A copy of a group's map: the owner's summary says each story's status. A story it doesn't list has none yet.
+      const summary = summaryIn(ref.dir);
+      if (summary?.read_at && (!asOfMin || summary.read_at < asOfMin)) asOfMin = summary.read_at;
+      for (const id of ids) {
+        const s = summary?.stories.find((x) => x.id === id);
+        if (!s) {
+          stories.push({ id, status: "todo", freshness: "no-summary" });
+          continue;
+        }
+        if (s.status === "cancelled") continue;
+        stories.push({ id, status: s.status, freshness: "summary" });
+        if (isDone(s.status)) done++;
+      }
     } else if (ref.id && !opts.groupState && assignedIn(ref.dir).length) {
       // A group's map with assignments: each story is its holder's status, read from the team's copy.
       index ??= readTeamIndex(root);
@@ -143,7 +164,41 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
     notCurrent,
     notFetched: [...notFetched],
     ...(dates.length ? { asOf: [...dates].sort()[0] } : {}),
+    ...(asOfMin ? { summaryAsOf: asOfMin } : {}),
   };
+}
+
+/**
+ * Every map a copy holds, summed: each story's status from its owner's delivery summary. A story with
+ * no summary yet is counted in noSummary. A map with no teams (and so no summary) counts its own state.
+ */
+export function mapDeliveryIn(dir: string): { stories: { id: string; status: string; approval: string }[]; noSummary: string[]; releases: number; asOf?: string } {
+  const stories: { id: string; status: string; approval: string }[] = [];
+  const noSummary: string[] = [];
+  let releases = 0;
+  let asOf: string | undefined;
+  for (const ref of storyMapsOf(dir)) {
+    const map = yamlAt(join(ref.dir, "storymap.yaml")) ?? {};
+    const ids: string[] = (map.releases ?? []).flatMap((r: { stories?: string[] }) => r.stories ?? []);
+    releases += (map.releases ?? []).length;
+    const summary = summaryIn(ref.dir);
+    if (summary) {
+      if (!asOf || summary.read_at < asOf) asOf = summary.read_at;
+      const byId = new Map(summary.stories.map((s) => [s.id, s]));
+      for (const id of ids) {
+        const s = byId.get(id);
+        if (!s) noSummary.push(id);
+        else if (s.status !== "cancelled") stories.push({ id, status: s.status, approval: s.approval });
+      }
+    } else if (!assignedIn(ref.dir).length) {
+      const states = loadStates(ref.dir);
+      for (const id of ids) {
+        const status = states[id]?.status ?? "todo";
+        if (status !== "cancelled") stories.push({ id, status, approval: "none" });
+      }
+    } else noSummary.push(...ids);
+  }
+  return { stories, noSummary, releases, ...(asOf ? { asOf } : {}) };
 }
 
 export const describeDelivery = (d: Delivery) =>

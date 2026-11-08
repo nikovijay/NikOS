@@ -1,9 +1,11 @@
 // `nikos map status`: in a group repo, how each team assigned to a map is doing on its stories.
 // Each team's repo is fetched read-only (or read from the last fetch with --offline), and every
 // story shows its holder's status, whether that status proves the story against the current
-// feature, the team's delivery approval and the group's intent approval. Reads only: nothing is
-// written to a team's repo, and the group's own files are untouched.
-import { basename, resolve } from "node:path";
+// feature, the team's delivery approval and the group's intent approval. Nothing is written to a
+// team's repo. The one file it writes is each read map's delivery.yaml in this group's repo (not
+// with --offline), which the plans above read so they never fetch a team (see lib/delivery-summary.ts).
+import { basename, join, resolve } from "node:path";
+import { writeDeliverySummary, type DeliverySummary } from "../lib/delivery-summary.js";
 import { headOf, ownRepo } from "../lib/git.js";
 import { isTeamRepo } from "../lib/team.js";
 import { repoEntry } from "../planning/upstream.js";
@@ -52,6 +54,8 @@ export interface MapStatus {
   teams: TeamRow[];
   stories: StoryRow[];
   counts: Record<Freshness, number>;
+  /** The name each approved story's delivery approval was given (not a verified identity). Written to delivery.yaml, not in --json. */
+  approvers: Record<string, string>;
 }
 
 /** Each team holding a story of the map, in assignment order, then any retired team read for its moved stories. */
@@ -116,13 +120,15 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
 
   return picked.map((gm) => {
     const base = { map: gm.id, key: gm.key, group, offline: !!opts.offline };
-    if (!gm.list.length) return { ...base, assigned: false, teams: [], stories: [], counts: zeroCounts() };
+    if (!gm.list.length) return { ...base, assigned: false, teams: [], stories: [], counts: zeroCounts(), approvers: {} };
     const views: StoryView[] = mapViews(root, gm, index, undefined, policy());
     const counts = zeroCounts();
     for (const v of views) counts[v.freshness]++;
+    const approvers = Object.fromEntries(views.filter((v) => v.approvedBy).map((v) => [v.id, v.approvedBy!]));
     return {
       ...base,
       assigned: true,
+      approvers,
       teams: teamRows(gm, index),
       stories: views.map((v) => ({
         id: v.id,
@@ -143,8 +149,43 @@ export function mapStatus(root: string, opts: { map?: string; offline?: boolean 
   });
 }
 
+/**
+ * Write each assigned map's delivery.yaml into this group's repo, from the status just read: the
+ * owner commits it, and the plans above read it. Offline reads write nothing (they're not fresh).
+ * Returns the files written, or why none were (no origin remote names the group's repo path).
+ */
+export function writeSummaries(root: string, results: MapStatus[], now: Date = new Date()): { written: string[]; skipped?: string } {
+  const todo = results.filter((r) => r.assigned && !r.offline);
+  if (!todo.length) return { written: [] };
+  const owner = ownRepo(root);
+  if (!owner) return { written: [], skipped: "no origin remote to take the group's repo path from, so delivery.yaml isn't written" };
+  const read_at = now.toISOString().replace(/\.\d{3}Z$/, "Z");
+  return {
+    written: todo.map((r) => {
+      const summary: DeliverySummary = {
+        format_version: 1,
+        map: r.map,
+        owner,
+        read_at,
+        stories: r.stories.map((s) => ({
+          id: s.id,
+          team: s.holder ?? "none",
+          status: s.status,
+          approval: r.approvers[s.id] ? "approved" : "none",
+          ...(r.approvers[s.id] ? { approved_by: r.approvers[s.id] } : {}),
+          read_at,
+        })),
+      };
+      return writeDeliverySummary(join(root, "maps", r.map), summary);
+    }),
+  };
+}
+
 /** The --json object: one map's status, or { maps } when several were read. */
-export const statusJson = (rs: MapStatus[]) => (rs.length === 1 ? rs[0] : { maps: rs });
+export const statusJson = (rs: MapStatus[]) => {
+  const plain = rs.map(({ approvers: _approvers, ...rest }) => rest);
+  return plain.length === 1 ? plain[0] : { maps: plain };
+};
 
 /** What a story's status column says: its status, and why it isn't current when it isn't. */
 function statusCell(s: StoryRow): string {
@@ -212,6 +253,11 @@ export function runMapStatus(args: string[]): number {
     const results = mapStatus(dir, { map: flag("--map"), offline: args.includes("--offline") });
     if (args.includes("--json")) console.log(JSON.stringify(statusJson(results), null, 2));
     else console.log(results.map(formatMapStatus).join("\n\n"));
+    const { written, skipped } = writeSummaries(dir, results);
+    if (!args.includes("--json")) {
+      for (const p of written) console.log(`\nWrote ${p}: commit it, so the plans above show this delivery`);
+      if (skipped) console.log(`! ${skipped}`);
+    }
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

@@ -299,6 +299,8 @@ export interface StoryView {
   fetched?: string;
   /** The delivery approval, as the team's table shows it. */
   delivery: string;
+  /** The name the delivery approval was given (not a verified identity). Set when the approval holds. */
+  approvedBy?: string;
   /** The group's intent approval, as the map shows it. */
   intent: string;
   /** For a moved story: the team that held it before, and its last status. */
@@ -351,6 +353,7 @@ function viewOf(id: string, f: Facts, copy: StoryView["copy"], intent: string, f
     copy,
     ...(fetched ? { fetched } : {}),
     delivery,
+    ...(v.approvedBy ? { approvedBy: v.approvedBy } : {}),
     intent,
     ...(from ? { from } : {}),
     done,
