@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so far: alignment, delivery and the team key. Not yet: team-owned story maps, `nikos team join --home`, the home's settings chain, and team sync sources.
+
+### Added
+
+- `nikos team init --key WEB` gives a team its key. A team file with a key or a home is format 2, which 0.3.0 can't read: a team upgraded this way must be upgraded in its groups too. A team with no key keeps format 1.
+- `nikos map status` writes `maps/<key>/delivery.yaml` in the group's repo, one line per story: its team, status, approval (a name, not a verified identity) and when it was read. Commit it: the plans above read it. Rollouts and the bet lines say how old each summary is, and how many stories have no summary yet. Offline reads write nothing.
+- A bet that aligns to a stopped bet is flagged in the rollout: "aligns to <bet>, which was stopped on <date>". Nothing else changes.
+- A team repo may run `nikos planning bet new`, `planning sync`, `planning status`, `planning validate`, `planning rollout`, and `nikos join`. `planning kr new` there is refused with the key-result wording.
+
+### Changed
+
+- A plan aligns to any plan above it that it joins, not only the one directly above. A group may align a bet to a company bet it joins. The "isn't the plan directly above this one" message is now "isn't a plan this <level> joins".
+- Key-result targets in `krs:` (cross-plan) are checked like `aligns_to`.
+- `nikos state set <id> done` exits 0 once the move is written; a problem found elsewhere is printed as a `!` warning.
+
+### Fixed
+
+- `--map` takes the key `map new` prints, case-insensitively (`--map HR` finds `maps/hr`).
+- The rollout's delivery read "0 of 0" for a group with several maps, and "team status not read here" for a bet. Both now come from the owner's summary.
+- The alignment tree printed a group bet twice: under the bet it aligns to, and under the key result. It's now shown under the bet only.
+
 ## 0.3.0 (2026-11-08)
 
 ### Added

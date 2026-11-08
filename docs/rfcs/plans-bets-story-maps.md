@@ -102,6 +102,37 @@ status/ approvals/          as today, for both kinds
     verified-approvals RFC is built. Nothing presents that name as checked by
     the forge.
 
+### Amendment status
+
+**Status:** partly built, for review. The 0.3.0 fixes, the level rules, the delivery summary, the stopped-parent flag and the team key are built. The rest is not yet.
+
+Built, as the amendment says:
+
+- Rules 4 and 10: the rollout flags a bet aimed at a stopped bet, with the stop date. Nothing cascades.
+- Rule 5 and section 3: a plan aligns to any plan above it that it joins, and `krs:` cross-references are checked. A company bet still has nothing above it. `planning kr new` in a team repo is refused with the key-result wording.
+- Rule 9: `nikos map status` writes `maps/<key>/delivery.yaml`, and every rollout reads it, saying how old it is. A rollout never fetches a team repo for its delivery. The "0 of 0" and "team status not read here" text is gone.
+- Rule 11: no output puts "verified" beside an approver. This is checked by a test over the source.
+- Team key (D6, in part): `nikos team init --key` and the `key` field. A keyless team keeps format 1.
+- Team home (D3, in part): the `home` field in nikos.team.yaml is accepted and read.
+
+Where the build differs:
+
+- **Rule 9 wording.** The amendment says "a rollout never fetches team repos". That holds for delivery. Rollouts still fetch the plans below through their downstream.yaml (as before), and they never read a team's live `status/` or `approvals/`. Rule 9 should say so; this is decision D2, and it is not changed here.
+- **Delivery reads the owner's summary, not the team.** A copy's bet and rollout count the owner's `delivery.yaml`. A story the summary doesn't list counts as "no summary yet" (not done). A map with no teams counts its own state.
+- **Summary owner.** `delivery.yaml` is written only when the repo has an origin remote (its repo path is the owner). With no origin, `nikos map status` says so and writes nothing.
+- **Approver names.** A summary records the name the approval was given (`approved_by`), and nothing else.
+- **Legacy team plans.** A 0.3.0 plan whose `plan.yaml` says `level: team` keeps its old, unchecked links. The new rules apply to team repos (no `plan.yaml`).
+
+Not built yet (the amendment's rules 1-3, 6, 7 and the sections below them):
+
+- Team-owned maps: `maps/<key>/` in a team repo, its ids (`WEB-INB-n`), `map new`, `story add`, the `validate`/`doctor` checks for them, and the guards that would allow them (`storyMapClash` still refuses `maps/` in a team repo).
+- `nikos team join <plan> --home`, the home check, the key-collision check at join, and the rollout's key check (D5).
+- The home's settings and locks chain (`settings.ts`): teams still take the team branch only.
+- Team sync sources: `nikos sync` still reads only groups, so a team can't take stories from another team's map.
+- `nikos assign` and `migrate maps` for a team's own map, the CODEOWNERS suggestion and the lead handle (D4).
+- The dashboard views' stopped-parent flag (the rollout data has it; the views don't yet).
+- The playbooks, skills and MCP descriptions for team layouts, and an end-to-end test of the whole flow (`team-e2e-amendment`).
+
 ### Decided in review
 
 - Group key results: none. A team's bet aims at company or department key
@@ -260,8 +291,6 @@ Where the build differs from this RFC:
   holder has its own status for it, so "moved" and the old team's last status show until then.
 - **Cache is per machine.** A new machine shows "previous team not fetched" for moves made elsewhere.
 - **`rollout` deleted a plan's last good copy when a fetch failed.** Fixed in PR 5 (see "PR 5 status").
-
-## PR 3 status
 
 ## PR 3 status
 
