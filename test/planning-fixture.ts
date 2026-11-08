@@ -11,11 +11,7 @@ import { commitAll, git, write } from "./team-fixture";
 
 export { git, write, commitAll, groupRepo, teamRepo } from "./team-fixture";
 
-// The dashboard and nikos apply commit with the person's own git identity. CI machines have none.
-process.env.GIT_AUTHOR_NAME ??= "Ada Lovelace";
-process.env.GIT_AUTHOR_EMAIL ??= "ada@example.test";
-process.env.GIT_COMMITTER_NAME ??= "Ada Lovelace";
-process.env.GIT_COMMITTER_EMAIL ??= "ada@example.test";
+// The git identity the dashboard and nikos apply commit with is set in team-fixture.
 
 /** A company plan on origin acme/company-plan, with one key result: kr-1. */
 export function companyRepo(): string {
