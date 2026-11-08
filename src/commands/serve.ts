@@ -15,5 +15,5 @@ export function runServeCommand(args: string[]): Promise<number> | number {
     console.error("✗ Nothing to show here yet: this folder has no intent/ or planning/. Set it up with nikos start (a team's product) or nikos company init (a company plan).");
     return 1;
   }
-  return runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export") });
+  return runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export"), map: opt("map") });
 }

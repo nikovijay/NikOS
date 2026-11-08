@@ -13,7 +13,8 @@ import { planningIssues } from "../planning/levels.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { validate } from "./validate.js";
+import { validate, validateGroup } from "./validate.js";
+import { mapDirs } from "../lib/maps.js";
 
 export interface Check {
   name: string;
@@ -34,8 +35,17 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
   const add = (c: Check) => checks.push(c);
   const intent = findIntentDir(root);
   const planOnly = isPlanOnly(root);
+  const maps = mapDirs(root).length;
   if (planOnly) planChecks(root, add);
-  else if (!store().exists(join(intent, "storymap.yaml"))) {
+  else if (maps) {
+    planChecks(root, add);
+    const v = validateGroup(root);
+    add(
+      v.errors.length
+        ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in maps/`, next: "Run nikos validate and fix what it lists" }
+        : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(maps, "map")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, ...(v.warnings.length ? { next: "Run nikos validate to see the warnings" } : {}) },
+    );
+  } else if (!store().exists(join(intent, "storymap.yaml"))) {
     add({ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does. For a company or department plan, nikos company init" });
     return checks;
   } else {
@@ -59,7 +69,7 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 
   const settings = resolveSettings(root);
   const policy = settings["approval.policy"];
-  if (planOnly) add(lockCheck(settings));
+  if (planOnly || maps) add(lockCheck(settings));
   else {
     const owners = codeowners(root);
     const protectedApprovals = owners && /approvals(\.yaml|\/)/.test(readFileSync(owners, "utf8"));

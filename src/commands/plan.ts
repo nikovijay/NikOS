@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { STORY_ID, findIntentDir, read } from "../lib/project.js";
+import { STORY_ID, read } from "../lib/project.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -10,6 +11,8 @@ const templateDir = [join(here, "../../templates"), join(here, "../templates")].
 
 export interface NewPlanOptions {
   dir?: string;
+  /** The map, in a group repo with several. */
+  map?: string;
   summary?: string;
   date?: string;
 }
@@ -26,8 +29,8 @@ export function planVersions(intentDir: string, story: string): number[] {
 }
 
 export function newPlan(story: string, opts: NewPlanOptions = {}): string {
-  if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1)`);
-  const intentDir = findIntentDir(opts.dir ?? process.cwd());
+  if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
+  const intentDir = resolveStoryMap(opts.dir ?? process.cwd(), opts.map).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   if (store().exists(mapPath)) {
     const map = parse(read(mapPath));
@@ -61,7 +64,7 @@ export function runPlan(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   try {
-    const path = newPlan(story, { summary: opt("summary"), dir: opt("dir") });
+    const path = newPlan(story, { summary: opt("summary"), dir: opt("dir"), map: opt("map") });
     console.log(`Created ${path}`);
     return 0;
   } catch (err) {

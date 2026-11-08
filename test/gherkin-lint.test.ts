@@ -51,3 +51,17 @@ describe("gherkin lint", () => {
     expect(issues).toEqual([{ level: "warning", message: "has no scenarios yet", hint: "add one Scenario per acceptance criterion" }]);
   });
 });
+
+describe("gherkin lint story ids", () => {
+  const example = readFileSync(join(exampleDir, "intent/features/tasks/add-a-task.feature"), "utf8");
+  const warnings = (text: string) => lintFeature(text).map((i) => i.message);
+
+  it("accepts a group-map story id and its depends tag", () => {
+    const text = example.replace("@HT-1 ", "@PAY-CHK-12 @depends-PAY-CHK-3 ");
+    expect(warnings(text).filter((m) => m.includes("unrecognised"))).toEqual([]);
+  });
+
+  it("still flags a tag that is not a story id", () => {
+    expect(warnings(example.replace("@HT-1 ", "@HT-1 @task-9 "))).toContain("has unrecognised tag @task-9");
+  });
+});

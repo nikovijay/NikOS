@@ -4,6 +4,7 @@
 
 ### Added
 
+- Story maps in group repos: a group keeps one story map per bet under `maps/<id>/`, made with `nikos map new --bet <bet-id> --key <KEY>`. Story ids carry the group and map keys, `GROUP-MAP-n` (e.g. `PAY-CHK-12`), and `nikos group init --key` sets the group key. Repos with `intent/` work as before.
 - Plan levels follow the model in `docs/rfcs/plans-bets-story-maps.md`: OKRs stop
   at department level. Company and department plans set objectives and key
   results. A group plan only makes bets, aimed at the department's (or
@@ -22,7 +23,8 @@
 
 ### Changed
 
-- A plan at `level: team` loads with a warning: teams are assigned story maps by
+- `nikos map` with `new` makes a map in a group repo. In a repo with `intent/` it no longer writes a page for `nikos map new`: bare `nikos map` still writes `storymap.html`.
+ loads with a warning: teams are assigned story maps by
   their group instead. Its key results and objectives are warnings, not errors,
   until a later release migrates them.
 - `nikos planning rollout --json`, the dashboard's data and custom views give

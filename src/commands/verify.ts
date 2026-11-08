@@ -3,6 +3,7 @@ import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
+import { mapFlag } from "../lib/maps.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
 
@@ -82,11 +83,11 @@ export interface VerifyResult {
 }
 
 /** Run the story's scenarios (or all of them) with the repo's Cucumber runner. */
-export function verify(root: string, story?: string, opts: { inherit?: boolean } = {}): VerifyResult {
+export function verify(root: string, story?: string, opts: { inherit?: boolean; map?: string } = {}): VerifyResult {
   const stack = stackOrThrow(root);
   if (!existsSync(join(root, CONFIG[stack]))) throw new Error(`No ${CONFIG[stack]} yet. Run \`nikos verify setup\` first.`);
   // cucumber-js and behave both run zero scenarios and exit 0 for a tag that matches nothing.
-  if (story && !featureFor(story, root)) throw new Error(`No feature file is tagged @${story}`);
+  if (story && !featureFor(story, root, opts.map)) throw new Error(`No feature file is tagged @${story}`);
 
   let cmd: string;
   let args: string[];
@@ -101,17 +102,26 @@ export function verify(root: string, story?: string, opts: { inherit?: boolean }
     // tsx lets Node versions without built-in type stripping load .ts step files.
     if (stack === "ts") env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import tsx`.trim();
   }
-  const r = spawnSync(cmd, args, { cwd: root, env, encoding: "utf8", stdio: opts.inherit ? "inherit" : "pipe" });
+  const r = spawnSync(cmd, args, { cwd: root, env, encoding: "utf8", stdio: "pipe" });
   if (r.error) throw new Error(`Couldn't run ${cmd}: ${r.error.message}. Run: ${INSTALL[stack]}`);
+  // With inherit the output still goes to the terminal, after the run.
+  if (opts.inherit) {
+    process.stdout.write(r.stdout ?? "");
+    process.stderr.write(r.stderr ?? "");
+  }
+  const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  if (story && r.status === 0 && /^0 scenarios\b/m.test(output)) {
+    throw new Error(`No scenarios ran for @${story}: the runner's paths don't reach its feature file. Check ${CONFIG[stack]}`);
+  }
   const node = r.status !== 0 ? nodeWarning(stack) : undefined;
   if (node && opts.inherit) console.error(`\n! ${node}`);
-  return { stack, command: [cmd, ...args].join(" "), status: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}${node ? `\n${node}\n` : ""}` };
+  return { stack, command: [cmd, ...args].join(" "), status: r.status ?? 1, output: `${output}${node ? `\n${node}\n` : ""}` };
 }
 
 export function runVerify(args: string[]): number {
   const i = args.indexOf("--dir");
   const root = i >= 0 ? args[i + 1] : process.cwd();
-  const positional = args.filter((a, n) => a !== "--dir" && (i < 0 || n !== i + 1));
+  const positional = args.filter((a, n) => !["--dir", "--map"].includes(a) && !["--dir", "--map"].includes(args[n - 1]));
   try {
     if (positional[0] === "setup") {
       const r = setupVerify(root);
@@ -122,7 +132,7 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    return verify(root, positional[0], { inherit: true }).status;
+    return verify(root, positional[0], { inherit: true, map: mapFlag(args) }).status;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;

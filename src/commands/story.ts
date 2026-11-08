@@ -1,8 +1,9 @@
 import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
-import { findIntentDir, read } from "../lib/project.js";
+import { featureStoryIds, read, walk } from "../lib/project.js";
+import { resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
-import { createStoryState } from "../lib/state-files.js";
+import { createStoryState, loadStates } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
@@ -11,6 +12,8 @@ const PRIORITIES = ["must", "should", "could"] as const;
 export interface StoryInput {
   title: string;
   activity: string;
+  /** The map, in a group repo with several: maps/<map>. */
+  map?: string;
   /** A step of that activity. */
   step?: string;
   /** Release number; defaults to the last release. */
@@ -27,6 +30,22 @@ export interface StoryResult {
 
 const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 
+/**
+ * The number of the last story in a map, so the next id is one more. A map counts its releases,
+ * its state and its feature tags, so a removed story's number isn't reused. intent/ counts its
+ * releases only, as it always has.
+ */
+function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
+  if (!ref.id) {
+    const key = prefix;
+    return Math.max(0, ...releases.flatMap((r) => r?.stories ?? []).map((s: string) => Number(s.slice(key.length + 1)) || 0));
+  }
+  const ids = new Set<string>(releases.flatMap((r) => r?.stories ?? []));
+  for (const s of Object.keys(loadStates(ref.dir))) ids.add(s);
+  for (const f of walk(join(ref.dir, "features"), ".feature")) for (const s of featureStoryIds(read(f))) ids.add(s);
+  return Math.max(0, ...[...ids].filter((s) => s.startsWith(`${prefix}-`)).map((s) => Number(s.slice(prefix.length + 1)) || 0));
+}
+
 /** Add a story to storymap.yaml and state.yaml, and write its starter feature file. */
 export function newStory(input: StoryInput, dir: string): StoryResult {
   const title = input.title?.trim();
@@ -34,7 +53,8 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const priority = input.priority ?? "must";
   if (!PRIORITIES.includes(priority)) throw new Error(`'${priority}' is not a priority (must, should, could)`);
 
-  const intentDir = findIntentDir(dir);
+  const ref = resolveStoryMap(dir, input.map);
+  const intentDir = ref.dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // Documents keep comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
@@ -56,9 +76,8 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   if (index < 0) throw new Error(`There is no release ${input.release}. Releases: ${releases.map((r) => r?.number).join(", ")}`);
   const release = releases[index].number as number;
 
-  const key = plain.key as string;
-  const taken = releases.flatMap((r) => r?.stories ?? []).map((s: string) => Number(s.slice(key.length + 1)) || 0);
-  const id = `${key}-${Math.max(0, ...taken) + 1}`;
+  const prefix = storyPrefix(ref, plain.key as string);
+  const id = `${prefix}-${lastNumber(ref, prefix, releases) + 1}`;
 
   const feature = join(intentDir, "features", input.activity, `${slugify(title)}.feature`);
   if (store().exists(feature)) throw new Error(`${feature} already exists; give the story a different title`);
@@ -94,13 +113,13 @@ export function runStory(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   if (sub !== "add" || !title || title.startsWith("--") || !opt("activity")) {
-    console.error('Usage: nikos story add "<title>" --activity <id> [--step <id>] [--release <n>] [--priority must|should|could]');
+    console.error('Usage: nikos story add "<title>" --activity <id> [--step <id>] [--release <n>] [--priority must|should|could] [--map <id>]');
     return 1;
   }
   try {
     const release = opt("release");
     const r = newStory(
-      { title, activity: opt("activity")!, step: opt("step"), release: release === undefined ? undefined : Number(release), priority: opt("priority") as StoryInput["priority"] },
+      { title, activity: opt("activity")!, step: opt("step"), release: release === undefined ? undefined : Number(release), priority: opt("priority") as StoryInput["priority"], map: opt("map") },
       opt("dir") ?? process.cwd(),
     );
     console.log(`Added ${r.id} to release ${r.release}\nCreated ${r.feature}`);

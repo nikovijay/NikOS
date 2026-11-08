@@ -205,6 +205,29 @@ below it.
 fetched. The dashboard's Rollout tab shows the same tree from the last fetch and
 never fetches on its own. A repo it can't reach is reported as unreachable and the rest carry on.
 
+## Story maps in a group repo
+
+A group plan has `key:` in `plan.yaml`, chosen at `nikos group init --key`
+(default: from the name). It's the GROUP in every story id, so each id is unique
+across the company, e.g. `PAY-CHK-12`.
+
+```
+planning/plan.yaml     level: group, key: PAY
+planning/bets/         the group's bets
+maps/chk/              one story map per bet: storymap.yaml (key: CHK, bet: faster-checkout),
+                       features/, plans/, approvals/, state.yaml
+```
+
+- `nikos map new --bet <bet-id> --key <KEY>` makes a map for one of the group's
+  bets. The map's key is unique within the group, and its folder is the key, lowercased.
+- With one map, the story commands work without `--map`. With more, pass `--map <id>`.
+- `nikos validate` checks each map, and the group: every map has a key and a
+  folder to match, and no two maps share a key.
+- Keys are checked unique within the group. Checking that a group key is unique
+  across the company is deferred: `nikos join` doesn't check plan keys today, and a
+  group repo can't see other companies' keys.
+- Team repos, assignments and status from teams are not in this version.
+
 ## A plan-only repo
 
 A company or department plan often has no story map: it plans, and the teams

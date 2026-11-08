@@ -12,7 +12,7 @@ export interface LintIssue {
 const STATUS_TAGS = /^@(todo|done|wip|in[-_]?progress|doing|blocked|needs[-_]?rework|ready|review|approved|complete[d]?|skip|pending)$/i;
 const PRIORITY = /^@(must|should|could)$/;
 const AC_TAG = /^@AC\d+$/;
-const KNOWN_FEATURE_TAG = [STORY_ID, /^release-\d+$/, /^(must|should|could)$/, /^activity-[a-z0-9-]+$/, /^step-[a-z0-9-]+$/, /^effort-(XS|S|M|L|XL)$/, /^depends-[A-Z][A-Z0-9]{0,9}-[0-9]+$/, /^persona-[a-z0-9-]+$/, /^type-(technical|bug-risk)$/];
+const KNOWN_FEATURE_TAG = [STORY_ID, /^release-\d+$/, /^(must|should|could)$/, /^activity-[a-z0-9-]+$/, /^step-[a-z0-9-]+$/, /^effort-(XS|S|M|L|XL)$/, /^depends-[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$/, /^persona-[a-z0-9-]+$/, /^type-(technical|bug-risk)$/];
 
 function parser() {
   return new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher());

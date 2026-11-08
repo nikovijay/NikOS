@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { loadStates } from "../lib/state-files.js";
 import { join, relative, resolve } from "node:path";
 import { parse } from "yaml";
-import { findIntentDir, featureStoryIds, isDone, read, walk } from "../lib/project.js";
+import { featureStoryIds, isDone, read, walk } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 
 export interface Storyboard {
@@ -33,8 +34,8 @@ function constitution(intentDir: string) {
 }
 
 /** Draft a video storyboard from intent/: only stories marked done, one beat per activity. */
-export function storyboard(dir: string): Storyboard {
-  const intentDir = findIntentDir(dir);
+export function storyboard(dir: string, mapId?: string): Storyboard {
+  const intentDir = resolveStoryMap(dir, mapId).dir;
   const c = constitution(intentDir);
   const map = parse(read(join(intentDir, "storymap.yaml"))) as { activities?: { id: string; title?: string }[] };
   const state = { stories: loadStates(intentDir) };
@@ -105,8 +106,8 @@ export function briefOf(sb: Storyboard): string {
 }
 
 /** Write brief.md and storyboard.js (read by the Video pack's storyboard template) into `out`. */
-export function writeVideo(dir: string, out: string) {
-  const sb = storyboard(dir);
+export function writeVideo(dir: string, out: string, mapId?: string) {
+  const sb = storyboard(dir, mapId);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "brief.md"), briefOf(sb));
   writeFileSync(join(out, "storyboard.js"), `// Drafted by nikos video from intent/. The storyboard template reads it.\nwindow.STORYBOARD = ${JSON.stringify(sb, null, 2)};\n`);
@@ -117,7 +118,7 @@ export function runVideo(args: string[]): number {
   const i = args.indexOf("--out");
   const out = resolve(i >= 0 && args[i + 1] ? args[i + 1] : "marketing/storymap-video");
   try {
-    const sb = writeVideo(process.cwd(), out);
+    const sb = writeVideo(process.cwd(), out, mapFlag(args));
     const shown = sb.beats.reduce((n, b) => n + b.stories.length, 0);
     const r = relative(process.cwd(), out), where = !r ? "." : r.startsWith("..") ? out : r;
     console.log(`Wrote ${where}/brief.md and ${where}/storyboard.js: ${sb.beats.length} beat${sb.beats.length === 1 ? "" : "s"}, ${shown} done ${shown === 1 ? "story" : "stories"}, about ${sb.total}s`);

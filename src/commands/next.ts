@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { loadStates } from "../lib/state-files.js";
 import { parse } from "yaml";
-import { featureStoryIds, featureTags, findIntentDir, isDone, read, walk } from "../lib/project.js";
+import { featureStoryIds, featureTags, isDone, read, walk } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 
 export interface NextResult {
   /** The story to build next, or undefined when nothing is left to do. */
@@ -24,8 +25,8 @@ export function dependencies(intentDir: string): Map<string, string[]> {
 }
 
 /** The first todo story in run.queue, then in story map order, whose dependencies are all done. */
-export function next(dir: string): NextResult {
-  const intentDir = findIntentDir(dir);
+export function next(dir: string, mapId?: string): NextResult {
+  const intentDir = resolveStoryMap(dir, mapId).dir;
   const map = parse(read(join(intentDir, "storymap.yaml")));
   const state = parse(read(join(intentDir, "state.yaml")));
   const stories: Record<string, { status?: string }> = loadStates(intentDir);
@@ -49,7 +50,7 @@ export function next(dir: string): NextResult {
 export function runNext(args: string[]): number {
   const i = args.indexOf("--dir");
   try {
-    const r = next(i >= 0 ? args[i + 1] : process.cwd());
+    const r = next(i >= 0 ? args[i + 1] : process.cwd(), mapFlag(args));
     for (const o of r.open) console.log(`! ${o.id} is ${o.status}; finish it first`);
     if (!r.story) {
       for (const w of r.waiting) console.log(`! ${w.id} is waiting on ${w.on.join(", ")}`);

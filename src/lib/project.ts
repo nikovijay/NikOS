@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { store } from "./store.js";
 import { join, relative } from "node:path";
+import { mapDirs } from "./maps.js";
 
-export const STORY_ID = /^[A-Z][A-Z0-9]{0,9}-[0-9]+$/;
+/** A story id: <KEY>-<n>, or <GROUP>-<MAP>-<n> in a group repo, e.g. HT-1 or PAY-CHK-12. */
+export const STORY_ID_PATTERN = "^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$";
+export const STORY_ID = new RegExp(STORY_ID_PATTERN);
 
 /** Statuses that count as built. approved is how the map shows done plus a sign-off that holds. */
 export const DONE = new Set(["done", "approved"]);
@@ -29,12 +32,12 @@ export function findIntentDir(start: string): string {
  * intent/storymap.yaml. Its decisions live in planning/decisions.md.
  */
 export function isPlanOnly(dir: string): boolean {
-  return !store().exists(join(findIntentDir(dir), "storymap.yaml")) && store().isDir(join(dir, "planning"));
+  return !store().exists(join(findIntentDir(dir), "storymap.yaml")) && !mapDirs(dir).length && store().isDir(join(dir, "planning"));
 }
 
-/** Where a repo keeps its decisions: intent/decisions.md, or planning/decisions.md in a plan-only repo. */
+/** Where a repo keeps its decisions: intent/decisions.md, or planning/decisions.md in a plan-only or group repo. */
 export function decisionsPath(dir: string): string {
-  return isPlanOnly(dir) ? join(dir, "planning", "decisions.md") : join(findIntentDir(dir), "decisions.md");
+  return isPlanOnly(dir) || mapDirs(dir).length ? join(dir, "planning", "decisions.md") : join(findIntentDir(dir), "decisions.md");
 }
 
 export function walk(dir: string, ext?: string): string[] {

@@ -74,7 +74,7 @@ Commands:
   init             Create intent/ in this repo (--name, --key)
   validate [dir]   Check the intent/ folder is well formed
   story add "<title>"  Add a story to the map, state and a starter feature
-                   (--activity, --step, --release, --priority)
+                   (--activity, --step, --release, --priority, --map in a group repo)
   activity add "<title>"  Add an activity to the story map (--id)
   step add "<title>"   Add a step under an activity (--activity, --id)
   release add "<title>"  Add the next release (--goal)
@@ -100,7 +100,7 @@ Commands:
   company init     Write a company plan repo that departments join, or a department's with
                    --level department (--name, --period, --departments, --repo, --host)
   group init       Write a group plan repo: bets aimed at the department's key results,
-                   and no key results of its own (--name, --period, --repo, --host)
+                   and no key results of its own (--name, --key, --period, --repo, --host)
   join <repo>      Plan against a company or department plan, and inherit its settings
                    (--host gitlab.com, --url, --ref)
   settings [set <key> <value>]  See the settings that apply here and where each comes
@@ -116,7 +116,9 @@ Commands:
                    (--why, --story, --category, --supersedes)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
-  map              Write a read-only story map page (--out, default storymap.html)
+  map              Write a read-only story map page (--out, default storymap.html, --map)
+  map new          In a group repo, a story map for one of its bets, in maps/<key>/
+                   (--bet <bet-id>, --key <KEY>)
   export --format <prd|linear|jira>  The story map as a PRD or tracker import
                    (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;

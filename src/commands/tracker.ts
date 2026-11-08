@@ -4,8 +4,8 @@
 // - a ticket can approve a story (when tracker.approvals is on) or cancel it, never mark it
 //   done: done still means the story's scenarios pass;
 // - for everything else, nikOS says which tickets should move, and the agent moves them.
-import { dirname } from "node:path";
-import { findIntentDir, STORY_ID } from "../lib/project.js";
+import { resolveStoryMap } from "../lib/maps.js";
+import { STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
@@ -27,14 +27,14 @@ function trackerOf(root: string) {
   };
 }
 
-const rootOf = (dir: string) => dirname(findIntentDir(dir));
+const rootOf = (dir: string, mapId?: string) => resolveStoryMap(dir, mapId).root;
 
 /** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in state.yaml. */
-export function linkTicket(input: { id: string; ticket: string }, dir: string) {
-  if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1)`);
+export function linkTicket(input: { id: string; ticket: string; map?: string }, dir: string) {
+  if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const ticket = input.ticket.trim();
   if (!ticket) throw new Error("Give the ticket's key or number, e.g. PAY-123");
-  const intent = findIntentDir(dir);
+  const intent = resolveStoryMap(dir, input.map).dir;
   if (!storyState(intent, input.id)) throw new Error(noEntry(intent, input.id));
   updateStory(intent, input.id, (doc, at) => doc.setIn([...at, "ticket"], ticket));
   return { id: input.id, ticket };
@@ -55,17 +55,17 @@ export interface RecordResult {
  * tracker.approvals is on) approves the story; cancelled cancels it; anything else is only
  * compared, because nikOS's own status comes from the story's scenarios.
  */
-export function recordTicket(input: { id: string; status: string; by?: string; on?: string }, dir: string): RecordResult {
-  const root = rootOf(dir);
+export function recordTicket(input: { id: string; status: string; by?: string; on?: string; map?: string }, dir: string): RecordResult {
+  const root = rootOf(dir, input.map);
   const t = trackerOf(root);
   if (t.system === "none") throw new Error("No tracker is set up here: set tracker.system first (nikos settings set tracker.system jira)");
   const means = t.statuses[input.status];
   if (!means) {
     throw new Error(`'${input.status}' isn't mapped to a nikOS status. Mapped: ${Object.keys(t.statuses).join(", ") || "none"}. Map it first: nikos settings set tracker.statuses '{"${input.status}": "done"}'`);
   }
-  const story = storyMapOf(root).releases.flatMap((r) => r.stories).find((s) => s.id === input.id);
+  const story = storyMapOf(root, input.map).releases.flatMap((r) => r.stories).find((s) => s.id === input.id);
   if (!story) throw new Error(`${input.id} is not in any release in storymap.yaml`);
-  const ticket = storyTicket(root, input.id);
+  const ticket = storyTicket(root, input.id, input.map);
   const base = { id: input.id, ...(ticket ? { ticket } : {}), means };
 
   if (means === "approved") {
@@ -89,8 +89,8 @@ export function recordTicket(input: { id: string; status: string; by?: string; o
   };
 }
 
-function storyTicket(root: string, id: string): string | undefined {
-  const v = storyState(findIntentDir(root), id)?.ticket;
+function storyTicket(root: string, id: string, mapId?: string): string | undefined {
+  const v = storyState(resolveStoryMap(root, mapId).dir, id)?.ticket;
   return typeof v === "string" ? v : undefined;
 }
 
@@ -103,14 +103,14 @@ export interface TicketMove {
 }
 
 /** For each linked story, the tracker status its ticket should be in. The agent moves the tickets. */
-export function ticketMoves(dir: string): TicketMove[] {
-  const root = rootOf(dir);
+export function ticketMoves(dir: string, mapId?: string): TicketMove[] {
+  const root = rootOf(dir, mapId);
   const t = trackerOf(root);
-  const stories = storyMapOf(root).releases.flatMap((r) => r.stories);
+  const stories = storyMapOf(root, mapId).releases.flatMap((r) => r.stories);
   const statusFor = (s: NikosStatus) => Object.entries(t.statuses).find(([, v]) => v === s)?.[0] ?? (s === "approved" ? Object.entries(t.statuses).find(([, v]) => v === "done")?.[0] : undefined);
   const out: TicketMove[] = [];
   for (const s of stories) {
-    const ticket = storyTicket(root, s.id);
+    const ticket = storyTicket(root, s.id, mapId);
     const status = statusFor(s.status as NikosStatus);
     if (ticket && status) out.push({ id: s.id, ticket, nikos: s.status as NikosStatus, status });
   }
@@ -130,9 +130,9 @@ export interface ImportedTicket {
  * release, or release), linked to its ticket, with its group as the activity. Tickets already
  * linked are skipped. Stories start as todo: their scenarios still have to be written.
  */
-export function importTickets(tickets: ImportedTicket[], dir: string, opts: { release?: number } = {}) {
-  const root = rootOf(dir);
-  const linked = new Set(storyMapOf(root).releases.flatMap((r) => r.stories).map((s) => storyTicket(root, s.id)).filter(Boolean));
+export function importTickets(tickets: ImportedTicket[], dir: string, opts: { release?: number; map?: string } = {}) {
+  const root = rootOf(dir, opts.map);
+  const linked = new Set(storyMapOf(root, opts.map).releases.flatMap((r) => r.stories).map((s) => storyTicket(root, s.id, opts.map)).filter(Boolean));
   const added: { id: string; ticket: string }[] = [];
   const skipped: string[] = [];
   for (const t of tickets) {
@@ -141,16 +141,16 @@ export function importTickets(tickets: ImportedTicket[], dir: string, opts: { re
       skipped.push(t.key);
       continue;
     }
-    const activity = newActivity({ title: t.group?.trim() || "Backlog" }, dir);
+    const activity = newActivity({ title: t.group?.trim() || "Backlog", map: opts.map }, dir);
     let story;
     try {
-      story = newStory({ title: t.title, activity, release: opts.release }, dir);
+      story = newStory({ title: t.title, activity, release: opts.release, map: opts.map }, dir);
     } catch (err) {
       // Two tickets with the same title in one group: tell them apart by key.
       if (!/already exists/.test((err as Error).message)) throw err;
-      story = newStory({ title: `${t.title} (${t.key})`, activity, release: opts.release }, dir);
+      story = newStory({ title: `${t.title} (${t.key})`, activity, release: opts.release, map: opts.map }, dir);
     }
-    linkTicket({ id: story.id, ticket: t.key }, dir);
+    linkTicket({ id: story.id, ticket: t.key, map: opts.map }, dir);
     linked.add(t.key);
     added.push({ id: story.id, ticket: t.key });
   }
@@ -173,18 +173,18 @@ export function runTracker(args: string[]): number {
   const dir = flag("dir") ?? process.cwd();
   try {
     if (sub === "link" && positional[1]) {
-      const r = linkTicket({ id: positional[0], ticket: positional[1] }, dir);
+      const r = linkTicket({ id: positional[0], ticket: positional[1], map: flag("map") }, dir);
       console.log(`${r.id} ↔ ${r.ticket}`);
     } else if (sub === "record" && positional[0] && flag("status")) {
-      const r = recordTicket({ id: positional[0], status: flag("status")!, by: flag("by"), on: flag("on") }, dir);
+      const r = recordTicket({ id: positional[0], status: flag("status")!, by: flag("by"), on: flag("on"), map: flag("map") }, dir);
       console.log(`${r.outcome === "differs" ? "!" : "✓"} ${r.message}`);
     } else if (sub === "sync") {
-      const moves = ticketMoves(dir);
+      const moves = ticketMoves(dir, flag("map"));
       if (rest.includes("--json")) console.log(JSON.stringify(moves, null, 2));
       else for (const m of moves) console.log(`${m.ticket} → ${m.status}  (${m.id} is ${m.nikos})`);
     } else if (sub === "import" && positional[0]) {
       const tickets = JSON.parse(store().read(positional[0]));
-      const r = importTickets(tickets, dir, { release: flag("release") ? Number(flag("release")) : undefined });
+      const r = importTickets(tickets, dir, { release: flag("release") ? Number(flag("release")) : undefined, map: flag("map") });
       for (const a of r.added) console.log(`+ ${a.id} ↔ ${a.ticket}`);
       if (r.skipped.length) console.log(`Already linked: ${r.skipped.join(", ")}`);
     } else {
