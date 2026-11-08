@@ -52,11 +52,12 @@ status/ approvals/          as today, for both kinds
 3. **A team's own maps are in place.** Their status and approvals are the
    team's own files, so they are committed and travel with the team repo.
    There is no `.nikos/assigned` copy and no `nikos map status` fetch for them.
-4. **Plans show what aims at them.** The home plan's rollout lists the team
-   with its bets and the delivery of each team-owned map, read from the team's
-   committed status. A plan the team has joined but isn't homed in shows the
-   links: which of the team's maps and bets align to its bets and key results,
-   with the team's home named.
+4. **Every plan a team joined lists it.** The home plan lists the team in
+   `planning/downstream.yaml` as usual. A plan the team joined but isn't homed
+   in lists it too, marked `home: <repo>`, so that plan knows where to fetch
+   the team from. Its rollout shows which of the team's maps and bets align
+   to its bets and key results, and the delivery of those maps, read from the
+   team's committed status. Settings and locks still come only from the home.
 5. **Groups get the same shortcut.** "The smallest setup" already says a group
    can align to company bets when there are no departments. 0.3.0 refuses that
    (a group bet must align to a department). The rule becomes: a group aligns
@@ -65,19 +66,25 @@ status/ approvals/          as today, for both kinds
    With this amendment it can move `intent/` to the team's own `maps/<key>/`
    in place, asking for the team key, its home and the bet.
 
-### Open questions
+7. **Work from a team's map goes to another team through a group.** A team
+   never assigns stories itself. When part of a team's map should be built by
+   another team, the team moves the map to a group (its home group, or a
+   group it has joined) with `nikos map move <key> --to <group repo>`, and the
+   group assigns it, the original team included, as it assigns any map. The
+   stories keep their ids (`WEB-INB-1`): ids never change, so a group map can
+   hold ids with a team's key once it has been moved in. The team's status
+   and approvals for those stories stay in the team repo and count as the
+   assigned team's from then on.
+8. **A team's own bets aim at company or department key results.** Groups
+   have no key results, so a team's bet that relates to a group's work
+   aligns to the group's bet instead.
 
-- **Group key results.** Groups have no key results, so a team's own bet aims
-  at company or department key results, and may align to a group bet. If
-  "aimed at a group key result" is meant, that would bring key results back
-  at group level.
-- **Listing a team outside its home.** Rule 4 has a non-home plan show the
-  team's links without listing the team in its `downstream.yaml`. The
-  alternative is to list it there too, as "homed elsewhere", so the plan knows
-  where to fetch it from.
-- **Assign out of a team-owned map.** A team that owns a map could also assign
-  part of it to another team, which makes it a group in all but name. This
-  draft says no: a team that hands work to other teams should be a group.
+### Decided in review
+
+- Group key results: none. A team's bet aims at company or department key
+  results, and may align to a group bet (rule 8).
+- A plan the team joined but isn't homed in lists the team (rule 4).
+- A team's map is handed to other teams through a group (rule 7).
 
 ## PR 6 status
 
