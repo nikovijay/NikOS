@@ -1,6 +1,6 @@
 {
   "name": "nikos-planning",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "The nikOS Planning pack: objectives, key results and bets in your repo, linked to the story map that delivers them, with KR check-ins and a local dashboard.",
   "author": { "name": "Niko Vijay" },
   "homepage": "https://nikos.tools",
