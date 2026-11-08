@@ -5,6 +5,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+// Commands under test commit with the person's own git identity. CI machines have none.
+process.env.GIT_AUTHOR_NAME ??= "Ada Lovelace";
+process.env.GIT_AUTHOR_EMAIL ??= "ada@example.test";
+process.env.GIT_COMMITTER_NAME ??= "Ada Lovelace";
+process.env.GIT_COMMITTER_EMAIL ??= "ada@example.test";
+
 export function write(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
