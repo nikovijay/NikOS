@@ -32,9 +32,14 @@ export interface TeamMember {
   handle?: string;
 }
 export interface TeamFile {
-  format_version: 1;
+  /** 2 when the team has a key or a home (0.3.0 can't read it); 1 otherwise. */
+  format_version: 1 | 2;
   name: string;
   repo: string;
+  /** The team's key (WEB): its story ids are WEB-<map>-<n> once it owns a map. Shares one namespace with group keys. */
+  key?: string;
+  /** The plan the team is homed in: its settings and locks come from there. */
+  home?: string;
   groups: TeamGroup[];
   members: TeamMember[];
 }

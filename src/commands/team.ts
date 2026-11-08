@@ -28,18 +28,26 @@ const block = <T>(node: T): T => {
 
 const NOT_A_REPO = "not a repo path (owner/repo, or group/subgroup/project on GitLab)";
 
-/** `nikos team init`: write nikos.team.yaml here, naming the team and its repo path. */
-export function teamInit(dir: string, opts: { repo?: string; name?: string }): { repo: string; name: string } {
+/** The team key's shape: the same one group keys have (planning/plan.yaml key). */
+export const TEAM_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+
+/** `nikos team init`: write nikos.team.yaml here, naming the team, its repo path and (optionally) its key. */
+export function teamInit(dir: string, opts: { repo?: string; name?: string; key?: string }): { repo: string; name: string } {
   const root = resolve(dir);
   if (isTeamRepo(root)) throw new Error(`${TEAM_FILE} already exists here`);
   if (store().isDir(join(root, "intent")) || store().isDir(join(root, "maps"))) {
     throw new Error("this repo has its own story map (intent/ or maps/), and a team repo can't hold one. Move it to a group repo with nikos migrate maps there, then nikos team join");
   }
+  if (store().exists(join(root, "planning", "plan.yaml"))) throw new Error("this repo has planning/plan.yaml: a plan repo can't also be a team repo. Make the team in its own repo");
   const repo = opts.repo ?? ownRepo(root);
   if (!repo) throw new Error("no origin remote to take the team's repo path from: pass --repo owner/repo");
   if (!REPO_PATH.test(repo)) throw new Error(`'${repo}' is ${NOT_A_REPO}`);
+  if (opts.key !== undefined && !TEAM_KEY.test(opts.key)) throw new Error(`'${opts.key}' is not a team key: capital letters and digits, starting with a letter, up to 10 (e.g. WEB)`);
   const name = (opts.name ?? basename(root)).trim();
-  const text = `# The team: who is on it, and the group repos it takes work from. Edit with nikos team.\n${stringify({ format_version: 1, name, repo, groups: [], members: [] })}`;
+  // A key is the one thing that makes this file 0.3.0-incompatible, so a keyless team keeps format 1.
+  const key = opts.key ? { key: opts.key } : {};
+  const version = opts.key ? 2 : 1;
+  const text = `# The team: who is on it, and the group repos it takes work from. Edit with nikos team.\n${stringify({ format_version: version, name, repo, ...key, groups: [], members: [] })}`;
   parseTeam(text); // refuses a bad name before anything is written
   store().write(join(root, TEAM_FILE), text, { create: true });
   ignoreAssigned(root);
@@ -160,7 +168,7 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
 }
 
 const USAGE = `Usage:
-  nikos team init [--repo owner/repo] [--name "<team>"] [--dir <path>]
+  nikos team init [--repo owner/repo] [--name "<team>"] [--key WEB] [--dir <path>]
   nikos team join <group repo> [--ref <branch>] [--host <host> | --url <git url>] [--dir <path>]
   nikos team member add "<name>" [--role "<role>"] [--handle <username>] [--dir <path>]
   nikos team member remove "<name>" [--dir <path>]
@@ -176,7 +184,7 @@ export function runTeam(args: string[]): number {
   const dir = flag("dir") ?? process.cwd();
   try {
     if (sub === "init") {
-      const r = teamInit(dir, { repo: flag("repo"), name: flag("name") });
+      const r = teamInit(dir, { repo: flag("repo"), name: flag("name"), key: flag("key") });
       console.log(`✓ Created ${TEAM_FILE} for ${r.name} (${r.repo})\n  Take work from a group next: nikos team join <group repo>`);
     } else if (sub === "join" && positional[0]) {
       const r = teamJoin(dir, positional[0], { ref: flag("ref"), host: flag("host"), url: flag("url") });
