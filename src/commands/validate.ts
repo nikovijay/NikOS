@@ -187,7 +187,7 @@ function crossBet(root: string, id: string | undefined, bet: string, errors: Iss
   if (!store().exists(join(copy, "planning", "bets", `${betId}.md`))) errors.push({ file, message: `maps/${id} names bet ${bet}, which ${repo} doesn't have`, hint: "check the bet's id in that plan" });
 }
 
-function validateMap(ref: StoryMapRef): ValidationResult {
+export function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];

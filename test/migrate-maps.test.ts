@@ -178,10 +178,11 @@ describe("refusals, with their exact messages", () => {
     expect((await refusal(migrateMaps(dir, yes))).message).toBe("This repo already has maps/. Migrate needs a repo with intent/ and no maps/.");
   });
 
-  it("refuses a team repo, with the move-then-join steps", async () => {
+  // Deliberate (after 0.3.0): a team repo takes its own map in place, so this refusal now asks for the team's key and home.
+  it("refuses a team repo with no key, and says what to pass", async () => {
     const dir = legacyRepo({ extra: { "nikos.team.yaml": "format_version: 1\nname: X\nrepo: a/b\ngroups: []\nmembers: []\n" } });
     expect((await refusal(migrateMaps(dir, yes))).message).toBe(
-      "This is a team repo, and a team repo can't hold a story map. Move intent/ into a group repo with nikos migrate maps there, delete intent/ here, then nikos team join.",
+      "This team repo has no key, and its own map needs one: pass --team-key WEB, or add key: WEB to nikos.team.yaml, then retry.",
     );
   });
 

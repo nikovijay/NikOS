@@ -229,7 +229,7 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
     add({ name: "team", status: "fail", found: (err as Error).message.replace(`${TEAM_FILE}: `, ""), next: `Fix ${TEAM_FILE}` });
   }
   const clash = storyMapClash(root);
-  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into a group repo with nikos migrate maps there, then delete it here." });
+  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>." });
   if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
   // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key and folder, and the team's status.

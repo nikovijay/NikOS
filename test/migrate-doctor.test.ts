@@ -81,7 +81,7 @@ describe("doctor on a team repo with a team plan", () => {
     mkdirSync(join(team, "intent"));
     const clash = doctor(team, { offline: true }).find((c) => c.name === "team");
     expect(clash).toMatchObject({ status: "fail", found: "this repo has intent/ or maps/ and nikos.team.yaml: keep one" });
-    expect(clash!.next).toBe("Move intent/ into a group repo with nikos migrate maps there, then delete it here.");
+    expect(clash!.next).toBe("Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>.");
   });
 });
 
