@@ -1,0 +1,21 @@
+{
+  "name": "nikos-ux",
+  "displayName": "nikOS UX",
+  "version": "0.2.4",
+  "description": "The nikOS UX pack: turn your existing components and tokens into a component library page, with a copyable brief any coding agent can build from.",
+  "author": {
+    "name": "Niko Vijay"
+  },
+  "homepage": "https://nikos.tools/ux",
+  "repository": "https://github.com/nikovijay/NikOS",
+  "license": "MIT",
+  "keywords": [
+    "design-system",
+    "component-library",
+    "tokens",
+    "ui",
+    "agent-brief",
+    "skills"
+  ],
+  "skills": "./skills/"
+}

@@ -77,6 +77,7 @@ marketplaces list it.
 | --- | --- | --- |
 | Video | `tools/video/` | `/plugin install nikos-video@nikos` |
 | Planning | `tools/planning/` | `/plugin install nikos-planning@nikos` |
+| UX | `tools/ux/` | `/plugin install nikos-ux@nikos` |
 
 In Codex and Cursor, install the pack from the same marketplace as nikOS.
 nikOS's router hands requests to an installed pack's skill, and gives the

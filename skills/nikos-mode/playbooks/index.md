@@ -11,6 +11,7 @@ first match. Packs add rows here as they ship new playbooks.
 | start | `start.md` | The person wants to set nikOS up in this repo, or get started, and there's no `intent/` folder yet (or they ask to set it up again). |
 | map-existing | `map-existing.md` | The person wants a story map of a product that already exists: "map what this repo does", or nikOS on an existing codebase. |
 | video | `video.md` | The person asks for a video: an explainer, product tour, demo, launch or social clip, or to edit or re-render one. Needs the Video pack. |
+| ux-library | `ux-library.md` | The person wants a component library page, a design system reference, or a brief for agents made from their existing components, tokens or design language. Needs the UX pack. |
 | validate | `validate.md` | The person wants to test or validate an idea with real people, or draft outreach, a post or a demo script for it. |
 | planning | `planning.md` | The person wants to plan a period, set OKRs or key results, frame or review a bet, check in on key results, or see a planning dashboard. Needs the Planning pack. |
 | tracker | `tracker.md` | The person wants to connect Jira, Linear, GitHub or GitLab issues, bring a tracker's backlog in, link stories to tickets, or bring the tracker and the story map back in step. |
