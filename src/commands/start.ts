@@ -8,7 +8,7 @@ import { stringify } from "yaml";
 import { store } from "../lib/store.js";
 import { detectStack } from "../verify/detect.js";
 import { detectHost, setupCi } from "./ci.js";
-import { init } from "./init.js";
+import { init, keyFor } from "./init.js";
 import { suggest, type Suggestion } from "./suggest.js";
 import { setupVerify } from "./verify.js";
 import { createInterface } from "node:readline/promises";
@@ -51,11 +51,16 @@ export function start(root: string, opts: { name?: string; key?: string } = {}):
 export interface CompanyResult {
   created: string[];
   skipped: string[];
+  /** A group's key. */
+  key?: string;
   /** The line each department or team runs (or asks their agent to) to join. */
   join: string;
 }
 
 export type PlanLevel = "company" | "department" | "group";
+
+/** A group's key: the GROUP in its story ids. */
+const GROUP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 
 /** Who plans against each level, for its README and join line. */
 const BELOW: Record<PlanLevel, string> = { company: "Departments", department: "Groups", group: "Teams" };
@@ -66,17 +71,20 @@ const BELOW: Record<PlanLevel, string> = { company: "Departments", department: "
  * objectives and key results; a group plan only makes bets, aimed at the department's key
  * results, since OKRs stop at department level. None of them has a story map of its own.
  */
-export function companyInit(dir: string, opts: { name: string; period?: string; departments?: string[]; repo?: string; host?: string; level?: PlanLevel }): CompanyResult {
+export function companyInit(dir: string, opts: { name: string; key?: string; period?: string; departments?: string[]; repo?: string; host?: string; level?: PlanLevel }): CompanyResult {
   const level: PlanLevel = opts.level ?? "company";
   const name = opts.name?.trim();
   if (!name) throw new Error(`Give the ${level}'s name`);
+  // A group's key is the GROUP in every story id, e.g. PAY in PAY-CHK-12.
+  const key = level === "group" ? (opts.key ?? keyFor(name)).toUpperCase() : undefined;
+  if (key !== undefined && !GROUP_KEY.test(key)) throw new Error(`'${key}' isn't a valid group key (letters and digits, starting with a letter, up to 10)`);
   const root = resolve(dir);
   const repo = opts.repo ?? `<owner>/${basename(root)}`;
   const join_ = `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
   const below = BELOW[level];
   const holds = level === "group" ? "bets, aimed at the department's key results" : "objectives, key results and bets";
   const files: Record<string, string> = {
-    "planning/plan.yaml": `# ${name}'s plan: its ${holds}.${level === "group" ? " OKRs stop at department level, so it has no key results of its own." : ` ${below} align their ${level === "company" ? "key results and bets" : "bets"} to it.`}\n${stringify({ name, period: opts.period ?? "Set the period, e.g. Q1 2027", level, pillars: [] })}`,
+    "planning/plan.yaml": `# ${name}'s plan: its ${holds}.${level === "group" ? " OKRs stop at department level, so it has no key results of its own." : ` ${below} align their ${level === "company" ? "key results and bets" : "bets"} to it.`}\n${stringify({ name, ...(key ? { key } : {}), period: opts.period ?? "Set the period, e.g. Q1 2027", level, pillars: [] })}`,
     "nikos.settings.yaml": `# Settings every level that joins this plan inherits.
 # Lock a key so the levels below can't change it. To hold every level to the approval policy,
 # lock its routes with it: locked: [approval.policy, approval.routes]
@@ -119,7 +127,7 @@ Nothing in your repo moves.
     const keep = join(root, "planning", sub, ".gitkeep");
     if (!store().exists(join(root, "planning", sub))) store().write(keep, "");
   }
-  return { created, skipped, join: join_ };
+  return { created, skipped, key, join: join_ };
 }
 
 /** A person at a terminal, not an agent, a pipe or CI: the only time start asks questions. */
@@ -161,7 +169,7 @@ export async function runStart(args: string[]): Promise<number> {
 const USAGE: Record<PlanLevel, string> = {
   company: 'Usage: nikos company init --name "<company>" [--level department] [--period "Q1 2027"] [--departments "Payments, Growth"] [--repo owner/company-plan] [--host gitlab.com] [--dir <path>]',
   department: 'Usage: nikos company init --level department --name "<department>" [--period "Q1 2027"] [--departments "<groups>"] [--repo owner/payments-plan] [--host gitlab.com] [--dir <path>]',
-  group: 'Usage: nikos group init --name "<group>" [--period "Q1 2027"] [--repo owner/checkout-group] [--host gitlab.com] [--dir <path>]',
+  group: 'Usage: nikos group init --name "<group>" [--key <KEY>] [--period "Q1 2027"] [--repo owner/checkout-group] [--host gitlab.com] [--dir <path>]',
 };
 
 /** `nikos company init` (a company, or a department with --level department) and `nikos group init`. */
@@ -177,13 +185,18 @@ function runPlanInit(args: string[], fixed?: PlanLevel): number {
     return 1;
   }
   const level: PlanLevel = fixed ?? (asked as PlanLevel | undefined) ?? "company";
+  if (flag("key") !== undefined && level !== "group") {
+    console.error("✗ --key is for group plans");
+    return 1;
+  }
   if (sub !== "init" || !flag("name")) {
     console.error(USAGE[level]);
     return 1;
   }
   try {
     const dir = flag("dir") ?? process.cwd();
-    const r = companyInit(dir, { name: flag("name")!, period: flag("period"), departments: flag("departments")?.split(","), repo: flag("repo"), host: flag("host"), level });
+    const r = companyInit(dir, { name: flag("name")!, key: flag("key"), period: flag("period"), departments: flag("departments")?.split(","), repo: flag("repo"), host: flag("host"), level });
+    if (r.key && flag("key") === undefined) console.log(`Group key ${r.key} (from the name; set another with --key)`);
     if (r.created.length) console.log(`Created:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
     if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
     console.log(`\n${BELOW[level]} join it with:\n  ${r.join}${existsSync(join(dir, ".git")) ? "" : "\n\nThis folder isn't a git repo yet: create the repo on GitHub or GitLab and push it, so others can join."}`);

@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { featureStoryIds, findIntentDir, read, rel, walk } from "../lib/project.js";
+import { featureStoryIds, read, rel, walk } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 
 export type CheckName = "Clear" | "Lean" | "Executable" | "Accurate" | "Responsible";
@@ -95,8 +96,8 @@ export function formatClear(results: CheckResult[]): string {
 }
 
 /** Find the feature file that carries a story id. */
-export function featureFor(story: string, dir: string): string | undefined {
-  return walk(join(findIntentDir(dir), "features"), ".feature").find((f) => featureStoryIds(read(f)).includes(story));
+export function featureFor(story: string, dir: string, map?: string): string | undefined {
+  return walk(join(resolveStoryMap(dir, map).dir, "features"), ".feature").find((f) => featureStoryIds(read(f)).includes(story));
 }
 
 export function runClear(args: string[]): number {
@@ -107,7 +108,7 @@ export function runClear(args: string[]): number {
   }
   const i = rest.indexOf("--dir");
   const dir = i >= 0 ? rest[i + 1] : process.cwd();
-  const file = featureFor(story, dir);
+  const file = featureFor(story, dir, mapFlag(rest));
   if (!file) {
     console.error(`✗ No feature file is tagged @${story}`);
     return 1;

@@ -3,7 +3,8 @@ import { loadStates } from "../lib/state-files.js";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
-import { STORY_ID, featureTags, findIntentDir, isDone, read, rel, specHash } from "../lib/project.js";
+import { STORY_ID, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
@@ -14,10 +15,11 @@ import { decisionEntries } from "./decisions.js";
 const yamlFile = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
 
 /** Everything the intent/ folder says about one story, in plain text. */
-export function show(story: string, dir: string): string {
-  if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1)`);
-  const intentDir = findIntentDir(dir);
-  const file = featureFor(story, dir);
+export function show(story: string, dir: string, mapId?: string): string {
+  if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
+  const ref = resolveStoryMap(dir, mapId);
+  const intentDir = ref.dir;
+  const file = featureFor(story, ref.root, ref.id);
   if (!file) throw new Error(`No feature file is tagged @${story}`);
   const feature = parseFeature(read(file));
   if (!feature) throw new Error(`${rel(intentDir, file)} has no Feature`);
@@ -74,7 +76,8 @@ export function show(story: string, dir: string): string {
 
   const { bets, from, release: rn } = betsFor(map, story);
   const where = (b: string) => (BET_ID.test(b) ? `${b} (planning/bets/${b}.md)` : b);
-  out.push(bets.length ? `Bets: ${bets.map(where).join(", ")} — from ${from === "story" ? "the story" : `release ${rn}`}` : "Bets: none");
+  const provenance = from === "map" ? "the story map" : from === "story" ? "the story" : `release ${rn}`;
+  out.push(bets.length ? `Bets: ${bets.map(where).join(", ")} — from ${provenance}` : "Bets: none");
 
   const decisions = decisionEntries(dir).filter((e) => e.title.includes(`(${story})`));
   out.push(decisions.length ? "Decisions:" : "Decisions: none recorded for this story");
@@ -90,7 +93,7 @@ export function runShow(args: string[]): number {
   }
   const i = rest.indexOf("--dir");
   try {
-    console.log(show(story, i >= 0 ? rest[i + 1] : process.cwd()));
+    console.log(show(story, i >= 0 ? rest[i + 1] : process.cwd(), mapFlag(rest)));
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

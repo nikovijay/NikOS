@@ -11,6 +11,7 @@ import { parse, stringify } from "yaml";
 import { CROSS_REF, REPO_PATH } from "../lib/bets.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
 import { walk } from "../lib/project.js";
+import { storyMapsOf } from "../lib/maps.js";
 import { betIds, krIds, loadBet, loadKr, paths, today, writePlanning } from "./model.js";
 
 export interface UpstreamEntry {
@@ -204,11 +205,11 @@ export function crossRefs(root: string): { ref: string; file: string; resolved: 
     const meta = parseFrontMatter(readFileSync(p, "utf8"))?.meta;
     for (const r of [meta?.krs?.primary, ...(meta?.krs?.also ?? []), ...[meta?.aligns_to ?? []].flat()]) if (typeof r === "string" && r.includes("#")) refs.push({ ref: r, file: `planning/bets/${basename(p)}` });
   }
-  const mapPath = join(paths(root).intent, "storymap.yaml");
-  if (existsSync(mapPath)) {
-    const map = parse(readFileSync(mapPath, "utf8"));
-    for (const r of map?.releases ?? []) for (const b of r?.bets ?? []) if (CROSS_REF.test(b)) refs.push({ ref: b, file: "intent/storymap.yaml" });
-    for (const list of Object.values(map?.story_bets ?? {})) for (const b of list as string[]) if (CROSS_REF.test(b)) refs.push({ ref: b, file: "intent/storymap.yaml" });
+  for (const ref of storyMapsOf(root)) {
+    const file = ref.id ? `maps/${ref.id}/storymap.yaml` : "intent/storymap.yaml";
+    const map = parse(readFileSync(join(ref.dir, "storymap.yaml"), "utf8"));
+    for (const r of map?.releases ?? []) for (const b of r?.bets ?? []) if (CROSS_REF.test(b)) refs.push({ ref: b, file });
+    for (const list of Object.values(map?.story_bets ?? {})) for (const b of list as string[]) if (CROSS_REF.test(b)) refs.push({ ref: b, file });
   }
   return refs.map((r) => ({ ...r, resolved: resolveRef(root, r.ref) !== undefined }));
 }

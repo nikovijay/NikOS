@@ -1,6 +1,6 @@
-import { dirname } from "node:path";
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
-import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
+import { STORY_ID, read, specHash } from "../lib/project.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { featureFor } from "./clear.js";
 import { formatResult, validate } from "./validate.js";
 import { verify } from "./verify.js";
@@ -65,6 +65,8 @@ export class StateError extends Error {
 
 export interface StateOptions {
   dir?: string;
+  /** The map, in a group repo with several. */
+  map?: string;
   by?: string;
   date?: string;
   /** Why the story is cancelled; required for a move to cancelled. */
@@ -74,11 +76,12 @@ export interface StateOptions {
 }
 
 export function setState(story: string, to: Status, opts: StateOptions = {}): StateResult {
-  if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
+  if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   if ((to as string) === "approved") throw new StateError(`Approval isn't a status: a person approves ${story} with nikos approve, or by reviewing a change to intent/approvals.yaml`);
   if (!(to in MOVES)) throw new StateError(`'${to}' is not a status (${Object.keys(MOVES).join(", ")})`);
   if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
-  const intentDir = findIntentDir(opts.dir ?? process.cwd());
+  const ref = resolveStoryMap(opts.dir ?? process.cwd(), opts.map);
+  const intentDir = ref.dir;
   const from = storyState(intentDir, story)?.status as Status | undefined;
   if (!from) throw new StateError(noEntry(intentDir, story));
   if (!MOVES[from]?.includes(to)) {
@@ -89,7 +92,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   if (to === "done") {
     let run;
     try {
-      run = verify(dirname(intentDir), story);
+      run = verify(ref.root, story, { map: ref.id });
     } catch (err) {
       throw new StateError(`${story} stays ${from}: its scenarios couldn't run. ${(err as Error).message}`, result);
     }
@@ -105,7 +108,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     result.output = run.output;
   }
 
-  const feature = featureFor(story, dirname(intentDir));
+  const feature = featureFor(story, ref.root, ref.id);
   // A Document keeps comments and the order of everything we don't touch.
   updateStory(intentDir, story, (doc, entry) => {
     doc.setIn([...entry, "status"], to);
@@ -134,7 +137,7 @@ export function runState(args: string[]): number {
     return i >= 0 ? rest[i + 1] : undefined;
   };
   try {
-    const r = setState(story, to as Status, { dir: opt("dir"), by: opt("by"), reason: opt("reason") });
+    const r = setState(story, to as Status, { dir: opt("dir"), map: opt("map"), by: opt("by"), reason: opt("reason") });
     console.log(`${r.story}: ${r.from} → ${r.to}`);
   } catch (err) {
     const e = err as StateError;
@@ -142,7 +145,7 @@ export function runState(args: string[]): number {
     console.error(`✗ ${e.message}`);
     return 1;
   }
-  const v = validate(opt("dir") ?? process.cwd());
+  const v = validate(opt("dir") ?? process.cwd(), opt("map"));
   if (v.errors.length) {
     console.error(formatResult(v));
     return 1;

@@ -3,9 +3,10 @@
 // intent/state.yaml keeps format_version and the run queue; each story gets intent/state/<ID>.yaml
 // and, once approved, intent/approvals/<ID>.yaml. `nikos migrate single-file` moves them back.
 // Both layouts read and write the same through lib/state-files.ts.
-import { dirname, join } from "node:path";
+import { join, relative } from "node:path";
 import { parse, parseDocument, stringify } from "yaml";
-import { count, findIntentDir, read } from "../lib/project.js";
+import { count, read } from "../lib/project.js";
+import { repoRootOf, resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { approvalsDir, approvalsFile, stateDir, statePath, storyApprovalPath, storyFiles, storyStatePath } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { validate } from "./validate.js";
@@ -23,11 +24,13 @@ export interface MigrateResult {
 const CODEOWNERS = ["CODEOWNERS", ".github/CODEOWNERS", ".gitlab/CODEOWNERS", "docs/CODEOWNERS"];
 
 /** Give a CODEOWNERS rule on approvals.yaml a matching rule on approvals/, or the other way round. */
-function carryCodeowners(root: string, to: Layout): string | undefined {
+function carryCodeowners(root: string, to: Layout, rel: string): string | undefined {
   const file = CODEOWNERS.map((f) => join(root, f)).find((f) => store().exists(f));
   if (!file) return undefined;
   const text = read(file);
-  const [from, into] = to === "per-story" ? [/^(\S*intent\/)approvals\.yaml(\s+.+)$/m, "approvals/"] : [/^(\S*intent\/)approvals\/(\s+.+)$/m, "approvals.yaml"];
+  // rel is the story map's folder from the root: intent, or maps/<id> in a group repo.
+  const at = rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const [from, into] = to === "per-story" ? [new RegExp(`^(\\S*${at}\\/)approvals\\.yaml(\\s+.+)$`, "m"), "approvals/"] : [new RegExp(`^(\\S*${at}\\/)approvals\\/(\\s+.+)$`, "m"), "approvals.yaml"];
   const m = text.match(from);
   if (!m) return undefined;
   const line = `${m[1]}${into}${m[2]}`;
@@ -36,8 +39,8 @@ function carryCodeowners(root: string, to: Layout): string | undefined {
   return file;
 }
 
-export function migrate(dir: string, to: Layout): MigrateResult {
-  const intent = findIntentDir(dir);
+export function migrate(dir: string, to: Layout, mapId?: string): MigrateResult {
+  const intent = resolveStoryMap(dir, mapId).dir;
   if (!store().exists(statePath(intent))) throw new Error("No intent/state.yaml here: set nikOS up first (nikos init)");
   const before = validate(intent);
   if (before.errors.length) throw new Error(`Fix intent/ first (nikos validate lists ${before.errors.length} ${before.errors.length === 1 ? "problem" : "problems"}), so nothing is lost moving it`);
@@ -82,7 +85,8 @@ export function migrate(dir: string, to: Layout): MigrateResult {
   }
   const after = validate(intent);
   if (after.errors.length) throw new Error(`The move left problems in intent/; check it with nikos validate:\n${after.errors.map((e) => `  ${e.file}: ${e.message}`).join("\n")}`);
-  const codeowners = carryCodeowners(dirname(intent), to);
+  const repo = repoRootOf(intent);
+  const codeowners = carryCodeowners(repo, to, relative(repo, intent));
   return { layout: to, states, approvals, ...(codeowners ? { codeowners } : {}) };
 }
 
@@ -95,7 +99,7 @@ export function runMigrate(args: string[]): number {
     return 1;
   }
   try {
-    const r = migrate(dir, to);
+    const r = migrate(dir, to, mapFlag(args));
     console.log(
       r.layout === "per-story"
         ? `Moved ${count(r.states, "story", "stories")} to intent/state/<ID>.yaml${r.approvals ? ` and ${count(r.approvals, "approval")} to intent/approvals/<ID>.yaml` : ""}.`

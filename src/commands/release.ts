@@ -1,7 +1,8 @@
 import { store } from "../lib/store.js";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
-import { featureStoryIds, findIntentDir, isDone, read, setFeatureTag, walk } from "../lib/project.js";
+import { featureStoryIds, isDone, read, setFeatureTag, walk } from "../lib/project.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { storyMapOf } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
 import { loadApprovals } from "../lib/approvals.js";
@@ -18,8 +19,8 @@ interface Opened {
   releases: YAMLSeq<YAMLMap>;
 }
 
-function open(dir: string): Opened {
-  const intentDir = findIntentDir(dir);
+function open(dir: string, mapId?: string): Opened {
+  const intentDir = resolveStoryMap(dir, mapId).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
@@ -80,8 +81,8 @@ function uniqueTitle(o: Opened, title: string, except?: YAMLMap) {
 }
 
 /** Add the next numbered release, with no stories yet. */
-export function addRelease(input: { title: string; goal?: string }, dir: string) {
-  const o = open(dir);
+export function addRelease(input: { map?: string; title: string; goal?: string }, dir: string) {
+  const o = open(dir, input.map);
   const number = Math.max(0, ...o.releases.items.map(numberOf)) + 1;
   const goal = input.goal?.trim();
   o.releases.add(o.map.createNode({ number, title: uniqueTitle(o, cleanTitle(input.title)), ...(goal ? { goal } : {}), stories: [] }));
@@ -91,9 +92,9 @@ export function addRelease(input: { title: string; goal?: string }, dir: string)
 }
 
 /** Change a release's title and/or goal. An empty goal removes it. */
-export function renameRelease(input: { number: number; title?: string; goal?: string }, dir: string) {
+export function renameRelease(input: { map?: string; number: number; title?: string; goal?: string }, dir: string) {
   if (input.title === undefined && input.goal === undefined) throw new Error("Give a new title, a --goal, or both");
-  const o = open(dir);
+  const o = open(dir, input.map);
   const r = find(o, input.number);
   if (input.title !== undefined) r.set("title", uniqueTitle(o, cleanTitle(input.title), r));
   if (input.goal !== undefined) {
@@ -110,8 +111,8 @@ export function renameRelease(input: { number: number; title?: string; goal?: st
 }
 
 /** Move a story to another release (to the end of its build order), keeping its feature tag in step. */
-export function moveStory(input: { id: string; to: number }, dir: string) {
-  const o = open(dir);
+export function moveStory(input: { map?: string; id: string; to: number }, dir: string) {
+  const o = open(dir, input.map);
   const target = find(o, input.to);
   const from = o.releases.items.find((r) => storiesOf(r).includes(input.id));
   if (!from) throw new Error(`${input.id} is not in any release in storymap.yaml`);
@@ -127,8 +128,8 @@ export function moveStory(input: { id: string; to: number }, dir: string) {
 }
 
 /** Remove an empty release and renumber the ones after it, retagging their stories. */
-export function removeRelease(input: { number: number }, dir: string) {
-  const o = open(dir);
+export function removeRelease(input: { map?: string; number: number }, dir: string) {
+  const o = open(dir, input.map);
   const r = find(o, input.number);
   const stories = storiesOf(r);
   if (stories.length) throw new Error(`Release ${input.number} still has ${stories.join(", ")}. Move its stories out first with nikos release move`);
@@ -142,8 +143,8 @@ export function removeRelease(input: { number: number }, dir: string) {
 }
 
 /** Move a release to a new position and renumber them all from 1, retagging every story that moved. */
-export function reorderRelease(input: { number: number; to: number }, dir: string) {
-  const o = open(dir);
+export function reorderRelease(input: { map?: string; number: number; to: number }, dir: string) {
+  const o = open(dir, input.map);
   const r = find(o, input.number);
   const count = o.releases.items.length;
   if (!Number.isInteger(input.to) || input.to < 1 || input.to > count) throw new Error(`Position must be from 1 to ${count}`);
@@ -171,16 +172,17 @@ const STATUS_WORD: Record<string, string> = { todo: "to do", in_progress: "in pr
  * blocked, have scenarios, and still match the feature it was done against; its dependencies
  * outside the release must be done too. With run, each done story's scenarios run again.
  */
-export function checkRelease(input: { number: number; run?: boolean }, dir: string): ReleaseCheck {
-  const map = storyMapOf(dir);
+export function checkRelease(input: { map?: string; number: number; run?: boolean }, dir: string): ReleaseCheck {
+  const map = storyMapOf(dir, input.map);
   const release = map.releases.find((r) => r.number === input.number);
   if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
   const inRelease = new Set(release.stories.map((s) => s.id));
   // approval.policy: required-for-release makes a done story without a sign-off a gap.
-  const needApproval = resolveSettings(dirname(findIntentDir(dir)))["approval.policy"].value === "required-for-release";
+  const ref = resolveStoryMap(dir, input.map);
+  const needApproval = resolveSettings(ref.root)["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   // A done story with an approval on file that no longer holds: say so, as validate does.
-  const signedOff = loadApprovals(findIntentDir(dir));
+  const signedOff = loadApprovals(ref.dir);
   const lapsed = (s: (typeof live)[number]) => s.status === "done" && !!signedOff[s.id];
   const gaps: string[] = [];
   for (const s of live) {
@@ -195,11 +197,10 @@ export function checkRelease(input: { number: number; run?: boolean }, dir: stri
     if (outside.length) gaps.push(`${s.id} depends on ${outside.join(", ")}, which ${outside.length === 1 ? "isn't" : "aren't"} done`);
   }
   if (input.run) {
-    const root = dirname(findIntentDir(dir));
     for (const s of live.filter((x) => isDone(x.status) && x.criteria.length)) {
       let run;
       try {
-        run = verify(root, s.id);
+        run = verify(ref.root, s.id, { map: ref.id });
       } catch (err) {
         gaps.push(`${s.id}'s scenarios couldn't run: ${(err as Error).message}`);
         continue;
@@ -242,28 +243,28 @@ export function runRelease(args: string[]): number {
   const dir = opt("dir") ?? process.cwd();
   try {
     if (sub === "add" && positional[0]) {
-      const r = addRelease({ title: positional[0], goal: opt("goal") }, dir);
+      const r = addRelease({ title: positional[0], goal: opt("goal"), map: opt("map") }, dir);
       console.log(`Added release ${r.number}: ${positional[0].trim()}`);
       report(r.validation);
     } else if (sub === "rename" && positional[0]) {
-      const r = renameRelease({ number: Number(positional[0]), title: positional[1], goal: opt("goal") }, dir);
+      const r = renameRelease({ number: Number(positional[0]), title: positional[1], goal: opt("goal"), map: opt("map") }, dir);
       console.log(`Updated release ${r.number}`);
       report(r.validation);
     } else if (sub === "move" && positional[0] && positional[1]) {
-      const r = moveStory({ id: positional[0], to: Number(positional[1]) }, dir);
+      const r = moveStory({ id: positional[0], to: Number(positional[1]), map: opt("map") }, dir);
       console.log(`Moved ${r.id} from release ${r.from} to release ${r.to}`);
       report(r.validation);
     } else if (sub === "reorder" && positional[0] && positional[1]) {
-      const r = reorderRelease({ number: Number(positional[0]), to: Number(positional[1]) }, dir);
+      const r = reorderRelease({ number: Number(positional[0]), to: Number(positional[1]), map: opt("map") }, dir);
       console.log(`Releases are now:\n${r.order.map((x) => `  ${x.number}. ${x.title}`).join("\n")}`);
       report(r.validation);
     } else if (sub === "check" && positional[0]) {
-      const r = checkRelease({ number: Number(positional[0]), run: rest.includes("--run") }, dir);
+      const r = checkRelease({ number: Number(positional[0]), run: rest.includes("--run"), map: opt("map") }, dir);
       console.log(`Release ${r.number} · ${r.title}: ${r.ready ? "ready" : "not ready"} — ${r.summary}`);
       for (const g of r.gaps) console.log(`  ✗ ${g}`);
       return r.ready ? 0 : 1;
     } else if (sub === "remove" && positional[0]) {
-      const r = removeRelease({ number: Number(positional[0]) }, dir);
+      const r = removeRelease({ number: Number(positional[0]), map: opt("map") }, dir);
       console.log(`Removed release ${r.number}: ${r.title}`);
       report(r.validation);
     } else {

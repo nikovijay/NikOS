@@ -168,3 +168,40 @@ describe("the alignment tree", () => {
     expect(formatTree(out).join("\n")).toContain("bet wallets (Payments) → acme/holding#big-bet, not in this rollout");
   });
 });
+
+describe("group key", () => {
+  it("group init takes --key, defaults it from the name, and writes it only for a group", () => {
+    const g = mkdtempSync(join(tmpdir(), "nikos-gk-"));
+    expect(runGroup(["init", "--name", "Checkout", "--key", "chk", "--dir", g])).toBe(0);
+    expect(parse(readFileSync(join(g, "planning/plan.yaml"), "utf8")).key).toBe("CHK");
+
+    const d = mkdtempSync(join(tmpdir(), "nikos-gd-"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect(runGroup(["init", "--name", "Pay Checkout", "--dir", d])).toBe(0);
+    expect(parse(readFileSync(join(d, "planning/plan.yaml"), "utf8")).key).toBe("PC");
+    expect(log.mock.calls.flat().join("\n")).toContain("Group key PC (from the name; set another with --key)");
+    log.mockRestore();
+
+    const bad = mkdtempSync(join(tmpdir(), "nikos-gb-"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(runGroup(["init", "--name", "Checkout", "--key", "9bad", "--dir", bad])).toBe(1);
+    expect(err.mock.calls.flat().join("\n")).toContain("isn't a valid group key");
+    err.mockRestore();
+  });
+
+  it("refuses --key on a company or department plan, and a group writes no maps/ or intent/", () => {
+    const c = mkdtempSync(join(tmpdir(), "nikos-gc-"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(runCompany(["init", "--name", "Acme", "--key", "ACME", "--dir", c])).toBe(1);
+    expect(err.mock.calls.flat().join("\n")).toContain("--key is for group plans");
+    err.mockRestore();
+
+    const g = mkdtempSync(join(tmpdir(), "nikos-gw-"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    runGroup(["init", "--name", "Checkout", "--key", "CHK", "--dir", g]);
+    expect(existsSync(join(g, "maps"))).toBe(false);
+    expect(existsSync(join(g, "intent"))).toBe(false);
+    expect(existsSync(join(g, "planning/bets"))).toBe(true);
+    vi.restoreAllMocks();
+  });
+});

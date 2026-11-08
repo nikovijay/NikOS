@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "name": { "type": "string", "minLength": 1 },
+    "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
     "period": { "type": "string", "minLength": 1 },
     "level": { "enum": ["company", "department", "group", "team"] },
     "pillars": { "type": "array", "items": { "type": "string", "minLength": 1 } },

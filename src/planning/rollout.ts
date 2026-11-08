@@ -7,7 +7,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse, parseDocument } from "yaml";
-import { findIntentDir, isDone } from "../lib/project.js";
+import { isDone } from "../lib/project.js";
+import { storyMapsOf } from "../lib/maps.js";
 import { loadStates } from "../lib/state-files.js";
 import { storyMapOf } from "../commands/map.js";
 import { next } from "../commands/next.js";
@@ -140,7 +141,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   let deliv: DownstreamPlan["delivery"];
   let nextUp: DownstreamPlan["next"];
   const blockers: Blocker[] = [];
-  if (existsSync(join(dir, "intent", "storymap.yaml"))) {
+  if (storyMapsOf(dir).length) {
     try {
       const map = storyMapOf(dir);
       const stories = map.releases.flatMap((r) => r.stories).filter((s) => s.status !== "cancelled");
@@ -160,8 +161,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         }
       })();
       if (id) nextUp = { id, title: titles.get(id) ?? id };
-      for (const [story, st] of Object.entries(loadStates(findIntentDir(dir)))) {
-        if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
+      for (const ref of storyMapsOf(dir)) {
+        for (const [story, st] of Object.entries(loadStates(ref.dir))) {
+          if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
+        }
       }
     } catch {
       // A story map that doesn't read is the team's to fix; the rest of the rollout still shows.

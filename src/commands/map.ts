@@ -4,11 +4,13 @@
 // Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
 import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
-import { parse } from "yaml";
+import { basename, join, relative, resolve } from "node:path";
+import { parse, stringify } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
-import { featureStoryIds, featureTags, findIntentDir, isDone, read, specHash, walk } from "../lib/project.js";
+import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
+import { BET_ID, CROSS_REF } from "../lib/bets.js";
+import { NO_GROUP_KEY, groupKeyOf, mapDirs, resolveStoryMap } from "../lib/maps.js";
 
 export interface MapCriterion {
   id: string;
@@ -100,8 +102,10 @@ function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
 }
 
 /** The story map as data: activities, releases with their bets, and every story's status. */
-export function storyMapOf(dir: string): StoryMap {
-  const intent = findIntentDir(dir);
+export function storyMapOf(dir: string, mapId?: string): StoryMap {
+  // Several maps and none picked: an empty map, so the dashboard and MCP still answer.
+  if (!mapId && mapDirs(dir).length > 1) return { project: "", key: "", personas: [], activities: [], releases: [], unreleased: [] };
+  const intent = resolveStoryMap(dir, mapId).dir;
   const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
   const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
     loadStates(intent);
@@ -176,8 +180,8 @@ const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "B
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The whole story map as one standalone HTML page. live adds the dashboard's filter bar and its script. */
-export function renderMap(dir: string, opts: { live?: boolean } = {}): string {
-  const m = storyMapOf(dir);
+export function renderMap(dir: string, opts: { live?: boolean; map?: string } = {}): string {
+  const m = storyMapOf(dir, opts.map);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
   const known = new Set(m.activities.map((a) => a.id));
   const everything = [...m.releases.flatMap((r) => r.stories), ...m.unreleased];
@@ -494,8 +498,54 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 }
 `;
 
-/** `nikos map`: write the story map as a standalone page. */
+/** A map key: uppercase letters and digits, e.g. CHK. Its folder is the key, lowercased. */
+const MAP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
+
+/**
+ * `nikos map new --bet <bet-id> --key <KEY>`: a story map for one of this group's bets, as
+ * maps/<key lowercased>/, with the folders and files a new intent/ has.
+ */
+export function runMapNew(args: string[]): number {
+  const flag = (name: string) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const bet = flag("--bet");
+  const key = flag("--key");
+  const dir = resolve(flag("--dir") ?? process.cwd());
+  try {
+    if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
+    if (!key) throw new Error("nikos map new needs --key <KEY>");
+    if (!BET_ID.test(bet)) {
+      if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
+      throw new Error(`'${bet}' is not a bet id`);
+    }
+    if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
+    if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
+    const plan = store().exists(join(dir, "planning", "plan.yaml")) ? (parse(read(join(dir, "planning", "plan.yaml"))) as { level?: string }) : undefined;
+    if (plan?.level !== "group") throw new Error("planning/plan.yaml is not a group plan");
+    const group = groupKeyOf(dir);
+    if (!group) throw new Error(NO_GROUP_KEY);
+    const taken = mapDirs(dir).find((d) => (parse(read(join(d, "storymap.yaml"))) as { key?: string })?.key === key);
+    if (taken) throw new Error(`map key ${key} is already used by maps/${basename(taken)}`);
+    const id = key.toLowerCase();
+    const mapDir = join(dir, "maps", id);
+    if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
+    const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
+    store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
+    store().write(join(mapDir, "state.yaml"), "format_version: 1\nstories: {}\n", { create: true });
+    for (const sub of ["features", "plans", "approvals"]) store().write(join(mapDir, sub, ".gitkeep"), "", { create: true });
+    console.log(`Created maps/${id} for bet ${bet}, story ids ${group}-${key}-n`);
+    return 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}
+
+/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in a group repo. */
 export function runMap(args: string[]): number {
+  if (args[0] === "new") return runMapNew(args.slice(1));
   const flag = (name: string) => {
     const i = args.indexOf(name);
     return i >= 0 ? args[i + 1] : undefined;
@@ -503,8 +553,9 @@ export function runMap(args: string[]): number {
   const out = resolve(flag("--out") ?? "storymap.html");
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
-    if (!store().exists(join(findIntentDir(dir), "storymap.yaml"))) throw new Error(`No storymap.yaml in ${findIntentDir(dir)}: run nikos init first`);
-    writeFileSync(out, renderMap(dir));
+    const ref = resolveStoryMap(dir, flag("--map"));
+    if (!store().exists(join(ref.dir, "storymap.yaml"))) throw new Error(`No storymap.yaml in ${ref.dir}: run nikos init first`);
+    writeFileSync(out, renderMap(dir, { map: flag("--map") }));
     const shown = relative(process.cwd(), out);
     console.log(`Wrote ${shown && !shown.startsWith("..") ? shown : out}`);
     return 0;

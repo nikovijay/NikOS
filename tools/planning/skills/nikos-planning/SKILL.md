@@ -19,8 +19,9 @@ planning/
   views/<name>.html      optional: custom dashboard views
 ```
 
-A bet never lists its stories. The story map says which bets it delivers: a
-release in `intent/storymap.yaml` carries `bets: [<bet-id>]` (or
+A bet never lists its stories. The story map says which bets it delivers: in a
+group repo, each map under `maps/<id>/` names its one bet in `bet:`; in an
+`intent/` repo, a release in `intent/storymap.yaml` carries `bets: [<bet-id>]` (or
 `owner/repo#bet-id` for another repo's bet), and `story_bets:` overrides that
 for a single story. A bet's delivery status (Shipped, Building, Not started)
 is worked out from those stories; its outcome (open, awaiting evidence, won,

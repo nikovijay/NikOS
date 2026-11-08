@@ -133,9 +133,9 @@ export function toJira(m: StoryMap, projectKey: string) {
   };
 }
 
-export function exportMap(dir: string, format: Format, opts: { release?: number; projectKey?: string } = {}): string {
+export function exportMap(dir: string, format: Format, opts: { release?: number; projectKey?: string; map?: string } = {}): string {
   if (!FORMATS.includes(format)) throw new Error(`'${format}' is not a format (${FORMATS.join(", ")})`);
-  const full = storyMapOf(dir);
+  const full = storyMapOf(dir, opts.map);
   if (opts.release !== undefined && !full.releases.some((r) => r.number === opts.release)) {
     throw new Error(`There is no release ${opts.release}. Releases: ${full.releases.map((r) => r.number).join(", ")}`);
   }
@@ -159,7 +159,7 @@ export function runExport(args: string[]): number {
   }
   try {
     const release = flag("release");
-    const text = exportMap(resolve(flag("dir") ?? process.cwd()), format, { release: release === undefined ? undefined : Number(release), projectKey: flag("project-key") });
+    const text = exportMap(resolve(flag("dir") ?? process.cwd()), format, { release: release === undefined ? undefined : Number(release), projectKey: flag("project-key"), map: flag("map") });
     const out = resolve(flag("out") ?? DEFAULT_OUT[format]);
     writeFileSync(out, text);
     const shown = relative(process.cwd(), out);

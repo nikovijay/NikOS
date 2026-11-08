@@ -1,6 +1,7 @@
 import { store } from "../lib/store.js";
 import { STORY_ID, decisionsPath, isPlanOnly, read } from "../lib/project.js";
-import { formatResult, validate } from "./validate.js";
+import { formatResult, validate, validateGroup } from "./validate.js";
+import { mapDirs } from "../lib/maps.js";
 
 const PLAN_DECISIONS = `# Decisions
 
@@ -23,12 +24,12 @@ export function decide(input: DecisionInput, dir: string): string {
   const title = input.title.trim();
   if (!title) throw new Error("A decision needs a title");
   if (!input.why.trim()) throw new Error("Say why: what you chose and what you rejected (--why)");
-  if (input.story && !STORY_ID.test(input.story)) throw new Error(`'${input.story}' is not a story id (expected e.g. HT-1)`);
+  if (input.story && !STORY_ID.test(input.story)) throw new Error(`'${input.story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const category = input.category ?? "architecture";
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
   const path = decisionsPath(dir);
   if (!store().exists(path)) {
-    if (!isPlanOnly(dir)) throw new Error("No intent/decisions.md. Run `nikos init` first, or `nikos company init` for a company or department plan.");
+    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No intent/decisions.md. Run `nikos init` first, or `nikos company init` for a company or department plan.");
     store().write(path, PLAN_DECISIONS, { create: true });
   }
 
@@ -60,13 +61,13 @@ export function runDecide(args: string[]): number {
   const dir = opt("dir") ?? process.cwd();
   try {
     decide({ title, why: opt("why") ?? "", story: opt("story"), category: opt("category"), supersedes: opt("supersedes") }, dir);
-    console.log(`Added to ${isPlanOnly(dir) ? "planning" : "intent"}/decisions.md: ${title}`);
+    console.log(`Added to ${isPlanOnly(dir) || mapDirs(dir).length ? "planning" : "intent"}/decisions.md: ${title}`);
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
   if (isPlanOnly(dir)) return 0; // no story map to check
-  const v = validate(dir);
+  const v = mapDirs(dir).length ? validateGroup(dir) : validate(dir);
   if (v.errors.length) {
     console.error(formatResult(v));
     return 1;

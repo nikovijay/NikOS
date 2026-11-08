@@ -6,11 +6,12 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
-import { BET_ID, CROSS_REF, planningDir } from "../lib/bets.js";
+import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
+import { groupKeyOf, mapDirs, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
-import { featureStoryIds, featureTag, featureTags, findIntentDir, isDone, read, rel, specHash, walk } from "../lib/project.js";
+import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 
 export interface Issue {
   file: string;
@@ -24,6 +25,8 @@ export interface ValidationResult {
   warnings: Issue[];
   stories: number;
   releases: number;
+  /** What the result is about, for the "is valid" line: intent/, or maps/ for a group. */
+  label?: string;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -78,8 +81,49 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
   }
 }
 
-export function validate(start: string): ValidationResult {
-  const dir = findIntentDir(start);
+/** Check one story map: intent/, or maps/<id> with --map (or the group's only map). */
+export function validate(start: string, map?: string): ValidationResult {
+  return validateMap(resolveStoryMap(start, map));
+}
+
+/**
+ * A group repo with maps/: each map is checked on its own, then the rules only the group can
+ * see: one key per map, and each map's folder named for its key.
+ */
+export function validateGroup(root: string): ValidationResult {
+  const errors: Issue[] = [];
+  const warnings: Issue[] = [];
+  if (store().exists(join(root, "intent", "storymap.yaml"))) {
+    errors.push({ file: "intent/storymap.yaml", message: "this repo has both intent/ and maps/: keep one", hint: "move intent/ into maps/<id>/, or remove maps/" });
+  }
+  if (!groupKeyOf(root)) errors.push({ file: "planning/plan.yaml", message: "has no key", hint: "add key: <KEY> to it, then retry" });
+  const owner = new Map<string, string>();
+  let stories = 0;
+  let releases = 0;
+  for (const dir of mapDirs(root)) {
+    const id = basename(dir);
+    let key: unknown;
+    try {
+      key = (parse(read(join(dir, "storymap.yaml"))) as { key?: unknown } | null)?.key;
+    } catch {
+      key = undefined; // validateMap reports the file's YAML error
+    }
+    if (typeof key === "string") {
+      if (key.toLowerCase() !== id) errors.push({ file: `maps/${id}/storymap.yaml`, message: `maps/${id} has key '${key}', so its folder should be maps/${key.toLowerCase()}` });
+      if (owner.has(key)) errors.push({ file: `maps/${id}/storymap.yaml`, message: `maps/${owner.get(key)} and maps/${id} both use key '${key}'`, hint: "give each map a key of its own" });
+      else owner.set(key, id);
+    }
+    const r = validateMap({ root, dir, id });
+    errors.push(...r.errors);
+    warnings.push(...r.warnings);
+    stories += r.stories;
+    releases += r.releases;
+  }
+  return { dir: root, errors, warnings, stories, releases, label: "maps/" };
+}
+
+function validateMap(ref: StoryMapRef): ValidationResult {
+  const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
 
@@ -101,6 +145,16 @@ export function validate(start: string): ValidationResult {
 
   // Cross-file checks only when both files parsed into objects.
   const mapStories = new Map<string, number>();
+  // A story id starts with the map's prefix: the key in intent/, or GROUP-KEY in a group's map.
+  // With no group key, validateGroup reports it once; the prefix check is then skipped.
+  let prefix: string | undefined = storymap?.key;
+  if (ref.id && storymap?.key) {
+    try {
+      prefix = storyPrefix(ref, storymap.key);
+    } catch {
+      prefix = undefined;
+    }
+  }
   const activityIds = new Set<string>();
   const personaIds = new Set<string>();
   // Each step id names its activity; ids are unique across the map so a @step tag is enough.
@@ -127,8 +181,8 @@ export function validate(start: string): ValidationResult {
           errors.push({ file: "storymap.yaml", message: `${id} appears in more than one release`, hint: "keep each story in exactly one release" });
         }
         mapStories.set(id, r.number);
-        if (storymap.key && typeof id === "string" && !id.startsWith(`${storymap.key}-`)) {
-          errors.push({ file: "storymap.yaml", message: `${id} doesn't use the project key '${storymap.key}'` });
+        if (storymap.key && prefix && typeof id === "string" && !id.startsWith(`${prefix}-`)) {
+          errors.push(ref.id ? { file: "storymap.yaml", message: `story ${id} must start with ${prefix}-` } : { file: "storymap.yaml", message: `${id} doesn't use the project key '${storymap.key}'` });
         }
       }
     }
@@ -199,7 +253,7 @@ export function validate(start: string): ValidationResult {
     const file = `state/${f.id}.yaml`;
     const entry = loadYaml(dir, file, errors);
     if (entry === undefined) continue;
-    if (!/^[A-Z][A-Z0-9]{0,9}-[0-9]+$/.test(f.id)) {
+    if (!STORY_ID.test(f.id)) {
       errors.push({ file, message: `'${f.id}' is not a story id`, hint: "name each file after its story, e.g. state/HT-1.yaml" });
       continue;
     }
@@ -295,7 +349,7 @@ export function validate(start: string): ValidationResult {
 
   // Bet links: each names a bet in planning/bets/ or one in another repo (<repo path>#id).
   if (storymap && typeof storymap === "object") {
-    const betsDir = join(planningDir(dir), "bets");
+    const betsDir = join(planningDirOf(repoRootOf(dir)), "bets");
     const check = (where: string, refs: unknown) => {
       for (const ref of Array.isArray(refs) ? refs : []) {
         if (typeof ref !== "string") continue;
@@ -307,10 +361,19 @@ export function validate(start: string): ValidationResult {
         }
       }
     };
-    for (const r of storymap.releases ?? []) check(`release ${r?.number}`, r?.bets);
-    for (const [id, refs] of Object.entries(storymap.story_bets ?? {})) {
-      if (!mapStories.has(id)) errors.push({ file: "storymap.yaml", message: `story_bets names ${id}, which is not in any release` });
-      check(id, refs);
+    if (ref.id) {
+      // A group's map names its one bet in bet:, so its releases and stories don't name bets.
+      for (const r of storymap.releases ?? []) if (r?.bets !== undefined) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove bets: from release ${r?.number}` });
+      for (const id of Object.keys(storymap.story_bets ?? {})) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove story_bets from ${id}` });
+      if (typeof storymap.bet !== "string") errors.push({ file: "storymap.yaml", message: `maps/${ref.id}/storymap.yaml has no bet: add bet: <bet-id>, the group bet this map specs` });
+      else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
+    } else {
+      if (storymap.bet !== undefined) errors.push({ file: "storymap.yaml", message: "intent/ names bets in releases: bet: is only for maps/<id>", hint: "move the bet to bets: on each release" });
+      for (const r of storymap.releases ?? []) check(`release ${r?.number}`, r?.bets);
+      for (const [id, refs] of Object.entries(storymap.story_bets ?? {})) {
+        if (!mapStories.has(id)) errors.push({ file: "storymap.yaml", message: `story_bets names ${id}, which is not in any release` });
+        check(id, refs);
+      }
     }
   }
 
@@ -341,7 +404,8 @@ export function formatResult(r: ValidationResult): string {
   for (const e of r.errors) lines.push(`✗ ${e.file}: ${e.message}${e.hint ? `\n    → ${e.hint}` : ""}`);
   for (const w of r.warnings) lines.push(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   if (r.errors.length === 0) {
-    lines.push(`✓ intent/ is valid — ${r.stories} ${r.stories === 1 ? "story" : "stories"}, ${r.releases} ${r.releases === 1 ? "release" : "releases"}`);
+    const label = r.label ?? (basename(dirname(r.dir)) === "maps" ? `maps/${basename(r.dir)}/` : "intent/");
+    lines.push(`✓ ${label} is valid — ${r.stories} ${r.stories === 1 ? "story" : "stories"}, ${r.releases} ${r.releases === 1 ? "release" : "releases"}`);
   } else {
     lines.push(`\n${r.errors.length} ${r.errors.length === 1 ? "problem" : "problems"} found.`);
   }
@@ -349,7 +413,15 @@ export function formatResult(r: ValidationResult): string {
 }
 
 export function runValidate(args: string[]): number {
-  const r = validate(args[0] ?? process.cwd());
-  console.log(formatResult(r));
-  return r.errors.length ? 1 : 0;
+  const i = args.indexOf("--map");
+  const start = args[0] && !args[0].startsWith("--") ? args[0] : process.cwd();
+  try {
+    // A group with maps/ and no --map checks every map, and the group's own rules.
+    const r = !(i >= 0) && mapDirs(start).length ? validateGroup(start) : validate(start, i >= 0 ? args[i + 1] : undefined);
+    console.log(formatResult(r));
+    return r.errors.length ? 1 : 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
 }

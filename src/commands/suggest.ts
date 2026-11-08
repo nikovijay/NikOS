@@ -3,10 +3,12 @@
 // question in its own way (a multiple-choice prompt where it has one) and runs what's picked.
 // Labels are plain words for the person. `do` tells the agent what a pick means; it's never
 // shown as a command for the person to run.
+import { repoRootOf } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 import { resolveSettings } from "../lib/settings.js";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { findIntentDir, isDone } from "../lib/project.js";
+import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate } from "./validate.js";
@@ -34,8 +36,8 @@ const MAX = 4;
 const named = (s: MapStory) => `${s.id}: ${s.title}`;
 const list = (ids: string[]) => (ids.length <= 3 ? ids.join(", ") : `${ids.slice(0, 2).join(", ")} and ${ids.length - 2} more`);
 
-export function suggest(dir: string): Suggestion {
-  const intentDir = findIntentDir(dir);
+export function suggest(dir: string, mapId?: string): Suggestion {
+  const intentDir = resolveStoryMap(dir, mapId).dir;
   if (!store().exists(join(intentDir, "storymap.yaml"))) {
     return {
       summary: "nikOS isn't set up in this repo yet.",
@@ -47,7 +49,7 @@ export function suggest(dir: string): Suggestion {
     };
   }
 
-  const map = storyMapOf(dir);
+  const map = storyMapOf(dir, mapId);
   const stories = [...map.releases.flatMap((r) => r.stories), ...map.unreleased];
   const byId = new Map(stories.map((s) => [s.id, s]));
   const options: Option[] = [];
@@ -67,7 +69,7 @@ export function suggest(dir: string): Suggestion {
 
   // Done stories nobody has signed off (the map shows a story with an approval that holds as
   // approved): the agent asks "Do you want to approve …?"
-  const approvalsOn = resolveSettings(dirname(intentDir))["approval.policy"].value !== "off";
+  const approvalsOn = resolveSettings(repoRootOf(intentDir))["approval.policy"].value !== "off";
   const unapproved = approvalsOn ? stories.filter((s) => s.status === "done" && !s.specChanged) : [];
   if (unapproved.length) {
     add({
@@ -94,7 +96,7 @@ export function suggest(dir: string): Suggestion {
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
 
   // The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results.
-  const root = dirname(intentDir);
+  const root = repoRootOf(intentDir);
   if (store().isDir(join(root, "planning"))) {
     const due = betIds(root).flatMap((id) => {
       try {
@@ -134,11 +136,12 @@ export function suggest(dir: string): Suggestion {
 export function runSuggest(args: string[]): number {
   const i = args.indexOf("--dir");
   const dir = resolve(i >= 0 ? args[i + 1] : process.cwd());
+  const mapId = mapFlag(args);
   // --brief is for a session-start hook: one line, and nothing at all outside a nikOS repo.
   if (args.includes("--brief")) {
-    if (!store().exists(join(findIntentDir(dir), "storymap.yaml"))) return 0;
+    if (!mapDirs(dir).length && !store().exists(join(findIntentDir(dir), "storymap.yaml"))) return 0;
     try {
-      const s = suggest(dir);
+      const s = suggest(dir, mapId);
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);
       const stale = staleCliWarning();
       if (stale) console.log(`nikOS: ${stale}`);
@@ -148,7 +151,7 @@ export function runSuggest(args: string[]): number {
     return 0;
   }
   try {
-    const s = suggest(dir);
+    const s = suggest(dir, mapId);
     if (args.includes("--json")) {
       console.log(JSON.stringify(s, null, 2));
       return 0;

@@ -1,17 +1,18 @@
 import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument } from "yaml";
-import { findIntentDir, read } from "../lib/project.js";
+import { read } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 
 const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 
 /** Add a step to an activity in storymap.yaml. Its id is the title's slug unless given. */
-export function newStep(input: { title: string; activity: string; id?: string }, dir: string): { id: string; validation: ValidationResult } {
+export function newStep(input: { title: string; activity: string; id?: string; map?: string }, dir: string): { id: string; validation: ValidationResult } {
   const title = input.title?.trim();
   if (!title) throw new Error("A step needs a title");
-  const intentDir = findIntentDir(dir);
+  const intentDir = resolveStoryMap(dir, input.map).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
@@ -34,10 +35,10 @@ export function newStep(input: { title: string; activity: string; id?: string },
 }
 
 /** Add an activity to the story map, e.g. an area of an existing product or an imported epic. Returns its id; an existing one is left as it is. */
-export function newActivity(input: { title: string; id?: string }, dir: string): string {
+export function newActivity(input: { title: string; id?: string; map?: string }, dir: string): string {
   const title = input.title?.trim();
   if (!title) throw new Error("An activity needs a title");
-  const intentDir = findIntentDir(dir);
+  const intentDir = resolveStoryMap(dir, input.map).dir;
   const mapPath = join(intentDir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
   const id = input.id ?? slugify(title);
@@ -58,8 +59,9 @@ export function runActivity(args: string[]): number {
     return 1;
   }
   try {
-    const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined }, d >= 0 ? rest[d + 1] : process.cwd());
-    console.log(`Activity ${id}: its stories go in intent/features/${id}/`);
+    const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined, map: mapFlag(rest) }, d >= 0 ? rest[d + 1] : process.cwd());
+    const where = mapFlag(rest) ? `maps/${mapFlag(rest)}` : "intent";
+    console.log(`Activity ${id}: its stories go in ${where}/features/${id}/`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
@@ -78,7 +80,7 @@ export function runStep(args: string[]): number {
     return 1;
   }
   try {
-    const r = newStep({ title, activity: opt("activity")!, id: opt("id") }, opt("dir") ?? process.cwd());
+    const r = newStep({ title, activity: opt("activity")!, id: opt("id"), map: opt("map") }, opt("dir") ?? process.cwd());
     console.log(`Added step ${r.id} to activity ${opt("activity")}`);
     console.log(`\nTag a story's feature with @step-${r.id}, or add one with nikos story add "<title>" --activity ${opt("activity")} --step ${r.id}.`);
     return 0;

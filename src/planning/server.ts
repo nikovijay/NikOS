@@ -91,9 +91,9 @@ function upstreamRef(upstream: Upstream, ref: string | undefined) {
 }
 
 /** Everything the views need, as JSON. Files that fail to load are listed in `problems`, not thrown. */
-export function planningData(root: string) {
+export function planningData(root: string, mapId?: string) {
   const plan = loadPlan(root) ?? null;
-  const story = storyMapOf(root);
+  const story = storyMapOf(root, mapId);
   const upstream = loadUpstream(root);
   const problems: string[] = [];
   const krs = krIds(root).flatMap((id) => {
@@ -209,11 +209,11 @@ export interface RunningServer {
 }
 
 /** Start the dashboard on 127.0.0.1 with a fresh token. The url carries the token for the browser. */
-export async function startServer(root: string, opts: { port?: number } = {}): Promise<RunningServer> {
+export async function startServer(root: string, opts: { port?: number; map?: string } = {}): Promise<RunningServer> {
   const token = randomBytes(24).toString("hex");
   let port = 0;
   const server = createServer((req, res) => {
-    route(root, token, port, req, res).catch((err) => send(res, 500, { error: (err as Error).message }));
+    route(root, token, port, req, res, opts.map).catch((err) => send(res, 500, { error: (err as Error).message }));
   });
   await new Promise<void>((ok, fail) => {
     server.once("error", fail);
@@ -233,13 +233,13 @@ export async function startServer(root: string, opts: { port?: number } = {}): P
 }
 
 /** `nikos planning serve`: run the dashboard until Ctrl+C, or export it to one file. */
-export async function runServe(root: string, opts: { port?: number; exportTo?: string } = {}): Promise<number> {
+export async function runServe(root: string, opts: { port?: number; exportTo?: string; map?: string } = {}): Promise<number> {
   if (opts.exportTo) {
     const { wrote } = exportSnapshot(root, opts.exportTo);
     console.log(`Wrote ${wrote}`);
     return 0;
   }
-  const srv = await startServer(root, { port: opts.port });
+  const srv = await startServer(root, { port: opts.port, map: opts.map });
   console.log(`nikOS planning dashboard: ${srv.url}`);
   console.log(`Saves write to ${relative(process.cwd(), paths(root).planning) || "planning"}/ only. Press Ctrl+C to stop.`);
   return new Promise<number>((ok) => {
@@ -262,21 +262,21 @@ const sameToken = (given: string, token: string) => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
-async function route(root: string, token: string, port: number, req: IncomingMessage, res: ServerResponse) {
+async function route(root: string, token: string, port: number, req: IncomingMessage, res: ServerResponse, mapId?: string) {
   // Only this machine's own address: a page on another site can't reach the dashboard by DNS rebinding.
   if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) {
     return send(res, 403, { error: "The dashboard only answers on its own address on this machine" });
   }
   const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
-  if (req.method === "GET") return serveGet(root, token, path, res);
+  if (req.method === "GET") return serveGet(root, token, path, res, mapId);
   if (req.method === "POST" && SAVES.has(path)) return saveRequest(root, token, path, req, res);
   return send(res, 404, { error: "Not found" });
 }
 
-function serveGet(root: string, token: string, path: string, res: ServerResponse) {
-  if (path === "/") return send(res, 200, renderDashboard({ data: planningData(root), token, readOnly: false }), HTML);
-  if (path === "/api/data") return send(res, 200, planningData(root));
-  if (path === "/map") return send(res, 200, renderMap(root, { live: true }), HTML);
+function serveGet(root: string, token: string, path: string, res: ServerResponse, mapId?: string) {
+  if (path === "/") return send(res, 200, renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
+  if (path === "/api/data") return send(res, 200, planningData(root, mapId));
+  if (path === "/map") return send(res, 200, renderMap(root, { live: true, map: mapId }), HTML);
   if (path === "/nikos-view.js") return send(res, 200, VIEW_SCRIPT, JS);
   const m = /^\/views\/([^/]+)$/.exec(path);
   if (m && VIEW_NAME.test(m[1])) {

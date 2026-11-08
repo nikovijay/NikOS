@@ -170,7 +170,7 @@ export async function runPlanning(args: string[]): Promise<number> {
         return 0;
       }
       case "serve":
-        return await runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export") });
+        return await runServe(root, { port: opt("port") ? Number(opt("port")) : undefined, exportTo: opt("export"), map: opt("map") });
     }
     console.error(`Unknown planning command.\n\n${help}`);
     return 1;

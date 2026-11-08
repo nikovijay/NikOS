@@ -14,12 +14,12 @@
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
-import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { approvalLapse, doneMark, loadApprovals } from "../lib/approvals.js";
 import { noEntry, storyState, writeApproval } from "../lib/state-files.js";
 import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
-import { STORY_ID, findIntentDir, read, specHash } from "../lib/project.js";
+import { STORY_ID, read, specHash } from "../lib/project.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
@@ -39,10 +39,11 @@ export interface ApproveResult {
 /** Check a story can be approved, rerun its scenarios, then record the approval. The terminal check lives in runApprove. */
 export type Via = "terminal" | "chat" | "app" | "tracker";
 
-export function approve(story: string, opts: { dir?: string; by: string; date?: string; via?: Via }): ApproveResult {
-  if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1)`);
-  const intentDir = findIntentDir(opts.dir ?? process.cwd());
-  const settings = resolveSettings(dirname(intentDir));
+export function approve(story: string, opts: { dir?: string; map?: string; by: string; date?: string; via?: Via }): ApproveResult {
+  if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
+  const ref = resolveStoryMap(opts.dir ?? process.cwd(), opts.map);
+  const intentDir = ref.dir;
+  const settings = resolveSettings(ref.root);
   const policy = settings["approval.policy"];
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
   const via = opts.via ?? "terminal";
@@ -55,7 +56,7 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
   const entry = storyState(intentDir, story);
   if (!entry) throw new StateError(noEntry(intentDir, story));
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
-  const feature = featureFor(story, dirname(intentDir));
+  const feature = featureFor(story, ref.root, ref.id);
   const hash = feature ? specHash(read(feature)) : undefined;
   if (!hash) throw new StateError(`No feature file is tagged @${story}`);
   if (entry.spec_hash && entry.spec_hash !== hash) {
@@ -66,7 +67,7 @@ export function approve(story: string, opts: { dir?: string; by: string; date?: 
 
   let run;
   try {
-    run = verify(dirname(intentDir), story);
+    run = verify(ref.root, story, { map: ref.id });
   } catch (err) {
     throw new StateError(`${story} isn't approved: its scenarios couldn't run. ${(err as Error).message}`);
   }
@@ -87,6 +88,7 @@ export async function runApprove(args: string[]): Promise<number> {
   };
   const stories = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--")));
   const dir = flag("dir") ?? process.cwd();
+  const map = flag("map");
   const via = flag("via") ?? "terminal";
   if (!stories.length || (via !== "terminal" && via !== "chat")) {
     console.error("Usage: nikos approve <story-id>... [--via chat] [--dir <path>]");
@@ -115,7 +117,7 @@ export async function runApprove(args: string[]): Promise<number> {
   let failed = 0;
   for (const story of stories) {
     try {
-      approve(story, { dir, by, via });
+      approve(story, { dir, map, by, via });
       console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (intent/approvals.yaml)`);
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);
