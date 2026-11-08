@@ -166,7 +166,7 @@ export function createServer(repo: string): McpServer {
     const r = migrate(root, a.to);
     return text(`Moved ${count(r.states, "story", "stories")}${r.approvals ? ` and ${count(r.approvals, "approval")}` : ""} to the ${r.layout} layout${r.codeowners ? `, and added a matching approvals rule to ${r.codeowners}` : ""}.`);
   });
-  tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
+  tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. Delivery is read from each map's committed delivery.yaml, with its age. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
     const r = rollout(root, { offline: a.offline });
     return text(formatRollout(r), { ...r });
   }, true);

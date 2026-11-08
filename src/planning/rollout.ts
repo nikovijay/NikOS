@@ -12,7 +12,7 @@ import { parse, parseDocument } from "yaml";
 import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadStates } from "../lib/state-files.js";
-import { storyMapOf } from "../commands/map.js";
+import { storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
 import { delivery, describeDelivery, mapDeliveryIn } from "./delivery.js";
@@ -22,6 +22,7 @@ import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
 import { ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
 import { alignsList } from "./levels.js";
+import { stopDate, stoppedTarget } from "./stops.js";
 import { ownRepo } from "../lib/git.js";
 
 export interface DownstreamPlan {
@@ -143,9 +144,9 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
   const blockers: Blocker[] = [];
   if (storyMapsOf(dir).length) {
     try {
-      const map = storyMapOf(dir);
-      const stories = map.releases.flatMap((r) => r.stories).filter((s) => s.status !== "cancelled");
-      // Every map the copy holds, summed (not storyMapOf, which is empty for several maps); the owner's summary says the teams' status.
+      // Every map the copy holds: titles from each, counts summed (storyMapOf is empty for several maps). The owner's summary says the teams' status.
+      const refs = storyMapsOf(dir);
+      const maps = refs.map((ref) => storyMapOfRef(ref));
       const all = mapDeliveryIn(dir);
       deliv = {
         stories: all.stories.length + all.noSummary.length,
@@ -156,15 +157,18 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         ...(all.noSummary.length ? { noSummary: all.noSummary.length } : {}),
         ...(all.asOf ? { asOf: all.asOf } : {}),
       };
-      const titles = new Map([...stories, ...map.unreleased].map((s) => [s.id, s.title]));
-      const id = (() => {
+      const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
+      // The next story of the first map with a queue: next can't pick among several maps without one.
+      for (const ref of refs) {
         try {
-          return next(dir).story;
+          const id = next(dir, ref.id).story;
+          if (!id) continue;
+          nextUp = { id, title: titles.get(id) ?? id };
+          break;
         } catch {
-          return undefined; // no state.yaml to read a queue from: delivery and blockers still show
+          // no state.yaml or queue in this map: delivery and blockers still show
         }
-      })();
-      if (id) nextUp = { id, title: titles.get(id) ?? id };
+      }
       for (const ref of storyMapsOf(dir)) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
@@ -191,16 +195,18 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       const d = delivery(dir, id, { groupState: true });
       const missing = d.stories.filter((s) => s.freshness === "no-summary").length;
       const note = missing ? `; ${missing} with no summary yet: run nikos map status in ${repo}` : "";
-      const stop = (m.reviews ?? []).filter((r: { decision?: string }) => r.decision === "stop").map((r: { date?: string }) => String(r.date ?? "")).sort().at(-1);
+      // The age of the summary the count reads, as the plan line says it.
+      const age = d.summaryAsOf ? `, ${summaryAge({ read_at: d.summaryAsOf })}` : "";
+      const stop = stopDate(m);
       return [
         {
           id,
           ref: `${repo}#${id}`,
           outcome: m.outcome,
-          delivery: describeDelivery(d) + note,
+          delivery: describeDelivery(d) + age + note,
           krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean),
           ...(up.length ? { aligns_to: up } : {}),
-          ...(m.outcome === "stopped" && stop ? { stoppedOn: stop } : {}),
+          ...(stop ? { stoppedOn: stop } : {}),
         },
       ];
     } catch {
@@ -237,15 +243,16 @@ export interface DownstreamBet {
 
 /**
  * Flag each bet that aligns to a stopped bet (rule 10). Stopping a bet never changes the bets aimed
- * at it: the rollout and the views say so, and the owner reviews them.
+ * at it: the rollout and the views say so, and the owner reviews them. own: this repo's stopped
+ * bets, keyed repo#id, since they aren't among the plans below.
  */
-export function flagStoppedParents(plans: DownstreamPlan[]): void {
-  const stopped = new Map<string, string>();
+export function flagStoppedParents(plans: DownstreamPlan[], own: Map<string, string> = new Map()): void {
+  const stopped = new Map(own);
   for (const p of plans) for (const b of p.bets) if (b.stoppedOn) stopped.set(b.ref, b.stoppedOn);
   for (const p of plans) {
     for (const b of p.bets) {
-      const target = [...(b.aligns_to ?? []), ...b.krs].find((t) => stopped.has(t));
-      if (target) b.stoppedParent = { target, date: stopped.get(target)! };
+      const hit = stoppedTarget([...(b.aligns_to ?? []), ...b.krs], stopped);
+      if (hit) b.stoppedParent = hit;
     }
   }
 }
@@ -321,7 +328,19 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     mkdirSync(cache(root), { recursive: true });
     writeFileSync(indexOf(root), JSON.stringify(index, null, 2));
   }
-  flagStoppedParents(plans);
+  // This repo's own stopped bets name themselves as repo#id, the way the plans below refer to them. Without an origin they can't be named.
+  const ownStops = new Map<string, string>();
+  if (self) {
+    for (const id of betIds(root)) {
+      try {
+        const d = stopDate(loadBet(root, id).meta);
+        if (d) ownStops.set(`${self}#${id}`, d);
+      } catch {
+        // a bet that doesn't read isn't a stopped parent
+      }
+    }
+  }
+  flagStoppedParents(plans, ownStops);
   return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
 }
 

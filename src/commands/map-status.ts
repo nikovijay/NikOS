@@ -251,13 +251,15 @@ export function runMapStatus(args: string[]): number {
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
     const results = mapStatus(dir, { map: flag("--map"), offline: args.includes("--offline") });
-    if (args.includes("--json")) console.log(JSON.stringify(statusJson(results), null, 2));
-    else console.log(results.map(formatMapStatus).join("\n\n"));
-    const { written, skipped } = writeSummaries(dir, results);
-    if (!args.includes("--json")) {
-      for (const p of written) console.log(`\nWrote ${p}: commit it, so the plans above show this delivery`);
-      if (skipped) console.log(`! ${skipped}`);
+    // --json only reports: it writes nothing, so a piped run leaves the owner's tree as it was.
+    if (args.includes("--json")) {
+      console.log(JSON.stringify(statusJson(results), null, 2));
+      return 0;
     }
+    console.log(results.map(formatMapStatus).join("\n\n"));
+    const { written, skipped } = writeSummaries(dir, results);
+    for (const p of written) console.log(`\nWrote ${p}: commit it, so the plans above show this delivery`);
+    if (skipped) console.log(`! ${skipped}`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

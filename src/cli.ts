@@ -31,7 +31,9 @@ import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
 import { runTeam } from "./commands/team.js";
 import { runTeamSync } from "./team/sync.js";
-import { isTeamRepo, TEAM_REPO_STORIES } from "./lib/team.js";
+import { isTeamRepo, openTeam, TEAM_REPO_STORIES } from "./lib/team.js";
+import { store } from "./lib/store.js";
+import { join } from "node:path";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
@@ -80,10 +82,26 @@ function teamRefusal(cmd: string): string {
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
 }
 
+/**
+ * Whether a team repo has taken up the amendment: a key, a home, a map of its own, or a plan joined.
+ * Until it has, the repo is refused exactly as in 0.3.0, so an existing team repo behaves as it did.
+ */
+function teamOptedIn(dir: string): boolean {
+  try {
+    const team = openTeam(dir);
+    if (team.key || team.home) return true;
+  } catch {
+    return false;
+  }
+  return store().isDir(join(dir, "maps")) || store().exists(join(dir, "planning", "upstream.yaml"));
+}
+
 /** What a team repo may run from the group-only commands: its own planning, bets, joins and maps (see the amendment, rule 2). */
 const TEAM_PLANNING = new Set(["sync", "status", "validate", "rollout"]);
-function teamMayRun(cmd: string, rest: string[]): boolean {
-  if (cmd === "join") return true;
+function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
+  // A team's first join names its home with --home; after that a team that has opted in may join more.
+  if (cmd === "join") return rest.includes("--home") || teamOptedIn(dir);
+  if (!teamOptedIn(dir)) return false;
   if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
   return false;
 }
@@ -194,7 +212,8 @@ async function main(argv: string[]): Promise<number> {
     console.error("✗ --dir needs a folder: --dir <path>");
     return 1;
   }
-  if (authoring && isTeamRepo(at >= 0 ? rest[at + 1] : process.cwd()) && !teamMayRun(cmd, rest)) {
+  const teamDir = at >= 0 ? rest[at + 1] : process.cwd();
+  if (authoring && isTeamRepo(teamDir) && !teamMayRun(cmd, rest, teamDir)) {
     console.error(`✗ ${teamRefusal(cmd)}`);
     return 1;
   }

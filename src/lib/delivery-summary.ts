@@ -31,7 +31,8 @@ export function writeDeliverySummary(mapDir: string, summary: DeliverySummary): 
   const problems = schemaProblems("delivery-summary.schema.json", summary);
   if (problems.length) throw new Error(`${DELIVERY_SUMMARY}: ${problems[0]}`);
   const path = join(mapDir, DELIVERY_SUMMARY);
-  store().write(path, `# Written by nikos map status from the teams' status it read. Commit it: the plans above read it.\n${stringify(summary)}`, { create: true });
+  // Overwritten on each run: it is generated, and read_at moves with every run.
+  store().write(path, `# Written by nikos map status from the teams' status it read. Commit it: the plans above read it.\n${stringify(summary)}`);
   return path;
 }
 

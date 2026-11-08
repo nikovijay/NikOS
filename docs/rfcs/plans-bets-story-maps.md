@@ -104,16 +104,18 @@ status/ approvals/          as today, for both kinds
 
 ### Amendment status
 
-**Status:** partly built, for review. The 0.3.0 fixes, the level rules, the delivery summary, the stopped-parent flag and the team key are built. The rest is not yet.
+**Status:** partly built, for review. The 0.3.0 fixes, the level rules, the delivery summary, the stopped-parent flag, the team key and home, and the home's settings chain are built. Team-owned story maps and team sync sources are not yet.
 
 Built, as the amendment says:
 
 - Rules 4 and 10: the rollout flags a bet aimed at a stopped bet, with the stop date. Nothing cascades.
 - Rule 5 and section 3: a plan aligns to any plan above it that it joins, and `krs:` cross-references are checked. A company bet still has nothing above it. `planning kr new` in a team repo is refused with the key-result wording.
-- Rule 9: `nikos map status` writes `maps/<key>/delivery.yaml`, and every rollout reads it, saying how old it is. A rollout never fetches a team repo for its delivery. The "0 of 0" and "team status not read here" text is gone.
+- Rule 9: `nikos map status` writes `maps/<key>/delivery.yaml`, and every rollout reads it, saying how old it is, including the bet lines. A rollout never fetches a team repo for its delivery. The "0 of 0" and "team status not read here" text is gone. `--json` writes nothing.
+- Rule 10 and section 8: the stopped-parent flag covers the plan's own stopped bets as well as the plans below, and the OKRs and bets page and the group bets list show it.
+- Rule 1 (in part): `nikos join <plan> --home` sets a team's home in nikos.team.yaml (format 2), checks it is a group, department or company plan whose key isn't the team's, and refuses a second home. A group's `--home` marks its home in planning/upstream.yaml. A team's settings and locks come only from its home's chain. A team repo with no key, home or maps is refused as in 0.3.0.
 - Rule 11: no output puts "verified" beside an approver. This is checked by a test over the source.
 - Team key (D6, in part): `nikos team init --key` and the `key` field. A keyless team keeps format 1.
-- Team home (D3, in part): the `home` field in nikos.team.yaml is accepted and read.
+- Team home (D3, in part): the `home` field is written by `nikos join --home` and read by the team's settings chain. `nikos doctor` warns about a team that joins a plan without one.
 
 Where the build differs:
 
@@ -123,14 +125,12 @@ Where the build differs:
 - **Approver names.** A summary records the name the approval was given (`approved_by`), and nothing else.
 - **Legacy team plans.** A 0.3.0 plan whose `plan.yaml` says `level: team` keeps its old, unchecked links. The new rules apply to team repos (no `plan.yaml`).
 
-Not built yet (the amendment's rules 1-3, 6, 7 and the sections below them):
+Not built yet (the amendment's rules 2, 3, 6, 7 and the sections below them):
 
-- Team-owned maps: `maps/<key>/` in a team repo, its ids (`WEB-INB-n`), `map new`, `story add`, the `validate`/`doctor` checks for them, and the guards that would allow them (`storyMapClash` still refuses `maps/` in a team repo).
-- `nikos team join <plan> --home`, the home check, the key-collision check at join, and the rollout's key check (D5).
-- The home's settings and locks chain (`settings.ts`): teams still take the team branch only.
-- Team sync sources: `nikos sync` still reads only groups, so a team can't take stories from another team's map.
-- `nikos assign` and `migrate maps` for a team's own map, the CODEOWNERS suggestion and the lead handle (D4).
-- The dashboard views' stopped-parent flag (the rollout data has it; the views don't yet).
+- Team-owned maps: `maps/<key>/` in a team repo, its ids (`WEB-INB-n`), `map new`, `story add`, the `validate`/`doctor` checks for them, and the guards that would allow them (`storyMapClash` still refuses `maps/` in a team repo, so `map status` also refuses a team repo).
+- Team sync sources: `nikos sync` still reads only groups, so a team can't take stories from another team's map, and `nikos team join <team repo>` is refused.
+- `nikos assign` and `migrate maps` for a team's own map, and the CODEOWNERS suggestion and lead handle (D4).
+- The key-collision check across the whole home chain (D5). Only the team's key against the plan it joins is checked.
 - The playbooks, skills and MCP descriptions for team layouts, and an end-to-end test of the whole flow (`team-e2e-amendment`).
 
 ### Decided in review

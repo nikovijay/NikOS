@@ -32,7 +32,7 @@ export interface TeamMember {
   handle?: string;
 }
 export interface TeamFile {
-  /** 2 when the team has a key or a home (0.3.0 can't read it); 1 otherwise. */
+  /** 2 when the team has a key or a home (0.3.0 can't read it); 1 otherwise. Written by nikos team init and nikos join --home. */
   format_version: 1 | 2;
   name: string;
   repo: string;
@@ -63,6 +63,8 @@ export function parseTeam(text: string): TeamFile {
   const data: any = parse(text) ?? {};
   const problems = schemaProblems("team.schema.json", data);
   if (problems.length) throw new Error(`${TEAM_FILE}: ${problems[0]}`);
+  // A home is part of format 2: a format 1 file with one is refused rather than read as a 0.3.0 team.
+  if (data.home !== undefined && data.format_version !== 2) throw new Error(`${TEAM_FILE}: home needs format_version 2`);
   return { ...data, groups: data.groups ?? [], members: data.members ?? [] };
 }
 

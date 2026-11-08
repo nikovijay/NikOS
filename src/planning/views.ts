@@ -3,6 +3,8 @@
 // fetch nothing. The page draws them, and the words here are the words it shows. Links, not totals:
 // no view adds up progress from one plan into another.
 
+import { stopDate, stoppedNote, stoppedTarget } from "./stops.js";
+
 /** A key result or bet in the plan above, as the page links to it. */
 export interface UpRef {
   ref: string;
@@ -63,43 +65,60 @@ function aboveRefs(data: any): UpRef[] {
 /** The OKRs and bets page: key results above and by objective, bets, the bets above, and group bets below. */
 export function okrsAndBets(data: any) {
   const above = aboveRefs(data);
+  const own = data.plan?.repo;
+  // Every stopped bet this page can see, keyed as refs are written: the copies above, this plan's own, and the plans below.
+  const stopped = new Map<string, string>();
+  for (const u of data.upstream ?? []) for (const b of u.bets ?? []) {
+    const d = stopDate(b);
+    if (d) stopped.set(`${u.repo}#${b.id}`, d);
+  }
+  for (const b of data.bets ?? []) {
+    const d = own ? stopDate(b) : undefined;
+    if (own && d) stopped.set(`${own}#${b.id}`, d);
+  }
+  for (const p of data.downstream?.plans ?? []) for (const b of p.bets ?? []) if (b.stoppedOn) stopped.set(b.ref, b.stoppedOn);
   const byObjective = new Map<string, { objective: string; krs: any[] }>();
   for (const k of data.krs ?? []) {
     const objective = String(k.objective || "").trim() || NOTE.noObjective;
     if (!byObjective.has(objective)) byObjective.set(objective, { objective, krs: [] });
     byObjective.get(objective)!.krs.push({ id: k.id, title: k.title, aligned: (k.aligned ?? []).filter(Boolean).map((a: any) => a.ref), progress: progressOf(k) });
   }
-  const bets = (data.bets ?? []).map((b: any) => ({
-    id: b.id,
-    title: betTitle(b.id),
-    tag: (b.aligns_to ?? []).length ? "aligned" : "own",
-    alignsTo: b.aligns_to ?? [],
-    krs: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
-    outcome: b.outcome,
-    delivery: b.delivery?.text ?? "",
-  }));
+  const bets = (data.bets ?? []).map((b: any) => {
+    const hit = stoppedTarget([...(b.aligns_to ?? []), ...[b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean)], stopped);
+    return {
+      id: b.id,
+      title: betTitle(b.id),
+      tag: (b.aligns_to ?? []).length ? "aligned" : "own",
+      alignsTo: b.aligns_to ?? [],
+      krs: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
+      outcome: b.outcome,
+      delivery: b.delivery?.text ?? "",
+      // A bet aimed at a stopped bet is flagged; nothing here changes it (rule 10).
+      ...(hit ? { stoppedParent: hit, note: stoppedNote(hit) } : {}),
+    };
+  });
   // Bets above this plan's bets align to, looked up in the synced copies.
-  const betsAbove = new Map<string, { ref: string; repo: string; id: string; title: string; plan: string; found: boolean; outcome?: string; from: string[] }>();
+  const betsAbove = new Map<string, { ref: string; repo: string; id: string; title: string; plan: string; found: boolean; outcome?: string; stoppedOn?: string; from: string[] }>();
   for (const b of data.bets ?? []) {
     for (const ref of b.aligns_to ?? []) {
       const [repo, id] = ref.split("#");
       const copy = (data.upstream ?? []).find((u: any) => u.repo === repo);
       const hit = copy?.bets?.find((x: any) => x.id === id);
-      const cur = betsAbove.get(ref) ?? { ref, repo, id, title: betTitle(id), plan: planName(data, repo), found: !!hit, ...(hit ? { outcome: hit.outcome } : {}), from: [] as string[] };
+      const cur = betsAbove.get(ref) ?? { ref, repo, id, title: betTitle(id), plan: planName(data, repo), found: !!hit, ...(hit ? { outcome: hit.outcome } : {}), ...(stopped.get(ref) ? { stoppedOn: stopped.get(ref) } : {}), from: [] as string[] };
       cur.from.push(b.id);
       betsAbove.set(ref, cur);
     }
   }
   // Group bets aligned to one of this plan's bets: delivery only, from each group's own state (D4).
-  const own = data.plan?.repo;
   const hasDownstreamBets = (data.downstream?.plans ?? []).some((p: any) => (p.bets ?? []).length);
-  const groupBets: { plan: string; repo?: string; id: string; aligns_to: string; delivery: string }[] = [];
+  const groupBets: { plan: string; repo?: string; id: string; aligns_to: string; delivery: string; note?: string }[] = [];
   for (const p of data.downstream?.plans ?? []) {
     for (const gb of p.bets ?? []) {
       for (const ref of gb.aligns_to ?? []) {
         const id = ref.split("#")[1];
         if (own && ref.startsWith(`${own}#`) && (data.bets ?? []).some((b: any) => b.id === id)) {
-          groupBets.push({ plan: p.name, ...(p.repo ? { repo: p.repo } : {}), id: gb.id, aligns_to: ref, delivery: gb.delivery });
+          const hit = stoppedTarget([...(gb.aligns_to ?? []), ...(gb.krs ?? [])], stopped);
+          groupBets.push({ plan: p.name, ...(p.repo ? { repo: p.repo } : {}), id: gb.id, aligns_to: ref, delivery: gb.delivery, ...(hit ? { note: stoppedNote(hit) } : {}) });
         }
       }
     }

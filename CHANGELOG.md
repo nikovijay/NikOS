@@ -2,14 +2,16 @@
 
 ## Unreleased
 
-Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so far: alignment, delivery and the team key. Not yet: team-owned story maps, `nikos team join --home`, the home's settings chain, and team sync sources.
+Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so far: alignment, delivery, stopped-bet flags, the team key and home, and the home's settings chain. Not yet: team-owned story maps, team sync sources (a team taking stories from another team), `nikos assign` and `nikos migrate maps` for a team's own map, and the CODEOWNERS suggestion.
 
 ### Added
 
 - `nikos team init --key WEB` gives a team its key. A team file with a key or a home is format 2, which 0.3.0 can't read: a team upgraded this way must be upgraded in its groups too. A team with no key keeps format 1.
 - `nikos map status` writes `maps/<key>/delivery.yaml` in the group's repo, one line per story: its team, status, approval (a name, not a verified identity) and when it was read. Commit it: the plans above read it. Rollouts and the bet lines say how old each summary is, and how many stories have no summary yet. Offline reads write nothing.
 - A bet that aligns to a stopped bet is flagged in the rollout: "aligns to <bet>, which was stopped on <date>". Nothing else changes.
-- A team repo may run `nikos planning bet new`, `planning sync`, `planning status`, `planning validate`, `planning rollout`, and `nikos join`. `planning kr new` there is refused with the key-result wording.
+- A team repo may run `nikos planning bet new`, `planning sync`, `planning status`, `planning validate`, `planning rollout`, and `nikos join`, once it has a key, a home, a map of its own or a plan joined. `planning kr new` there is refused with the key-result wording. A team repo with none of those is refused as in 0.3.0.
+- `nikos join <plan> --home` makes a plan a team's home (a group, department or company plan, with a key that isn't the team's own), records it in `nikos.team.yaml` at format 2, and refuses a second home. A group's `--home` marks the plan in its `planning/upstream.yaml`. `nikos doctor` warns about a team that joins a plan with no home.
+- A team's settings and locks come only from its home's chain. A group marked with a home takes its settings from that plan's chain alone.
 
 ### Changed
 
@@ -22,6 +24,13 @@ Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`). Built so
 - `--map` takes the key `map new` prints, case-insensitively (`--map HR` finds `maps/hr`).
 - The rollout's delivery read "0 of 0" for a group with several maps, and "team status not read here" for a bet. Both now come from the owner's summary.
 - The alignment tree printed a group bet twice: under the bet it aligns to, and under the key result. It's now shown under the bet only.
+- A bet aimed at a stopped bet is flagged in the dashboard's OKRs and bets page too, and in the rollout when the stopped bet is in the plan being rolled out.
+- A bet's delivery line says how old the summary it counts is, as the plan line does.
+- The rollout's next story and story titles come from every map of a group, not only a group with one map.
+- `nikos map status` can run twice in one repo: it overwrites `delivery.yaml` instead of failing with EEXIST.
+- `nikos map status --json` writes nothing, so a piped run leaves the group's tree clean.
+- A 0.3.0 team repo with no key or home no longer gets a "team plan" warning from `nikos doctor`.
+- A team's settings no longer include a plan it joined that isn't its home, and a team with a home is no longer read by the generic walk.
 
 ## 0.3.0 (2026-11-08)
 

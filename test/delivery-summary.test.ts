@@ -74,10 +74,17 @@ describe("the delivery summary a group's owner commits", () => {
   });
 
   it("assigned copies are never written: the team's tree has no delivery.yaml", () => {
-    const { t } = setup();
+    const { g, t } = setup();
+    // The group's owner has a summary on disk, so a copy that picked it up would show here.
+    writeSummaries(g, mapStatus(g), NOW);
+    expect(allFiles(g).filter((p) => p.endsWith("delivery.yaml"))).toHaveLength(1);
     setState("PAY-CHK-1", "in_progress", { dir: t, by: "Priya" });
     commitAll(t, "start");
     teamSync(t);
+    expect(allFiles(t).filter((p) => p.endsWith("delivery.yaml"))).toEqual([]);
+    // A writer run against the copy the team holds writes nothing: the copy has no origin, so there is nothing to name.
+    const copy = join(t, ".nikos", "assigned", "acme", "payments-group");
+    expect(writeSummaries(copy, [{ ...mapStatus(g)[0], assigned: true, offline: false }]).written).toEqual([]);
     expect(allFiles(t).filter((p) => p.endsWith("delivery.yaml"))).toEqual([]);
   });
 });

@@ -11,7 +11,8 @@ import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { betIds, krIds } from "../planning/model.js";
-import { levelOf, planningIssues } from "../planning/levels.js";
+import { planningIssues } from "../planning/levels.js";
+import { loadPlan } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
@@ -34,9 +35,10 @@ const migrateNext = (root: string, intent: string) => {
   return `nikos migrate maps moves it under a group plan. Story ids without the group key stop it unless you pass --rename-ids (${key}-1 becomes ${keyFor(basename(resolve(root)))}-${key}-1). Nothing moves until you confirm.`;
 };
 /** The plan's level, or undefined when planning/plan.yaml doesn't parse: the file's own checks say so, and the rest of doctor still runs. */
+// The level in planning/plan.yaml only: a team repo with no plan.yaml has no plan level (levelOf says team for it).
 const planLevel = (root: string) => {
   try {
-    return levelOf(root);
+    return loadPlan(root)?.level;
   } catch {
     return undefined;
   }
@@ -230,6 +232,19 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
   if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into a group repo with nikos migrate maps there, then delete it here." });
   if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
+  // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
+  if (team) {
+    const joined = (() => {
+      try {
+        return upstreamEntries(root).map((u) => u.repo);
+      } catch {
+        return [];
+      }
+    })();
+    if (joined.length && !team.home) add({ name: "home", status: "warn", found: "joins a plan but has no home", next: "Make one of the plans it joined its home: nikos join <plan> --home" });
+    if (team.home && !team.key) add({ name: "key", status: "warn", found: "has a home but no key", next: `Add key: <KEY> to ${TEAM_FILE}` });
+    if (team.home && !joined.includes(team.home) && !team.groups.some((g) => g.repo === team.home)) add({ name: "home", status: "warn", found: `${team.home} is not a plan the team joined`, next: `Join it with nikos join ${team.home} --home` });
+  }
   if (team) {
     if (!team.groups.length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
     for (const g of team.groups) {

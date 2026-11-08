@@ -61,7 +61,8 @@ describe("a rollout's delivery from the owner's summaries", () => {
     const { co } = setup([story("PAY-CHK-1", "done", "approved"), story("PAY-CHK-2", "in_progress")]);
     const bet = rollout(co).plans.find((p) => p.name === "Payments")!.bets.find((b) => b.id === "faster-checkout")!;
     // The bet aims at both maps: chk's three stories (the summary lists two) and hr's one, which has no team and counts its own state.
-    expect(bet.delivery).toMatch(/Building, 2 of 4 done; 1 with no summary yet: run nikos map status in acme\/payments-group/);
+    // The bet's line also says how old the summary it counts is, as the plan line does (the amendment, rule 9).
+    expect(bet.delivery).toMatch(/Building, 2 of 4 done, read today \(\d{4}-\d{2}-\d{2}\); 1 with no summary yet: run nikos map status in acme\/payments-group/);
   });
 
   it("a rollout reads no team repo: a team that doesn't exist changes nothing above, and nothing is fetched for it", () => {

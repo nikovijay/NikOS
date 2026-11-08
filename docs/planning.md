@@ -395,9 +395,10 @@ last good copy is shown, and its row says why. The MCP server has the same view 
 A story counts as done in a group's delivery only when its team's status is done,
 current, and its delivery approval holds, or approval isn't required here (`approval.policy` is
 `optional`, the default, or `off`). The bet's delivery (`nikos planning status`,
-the dashboard, the rollout) reads the copies from the last fetch, so it doesn't wait
-on the network: it says how many stories await approval, and how many teams it
-couldn't read.
+the dashboard, the rollout) reads each group's committed `maps/<key>/delivery.yaml`,
+written by `nikos map status` in the group's repo. Rollouts never fetch a team repo: the
+delivery is the owner's summary, and it says how old that summary is. A story the summary
+doesn't list counts as having no summary yet, not as done.
 
 `nikos assign` reads a holder's done state from its copy when it's fetched. The
 refusal names where it read the status and when the copy was fetched. With no copy,
