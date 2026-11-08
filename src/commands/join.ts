@@ -4,7 +4,7 @@
 import { join } from "node:path";
 import { parseDocument } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
-import { formatSettings, resolveSettings, setSetting, type Resolved } from "../lib/settings.js";
+import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting, type Resolved } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { sync, upstreamEntries, type SyncReport } from "../planning/upstream.js";
 
@@ -93,7 +93,9 @@ export function runSettings(args: string[]): number {
   const [sub = "show", key, raw] = args.filter((a, n) => a !== "--dir" && (i < 0 || n !== i + 1));
   try {
     if (sub === "show") {
-      console.log(formatSettings(resolveSettings(root)));
+      const r = resolveSettingsDetailed(root);
+      console.log(formatSettings(r.resolved));
+      for (const p of r.problems) console.log(`! ${p}`);
       return 0;
     }
     if (sub === "set" && key && raw !== undefined) {

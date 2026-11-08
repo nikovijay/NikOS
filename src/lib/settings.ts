@@ -8,6 +8,7 @@ import Ajv2020Module from "ajv/dist/2020.js";
 import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { REPO_PATH } from "./bets.js";
+import { isTeamRepo, openTeam } from "./team.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -47,15 +48,27 @@ const flatten = (data: any): Record<string, unknown> => {
   return out;
 };
 
+/** Why a settings file's text doesn't read, or undefined when it does. */
+export function checkSettingsText(text: string): string | undefined {
+  let data: unknown;
+  try {
+    data = parse(text) ?? {};
+  } catch (err) {
+    return `${SETTINGS_FILE}: ${(err as Error).message.split("\n")[0]}`;
+  }
+  if (check(data)) return undefined;
+  const e = check.errors![0];
+  return `${SETTINGS_FILE}: ${e.instancePath.replace(/^\//, "").replace(/\//g, ".") || "(root)"} ${e.message}`;
+}
+
 /** A repo's own settings file, parsed and checked. */
 export function readSettings(root: string): { values: Record<string, unknown>; locked: string[] } {
   const path = join(root, SETTINGS_FILE);
   if (!store().exists(path)) return { values: {}, locked: [] };
-  const data = parse(store().read(path)) ?? {};
-  if (!check(data)) {
-    const e = check.errors![0];
-    throw new Error(`${SETTINGS_FILE}: ${e.instancePath.replace(/^\//, "").replace(/\//g, ".") || "(root)"} ${e.message}`);
-  }
+  const text = store().read(path);
+  const bad = checkSettingsText(text);
+  if (bad) throw new Error(bad);
+  const data = parse(text) ?? {};
   return { values: flatten(data), locked: data.locked ?? [] };
 }
 
@@ -70,9 +83,16 @@ function upstreamsOf(dir: string): string[] {
 /**
  * The settings that apply to a repo: defaults, then each level above it from the top down
  * (through the synced copies in .nikos/upstream/), then the repo's own. A level can't change a
- * value a level above it locked.
+ * value a level above it locked. A team repo is different: it takes only the locks from above (see
+ * teamSettings), so its own values stand wherever nothing above locked them.
  */
 export function resolveSettings(root: string): Resolved {
+  return resolveSettingsDetailed(root).resolved;
+}
+
+/** resolveSettings, with the problems found in the levels above (a group copy that doesn't read, or two locks that disagree). */
+export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
+  if (isTeamRepo(resolve(root)) && !store().isDir(join(resolve(root), "planning"))) return teamSettings(resolve(root));
   const cache = join(resolve(root), ".nikos", "upstream");
   const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const visiting = new Set<string>();
@@ -91,7 +111,67 @@ export function resolveSettings(root: string): Resolved {
     for (const key of own.locked) if (out[key] && !out[key].lockedBy) out[key].lockedBy = name;
   };
   apply(resolve(root), "this repo");
-  return out;
+  return { resolved: out, problems: [] };
+}
+
+/**
+ * A team repo's settings: its own file, plus the locks of the levels above it. The levels are the
+ * company chain of each group copy (.nikos/upstream), then each group copy in nikos.team.yaml
+ * order. Only locks reach a team: a value above that nothing locks doesn't apply here. A level
+ * that doesn't read is skipped and named in the problems; the team's own file still applies.
+ */
+function teamSettings(root: string): { resolved: Resolved; problems: string[] } {
+  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
+  const problems: string[] = [];
+  const cache = join(root, ".nikos", "upstream");
+  const groups = (() => {
+    try {
+      return openTeam(root).groups.map((g) => g.repo);
+    } catch {
+      return [];
+    }
+  })();
+  // Each level once, top-down: a group copy's upstream (the company) before the copy itself.
+  const levels: { dir: string; name: string }[] = [];
+  const visiting = new Set<string>();
+  const chain = (dir: string, name: string) => {
+    if (visiting.has(dir)) return;
+    visiting.add(dir);
+    for (const up of upstreamsOf(dir)) {
+      const copy = join(cache, ...up.split("/"));
+      if (store().exists(copy)) chain(copy, up);
+    }
+    levels.push({ dir, name });
+  };
+  for (const g of groups) {
+    const copy = join(root, ".nikos", "assigned", ...g.split("/"));
+    if (store().exists(copy)) chain(copy, g);
+  }
+  const inherited: Record<string, unknown> = {};
+  for (const level of levels) {
+    let own: ReturnType<typeof readSettings>;
+    try {
+      own = readSettings(level.dir);
+    } catch (err) {
+      problems.push(`${level.name} is skipped, so its locks don't apply here: ${(err as Error).message}`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(own.values)) inherited[key] = value;
+    for (const key of own.locked) {
+      if (!(key in out)) continue;
+      const value = inherited[key] !== undefined ? inherited[key] : out[key].value;
+      const cur = out[key];
+      if (cur.lockedBy) {
+        if (JSON.stringify(cur.value) !== JSON.stringify(value)) problems.push(`${key} is locked by ${cur.lockedBy} and ${level.name} with different values: ${cur.lockedBy}'s applies`);
+        continue;
+      }
+      out[key] = { value, from: level.name, lockedBy: level.name };
+    }
+  }
+  const own = readSettings(root);
+  for (const [key, value] of Object.entries(own.values)) if (!out[key].lockedBy) out[key] = { value, from: "this repo" };
+  for (const key of own.locked) if (out[key] && !out[key].lockedBy) out[key].lockedBy = "this repo";
+  return { resolved: out, problems };
 }
 
 export const settingValue = <T>(root: string, key: string): T => resolveSettings(root)[key].value as T;

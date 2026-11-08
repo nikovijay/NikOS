@@ -11,8 +11,9 @@ import { mapDirs } from "../lib/maps.js";
 import { read, walk } from "../lib/project.js";
 import { store } from "../lib/store.js";
 import { storyFiles } from "../lib/state-files.js";
+import { checkSettingsText } from "../lib/settings.js";
 import { TEAM_FILE, clashingGroups, copyDirOf, ignoreAssigned, isTeamRepo, openTeam, storyMapClash, type TeamGroup } from "../lib/team.js";
-import { git, repoEntry, type UpstreamEntry } from "../planning/upstream.js";
+import { fetchChain, git, repoEntry, upstreamEntries, type UpstreamEntry } from "../planning/upstream.js";
 
 /** A group's key: the GROUP in its story ids, e.g. PAY. */
 const GROUP_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
@@ -94,6 +95,10 @@ export interface TeamSync {
   marked: { id: string; to: string }[];
   /** Stories this team has again: their reassigned mark is removed. */
   cleared: string[];
+  /** Plans above a group (its company, say) that couldn't be fetched: their locks don't reach the team this run. */
+  upstream: { repo: string; reason: string }[];
+  /** Files from a group that didn't read, and what was kept in their place. */
+  warnings: string[];
 }
 
 /** Read a fetched group: it must be a group plan with a key. Throws with the reason. */
@@ -130,7 +135,7 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
   const assigned = assignedDirOf(root);
   const scratch = join(assigned, ".fetch");
   const previous = readAssignedLock(root);
-  const out: TeamSync = { team: team.name, groups: [], marked: [], cleared: [] };
+  const out: TeamSync = { team: team.name, groups: [], marked: [], cleared: [], upstream: [], warnings: [] };
   const lock = previous.filter((l) => team.groups.some((g) => g.repo === l.repo));
   const fetched: Group[] = [];
   try {
@@ -152,6 +157,8 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
 
     for (const group of fetched) {
       const copy = copyDirOf(root, group.entry.repo);
+      // The last good settings file, kept when the group's new one doesn't read.
+      const priorSettings = store().exists(join(copy, "nikos.settings.yaml")) ? read(join(copy, "nikos.settings.yaml")) : undefined;
       rmSync(copy, { recursive: true, force: true });
       for (const rel of ["planning/plan.yaml", ...walk(join(group.dir, "planning", "bets"), ".md").map((p) => relative(group.dir, p))]) {
         store().write(join(copy, rel), read(join(group.dir, rel)));
@@ -168,6 +175,26 @@ export function teamSync(root: string, opts: { only?: string } = {}): TeamSync {
         for (const a of storyFiles(join(map.dir, "approvals"))) if (ids.has(a.id)) store().write(join(dest, "approvals", `${a.id}.yaml`), read(a.path));
         for (const id of ids) group.mine.add(id);
       }
+      // The group's settings reach the team as locks, and the plans above the group (its company)
+      // are fetched into .nikos/upstream, where the team's settings find them.
+      for (const f of ["nikos.settings.yaml", "planning/upstream.yaml"]) {
+        if (!store().exists(join(group.dir, f))) continue;
+        const text = read(join(group.dir, f));
+        const bad = f === "nikos.settings.yaml" ? checkSettingsText(text) : undefined;
+        if (!bad) {
+          store().write(join(copy, f), text);
+          continue;
+        }
+        if (priorSettings !== undefined) store().write(join(copy, f), priorSettings);
+        out.warnings.push(`${group.entry.repo}'s ${bad}. ${priorSettings !== undefined ? "Kept the copy from the last sync" : "Its locks don't reach the team"}`);
+      }
+      let above: UpstreamEntry[] = [];
+      try {
+        above = upstreamEntries(group.dir);
+      } catch (err) {
+        out.upstream.push({ repo: group.entry.repo, reason: (err as Error).message });
+      }
+      for (const u of fetchChain(above, join(root, ".nikos", "upstream")).unresolved) out.upstream.push(u);
       const stories = group.mine.size;
       out.groups.push({ repo: group.entry.repo, ref: group.entry.ref, commit: group.commit, stories });
       const entry: AssignedLock = { repo: group.entry.repo, ref: group.entry.ref, commit: group.commit, synced: today(), stories };
@@ -231,6 +258,8 @@ export function runTeamSync(args: string[]): number {
       if (g.unresolved) console.log(`? ${g.repo} is unresolved: ${g.unresolved}. Kept the copy from the last sync.`);
       else console.log(`✓ ${g.repo} @ ${g.commit?.slice(0, 7)}: ${g.stories} ${g.stories === 1 ? "story" : "stories"} for ${r.team}`);
     }
+    for (const u of r.upstream) console.log(`? ${u.repo}'s plans above it are unresolved: ${u.reason}. Its locks don't reach ${r.team} this time.`);
+    for (const w of r.warnings) console.log(`! ${w}`);
     for (const m of r.marked) console.log(`! ${m.id} reassigned to ${m.to}: status/${m.id}.yaml marked, commit it`);
     for (const id of r.cleared) console.log(`✓ ${id} is back with this team: its reassigned mark is cleared, commit it`);
     if (r.marked.length || r.cleared.length) console.log("  nikos sync may change committed status/ files: commit them with your next change.");

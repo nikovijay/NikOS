@@ -136,13 +136,15 @@ Commands:
                    (--out, default marketing/storymap-video)
   map              Write a read-only story map page (--out, default storymap.html, --map)
   map new          In a group repo, a story map for one of its bets, in maps/<key>/
+  map status       In a group repo, each assigned team's status on its stories: fresh or not,
+                   delivery and intent approvals (--map, --offline, --json)
                    (--bet <bet-id>, --key <KEY>)
   export --format <prd|linear|jira>  The story map as a PRD or tracker import
                    (--release, --out, --project-key)
   planning <cmd>   Bets, key results and the planning dashboard (nikos-planning pack;
                    run \`nikos planning help\`)
   assign "<team>" --repo <path|.>  Give a team all or part of a group's story map
-                   (--activities, --releases or --stories; --map, --include-done)
+                   (--activities, --releases or --stories; --map, --include-done, --url, --ref)
   team init|join|member|show  A team repo: its name, the groups it takes work from, its members
                    (team init --repo owner/repo, team join <group repo>, team member add "<name>")
   sync             In a team repo: fetch the stories assigned to it, read-only, into

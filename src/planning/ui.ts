@@ -326,7 +326,8 @@ function betCard(b) {
     return LIVE ? '<a class="chip blue" href="' + esc(r.href) + '">Release ' + r.number + '</a>' : chip('Release ' + r.number, 'blue');
   }).join(' ') : '<span class="muted">Not on any release</span>';
   var stories = d.stories.map(function (s) {
-    return '<li><span class="sid">' + esc(s.id) + '</span>' + esc(s.status.replace(/_/g, ' ')) + '</li>';
+    var fresh = s.freshness && s.freshness !== 'current' && s.freshness !== 'in-place' ? ' <span class="muted">(' + esc(s.freshness) + ')</span>' : '';
+    return '<li><span class="sid">' + esc(s.id) + '</span>' + esc(s.status.replace(/_/g, ' ')) + fresh + '</li>';
   }).join('');
   var reviews = b.reviews.length ? '<ol class="reviews">' + b.reviews.slice().reverse().map(function (r) {
     return '<li><span class="muted">' + esc(r.date) + '</span> <strong>' + esc(r.decision) + '</strong>' + (r.outcome ? ' (' + esc(r.outcome) + ')' : '') + ': ' + esc(r.reason) + '</li>';

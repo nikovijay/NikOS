@@ -19,6 +19,8 @@ import { isTeamRepo, openTeam, storyMapClash, TEAM_FILE, type TeamFile } from ".
 import { read } from "../lib/project.js";
 import { storyFiles } from "../lib/state-files.js";
 import { groupStatus } from "../team/sync.js";
+import { groupMaps, readTeamIndex, short } from "../team/status.js";
+import { resolveSettingsDetailed } from "../lib/settings.js";
 
 export interface Check {
   name: string;
@@ -47,6 +49,7 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
   if (planOnly) planChecks(root, add);
   else if (maps) {
     planChecks(root, add);
+    teamStatusChecks(root, add);
     const v = validateGroup(root);
     add(
       v.errors.length
@@ -142,6 +145,27 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 }
 
 /**
+ * A group with assignments: each assigned team's status fetch. A team never fetched, or whose last
+ * fetch failed, is a warning; a group with no assignments gets no lines here.
+ */
+function teamStatusChecks(root: string, add: (c: Check) => void) {
+  let teams = new Map<string, string>();
+  try {
+    for (const m of groupMaps(root)) for (const a of m.list) if (a.repo !== ".") teams.set(a.repo, a.team);
+  } catch {
+    return; // validate reports an assignments file that doesn't read
+  }
+  if (!teams.size) return;
+  const index = readTeamIndex(root);
+  for (const [repo, team] of teams) {
+    const c = index.teams[repo];
+    if (!c?.commit && !c?.attempted) add({ name: `team ${team}`, status: "warn", found: `${team} has never been fetched`, next: "Run nikos map status" });
+    else if (!c.ok) add({ name: `team ${team}`, status: "warn", found: `${team}'s last fetch failed: ${c.error ?? "unknown error"}`, next: "Check the team's repo is reachable, then run nikos map status" });
+    else add({ name: `team ${team}`, status: "ok", found: `team status last fetched ${c.fetched} at ${short(c.commit)}` });
+  }
+}
+
+/**
  * A team repo: its team file, each group it takes work from (synced, moved on, or not yet), the
  * runner's glob for the assigned copies, the ignore rule, and a CODEOWNERS suggestion for the lead.
  */
@@ -183,6 +207,9 @@ function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boo
   const owners = codeowners(root);
   const guarded = !!owners && /approvals(\/|\.yaml|$)/m.test(read(owners));
   add({ name: "approvals", status: "ok", found: `${count(approvals, "delivery approval")} in approvals/`, ...(lead && !guarded ? { next: `Suggest: add "/approvals/ @${lead.handle}" to CODEOWNERS, so a delivery approval needs the lead's review` } : {}) });
+
+  // Locks from the group and company copies that the team's settings take (see lib/settings.ts).
+  for (const problem of resolveSettingsDetailed(root).problems) add({ name: "settings", status: "warn", found: problem, next: "Run nikos sync, or fix the group's nikos.settings.yaml" });
 
   const stale = staleCliWarning();
   if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });

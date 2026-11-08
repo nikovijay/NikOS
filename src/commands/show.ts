@@ -46,7 +46,7 @@ export function show(story: string, dir: string, mapId?: string): string {
       out.push(lapse ? `! Approved by ${approval.by} on ${approval.on}, but that no longer holds: ${lapse}` : `Approved by ${approval.by} on ${approval.on}`);
       // A team's approval is for the code it tested: code committed since is what approve refuses, so say so here too.
       if (!lapse && ref.team && codeChangedSince(ref.root, (approval as DeliveryApproval).tested_commit)) {
-        out.push(`! The code has changed since it was tested: run its scenarios again (nikos state set ${story} needs_rework, then done), then approve`);
+        out.push(`! The code has changed since it was tested: run its scenarios again (nikos state set ${story} needs_rework, then in_progress, then done), then approve`);
       }
     }
     if (entry.status === "cancelled") out.push(`Cancelled: ${entry.cancelled_reason ?? "no reason given"}`);

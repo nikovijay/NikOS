@@ -13,7 +13,7 @@ import { loadStates } from "../lib/state-files.js";
 import { storyMapOf } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
-import { delivery, describeDelivery } from "./delivery.js";
+import { delivery, describeDelivery, teamsHolding } from "./delivery.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { git, ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry } from "./upstream.js";
@@ -179,7 +179,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
     try {
       const m = loadBet(dir, id).meta;
       const up = alignsList(m.aligns_to);
-      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id)), krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean), ...(up.length ? { aligns_to: up } : {}) }];
+      // A copy has no team cache, so a bet's delivery here is the group's own state; team status is read in the group.
+      const teams = teamsHolding(dir, id);
+      const note = teams.length ? `; team status not read here: run nikos map status in ${repo}` : "";
+      return [{ id, outcome: m.outcome, delivery: describeDelivery(delivery(dir, id, { groupState: true })) + note, krs: [m.krs?.primary, ...(m.krs?.also ?? [])].filter(Boolean), ...(up.length ? { aligns_to: up } : {}) }];
     } catch {
       return [];
     }

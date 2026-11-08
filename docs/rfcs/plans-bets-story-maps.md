@@ -1,14 +1,52 @@
 # RFC: plans, bets, story maps and team assignments
 
-**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below.
+**Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, and PR 4 (status flowing back) as described in "PR 4 status".
+
+## PR 4 status
+
+Built: `nikos map status` in a group repo (with `--map`, `--offline` and `--json`, and the MCP tool
+`map_status`); a group reading each assigned team's `status/` and `approvals/` through a read-only
+fetch into `.nikos/teams/`; a bet's delivery counted from those statuses, with the number awaiting
+approval and the teams not fetched; `nikos assign` checking a holder's done state in its copy; the
+company and group locks reaching a team through `nikos sync`; and the team's `state set` stamping
+`spec_hash` on every write. Not in PR 4: the dashboard's editing and the "OKRs and bets" views (PR 5),
+`nikos apply` (PR 5), `nikos migrate maps` and the wizard (PR 6), and team repos with `intent/` (PR 6).
+
+Where the build differs from this RFC:
+
+- **Behind is a spec hash, not a sync file.** A team's `state set` stamps `spec_hash` on every write,
+  computed from its own copy of the feature. A copy keeps the feature text as it was, so a feature
+  changed in the group shows as `behind`, or `changed` for a done story. The group commit isn't
+  recorded in the team's repo. A change that only moves a story to another team shows as moved or
+  no-status, not behind.
+- **Assignments carry `url` and `ref`**, optional, stored only when given. Old CLIs reject a group
+  that uses them (the schema is closed), so ship this with the release notes.
+- **Shipped needs approval only when it's required.** A done story counts toward a bet when its
+  delivery approval holds, or when `approval.policy` is `optional` (the default) or `off`, where no
+  approval is needed. Only `required-for-release` holds a done story without an approval as awaiting
+  approval, which can move a bet from Shipped back to Building. Releases should say so.
+- **Only locks reach a team.** A group's and company's unlocked values don't apply to a team, which
+  keeps its own. A group copy that doesn't read is named by `nikos doctor` and skipped.
+- **Department rollout doesn't read group teams.** A group's copy under `.nikos/downstream/` has no
+  team cache, so its bets keep the group's own numbers and say `team status not read here: run nikos
+  map status in <group>`. Aligned group bets under a department bet aren't listed in the rollout yet.
+- **Intent approvals are read only.** No command writes a group's approval for a team's story yet.
+  In `--repo .` the delivery approval and the intent approval share one file, so the group shows it as
+  intent only.
+- **A move is remembered by the old holder.** The index keeps the team that held a story until the new
+  holder has its own status for it, so "moved" and the old team's last status show until then.
+- **Cache is per machine.** A new machine shows "previous team not fetched" for moves made elsewhere.
+- **`rollout` still deletes a plan's last good copy when a fetch fails** (`src/planning/rollout.ts`).
+  Not changed here; fix in PR 5 or before.
+
+## PR 3 status
 
 ## PR 3 status
 
 Built: `nikos team init|join|member|show`, `nikos assign`, `nikos sync`, team-side `next`,
 `state set`, `approve`, `show`, `verify` and the tracker, team `validate` and `doctor`, and the
-runner paths. Not in PR 3: `nikos map status` and the group reading team status (PR 4), bets
-delivered from team status (PR 4), the dashboard's editing (PR 5), `nikos migrate maps`, and team
-repos with `intent/` (PR 6).
+runner paths. (PR 4 added `nikos map status`, the group reading team status, and bets delivered
+from it; see "PR 4 status" above.)
 
 Where the build differs from this RFC:
 
@@ -30,8 +68,8 @@ Where the build differs from this RFC:
   repo keeps the paths its behave.ini names, as before. The cucumber configs list the new glob in
   `paths`.
 - **A team repo can't keep `intent/` or `maps/`** until PR 6 moves them.
-- **Team settings are the team's own file** for now: company and group locks don't reach a team
-  until PR 4.
+- **Team settings are the team's own file, plus the locks of its group and company** (PR 4): a
+  group's `nikos.settings.yaml` and `planning/upstream.yaml` are copied by `nikos sync`.
 
 ## Summary
 

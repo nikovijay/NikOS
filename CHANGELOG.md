@@ -4,6 +4,18 @@
 
 ### Added
 
+- Status flowing back. In a group repo, `nikos map status [--map <id>] [--offline] [--json]` shows each assigned team's status on each story: the team's repo is fetched read-only (its `status/`, `approvals/` and `nikos.team.yaml` only), and a story's status counts only when the team proved it against the story's current feature. Each story shows its freshness (current, changed, behind, unverified, moved, unassigned, not-fetched, no-status or in-place), its delivery approval and the group's intent approval. A team that can't be fetched shows its last good copy and says why; the command still exits 0. The MCP server has it as `map_status`.
+- A bet's delivery in a group repo counts a team's done stories only when they're current and their delivery approval holds, and says how many await approval and how many teams aren't fetched. A team repo's own delivery now counts its own status (it used to read the group's empty state and show 0 of N).
+- `nikos assign` checks a holder team's done state in its fetched copy, and names where it read it. With no copy, it checks the group's own `state.yaml` and warns. `--url` and `--ref` record a team's repo and branch when they're not the default.
+- Team settings: a group's and company's locks reach a team on `nikos sync`, with the same "locked by" message. Unlocked values above a team don't apply to it.
+- `nikos doctor` in a group repo warns when an assigned team has never been fetched, or its last fetch failed; in a team repo it names settings problems in the group copies.
+
+### Changed
+
+- A team's `state set` writes `spec_hash` on every status write, not only on done, so a team's status shows which feature it was written against.
+- Release note: where `approval.policy` is `required-for-release`, a group's done stories with no delivery approval count as awaiting approval, so its bets can show Building where they showed Shipped. Under `optional` (the default) and `off`, done stories count without an approval.
+- Release note: `assignments.yaml` takes `url` and `ref`. A CLI older than this one rejects a group that uses them.
+
 - Teams. A code repo becomes a team repo with `nikos team init` (its name and repo path, in `nikos.team.yaml`), and takes work from a group with `nikos team join <group repo>`. `nikos team member add|remove` and `nikos team show` manage its members, names and roles only.
 - `nikos assign "<team>" --repo <path|.>` in a group repo gives a team all or part of a map: `--activities`, `--releases` or `--stories`, adding to what the team has (`--replace` redefines it). A story belongs to one team; a done story moves only with `--include-done`. `maps/<id>/assignments.yaml` holds the assignments, and `nikos validate` reports overlaps and the stories nobody holds yet.
 - `nikos sync` in a team repo fetches each group read-only and copies the stories assigned to the team into `.nikos/assigned/` (gitignored). A story another team now holds is marked `reassigned_to` in the team's `status/`.

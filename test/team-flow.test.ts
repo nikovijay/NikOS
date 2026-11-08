@@ -102,7 +102,7 @@ describe("a team's flow on its assigned stories", () => {
     write(join(t, "src/checkout.js"), "export const pay = () => {};\n");
     commitAll(t, "more code");
     expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow(
-      `PAY-CHK-1 was tested at ${head.slice(0, 7)}, and the code has changed since (HEAD is ${git(t, "rev-parse", "--short", "HEAD")}): run its scenarios again with nikos state set PAY-CHK-1 needs_rework, then done`,
+      `PAY-CHK-1 was tested at ${head.slice(0, 7)}, and the code has changed since (HEAD is ${git(t, "rev-parse", "--short", "HEAD")}): run its scenarios again: nikos state set PAY-CHK-1 needs_rework, then in_progress, then done, then approve`,
     );
   });
 

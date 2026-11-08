@@ -12,6 +12,10 @@ export interface Assignment {
   team: string;
   /** The team's repo path, or "." when the group repo is its own team. */
   repo: string;
+  /** Where the team's repo is, when it isn't the default (https://github.com/<repo>.git): a full url. */
+  url?: string;
+  /** The team repo's branch, when it isn't main. */
+  ref?: string;
   releases?: number[];
   activities?: string[];
   stories?: string[];

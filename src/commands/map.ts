@@ -11,6 +11,7 @@ import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { NO_GROUP_KEY, groupKeyOf, homeOf, mapDirs, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
+import { runMapStatus } from "./map-status.js";
 
 export interface MapCriterion {
   id: string;
@@ -551,6 +552,7 @@ export function runMapNew(args: string[]): number {
 /** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in a group repo. */
 export function runMap(args: string[]): number {
   if (args[0] === "new") return runMapNew(args.slice(1));
+  if (args[0] === "status") return runMapStatus(args.slice(1));
   const flag = (name: string) => {
     const i = args.indexOf(name);
     return i >= 0 ? args[i + 1] : undefined;
