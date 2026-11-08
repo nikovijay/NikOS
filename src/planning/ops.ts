@@ -154,7 +154,7 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   assign: ["name", "activities", "releases", "stories", "replace", "map"],
   unassign: ["stories", "activities", "releases", "map"],
   "setting.set": ["key", "value"],
-  "downstream.add": ["name", "repo"],
+  "downstream.add": ["name", "repo", "home"],
 };
 
 /**
@@ -396,7 +396,7 @@ function apply(root: string, op: Op): string {
       return `Set ${key}`;
     }
     case "downstream.add": {
-      const r = addDownstream(root, { name: String(a.name ?? ""), repo: str(a.repo) });
+      const r = addDownstream(root, { name: String(a.name ?? ""), repo: str(a.repo), home: str(a.home) });
       return `${r.added ? "Added" : "Updated"} ${r.name}`;
     }
   }

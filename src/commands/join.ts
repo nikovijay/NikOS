@@ -7,6 +7,7 @@ import { parse, parseDocument, stringify } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting, type Resolved } from "../lib/settings.js";
 import { store } from "../lib/store.js";
+import { keyClash } from "../lib/keys.js";
 import { isTeamRepo, openTeam, saveTeam, teamDocument, TEAM_FILE, type TeamFile } from "../lib/team.js";
 import { paths } from "../planning/model.js";
 import { readLock, sync, upstreamEntries, type SyncReport } from "../planning/upstream.js";
@@ -84,6 +85,13 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
   };
   const report = sync(root);
   const fetched = !report.unresolved.some((u) => u.repo === input.repo);
+  // Its key must be its own across the chain: this repo's, and the copies already here (amendment D5).
+  const fetchedKey = fetched && store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml")))?.key : undefined;
+  const clash = typeof fetchedKey === "string" ? keyClash(root, team ? "team" : "plan", input.repo, fetchedKey, [paths(root).cache]) : undefined;
+  if (clash) {
+    undo();
+    throw new Error(clash);
+  }
   // A team's home is checked once its copy is here: a group, department or company plan, with a key that isn't the team's own.
   if (team && input.home && fetched) {
     const plan = store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml"))) : undefined;

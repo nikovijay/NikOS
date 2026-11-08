@@ -13,6 +13,7 @@ import { ignoreAssigned, isTeamRepo, openTeam, parseTeam, saveTeam, teamDocument
 import { storyFiles } from "../lib/state-files.js";
 import { repoEntry } from "../planning/upstream.js";
 import { dropFromLock, groupStatus, teamSync } from "../team/sync.js";
+import { copyKeys, keyClash } from "../lib/keys.js";
 
 /** The team commands that change or read nikos.team.yaml need one. Named once, so each refuses alike. */
 const NO_TEAM = "run nikos team init first";
@@ -102,17 +103,12 @@ export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?:
     undo();
     throw new Error(`${repo} ${got.unresolved}`);
   }
-  // Its key must be its own: neither this team's nor any other source this team takes work from can use it.
-  // A source that hasn't synced has no copy, so no key to compare.
+  // Its key must be unused across the chain: this team's, and the copies it reads as sources or joined plans (amendment D5).
   const key = got?.commit ? keyOf(copyDirOf(root, repo)) : undefined;
-  if (key && key === team.key) {
+  const problem = key ? keyClash(root, "team", repo, key, [join(root, ".nikos", "assigned"), join(root, ".nikos", "upstream")]) : undefined;
+  if (problem) {
     undo();
-    throw new Error(`${repo} uses key ${key}, which this team uses: give one of them another key`);
-  }
-  const other = team.groups.map((g) => g.repo).find((r2) => key && keyOf(copyDirOf(root, r2)) === key);
-  if (other) {
-    undo();
-    throw new Error(`${repo} uses key ${key}, which ${other} already uses: give one of them another key`);
+    throw new Error(problem);
   }
   return { repo, commit: got?.commit, stories: got?.stories ?? 0, unresolved: got?.unresolved };
 }

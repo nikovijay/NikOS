@@ -175,7 +175,7 @@ export function createServer(repo: string): McpServer {
     return text(r.map(formatMapStatus).join("\n\n"), { ...statusJson(r) });
   }, true);
   tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {
-    name: z.string(), repo: z.string().optional(), host: z.string().optional(), url: z.string().optional(),
+    name: z.string(), repo: z.string().optional(), host: z.string().optional(), url: z.string().optional(), home: z.string().optional(),
   }, (a) => {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);

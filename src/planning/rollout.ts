@@ -10,6 +10,7 @@ import { store } from "../lib/store.js";
 import { dirname, join } from "node:path";
 import { parse, parseDocument } from "yaml";
 import { isDone } from "../lib/project.js";
+import { REPO_PATH } from "../lib/bets.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { loadStates } from "../lib/state-files.js";
 import { storyMapOfRef } from "../commands/map.js";
@@ -17,6 +18,7 @@ import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
 import { delivery, describeDelivery, mapDeliveryIn } from "./delivery.js";
 import { summaryAge } from "../lib/delivery-summary.js";
+import { copyKeys, duplicateKeys } from "../lib/keys.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
@@ -31,6 +33,8 @@ export interface DownstreamPlan {
   repo?: string;
   /** For a plan further down: the downstream that listed it. */
   via?: string;
+  /** Set when the plan (a team or group) is homed in another plan: the one its settings come from. */
+  home?: string;
   state: "no repo yet" | "unreachable" | "not joined" | "joined";
   reason?: string;
   /** When this repo's copy of it was fetched. */
@@ -94,6 +98,8 @@ export interface Rollout {
   /** This repo's own latest decisions. */
   decisions: Decision[];
   plans: DownstreamPlan[];
+  /** Errors the rollout found in the copies below, such as two plans with one key (amendment D5). */
+  problems: string[];
   /**
    * The key results here, with the key results below that align to them and the bets on each, built
    * from aligns_to and bet krs. unaligned: the ones below that point at nothing in this rollout.
@@ -111,9 +117,13 @@ export { ownRepo } from "../lib/git.js";
 interface Listed {
   name: string;
   entry?: UpstreamEntry;
+  home?: string;
 }
 
-/** The plans a repo (or a copy of one) lists in planning/downstream.yaml. */
+/**
+ * The plans a repo (or a copy of one) lists in planning/downstream.yaml. home is the plan a listed
+ * team or group is homed in, when that isn't this one (rule 4): it's how the plan knows where to fetch it.
+ */
 export function downstreamEntries(dir: string): Listed[] {
   const p = join(dir, "planning", "downstream.yaml");
   if (!existsSync(p)) return [];
@@ -122,7 +132,8 @@ export function downstreamEntries(dir: string): Listed[] {
   return list.map((e: any) => {
     const name = typeof e === "string" ? e : String(e?.name ?? e?.repo ?? "");
     if (!name) throw new Error("planning/downstream.yaml: each entry needs a name or a repo");
-    return { name, ...(e?.repo ? { entry: repoEntry(e, "planning/downstream.yaml") } : {}) };
+    if (e?.home !== undefined && (typeof e.home !== "string" || !REPO_PATH.test(e.home))) throw new Error(`planning/downstream.yaml: '${e.home}' is not a repo path for home`);
+    return { name, ...(e?.repo ? { entry: repoEntry(e, "planning/downstream.yaml") } : {}), ...(e?.home ? { home: e.home } : {}) };
   });
 }
 
@@ -269,7 +280,7 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
   const seen = new Set<string>();
   while (queue.length) {
     const { listed, depth, via, parent } = queue.shift()!;
-    const base = { name: listed.name, ...(via ? { via } : {}), blockers: [], decisions: [], krs: [], bets: [] };
+    const base = { name: listed.name, ...(via ? { via } : {}), ...(listed.home ? { home: listed.home } : {}), blockers: [], decisions: [], krs: [], bets: [] };
     if (!listed.entry) {
       plans.push({ ...base, state: "no repo yet" });
       continue;
@@ -341,7 +352,9 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     }
   }
   flagStoppedParents(plans, ownStops);
-  return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, tree: alignment(root, self, plans) };
+  // Two copies below with one key would name their story ids the same: an error, not a warning (amendment D5).
+  const problems = duplicateKeys(copyKeys(cache(root))).map((d) => `key ${d.key} is used by ${d.repos.join(" and ")}: give one of them another key`);
+  return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, problems, tree: alignment(root, self, plans) };
 }
 
 type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[] };
@@ -474,12 +487,13 @@ export function formatRollout(r: Rollout): string {
   const out: string[] = [];
   const joined = r.plans.filter((p) => p.state === "joined").length;
   out.push(`${joined} of ${r.plans.length} plans below ${r.repo ?? "this one"} have joined.`);
+  for (const p of r.problems) out.push(`✗ ${p}`);
   const tree = formatTree(r.tree);
   if (tree.length) out.push("", ...tree);
   if (r.decisions.length) out.push("", `Latest decisions here:`, ...r.decisions.map((d) => `  ${d.title}`));
   for (const p of r.plans) {
     const mark = p.state === "joined" ? "✓" : p.state === "not joined" ? "!" : "?";
-    out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
+    out.push(`\n${mark} ${p.name}${p.repo && p.repo !== p.name ? ` (${p.repo})` : ""}${p.home ? `, homed in ${p.home}` : ""}${p.via ? `, below ${p.via}` : ""}: ${p.state}${p.reason ? `, ${p.reason}` : ""}`);
     if (p.synced) out.push(`    synced on ${p.synced.on} at ${p.synced.commit.slice(0, 7)}${p.synced.current === false ? `, behind ${p.via ?? "this plan"}: ask them to run nikos planning sync` : ""}`);
     if (p.delivery) {
       const d = p.delivery;
@@ -501,11 +515,12 @@ export function formatRollout(r: Rollout): string {
 }
 
 /** List a department or team in planning/downstream.yaml, or give an entry already there its repo. */
-export function addDownstream(root: string, input: { name: string; repo?: string; host?: string; url?: string }): { name: string; repo?: string; added: boolean } {
+export function addDownstream(root: string, input: { name: string; repo?: string; host?: string; url?: string; home?: string }): { name: string; repo?: string; added: boolean } {
   const name = input.name?.trim();
   if (!name) throw new Error("Give the department's or team's name");
-  if ((input.host || input.url) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
-  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
+  if ((input.host || input.url || input.home) && !input.repo) throw new Error("Give the repo path too (--repo), so rollout knows what to call it");
+  if (input.home !== undefined && !REPO_PATH.test(input.home)) throw new Error(`'${input.home}' is not a repo path for --home (owner/repo, or group/subgroup/project on GitLab)`);
+  const entry = { name, ...(input.repo ? { repo: input.repo } : {}), ...(input.home ? { home: input.home } : {}), ...(input.host ? { host: input.host } : {}), ...(input.url ? { url: input.url } : {}) };
   if (input.repo) repoEntry(entry, "planning/downstream.yaml"); // a bad repo path or host fails before anything is written
   // Through the store, so a dry run (runOps) keeps the change in memory and the change set lists it.
   const p = join(root, "planning", "downstream.yaml");
