@@ -101,13 +101,13 @@ flowchart LR
 nikos.settings.yaml               the company's settings and locks, as today
 planning/
   company/
-    plan.yaml                     name, period, pillars, owner
-    krs/<id>.yaml                 key results, with their check-ins
+    plan.yaml                     name, year (period: 2027), pillars, owner
+    krs/<id>.yaml                 annual key results, with their check-ins
     bets/<id>.md                  company bets
     decisions.md
   departments/<id>/
     plan.yaml                     name, owner, members
-    krs/<id>.yaml                 aligns_to: company KRs, or none
+    krs/<id>.yaml                 period: a quarter (2027-Q1); aligns_to: company KRs, or none
     bets/<id>.md                  aligns_to: company bets, or none
     decisions.md
   groups/<id>/
@@ -116,7 +116,7 @@ planning/
     decisions.md
   teams/<key>/
     team.yaml                     name, key, group or department (its home), members, repos
-    bets/<id>.md                  the team's own bets, if any: no key results
+    bets/<id>.md                  the team's own bets, if any: no key results, and no plan.yaml
   repos.yaml                      the code repos whose story maps deliver bets here
 ```
 
@@ -133,26 +133,36 @@ The rules:
    key results (`krs.primary`, `krs.also`) and may align to one or more bets
    at any level above (`aligns_to`). `nikos plan validate` refuses a `krs/`
    folder under `groups/` or `teams/`.
-3. **Ids are unique across the repo.** Key result and bet ids are unique in
-   the whole planning repo, so a link inside it is just the id:
-   `aligns_to: [one-inbox]`. From a code repo, a link names the repo:
-   `acme/plan#faster-checkout`. `nikos plan validate` reports a clash with
-   the folders that both use the id. Team keys and the story id prefixes
-   built from them stay unique, as today.
-4. **A team can take part beyond its home.** A team's bets and its maps' bets
+3. **Ids are unique within the company.** Key result, bet, group,
+   department and team ids are unique across the whole company, so a link
+   inside the planning repo is just the id: `aligns_to: [one-inbox]`. From a
+   code repo, a link names the repo: `acme/plan#faster-checkout`.
+   `nikos plan validate` reports a clash and names the folders that use the
+   id. A private area in another repo (rule 8) belongs to the same company,
+   so its ids are checked against the rest too. Team keys, and the story ids
+   built from them, are unique within the company as today.
+4. **The company plans by year, departments by quarter.** The company's
+   `period` is a year (`2027`), and its key results are annual. A
+   department's key results each carry a quarter (`period: 2027-Q1`) inside
+   the company's year, and may align to the company's annual key results. A
+   new quarter means new department key results. The last quarter's stay,
+   with their check-ins, as history. Groups and teams have no period of their
+   own. Their bets run as long as they need to, with their own review dates,
+   and the dashboard shows them against the department's quarters.
+5. **A team can take part beyond its home.** A team's bets and its maps' bets
    may align to bets in any department or group, as in the amendment to the
    earlier RFC. The folder a team sits in says where it reports. It doesn't
    limit what it can work on.
-5. **Settings come down the folders.** `nikos.settings.yaml` at the root is
+6. **Settings come down the folders.** `nikos.settings.yaml` at the root is
    the company's. Each area may have its own `settings.yaml` that changes what
    the company hasn't locked, as with linked repos today. A code repo takes its
    settings from the planning repo and from its owning team's chain of folders.
-6. **People can only edit their own areas.** `nikos plan owners` writes a
+7. **People can only edit their own areas.** `nikos plan owners` writes a
    `CODEOWNERS` file from each area's `owner` and `members`. Both GitHub and
    GitLab read it, and GitLab also gets one section per area. With branch
    protection, a department's lead reviews changes to that department's
    folder. Anyone can still read every area.
-7. **A private area is the exception, not the rule.** When an area's plan
+8. **A private area is the exception, not the rule.** When an area's plan
    must stay private, its folder can hold just `linked.yaml`, naming another
    planning repo with the same layout. The Plan reads it the way rollouts read
    linked repos today, with the reader's own access, and shows when it was
@@ -366,14 +376,12 @@ repo's `planning/` into an area folder, then move `intent/` to `maps/<key>/`.
   it, and a bet that spans repos gets one map per repo.
 - **Plan stays local and git-native.** It reads code repos with the reader's
   own access, on demand. There is no server and nothing always on.
+- **The company plans by year, departments by quarter.** Company key results
+  are annual. Department key results each carry a quarter inside the
+  company's year. Groups and teams have no period, only bets with review
+  dates.
+- **A team has no `plan.yaml`.** `team.yaml` and its bets are enough.
+- **Ids are unique within the company.** That includes private areas held in
+  another repo.
 
-## Open questions
-
-- **One period or one per area?** The company's period could apply to every
-  area, or each area could set its own, such as a group planning in six-week
-  cycles. Proposed: one period by default, and an area may set its own.
-- **Do teams need `plan.yaml` at all?** `team.yaml` may be enough, since a team
-  has no objectives.
-- **Do ids need checking across companies?** This matters if two companies'
-  planning repos ever link through `linked.yaml`. Not needed for the first
-  PRs.
+No open questions are left.
