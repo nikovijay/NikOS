@@ -23,7 +23,19 @@
           "spec_hash": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
           "done_at": { "type": "string", "minLength": 1 },
           "cancelled_reason": { "type": "string", "minLength": 1 },
-          "ticket": { "type": "string", "minLength": 1 }
+          "ticket": { "type": "string", "minLength": 1 },
+          "tested_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+          "evidence": {
+            "type": "object",
+            "required": ["run_at", "runner", "commit", "ok"],
+            "additionalProperties": false,
+            "properties": {
+              "run_at": { "type": "string", "minLength": 1 },
+              "runner": { "enum": ["cucumber", "behave"] },
+              "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+              "ok": { "type": "boolean" }
+            }
+          }
         }
       }
     },

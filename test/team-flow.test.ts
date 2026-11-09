@@ -23,7 +23,8 @@ vi.mock("../src/commands/verify", async (importOriginal) => {
 const runner = vi.mocked(verify);
 beforeEach(() => runner.mockClear());
 
-const status = (t: string, id: string) => parse(readFileSync(join(t, "status", `${id}.yaml`), "utf8"));
+/** A story's state in its map, maps/chk/state.yaml: a team's state lives in its own map. */
+const status = (t: string, id: string) => parse(readFileSync(join(t, "maps/chk/state.yaml"), "utf8")).stories[id];
 
 /** A group's map, owned by one team (its own copy, with the group\'s ids), committed. */
 function setup(key = "PAY") {
@@ -40,11 +41,11 @@ describe("a team's flow on its own map", () => {
     expect(next(t).waiting).toEqual([]);
   });
 
-  it("state set in-progress writes status/, never intent/", () => {
+  it("state set in-progress writes the map's state.yaml, never intent/", () => {
     const { t } = setup();
     setState("PAY-CHK-1", "in_progress", { dir: t, by: "Priya" });
     expect(status(t, "PAY-CHK-1")).toMatchObject({ status: "in_progress", claimed_by: "Priya" });
-    expect(readFileSync(join(t, "status/PAY-CHK-1.yaml"), "utf8")).toMatch(/^status: in_progress$/m);
+    expect(existsSync(join(t, "status"))).toBe(false);
     expect(existsSync(join(t, "intent"))).toBe(false);
   });
 
@@ -76,7 +77,7 @@ describe("a team's flow on its own map", () => {
     setState("PAY-CHK-1", "done", { dir: t, now: "2027-01-05T10:00:00Z" });
     commitAll(t, "status done"); // HEAD moves, but no code changed since the tested commit
     approve("PAY-CHK-1", { dir: t, by: "Priya Shah", date: "2027-01-06" });
-    expect(parse(readFileSync(join(t, "approvals/PAY-CHK-1.yaml"), "utf8"))).toEqual({
+    expect(parse(readFileSync(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), "utf8"))).toEqual({
       by: "Priya Shah",
       on: "2027-01-06",
       via: "terminal",
@@ -132,7 +133,7 @@ describe("a team's flow: the review's edge cases", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       expect(runState(["set", "PAY-CHK-1", "needs_rework", "--dir", t])).toBe(0);
-      expect(out.mock.calls.flat().join("\n")).toContain("approval is for spec");
+      expect(out.mock.calls.flat().join("\n")).toContain("approval no longer holds: it's needs_rework now");
       expect(err).not.toHaveBeenCalled();
     } finally {
       out.mockRestore();
@@ -152,7 +153,7 @@ describe("a team's flow: the review's edge cases", () => {
 
   it("approve refuses a done story whose status has no evidence of a commit", () => {
     const { t } = setup();
-    write(join(t, "status/PAY-CHK-1.yaml"), "status: done\nupdated: 2027-01-05\n");
+    write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, updated: 2027-01-05 }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n");
     commitAll(t, "status");
     expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("was tested at no commit");
   });
@@ -184,16 +185,14 @@ describe("a team's flow: the review's edge cases", () => {
     expect(existsSync(join(t, "maps"))).toBe(false);
   });
 
-  it("the tracker writes a team's ticket links and cancellations into its own status, and leaves the group's map alone", () => {
+  it("the tracker writes a team's ticket links and cancellations into its map's state", () => {
     const { t } = setup();
     write(join(t, "nikos.settings.yaml"), "format_version: 1\ntracker:\n  system: jira\n  site: acme.atlassian.net\n  project: PAY\n  statuses:\n    In Progress: in_progress\n    Won't Do: cancelled\n");
-    const groupMap = readFileSync(join(t, "maps/chk/state.yaml"), "utf8");
     linkTicket({ id: "PAY-CHK-1", ticket: "PAY-101" }, t);
     setState("PAY-CHK-1", "in_progress", { dir: t });
     expect(ticketMoves(t)).toEqual([expect.objectContaining({ id: "PAY-CHK-1", ticket: "PAY-101", status: "In Progress" })]);
     recordTicket({ id: "PAY-CHK-1", status: "Won't Do", by: "Ana Lee" }, t);
     expect(status(t, "PAY-CHK-1")).toMatchObject({ status: "cancelled", ticket: "PAY-101" });
-    expect(readFileSync(join(t, "maps/chk/state.yaml"), "utf8")).toBe(groupMap);
   });
 });
 

@@ -207,7 +207,7 @@ function teamChecks(root: string, add: (c: Check) => void) {
   if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>." });
   if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
   if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
-  // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key and folder, and the team's status.
+  // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key, folder and state.
   const own = ownMapsOf(root);
   if (own.length && !clash) {
     const v = validateTeam(root);

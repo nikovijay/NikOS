@@ -83,7 +83,7 @@ describe("the summary a map's files say", () => {
 
   it("a team's own map: a done status with no spec hash is unverified, and one proved against an older feature is changed", () => {
     const t = teamMap();
-    write(join(t, "status/WEB-INB-1.yaml"), "status: done\n");
+    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  WEB-INB-1: { status: done }\n  WEB-INB-2: { status: todo }\n");
     expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-1")).toMatchObject({ status: "done", proof: "unverified" });
     setState("WEB-INB-2", "in_progress", { dir: t });
     commitAll(t, "start");
@@ -128,10 +128,10 @@ describe("the summary a map's files say", () => {
     expect(() => summaryBody(g, join(g, "maps/chk"))).toThrow("this map has no owner");
   });
 
-  it("a map gets a summary only in a repo's maps/ folder: intent/ and a team's copy of a group's map get none", () => {
-    expect(hasSummary({ root: "/r", dir: "/r/intent" })).toBe(false);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/chk", id: "chk" })).toBe(true);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/inb", id: "inb", team: true, own: true })).toBe(true);
+  it("a map gets a summary only in a repo's maps/ folder: intent/ gets none", () => {
+    expect(hasSummary({ root: "/r", dir: "/r/intent", inRepo: false })).toBe(false);
+    expect(hasSummary({ root: "/r", dir: "/r/maps/chk", id: "chk", inRepo: true })).toBe(true);
+    expect(hasSummary({ root: "/r", dir: "/r/maps/inb", id: "inb", inRepo: true })).toBe(true);
   });
 });
 

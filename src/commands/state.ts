@@ -87,7 +87,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
   const home = homeOf(ref);
   // In a team repo a story with no status file is todo: its first move creates the file.
-  const from = (storyState(home, story)?.status ?? (ref.team ? "todo" : undefined)) as Status | undefined;
+  const from = (storyState(home, story)?.status ?? (ref.inRepo ? "todo" : undefined)) as Status | undefined;
   if (!from) throw new StateError(noEntry(home, story));
   if (!MOVES[from]?.includes(to)) {
     throw new StateError(`${story} can't move from ${from} to ${to}. From ${from} it can move to: ${MOVES[from].join(", ")}`);
@@ -112,11 +112,11 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
       throw new StateError(`${story} stays ${from}: its scenarios don't all pass${list}`, result);
     }
     result.output = run.output;
-    if (ref.team) {
-      // The proof is for the commit it ran at, so approval can check nothing has changed since.
+    if (ref.inRepo) {
+      // The proof is for the commit it ran at, so approval can check nothing has changed since. With no
+      // git or no commit yet there is no commit to point at, and the git checks are skipped.
       commit = headOf(ref.root);
-      if (!commit) throw new StateError(`${story} stays ${from}: this team repo has no commit yet. Commit first, so the proof has a commit to point at`, result);
-      result.dirty = codeIsDirty(ref.root);
+      if (commit) result.dirty = codeIsDirty(ref.root);
     }
   }
 
@@ -124,15 +124,15 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   // A Document keeps comments and the order of everything we don't touch.
   updateStory(home, story, (doc, entry) => {
     doc.setIn([...entry, "status"], to);
-    // A team's status says which feature it was written against, so the group can tell a stale one.
-    if (ref.team && feature && to !== "done") doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
+    // A map's story says which feature it was written against, so a stale one shows as changed.
+    if (ref.inRepo && feature && to !== "done") doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
     if (opts.by && to === "in_progress") doc.setIn([...entry, "claimed_by"], opts.by);
     if (to === "done") {
       // What the scenarios proved: validate warns if the feature changes afterwards. done_at
       // marks this done, so an approval of an earlier done doesn't carry over.
       if (feature) doc.setIn([...entry, "spec_hash"], specHash(read(feature)));
       doc.setIn([...entry, "done_at"], opts.now ?? new Date().toISOString());
-      if (ref.team && commit && run) {
+      if (ref.inRepo && commit && run) {
         doc.setIn([...entry, "tested_commit"], commit);
         doc.setIn([...entry, "evidence"], { run_at: opts.now ?? new Date().toISOString(), runner: run.stack === "python" ? "behave" : "cucumber", commit, ok: true });
       }
@@ -140,7 +140,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     if (to === "cancelled") doc.setIn([...entry, "cancelled_reason"], opts.reason!.trim());
     else doc.deleteIn([...entry, "cancelled_reason"]);
     doc.setIn([...entry, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
-  }, { create: !!ref.team });
+  }, { create: ref.inRepo });
   // The map's delivery.yaml says what its files say: written with each change, so `nikos validate` finds it current.
   if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return result;
@@ -171,7 +171,7 @@ export function runState(args: string[]): number {
   const v = validate(opt("dir") ?? process.cwd(), opt("map"));
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
   // Only the story this command changed is named: another story's lapse is still in nikos validate, not repeated on every set.
-  for (const w of v.errors.filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
+  for (const w of [...v.errors, ...v.warnings].filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   // The move is written, so a problem found elsewhere is a warning here, not a failed command.
   for (const w of v.errors.filter((e) => !e.lapse)) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);
   return 0;

@@ -4,8 +4,8 @@
 // intent/state/<ID>.yaml and intent/approvals/<ID>.yaml, so two branches that move different
 // stories never touch the same file and never conflict. state.yaml keeps format_version and the
 // run queue. Everything reads and writes stories through here, so both layouts work the same.
-// A team repo keeps one file per story too: status/<ID>.yaml and approvals/<ID>.yaml.
-import { join } from "node:path";
+// A map in maps/<key>/ keeps its state in state.yaml, and each approval in approvals/<ID>.yaml.
+import { basename, dirname, join } from "node:path";
 import { Document, parse, parseDocument, stringify } from "yaml";
 import { read } from "./project.js";
 import { store } from "./store.js";
@@ -24,11 +24,8 @@ export type StoryState = {
   evidence?: { run_at: string; runner: string; commit: string; ok: boolean };
 };
 
-/**
- * Where a story's state lives: an intent or map folder (the group and single-team layouts), or a
- * team repo, which keeps status/ and approvals/ at its root.
- */
-export type StoryHome = string | { team: string };
+/** Where a story's state lives: the intent/ folder, or a map's folder maps/<key>/. */
+export type StoryHome = string;
 
 export const statePath = (intentDir: string) => join(intentDir, "state.yaml");
 export const stateDir = (intentDir: string) => join(intentDir, "state");
@@ -36,14 +33,12 @@ export const approvalsFile = (intentDir: string) => join(intentDir, "approvals.y
 export const approvalsDir = (intentDir: string) => join(intentDir, "approvals");
 export const storyStatePath = (intentDir: string, id: string) => join(stateDir(intentDir), `${id}.yaml`);
 export const storyApprovalPath = (intentDir: string, id: string) => join(approvalsDir(intentDir), `${id}.yaml`);
-export const statusDirOf = (team: string) => join(team, "status");
-export const teamApprovalsDirOf = (team: string) => join(team, "approvals");
 
 /** The error when a story has no state: named by the file it would be in. */
-export const noEntry = (home: StoryHome, id: string) => {
-  if (typeof home !== "string") return `${id} has no status file (status/${id}.yaml)`;
-  return perStory(home) ? `${id} has no state file (intent/state/${id}.yaml)` : `${id} has no entry in state.yaml`;
-};
+export const noEntry = (home: StoryHome, id: string) => (perStory(home) ? `${id} has no state file (intent/state/${id}.yaml)` : `${id} has no entry in state.yaml`);
+
+/** Whether a folder is a map's (maps/<key>): it keeps each approval in approvals/<ID>.yaml. */
+const inMapsFolder = (dir: string) => basename(dir) !== "intent" && basename(dirname(dir)) === "maps";
 
 /** Whether this repo keeps a file per story (intent/state/ exists). */
 export const perStory = (intentDir: string) => store().isDir(stateDir(intentDir));
@@ -60,16 +55,8 @@ export function storyFiles(dir: string): { id: string; path: string }[] {
     .map((f) => ({ id: f.slice(0, -".yaml".length), path: join(dir, f) }));
 }
 
-/** Every story's state: state.yaml's stories, then the per-story files (or a team's status/ files). */
+/** Every story's state: state.yaml's stories, then the per-story files. */
 export function loadStates(home: StoryHome): Record<string, StoryState> {
-  if (typeof home !== "string") {
-    const out: Record<string, StoryState> = {};
-    for (const f of storyFiles(statusDirOf(home.team))) {
-      const entry = parse(read(f.path));
-      if (entry && typeof entry === "object") out[f.id] = entry;
-    }
-    return out;
-  }
   const path = statePath(home);
   const out: Record<string, StoryState> = { ...((store().exists(path) ? parse(read(path))?.stories : undefined) ?? {}) };
   for (const f of storyFiles(stateDir(home))) {
@@ -84,31 +71,23 @@ export const storyState = (home: StoryHome, id: string): StoryState | undefined 
 /**
  * Change one story's entry. fn gets a yaml Document and the path to the entry in it, so it can
  * setIn and deleteIn and keep comments and order. The change lands in the story's own file when
- * the repo keeps one per story (or the story already has one), else in state.yaml. A team's
- * change always lands in status/<ID>.yaml.
+ * the repo keeps one per story (or the story already has one), else in state.yaml.
  */
 export function updateStory(home: StoryHome, id: string, fn: (doc: Document, at: string[]) => void, opts: { create?: boolean } = {}): void {
-  if (typeof home !== "string") {
-    const own = join(statusDirOf(home.team), `${id}.yaml`);
+  const own = storyStatePath(home, id);
+  if (store().exists(own) || (perStory(home) && !hasInStateFile(home, id))) {
     if (!store().exists(own) && !opts.create) throw new Error(noEntry(home, id));
     const doc = store().exists(own) ? parseDocument(read(own)) : new Document({});
     fn(doc, []);
     store().write(own, yamlOut(doc));
     return;
   }
-  const intentDir = home;
-  const own = storyStatePath(intentDir, id);
-  if (store().exists(own) || (perStory(intentDir) && !hasInStateFile(intentDir, id))) {
-    if (!store().exists(own) && !opts.create) throw new Error(noEntry(intentDir, id));
-    const doc = store().exists(own) ? parseDocument(read(own)) : new Document({});
-    fn(doc, []);
-    store().write(own, yamlOut(doc));
-    return;
-  }
-  const doc = parseDocument(read(statePath(intentDir)));
-  if (!doc.getIn(["stories", id]) && !opts.create) throw new Error(noEntry(intentDir, id));
+  // A map with no state.yaml yet starts an empty one: its first story's state creates it.
+  const path = statePath(home);
+  const doc = parseDocument(store().exists(path) ? read(path) : NEW_STATE);
+  if (!doc.getIn(["stories", id]) && !opts.create) throw new Error(noEntry(home, id));
   fn(doc, ["stories", id]);
-  store().write(statePath(intentDir), yamlOut(doc));
+  store().write(path, yamlOut(doc));
 }
 
 function hasInStateFile(intentDir: string, id: string): boolean {
@@ -121,22 +100,18 @@ export function createStoryState(home: StoryHome, id: string, entry: StoryState)
   updateStory(home, id, (doc, at) => (at.length ? doc.setIn(at, doc.createNode(entry)) : (doc.contents = doc.createNode(entry) as any)), { create: true });
 }
 
+const NEW_STATE = `format_version: 1
+stories: {}
+`;
+
 const NEW_APPROVALS = `# Sign-offs on done stories, written by nikos approve. Protect this file with CODEOWNERS
 # (e.g. "/intent/approvals.yaml @your-product-lead") so an approval needs that person's review.
 format_version: 1
 approvals: {}
 `;
 
-/** Every approval: approvals.yaml's, then the per-story files (a team's approvals/ folder). */
+/** Every approval: approvals.yaml's, then the per-story files in approvals/. */
 export function loadApprovalEntries<T>(home: StoryHome): Record<string, T> {
-  if (typeof home !== "string") {
-    const out: Record<string, T> = {};
-    for (const f of storyFiles(teamApprovalsDirOf(home.team))) {
-      const entry = parse(read(f.path));
-      if (entry && typeof entry === "object") out[f.id] = entry;
-    }
-    return out;
-  }
   const path = approvalsFile(home);
   const out: Record<string, T> = { ...((store().exists(path) ? parse(read(path))?.approvals : undefined) ?? {}) };
   for (const f of storyFiles(approvalsDir(home))) {
@@ -146,19 +121,18 @@ export function loadApprovalEntries<T>(home: StoryHome): Record<string, T> {
   return out;
 }
 
-/** Record a story's approval: in its own file when the repo keeps one per story, else in approvals.yaml. A team's goes to approvals/<ID>.yaml. */
+/** Where a story's approval is recorded: its own file when the repo keeps one per story (a map always does), else approvals.yaml. */
+export function approvalFileOf(home: StoryHome, id: string): string {
+  return perStory(home) || inMapsFolder(home) || store().exists(storyApprovalPath(home, id)) ? storyApprovalPath(home, id) : approvalsFile(home);
+}
+
+/** Record a story's approval where approvalFileOf says it goes. */
 export function writeApproval(home: StoryHome, id: string, approval: object): string {
-  if (typeof home !== "string") {
-    const own = join(teamApprovalsDirOf(home.team), `${id}.yaml`);
-    store().write(own, stringify(approval));
-    return own;
+  const path = approvalFileOf(home, id);
+  if (path !== approvalsFile(home)) {
+    store().write(path, stringify(approval));
+    return path;
   }
-  if (perStory(home) || store().exists(storyApprovalPath(home, id))) {
-    const own = storyApprovalPath(home, id);
-    store().write(own, stringify(approval));
-    return own;
-  }
-  const path = approvalsFile(home);
   // A Document keeps comments and the other approvals as they were.
   const doc = parseDocument(store().exists(path) ? read(path) : NEW_APPROVALS);
   doc.setIn(["approvals", id], doc.createNode(approval));

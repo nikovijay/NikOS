@@ -1,6 +1,6 @@
 // A team repo: its code, plus nikos.team.yaml, which names the team, the repos it takes work from,
 // and its members. A team keeps its own story maps in maps/<key>/, with its status and delivery
-// approvals in status/ and approvals/.
+// approvals in each map's own folder.
 import { join } from "node:path";
 import { parse, parseDocument, type Document } from "yaml";
 import { store } from "./store.js";

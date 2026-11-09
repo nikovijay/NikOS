@@ -1,5 +1,5 @@
 // A team that owns a story map (after 0.3.0): maps/<key>/ in its own repo, its ids carrying the
-// team's key (WEB-INB-1), its status in its own status/, and its bets checked against the plans it joins.
+// team's key (WEB-INB-1), its state and approvals in its own folder, and its bets checked against the plans it joins.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +22,8 @@ vi.mock("../src/commands/verify", async (importOriginal) => {
 });
 beforeEach(() => vi.mocked(verify).mockClear());
 
-const status = (t: string, id: string) => parse(readFileSync(join(t, "status", `${id}.yaml`), "utf8"));
+/** A story's state in its map: maps/inb/state.yaml, the team's own. */
+const status = (t: string, id: string) => parse(readFileSync(join(t, "maps/inb/state.yaml"), "utf8")).stories[id];
 
 /** Write nikos.team.yaml in the format a team with a key and a home has. */
 function setTeamFile(t: string, opts: { key?: string; home?: string } = {}) {
@@ -54,7 +55,7 @@ describe("a team's own map", () => {
     const story = newStory({ title: "Pay by card", activity: "getting-started" }, t);
     expect(story.id).toBe("WEB-INB-1");
     expect(existsSync(join(t, "maps/inb/features"))).toBe(true);
-    // The story's state is the team's own: status/ at the team root, not in the map.
+    // The story's state is in the map's own state.yaml, one file for the map.
     expect(status(t, "WEB-INB-1")).toMatchObject({ status: "todo" });
     expect(existsSync(join(t, "maps/inb/state"))).toBe(false);
   });
@@ -144,7 +145,7 @@ describe("a team's own map", () => {
     expect(storyMapClash(t)).toBe("this repo has intent/ or maps/ and nikos.team.yaml: keep one");
   });
 
-  it("runs state set and approve on its own stories in the team's status/", () => {
+  it("runs state set and approve on its own stories in the map's state.yaml", () => {
     const t = teamWithKey();
     newMap({ bet: "faster-checkout", key: "INB" }, t);
     newStory({ title: "Pay by card", activity: "getting-started" }, t);
@@ -154,7 +155,7 @@ describe("a team's own map", () => {
     setState("WEB-INB-1", "done", { dir: t, by: "Priya" });
     expect(status(t, "WEB-INB-1")).toMatchObject({ status: "done" });
     expect(status(t, "WEB-INB-1").spec_hash).toMatch(/^[0-9a-f]+$/);
-    expect(existsSync(join(t, "maps/inb/state.yaml"))).toBe(false);
+    expect(existsSync(join(t, "status"))).toBe(false);
   });
 
   it("refuses a story that isn't in the map's features", () => {
@@ -195,7 +196,7 @@ describe("a team's own bets, approval and next", () => {
     setState("WEB-INB-1", "done", { dir: t, by: "Priya" });
     commitAll(t, "done");
     approve("WEB-INB-1", { dir: t, by: "Priya", via: "terminal" });
-    expect(parse(readFileSync(join(t, "approvals/WEB-INB-1.yaml"), "utf8"))).toMatchObject({ by: "Priya" });
-    expect(existsSync(join(t, "maps/inb/approvals"))).toBe(false);
+    expect(parse(readFileSync(join(t, "maps/inb/approvals/WEB-INB-1.yaml"), "utf8"))).toMatchObject({ by: "Priya", tested_commit: expect.any(String) });
+    expect(existsSync(join(t, "approvals"))).toBe(false);
   });
 });

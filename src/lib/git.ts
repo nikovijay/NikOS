@@ -17,12 +17,6 @@ export function headOf(root: string): string | undefined {
 }
 
 /**
- * Paths a team repo writes about itself: its status and approvals, its identity file, and each map's
- * delivery summary (nikos map status). Changes there aren't code.
- */
-const TEAM_OWN = [":!status", ":!approvals", ":!nikos.team.yaml", ":!.nikos", ":(exclude,glob)maps/*/assignments.yaml", ":(exclude,glob)maps/*/delivery.yaml"];
-
-/**
  * Paths nikOS writes about a map's own status and sign-offs (its state, approvals and delivery summary).
  * They change with each move and sign-off, not with the code, so they never lapse an approval.
  */
@@ -35,15 +29,19 @@ const BOOKKEEPING = [
   ":(exclude,glob)maps/*/delivery.yaml",
 ];
 
-/** Whether the code (everything but a team's own status, approvals and delivery summaries) changed since a commit. */
+/**
+ * Whether the code changed since a commit. A folder with no git, or a repo with no commit yet, has
+ * no code to compare, so nothing changed.
+ */
 export function codeChangedSince(root: string, commit: string): boolean {
-  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...TEAM_OWN, ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
+  if (!headOf(root)) return false;
+  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status !== 0;
 }
 
-/** Whether the code has uncommitted changes (a team's own status and approvals don't count). */
+/** Whether the code has uncommitted changes (nikOS's own bookkeeping files don't count). */
 export function codeIsDirty(root: string): boolean {
-  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...TEAM_OWN, ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
+  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status === 0 && r.stdout.trim() !== "";
 }
 

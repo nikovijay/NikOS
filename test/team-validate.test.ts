@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { memberAdd } from "../src/commands/team";
 import { validate } from "../src/commands/validate";
 import { writeMapSummary } from "../src/lib/map-summary";
+import { specHash } from "../src/lib/project";
 import { groupRepo, teamRepo, write, commitAll } from "./team-fixture";
 
 /** A team that owns the group's map (PAY-CHK, three stories), with its bet, key and home, committed. */
@@ -30,24 +31,25 @@ describe("validate on a team repo", () => {
     expect(v.stories).toBe(3);
   });
 
-  it("warns about a status for a story the team's maps don't have, and about an approver who isn't a member", () => {
+  it("warns about an approver who isn't a member, and about an approval whose feature changed", () => {
     const { t } = synced();
-    write(join(t, "status/PAY-CHK-9.yaml"), "status: in_progress\n");
-    write(join(t, "status/PAY-CHK-1.yaml"), "status: done\nspec_hash: 0123456789ab\nevidence:\n  run_at: '2027-01-05T10:00:00Z'\n  runner: cucumber\n  commit: abcdef1234567\n  ok: true\n");
-    write(join(t, "approvals/PAY-CHK-1.yaml"), "by: Sam Lee\non: 2027-01-06\nspec_hash: 0123456789ab\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: abcdef1234567\n");
+    write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, spec_hash: 0123456789ab, done_at: '2027-01-05T10:00:00Z' }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n  PAY-CHK-9: { status: in_progress }\n");
+    write(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), "by: Sam Lee\non: 2027-01-06\nspec_hash: 0123456789ab\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: abcdef1234567\n");
     const v = validate(t);
-    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-9 has status but isn't in any of this team's maps");
     expect(v.warnings.map((w) => w.message)).toContain("approved by Sam Lee, who isn't listed in nikos.team.yaml");
-    expect(v.errors.map((e) => e.message).some((m) => m.startsWith("approval is for spec 0123456789ab, the story is now "))).toBe(true);
+    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-1's approval no longer holds: its feature changed since");
   });
 
-  it("refuses a delivery approval for a commit other than the one the story was tested at", () => {
+  it("warns about an approval for a commit other than the one the story was tested at", () => {
     const { t } = synced();
-    write(join(t, "status/PAY-CHK-1.yaml"), "status: done\nevidence:\n  run_at: '2027-01-05T10:00:00Z'\n  runner: cucumber\n  commit: abcdef1234567\n  ok: true\n");
-    write(join(t, "approvals/PAY-CHK-1.yaml"), "by: Priya Shah\non: 2027-01-06\nspec_hash: '000000000000'\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: 1111111aaaaaa\n");
+    const hash = specHash(readFileSync(join(t, "maps/chk/features/pay/pay-by-card.feature"), "utf8"));
+    write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, done_at: '2027-01-05T10:00:00Z', evidence: { run_at: '2027-01-05T10:00:00Z', runner: cucumber, commit: abcdef1234567, ok: true } }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n");
+    writeMapSummary(t, join(t, "maps/chk")); // the summary says what the state says, as nikos map status writes it
+    write(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), `by: Priya Shah\non: 2027-01-06\nspec_hash: ${hash}\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: 1111111aaaaaa\n`);
     memberAdd(t, "Priya Shah");
-    const messages = validate(t).errors.map((e) => e.message);
-    expect(messages).toContain("approval is for commit 1111111, but the story was tested at abcdef1");
+    const v = validate(t);
+    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-1's approval no longer holds: it was tested at another commit");
+    expect(v.errors).toEqual([]);
   });
 
   it("refuses a delivery.yaml that no longer says what the map's files say", () => {

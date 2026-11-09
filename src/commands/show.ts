@@ -2,7 +2,7 @@ import { store } from "../lib/store.js";
 import { loadStates, type StoryState } from "../lib/state-files.js";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { STORY_ID, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
 import { homeOf, storyMapFor, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
@@ -32,7 +32,7 @@ export function show(story: string, dir: string, mapId?: string): string {
   const map = yamlFile(join(intentDir, "storymap.yaml"));
   const release = (map?.releases ?? []).find((r: any) => (r?.stories ?? []).includes(story));
   const states = loadStates(home);
-  const entry: StoryState | undefined = states[story] ?? (ref.team ? { status: "todo" } : undefined);
+  const entry: StoryState | undefined = states[story] ?? (ref.inRepo ? { status: "todo" } : undefined);
   const text = read(file);
 
   const out = [`${story} — ${feature.name}`];
@@ -42,10 +42,10 @@ export function show(story: string, dir: string, mapId?: string): string {
     if (entry.blockers?.length) out.push(`Blockers: ${entry.blockers.join("; ")}`);
     const approval = loadApprovals(home)[story];
     if (approval) {
-      const lapse = ref.team ? teamApprovalLapse(approval as DeliveryApproval, entry, specHash(text)) : approvalLapse(approval, entry, specHash(text));
+      const lapse = approvalLapse(approval, entry, specHash(text));
       out.push(lapse ? `! Approved by ${approval.by} on ${approval.on}, but that no longer holds: ${lapse}` : `Approved by ${approval.by} on ${approval.on}`);
-      // A team's approval is for the code it tested: code committed since is what approve refuses, so say so here too.
-      if (!lapse && ref.team && codeChangedSince(ref.root, (approval as DeliveryApproval).tested_commit)) {
+      // An approval names the commit it was tested at: code committed since is what approve refuses, so say so here too.
+      if (!lapse && approval.tested_commit && codeChangedSince(ref.root, approval.tested_commit)) {
         out.push(`! The code has changed since it was tested: run its scenarios again (nikos state set ${story} needs_rework, then in_progress, then done), then approve`);
       }
     }

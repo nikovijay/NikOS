@@ -27,14 +27,14 @@ function trackerOf(root: string) {
   };
 }
 
-/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in state.yaml (or the team's status/). */
+/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in the map's state.yaml. */
 export function linkTicket(input: { id: string; ticket: string; map?: string }, dir: string) {
   if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const ticket = input.ticket.trim();
   if (!ticket) throw new Error("Give the ticket's key or number, e.g. PAY-123");
   const ref = storyMapFor(dir, { story: input.id, map: input.map });
   const home = homeOf(ref);
-  if (!storyState(home, input.id) && !ref.team) throw new Error(noEntry(home, input.id));
+  if (!storyState(home, input.id) && !ref.inRepo) throw new Error(noEntry(home, input.id));
   updateStory(
     home,
     input.id,
@@ -43,7 +43,7 @@ export function linkTicket(input: { id: string; ticket: string; map?: string }, 
       if (!doc.getIn([...at, "status"])) doc.setIn([...at, "status"], "todo");
       doc.setIn([...at, "ticket"], ticket);
     },
-    { create: !!ref.team },
+    { create: ref.inRepo },
   );
   return { id: input.id, ticket };
 }

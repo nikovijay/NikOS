@@ -26,6 +26,7 @@ import { ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry }
 import { alignsList } from "./levels.js";
 import { stopDate, stoppedTarget } from "./stops.js";
 import { ownRepo } from "../lib/git.js";
+import { isTeamRepo } from "../lib/team.js";
 
 export interface DownstreamPlan {
   name: string;
@@ -200,7 +201,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
       // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
       for (const ref of refs) {
-        if (ref.team) continue;
+        if (isTeamRepo(ref.root)) continue;
         try {
           // A map with a summary: each story's status is the summary's, not the group's state (a team holds it). A proof that
           // isn't current is work to redo, so it isn't next.
@@ -214,8 +215,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
           // no state.yaml or queue in this map: delivery and blockers still show
         }
       }
-      // Blockers are read from a group's own map state only: a team's blockers live in its live status/, which a rollout never reads.
-      for (const ref of storyMapsOf(dir).filter((r) => !r.team)) {
+      // Blockers are read from a group's own map state only: a team's blockers live in its own live state, which a rollout never reads.
+      for (const ref of storyMapsOf(dir).filter((r) => !isTeamRepo(r.root))) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
         }

@@ -98,15 +98,17 @@ describe("nikos migrate maps in a team repo", () => {
 });
 
 describe("a team's migrated status and approvals", () => {
-  it("move to the team's own status/ and approvals/, one file per story, so the team commands read them", async () => {
+  it("keep the team's state in the map's own state.yaml, with the ids renamed, and split its approvals per story", async () => {
     const dir = teamWithIntent();
     write(join(dir, "intent/state.yaml"), "format_version: 1\nstories:\n  HT-1: { status: in_progress }\n  HT-2: { status: todo }\n");
     commitAll(dir, "state");
     const res = await migrateMaps(dir, { ...yes, key: "HT", teamKey: "WEB", home: "acme/payments-group", bet: "checkout-speed", renameIds: true });
     expect(res).toBeDefined();
-    expect(parse(readFileSync(join(dir, "status/WEB-HT-1.yaml"), "utf8"))).toMatchObject({ status: "in_progress" });
-    expect(parse(readFileSync(join(dir, "status/WEB-HT-2.yaml"), "utf8"))).toMatchObject({ status: "todo" });
-    // The map keeps no state of its own: the team's status is the only one.
-    expect(existsSync(join(dir, "maps/ht/state.yaml"))).toBe(false);
+    expect(parse(readFileSync(join(dir, "maps/ht/state.yaml"), "utf8")).stories).toMatchObject({
+      "WEB-HT-1": { status: "in_progress" },
+      "WEB-HT-2": { status: "todo" },
+    });
+    // Nothing is kept at the team's root: the map holds its own state and approvals.
+    expect(existsSync(join(dir, "status"))).toBe(false);
   });
 });

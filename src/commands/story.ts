@@ -160,10 +160,6 @@ export function renameStory(dir: string, input: { map?: string; id: string; titl
 
 /** Drop a story's state entry from its map: its own file, or its line in state.yaml. */
 function dropState(home: StoryHome, id: string): void {
-  if (typeof home !== "string") {
-    if (store().exists(join(home.team, "status", `${id}.yaml`))) store().remove(join(home.team, "status", `${id}.yaml`));
-    return;
-  }
   const dir = home;
   if (perStory(dir) && store().exists(storyStatePath(dir, id))) store().remove(storyStatePath(dir, id));
   const path = statePath(dir);

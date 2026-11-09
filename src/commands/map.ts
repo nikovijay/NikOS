@@ -6,7 +6,7 @@ import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
@@ -123,7 +123,7 @@ export function storyMapOfRef(ref: StoryMapRef): StoryMap {
   // Approved is shown as a status: done, plus an approval that still holds.
   const approvedBy = (id: string, hash?: string) => {
     const a = approvals[id];
-    return a && !(ref.team ? teamApprovalLapse(a as DeliveryApproval, states[id], hash) : approvalLapse(a, states[id], hash)) ? a.by : "";
+    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
   };
   const stateOf = (id: string, deps: string[], hash?: string) => {
     const st = states[id] ?? {};

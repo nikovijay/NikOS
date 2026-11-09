@@ -1,5 +1,5 @@
 // `nikos map status`, read from each map's own files: a group's state and approvals, and a team's
-// own map from its status/ and approvals/. No git or network: the proof of a status is judged
+// own map from its own state.yaml and approvals/. No git or network: the proof of a status is judged
 // against the feature it sits beside, and each map's delivery.yaml is written from what it reads.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -140,7 +140,7 @@ describe("nikos map status: a group's map", () => {
 });
 
 describe("nikos map status: a team's own map", () => {
-  it("reads the team's own status, judged against the feature it was written against", () => {
+  it("reads the team's own state, judged against the feature it was written against", () => {
     const t = teamWithOwnMap();
     setState("WEB-INB-1", "in_progress", { dir: t });
     commitAll(t, "start");
@@ -172,7 +172,7 @@ describe("nikos map status: a team's own map", () => {
 
   it("a done status with no spec hash is unverified", () => {
     const t = teamWithOwnMap();
-    write(join(t, "status/WEB-INB-2.yaml"), "status: done\nupdated: 2027-01-04\n");
+    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  WEB-INB-1: { status: in_progress }\n  WEB-INB-2: { status: done, updated: 2027-01-04 }\n");
     commitAll(t, "status by hand");
     expect(story(mapStatus(t), "WEB-INB-2")).toMatchObject({ status: "done", proof: "unverified" });
   });
@@ -191,10 +191,11 @@ describe("nikos map status: a team's own map", () => {
     expect(readDeliverySummary(join(t, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
   });
 
-  it("a team with a map has no status to read from anywhere else: its own map is the one read", () => {
+  it("a team with a map reads its own map's state: the map is the one read", () => {
     const t = teamWithOwnMap();
     expect(mapStatus(t).map((m) => m.map)).toEqual(["inb"]);
-    expect(existsSync(join(t, "maps/inb/state.yaml"))).toBe(false);
+    expect(existsSync(join(t, "maps/inb/state.yaml"))).toBe(true);
+    expect(existsSync(join(t, "status"))).toBe(false);
     expect(parse(readFileSync(join(t, "nikos.team.yaml"), "utf8")).key).toBe("WEB");
   });
 });

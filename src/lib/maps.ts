@@ -15,10 +15,8 @@ export interface StoryMapRef {
   dir: string;
   /** Set only for maps/<id>. */
   id?: string;
-  /** Set when the status lives in the team repo: a team's own map. */
-  team?: boolean;
-  /** Set for a map the team owns (maps/<key>/ in its own repo): it's in place, and its status is the team's own. */
-  own?: boolean;
+  /** A map in this code repo (maps/<id>): its state, approvals and git gates are the repo's own. intent/ is not. */
+  inRepo: boolean;
 }
 
 /** The sorted maps/<id> folders that hold a storymap.yaml; [] if there's no maps/. */
@@ -85,8 +83,7 @@ export function keyOfMap(dir: string): string | undefined {
 export function resolveStoryMap(start: string, map?: string): StoryMapRef {
   if (store().exists(join(start, "storymap.yaml")) && isMapFolder(start)) {
     const root = repoRootOf(start);
-    if (isTeamRepo(root)) return { root, dir: start, id: basename(start), team: true, own: true };
-    return { root, dir: start, id: basename(start) };
+    return { root, dir: start, id: basename(start), inRepo: true };
   }
   if (isTeamRepo(start)) return teamRef(start, map);
   const root = start;
@@ -100,16 +97,16 @@ export function resolveStoryMap(start: string, map?: string): StoryMapRef {
       throw new Error(`--map needs a group repo with maps/ (${hint})`);
     }
     const dir = findIntentDir(root);
-    return { root: repoRootOf(dir), dir };
+    return { root: repoRootOf(dir), dir, inRepo: false };
   }
   const ids = maps.map((d) => basename(d));
   if (map) {
     // Folders are the lowercased map key, so --map HR finds maps/hr.
     const id = ids.find((i) => i === map.toLowerCase());
     if (!id) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
-    return { root, dir: join(root, "maps", id), id };
+    return { root, dir: join(root, "maps", id), id, inRepo: true };
   }
-  if (ids.length === 1) return { root, dir: maps[0], id: ids[0] };
+  if (ids.length === 1) return { root, dir: maps[0], id: ids[0], inRepo: true };
   throw new Error(`several story maps in maps/ (${ids.join(", ")}): pass --map <id>`);
 }
 
@@ -122,7 +119,7 @@ function assertTeamOnly(root: string): void {
 /** The maps a team owns: each maps/<key>/ in its own repo, in place. Empty for any other repo. */
 export function ownMapsOf(root: string): StoryMapRef[] {
   if (!isTeamRepo(root)) return [];
-  return mapDirs(root).map((dir) => ({ root, dir, id: basename(dir), team: true, own: true }));
+  return mapDirs(root).map((dir) => ({ root, dir, id: basename(dir), inRepo: true }));
 }
 
 /** Whether a map (--map's value, or a label like WEB-INB) names this map: its folder, its key, or its full label. */
@@ -190,15 +187,15 @@ export function authoringMap(dir: string, map?: string): StoryMapRef {
   return resolveStoryMap(dir, map);
 }
 
-/** Where a story's state and approvals live for a map: the intent or map folder, or the team repo. */
-export const homeOf = (ref: StoryMapRef): StoryHome => (ref.team ? { team: ref.root } : ref.dir);
+/** Where a story's state and approvals live: the map's folder, or intent/. */
+export const homeOf = (ref: StoryMapRef): StoryHome => ref.dir;
 
 /** Every story map in a repo: each maps/<id>, plus the intent/ map if there is one. A team's are its own maps. */
 export function storyMapsOf(root: string): StoryMapRef[] {
   if (isTeamRepo(root)) return ownMapsOf(root);
-  const maps: StoryMapRef[] = mapDirs(root).map((dir) => ({ root, dir, id: basename(dir) }));
+  const maps: StoryMapRef[] = mapDirs(root).map((dir) => ({ root, dir, id: basename(dir), inRepo: true }));
   const intent = findIntentDir(root);
-  if (store().exists(join(intent, "storymap.yaml"))) maps.push({ root, dir: intent });
+  if (store().exists(join(intent, "storymap.yaml"))) maps.push({ root, dir: intent, inRepo: false });
   return maps;
 }
 

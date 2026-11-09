@@ -51,7 +51,7 @@ is only done when its Cucumber scenarios pass. The person talks; you call these 
 - A group repo keeps one story map per bet, under maps/<id>/: pass map (the id, e.g. chk) to the story tools
   when there is more than one. A map for a bet is made with nikos map new --bet <bet-id> --key <KEY>.
 - A team repo (nikos.team.yaml) works on its own maps under maps/<key>/, and adds their stories (ids like WEB-INB-1).
-  Its status is in status/, and it doesn't add stories to a group's or another team's map.
+  Its state and approvals are in each map's own folder, and it doesn't add stories to a group's or another team's map.
 - To see how a map's stories are doing, call map_status: a story's status counts only when
   it was proved against the current feature. Say which stories need attention and why.
 - When a story reaches done, offer to approve it. The approve tool asks the person directly

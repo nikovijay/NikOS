@@ -10,7 +10,7 @@ import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
 import { groupKeyOf, keyOfMap, mapDirs, mapOwnerOf, NO_OWNER, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { hasSummary, summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
-import { approvalLapse, type Approval } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
 import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
@@ -24,7 +24,7 @@ export interface Issue {
   file: string;
   message: string;
   hint?: string;
-  /** A delivery approval that no longer holds: `state set` reports it as a warning, since the move itself worked. */
+  /** An approval that no longer holds: `state set` reports it as a warning, since the move itself worked. */
   lapse?: boolean;
 }
 
@@ -127,7 +127,7 @@ export function validateGroup(root: string): ValidationResult {
       if (owner.has(key)) errors.push({ file: `maps/${id}/storymap.yaml`, message: `maps/${owner.get(key)} and maps/${id} both use key '${key}'`, hint: "give each map a key of its own" });
       else owner.set(key, id);
     }
-    const r = validateMap({ root, dir, id });
+    const r = validateMap({ root, dir, id, inRepo: true });
     errors.push(...r.errors);
     warnings.push(...r.warnings);
     stories += r.stories;
@@ -165,9 +165,8 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
-  // A team's own map has no state.yaml: its status is checked by validateTeam.
   const storymap = loadYaml(dir, "storymap.yaml", errors);
-  const state = ref.team ? undefined : loadYaml(dir, "state.yaml", errors);
+  const state = loadYaml(dir, "state.yaml", errors);
 
   if (storymap !== undefined && !checkStorymap(storymap)) {
     for (const e of checkStorymap.errors ?? []) {
@@ -366,7 +365,11 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       continue;
     }
     const lapse = approvalLapse(a, (stateStories as any)[id], hashes.get(id));
-    if (lapse) warnings.push({ file, message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry` });
+    if (lapse) warnings.push({ file, message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry`, lapse: true });
+    // An approval names the commit it was tested at: code committed since is what approve refuses, so say so here too.
+    if (ref.inRepo && a.tested_commit && codeChangedSince(ref.root, a.tested_commit)) {
+      warnings.push({ file, message: `${id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${id} needs_rework, then in_progress, then done, then approve`, lapse: true });
+    }
   }
 
   // Dependencies: each @depends-<id> names a known story, never itself, never in a loop.
@@ -407,7 +410,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       // The bet is optional (RFC rule 5): a map with none is valid, and counts toward no bet.
       if (typeof storymap.bet !== "string") {
         // nothing to check: the bet is optional
-      } else if (ref.own && CROSS_REF.test(storymap.bet)) {
+      } else if (isTeamRepo(ref.root) && CROSS_REF.test(storymap.bet)) {
         // A team's map names a bet in a plan above it: it's checked against the plan the team joins.
         crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
       } else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
@@ -464,8 +467,8 @@ function checkDeliverySummary(ref: StoryMapRef, errors: Issue[]): void {
 }
 
 /**
- * A team repo: its nikos.team.yaml, its own maps, and the team's own status and delivery approvals
- * for their stories.
+ * A team repo: its nikos.team.yaml, and its own maps, each checked as a map (state, approvals and
+ * delivery summary included).
  */
 export function validateTeam(root: string): ValidationResult {
   const errors: Issue[] = [];
@@ -481,9 +484,9 @@ export function validateTeam(root: string): ValidationResult {
   const nested = clashingGroups(team?.groups.map((g) => g.repo) ?? []);
   if (nested) errors.push({ file: TEAM_FILE, message: `${nested[0]} and ${nested[1]} can't both be groups: one path sits inside the other` });
 
-  // A team's own maps: each is checked as a map, its folder is named for its key, and each key is used once here.
+  // A team's own maps: each is checked as a map (its state, approvals and delivery summary included),
+  // its folder is named for its key, and each key and story id is used once here.
   const owner = new Map<string, string>();
-  const hashes = new Map<string, string>();
   let releases = 0;
   const ownKeys = new Map<string, string>();
   const own = ownMapsOf(root);
@@ -495,6 +498,7 @@ export function validateTeam(root: string): ValidationResult {
     joined = [];
   }
   if ((own.length || joined.length) && team && !team.home) errors.push({ file: TEAM_FILE, message: "a team that joins a plan or owns a map needs one home (nikos join <plan repo> --home)" });
+  const members = new Set((team?.members ?? []).map((m) => m.name));
   for (const ref of own) {
     const prefix = `maps/${ref.id}`;
     const r = validateMap(ref);
@@ -508,49 +512,10 @@ export function validateTeam(root: string): ValidationResult {
     for (const f of loadMapData(ref.dir).features) {
       if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two places in this team`, hint: "keep each story in one map" });
       owner.set(f.id, prefix);
-      hashes.set(f.id, specHash(f.text));
     }
-  }
-
-  for (const f of storyFiles(join(root, "status"))) {
-    const file = `status/${f.id}.yaml`;
-    const entry = loadYaml(root, file, errors);
-    if (entry === undefined) continue;
-    const statusProblems = schemaProblems("status.schema.json", entry);
-    if (statusProblems.length) {
-      for (const message of statusProblems) errors.push({ file, message });
-      continue;
+    for (const [id, a] of Object.entries(loadApprovals(ref.dir))) {
+      if (!members.has(a.by)) warnings.push({ file: `${prefix}/approvals/${id}.yaml`, message: `approved by ${a.by}, who isn't listed in nikos.team.yaml`, hint: "add them with nikos team member add, or check who approved it" });
     }
-    if (!owner.has(f.id)) {
-      warnings.push({ file, message: `${f.id} has status but isn't in any of this team's maps`, hint: "add the story to one of the team's maps, or remove the status file" });
-      continue;
-    }
-    const hash = hashes.get(f.id);
-    if (isDone(entry.status) && entry.spec_hash && hash && entry.spec_hash !== hash) {
-      warnings.push({ file, message: `${f.id} changed after it was ${entry.status}`, hint: `if the change matters, move it back: nikos state set ${f.id} needs_rework` });
-    }
-  }
-
-  const members = new Set((team?.members ?? []).map((m) => m.name));
-  for (const f of storyFiles(join(root, "approvals"))) {
-    const file = `approvals/${f.id}.yaml`;
-    const a = loadYaml(root, file, errors);
-    if (a === undefined) continue;
-    const deliveryProblems = schemaProblems("delivery-approval.schema.json", a);
-    if (deliveryProblems.length) {
-      for (const message of deliveryProblems) errors.push({ file, message });
-      continue;
-    }
-    const st = loadYaml(root, `status/${f.id}.yaml`, []);
-    const tested = st?.evidence?.commit;
-    if (tested !== a.tested_commit) {
-      errors.push({ file, message: `approval is for commit ${a.tested_commit.slice(0, 7)}, but the story was tested at ${tested ? String(tested).slice(0, 7) : "no commit"}`, hint: `approve it again after the story is done at this commit`, lapse: true });
-    }
-    const hash = hashes.get(f.id);
-    if (hash && a.spec_hash !== hash) errors.push({ file, message: `approval is for spec ${a.spec_hash}, the story is now ${hash}`, hint: `once it's done again, approve it again`, lapse: true });
-    // The approval holds for the code it tested; code committed after that is what approve refuses, so show it here too.
-    if (codeChangedSince(root, a.tested_commit)) warnings.push({ file, message: `${f.id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${f.id} needs_rework, then in_progress, then done, then approve` });
-    if (!members.has(a.by)) warnings.push({ file, message: `approved by ${a.by}, who isn't listed in nikos.team.yaml`, hint: "add them with nikos team member add, or check who approved it" });
   }
 
   return { dir: root, errors, warnings, stories: owner.size, releases, label: TEAM_FILE };

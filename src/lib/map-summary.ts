@@ -8,7 +8,7 @@ import { loadMapData, mapStoryIds } from "./map-data.js";
 import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./delivery-summary.js";
 import { keyOf, mapOwnerOf, NO_OWNER, type StoryMapRef } from "./maps.js";
 import { isDone, specHash } from "./project.js";
-import { loadStates, type StoryHome } from "./state-files.js";
+import { loadStates } from "./state-files.js";
 import { isTeamRepo } from "./team.js";
 
 export type Proof = "changed" | "behind" | "unverified";
@@ -32,7 +32,7 @@ export interface SummaryBody {
 }
 
 /** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/). */
-export const hasSummary = (ref: StoryMapRef): boolean => !!ref.id && (!ref.team || !!ref.own);
+export const hasSummary = (ref: StoryMapRef): boolean => ref.inRepo;
 
 /** The owner a map's story ids and summary carry: its storymap owner, else the repo's group or team key. */
 export function ownerFor(root: string, dir: string): string {
@@ -52,16 +52,16 @@ function orderedIds(data: ReturnType<typeof loadMapData>): string[] {
 }
 
 /**
- * The summary a map's files say now. A team's own map reads its status from the team's status/ and
- * judges it against each feature (so a proof for an older feature shows); a group's map reads its own state.
+ * The summary a map's files say now. A team's own map judges each story's proof against its feature (so a
+ * proof for an older feature shows); a group's map is read as it stands.
  */
 export function summaryBody(root: string, dir: string): SummaryBody {
   const owner = ownerFor(root, dir);
   const data = loadMapData(dir);
+  // A team's proof is judged against each feature; a group's map is read as it stands.
   const team = isTeamRepo(root);
-  const home: StoryHome = team ? { team: root } : dir;
-  const states = loadStates(home);
-  const approvals = loadApprovals(home);
+  const states = loadStates(dir);
+  const approvals = loadApprovals(dir);
   const stories = orderedIds(data).map((id): SummaryBodyStory => {
     const feature = data.features.find((f) => f.id === id);
     const hash = specHash(feature?.text ?? "");
