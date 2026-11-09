@@ -3,10 +3,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync } from "node:fs";
-import { assign } from "../src/commands/assign";
-import { teamJoin } from "../src/commands/team";
 import { printUndefined, setupVerify, undefinedSteps, verify } from "../src/commands/verify";
-import { groupRepo, teamRepo, write, commitAll } from "./team-fixture";
+import { groupRepo, teamOwnsGroupMap, teamRepo, write } from "./team-fixture";
 
 const ROOT = join(__dirname, "..");
 const PYTHON = process.env.PYTHON ?? "python3";
@@ -19,13 +17,11 @@ When("I pay for it", () => {});
 Then("I see a receipt", () => {});
 `;
 
-/** A team that takes release 1 of a group, its runner set up, with node_modules borrowed from this repo. */
+/** A team that owns the group's map, its runner set up, with node_modules borrowed from this repo. */
 function teamWithRunner(steps = STEPS_JS): string {
   const g = groupRepo("PAY");
-  assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-  commitAll(g, "assign");
   const t = teamRepo();
-  teamJoin(t, "acme/payments/checkout-group", { url: g });
+  teamOwnsGroupMap(t, g);
   setupVerify(t);
   symlinkSync(join(ROOT, "node_modules"), join(t, "node_modules"));
   write(join(t, "test/steps/team.steps.mjs"), steps);
@@ -33,11 +29,12 @@ function teamWithRunner(steps = STEPS_JS): string {
 }
 
 describe("runner templates and setup", () => {
-  it("js and ts runners also read the assigned copies, and python passes them to behave", () => {
+  it("js and ts runners read every map's features, and python's behave.ini names intent/features", () => {
     for (const stack of ["js", "ts"]) {
       const text = readFileSync(join(ROOT, "templates/verify", stack, "cucumber.mjs"), "utf8");
-      expect(text).toContain(".nikos/assigned/**/features/**/*.feature");
+      expect(text).toContain("maps/*/features/**/*.feature");
       expect(text).toContain("intent/features/**/*.feature");
+      expect(text).not.toContain(".nikos/assigned");
     }
     expect(readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8")).toContain("[behave]");
   });
@@ -51,23 +48,20 @@ describe("runner templates and setup", () => {
   });
 });
 
-describe("running the assigned stories", () => {
-  it("cucumber finds a feature under .nikos/assigned and runs it", () => {
+describe("running the team's stories", () => {
+  it("cucumber finds a feature in the team's own map and runs it", () => {
     const t = teamWithRunner();
     const r = verify(t, "PAY-CHK-1");
     expect(r.status).toBe(0);
     expect(r.output).toMatch(/1 scenario \(1 passed\)/);
   });
 
-  it.skipIf(!hasBehave)("behave finds a feature under .nikos/assigned and runs it", () => {
+  it.skipIf(!hasBehave)("behave finds a feature in the team's own map and runs it", () => {
     const t = teamRepo();
     rmSync(join(t, "package.json"));
     write(join(t, "requirements.txt"), "behave\n");
     write(join(t, "steps/steps.py"), "from behave import given, when, then\n\n@given('a basket with one item')\ndef a(c): pass\n\n@when('I pay for it')\ndef b(c): pass\n\n@then('I see a receipt')\ndef d(c): pass\n");
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-    commitAll(g, "assign");
-    teamJoin(t, "acme/payments/checkout-group", { url: g });
+    teamOwnsGroupMap(t, groupRepo("PAY"));
     setupVerify(t);
     const r = verify(t, "PAY-CHK-1");
     expect(r.stack).toBe("python");
@@ -77,12 +71,12 @@ describe("running the assigned stories", () => {
 });
 
 describe("steps with no definition yet", () => {
-  it("lists them from a dry run, for each assigned story", () => {
+  it("lists them from a dry run, for each story of the team's map", () => {
     const t = teamWithRunner(STEPS_JS.replace('Then("I see a receipt", () => {});\n', ""));
     const steps = undefinedSteps(t, "js");
     expect(steps).toBeDefined();
-    expect(steps!.map((s) => s.text)).toEqual(["I see a receipt", "I see a receipt"]);
-    expect(steps!.map((s) => s.story).sort()).toEqual(["PAY-CHK-1", "PAY-CHK-2"]);
+    expect(steps!.map((s) => s.text)).toEqual(["I see a receipt", "I see a receipt", "I see a receipt"]);
+    expect(steps!.map((s) => s.story).sort()).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
   });
 
   it("says the test run will report them when the runner's output can't be read", () => {

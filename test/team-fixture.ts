@@ -1,7 +1,7 @@
 // Fixtures for team tests: a group repo with one map (PAY-CHK, three stories in two releases), and
 // a team repo that takes work from it. Both are real git repos, so sync and ls-remote run for real.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { writeMapSummary } from "../src/lib/map-summary";
@@ -87,4 +87,18 @@ export function teamRepo(repo = "acme/checkout-web", name = "Checkout web"): str
 export function commitAll(dir: string, message = "change"): void {
   git(dir, "add", "-A");
   git(dir, "commit", "-q", "--allow-empty", "-m", message);
+}
+
+/**
+ * Make a team own the group's map: its maps/ copied in, named with the group's owner (PAY) so its
+ * ids are the group's, with the team's key and home in its file. Committed.
+ */
+export function teamOwnsGroupMap(t: string, g: string): void {
+  write(join(t, "nikos.team.yaml"), "format_version: 2\nname: Checkout web\nrepo: acme/checkout-web\nkey: WEB\nhome: acme/payments/checkout-group\ngroups: []\nmembers: []\n");
+  write(join(t, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
+  cpSync(join(g, "maps"), join(t, "maps"), { recursive: true });
+  const storymap = join(t, "maps/chk/storymap.yaml");
+  write(storymap, readFileSync(storymap, "utf8").replace("key: CHK\n", "key: CHK\nowner: PAY\n"));
+  writeMapSummary(t, join(t, "maps/chk"));
+  commitAll(t, "team owns the map");
 }

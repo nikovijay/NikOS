@@ -154,12 +154,12 @@ function teamSettings(root: string): { resolved: Resolved; problems: string[] } 
     }
   })();
   const homed = !!team?.home;
-  // A group the team takes work from has its copy in .nikos/assigned; any other plan it joined is in .nikos/upstream.
+  // Each plan the team joins is read from its copy in .nikos/upstream.
   const starts = homed
-    ? [{ repo: team!.home!, dir: team!.groups.some((g) => g.repo === team!.home) ? join(root, ".nikos", "assigned", ...team!.home!.split("/")) : join(cache, ...team!.home!.split("/")) }]
-    : (team?.groups ?? []).map((g) => ({ repo: g.repo, dir: join(root, ".nikos", "assigned", ...g.repo.split("/")) }));
+    ? [{ repo: team!.home!, dir: join(cache, ...team!.home!.split("/")) }]
+    : (team?.groups ?? []).map((g) => ({ repo: g.repo, dir: join(cache, ...g.repo.split("/")) }));
   const groups = starts.filter((s) => store().exists(s.dir));
-  if (homed && !groups.length) problems.push(`home ${team!.home} isn't synced yet, so its locks don't apply here: run nikos sync`);
+  if (homed && !groups.length) problems.push(`home ${team!.home} isn't synced yet, so its locks don't apply here: run nikos planning sync`);
   // Each level once, top-down: a group copy's upstream (the company) before the copy itself.
   const levels: { dir: string; name: string }[] = [];
   const visiting = new Set<string>();

@@ -2,7 +2,6 @@ import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
 import { checkHash } from "../planning/model.js";
-import { holderOf, loadMapData, readAssignments } from "../lib/assignments.js";
 import { authoringMap, homeOf, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 import { createStoryState, loadStates, perStory, statePath, storyStatePath, type StoryHome } from "../lib/state-files.js";
@@ -177,15 +176,13 @@ function dropState(home: StoryHome, id: string): void {
 
 /**
  * Remove a story that has never been started: its feature, its place in its release, and its state.
- * Refused when a team holds it (unassign first), or when any work is recorded against it.
+ * Refused when any work is recorded against it.
  */
 export function removeStory(dir: string, input: { map?: string; id: string }, expect?: string): { removed: string; validation: ValidationResult } {
   const ref = authoringMap(dir, input.map);
   const file = featureOf(ref, input.id);
   if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
   checkHash(input.id, read(file), expect);
-  const holder = holderOf(readAssignments(ref.dir), loadMapData(ref.dir), input.id);
-  if (holder) throw new Error(`${input.id} is assigned to ${holder.team}: unassign it first`);
   const status = loadStates(homeOf(ref))[input.id]?.status ?? "todo";
   if (status !== "todo") throw new Error(`${input.id} has work done: remove it from the CLI`);
   const mapPath = join(ref.dir, "storymap.yaml");

@@ -12,7 +12,7 @@ import { setState } from "../src/commands/state";
 import { validate } from "../src/commands/validate";
 import { verify } from "../src/commands/verify";
 import { storyMapClash } from "../src/lib/team";
-import { assignedMaps, keyOf, ownMapsOf, storyMapFor } from "../src/lib/maps";
+import { keyOf, ownMapsOf, storyMapFor } from "../src/lib/maps";
 import { git, write, commitAll, teamRepo } from "./team-fixture";
 
 // The runner is a stand-in here: each test says whether the scenarios pass.
@@ -166,10 +166,11 @@ describe("a team's own map", () => {
     expect(() => storyMapFor(t, { story: "WEB-INB-9" })).toThrow("is not in maps/inb/features");
   });
 
-  it("has no copies until it takes stories from a source", () => {
+  it("is the team's only map: a team with one map of its own needs no --map", () => {
     const t = teamWithKey();
     newMap({ bet: "faster-checkout", key: "INB" }, t);
-    expect(assignedMaps(t)).toEqual([]);
+    expect(ownMapsOf(t).map((r) => r.id)).toEqual(["inb"]);
+    expect(storyMapFor(t).id).toBe("inb");
   });
 });
 

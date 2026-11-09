@@ -29,9 +29,7 @@ import { help as planningHelp, runPlanning } from "./planning/cli.js";
 import { help as planRepoHelp, runPlanRepo } from "./plan/cli.js";
 import { runServeCommand } from "./commands/serve.js";
 import { runApply } from "./planning/apply.js";
-import { runAssign } from "./commands/assign.js";
 import { runTeam } from "./commands/team.js";
-import { runTeamSync } from "./team/sync.js";
 import { isTeamRepo, openTeam, TEAM_REPO_STORIES, teamOptedIn } from "./lib/team.js";
 import { store } from "./lib/store.js";
 import { join } from "node:path";
@@ -71,15 +69,12 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   planning: runPlanning,
   serve: runServeCommand,
   apply: runApply,
-  assign: runAssign,
   team: runTeam,
-  sync: runTeamSync,
 };
 
 /** Why a team repo refuses a command that writes a group's stories or plan: each names where the work is done. */
 function teamRefusal(cmd: string): string {
   if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release" || cmd === "map") return TEAM_REPO_STORIES;
-  if (cmd === "assign") return "this is a team repo: assignments are made in the group repo";
   if (cmd === "apply") return "this is a team repo: changes are made in the group repo";
   if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
   return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
@@ -92,8 +87,6 @@ function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
   if (cmd === "join") return rest.includes("--home") || teamOptedIn(dir);
   if (!teamOptedIn(dir)) return false;
   if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
-  // assign takes a team's own maps only: a copy's assignments are refused where they're made (assign.ts).
-  if (cmd === "assign") return true;
   // A team writes stories and maps of its own; a copy of a group's or another team's map is refused where it's reached (authoringMap).
   if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release") return true;
   if (cmd === "map") return rest[0] === "new";
@@ -101,7 +94,7 @@ function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
 }
 
 /** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
-const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "assign", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout", "apply"]);
+const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout", "apply"]);
 
 const help = `nikos: plan the work, write it as stories, and check each story is really done
 
@@ -168,13 +161,9 @@ Building and checking stories
                    (GitHub Actions or GitLab CI; --github, --gitlab)
 
 Teams
-  assign "<team>" --repo <path|.>  Give a team all or part of a story map this repo owns
-                   (--activities, --releases or --stories; --map, --include-done, --url, --ref)
   team init|join|member|show  Set up a team repo and the repos it takes work from.
                    For example: team init --repo owner/repo --key WEB, team join <group repo>,
                    team member add "<name>". Set its home with nikos join <plan> --home
-  sync             In a team repo: fetch the stories given to this team, read-only, into
-                   .nikos/assigned/ (git ignores it)
 
 Decisions, exports and tools
   decide "<title>" Record a decision in decisions.md (--why, --story, --category, --supersedes)

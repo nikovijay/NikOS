@@ -19,17 +19,6 @@ describe("team file", () => {
   });
 });
 
-describe("assignments", () => {
-  it("accepts stories alone, or the whole map", () => {
-    expect(schemaProblems("assignments.schema.json", [{ team: "A", repo: "acme/a", stories: ["PAY-CHK-1"] }, { team: "B", repo: "." }])).toEqual([]);
-  });
-
-  it("refuses two selectors together", () => {
-    expect(schemaProblems("assignments.schema.json", [{ team: "A", repo: "acme/a", releases: [1], activities: ["pay"] }]).length).toBeGreaterThan(0);
-    expect(schemaProblems("assignments.schema.json", [{ team: "A", repo: "acme/a", releases: [1], stories: ["PAY-CHK-1"] }]).length).toBeGreaterThan(0);
-  });
-});
-
 describe("team status and delivery approval files", () => {
   it("status refuses unknown fields and accepts the evidence shape", () => {
     expect(schemaProblems("status.schema.json", { status: "done", evidence: { run_at: "2027-01-05", runner: "cucumber", commit: "abc1234", ok: true } })).toEqual([]);

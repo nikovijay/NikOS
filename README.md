@@ -122,9 +122,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos team init\|join\|member\|show` | Make a code repo a team repo, take work from a group, manage its members ([docs/planning.md](docs/planning.md#teams)) |
-| `nikos assign "<team>" --repo <path>` | In a group repo, or a team repo for a map it owns (`--repo .` for its own share), give a team all or part of a story map |
-| `nikos map status [--map <id>] [--offline] [--json]` | In a group repo, or a team repo for a map it owns, each assigned team's status on each story: fresh or not, its delivery approval, and the owner's intent approval. Writes `maps/<key>/delivery.yaml` for the plans above |
-| `nikos sync` | In a team repo, fetch the stories assigned to it, read-only |
+| `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |

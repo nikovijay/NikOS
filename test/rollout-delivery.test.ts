@@ -6,7 +6,6 @@ import { companyInit } from "../src/commands/start";
 import { formatRollout, rollout } from "../src/planning/rollout";
 import { writeDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
 import { groupRepo, git, write, commitAll } from "./team-fixture";
-import { assign } from "../src/commands/assign";
 
 const NOW = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
@@ -22,6 +21,7 @@ function setup(summary: DeliverySummary["stories"]) {
   git(grp, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
   write(join(grp, "maps/hr/storymap.yaml"), "format_version: 1\nproject: hr\nkey: HR\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-HR-1]\n");
   write(join(grp, "maps/hr/state.yaml"), "format_version: 1\nstories:\n  PAY-HR-1: { status: done }\n");
+  writeDeliverySummary(join(grp, "maps/hr"), { format_version: 1, map: "hr", owner: "PAY", read_at: NOW, stories: [{ id: "PAY-HR-1", status: "done", approval: "none", read_at: NOW }] });
   writeDeliverySummary(join(grp, "maps/chk"), { format_version: 1, map: "chk", owner: "PAY", read_at: NOW, stories: summary });
   commitAll(grp, "map and summary");
 
@@ -32,7 +32,6 @@ function setup(summary: DeliverySummary["stories"]) {
 
 const story = (id: string, status: string, approval: "none" | "approved" = "none") => ({
   id,
-  team: "acme/checkout-web",
   status,
   approval,
   ...(approval === "approved" ? { approved_by: "Ana Example" } : {}),
@@ -81,16 +80,5 @@ describe("a rollout's delivery from the owner's summaries", () => {
     expect(teamPlan.next).toBeUndefined();
     expect(teamPlan.blockers).toEqual([]);
     expect(formatRollout(rollout(co))).not.toMatch(/waiting on design|next: WEB-INB/);
-  });
-
-  it("a team that was never fetched changes nothing above, and nothing is fetched for it", () => {
-    const { co, grp } = setup([story("PAY-CHK-1", "done", "approved"), story("PAY-CHK-2", "in_progress"), story("PAY-CHK-3", "todo")]);
-    // The group assigns chk to a team whose repo was never created: the owner's summary still says the delivery.
-    assign(grp, "Checkout web", { repo: "acme/no-such-team", releases: [1], map: "chk" });
-    commitAll(grp, "assign");
-    const r = rollout(co);
-    const payments = r.plans.find((p) => p.name === "Payments")!;
-    expect(payments.delivery).toMatchObject({ stories: 4, done: 2, approved: 1, inProgress: 1 });
-    expect(JSON.stringify(r)).not.toMatch(/no-such-team/);
   });
 });

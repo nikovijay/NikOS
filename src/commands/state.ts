@@ -168,7 +168,7 @@ export function runState(args: string[]): number {
     console.error(`✗ ${e.message}`);
     return 1;
   }
-  const v = validate(opt("dir") ?? process.cwd(), opt("map"), { remote: false });
+  const v = validate(opt("dir") ?? process.cwd(), opt("map"));
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
   // Only the story this command changed is named: another story's lapse is still in nikos validate, not repeated on every set.
   for (const w of v.errors.filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);

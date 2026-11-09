@@ -40,8 +40,7 @@ export const NOTE = {
   noObjective: "No objective",
   ladder: "Highlighted: the path from this plan's key results up to the company.",
   okrsFoot: "Links, not totals. Each figure comes from its own plan.",
-  groupFoot: "Status is from each team's last nikos map status run on this machine (fetched {date}). Nothing is fetched on this page.",
-  groupNotFetched: "Status is from each team's last nikos map status run on this machine. No team has been read yet. Nothing is fetched on this page.",
+  groupFoot: "Status is from each map's delivery.yaml, as nikos map status last wrote it. Nothing is fetched on this page.",
   emptyAbove: "No company key results loaded. Run nikos planning sync to refresh the copies.",
   topLevel: "This is the top plan: nothing sits above it.",
   noOrigin: "This plan has no origin remote, so group bets aligned to its bets can't be matched here. Add the origin remote, then sync again.",
@@ -168,9 +167,8 @@ export function okrLadder(data: any) {
   };
 }
 
-/** The group page: each bet with its aligned-to and delivery, and every story map with its parts and story rows. */
+/** The group page: each bet with its aligned-to and delivery, and every story map with its story rows. */
 export function betsAndStoryMaps(data: any) {
-  const fetched: string | null = data.teamIndex?.fetched ?? null;
   return {
     bets: (data.bets ?? []).map((b: any) => ({
       id: b.id,
@@ -184,9 +182,8 @@ export function betsAndStoryMaps(data: any) {
       bet: m.bet ?? null,
       key: m.key,
       title: m.title,
-      parts: m.parts ?? [],
       stories: m.stories ?? [],
     })),
-    foot: fetched ? NOTE.groupFoot.replace("{date}", fetched) : NOTE.groupNotFetched,
+    foot: NOTE.groupFoot,
   };
 }

@@ -271,7 +271,7 @@ describe("the plan", () => {
     expect(text).toContain("(bet: checkout-speed");
     expect(text).toContain("planning/plan.yaml");
     expect(text).toContain("level team -> group, key PAY (name and pillars kept, period Q4 2026)");
-    expect(text).toMatch(/maps\/ht\/assignments\.yaml\s+team "hello-todo", repo "\."/);
+    expect(text).not.toContain("assignments.yaml");
     expect(text).toContain("Ids (--rename-ids): 4 ids");
     expect(text).toContain("HT-1 -> PAY-HT-1");
     expect(text).toContain("ticket values kept: PAY-123");
@@ -353,7 +353,7 @@ describe("applying the plan", () => {
     expect(existsSync(join(dir, "maps/ht/state/PAY-HT-1.yaml"))).toBe(true);
     expect(readFileSync(join(dir, "maps/ht/approvals/PAY-HT-1.yaml"), "utf8")).toContain("by: Ada Lovelace");
     expect(readFileSync(join(dir, "maps/ht/plans/PAY-HT-12.v1.md"), "utf8")).toContain("PAY-HT-12 plan");
-    expect(readFileSync(join(dir, "maps/ht/assignments.yaml"), "utf8")).toContain("repo: .");
+    expect(existsSync(join(dir, "maps/ht/assignments.yaml"))).toBe(false);
     expect(readFileSync(join(dir, "planning/decisions.md"), "utf8")).toContain("(PAY-HT-12)");
   });
 
@@ -452,7 +452,7 @@ describe("applying the plan", () => {
     expect(hashOf(dir)).toBe(before);
   });
 
-  it("a team repo joins the migrated group and reads its one assigned map", async () => {
+  it("a team repo joins the migrated group", async () => {
     const dir = legacyRepo();
     await migrateMaps(dir, { ...yes, commit: true });
     // The group's main branch is what a team reads: merge the migration first, as the person would.
@@ -461,18 +461,17 @@ describe("applying the plan", () => {
     const team = mkdtempSync(join(tmpdir(), "nikos-team-after-"));
     teamInit(team, { repo: "acme/hello-todo-web", name: "Hello web" });
     const joined = teamJoin(team, "acme/hello-todo", { url: dir });
-    expect(joined.stories).toBe(0);
-    expect(joined.unresolved).toBeUndefined();
+    expect(joined.repo).toBe("acme/hello-todo");
   });
 
-  it("the plan names each file it creates: the plan, a stub bet, and the group's assignment", () => {
+  it("the plan names each file it creates: the plan and a stub bet", () => {
     const dir = legacyRepo({ storymap: STORYMAP.replace("    bets: [checkout-speed]\n", "") });
     const plan = planMapsMigration(dir, { key: "HT", group: "PAY", bet: "faster-checkout", stub: true, renameIds: true, period: "Q4 2026", name: "Hello Todo", team: "hello-todo" });
     const text = renderPlan(plan, true).join("\n");
     expect(text).toMatch(/^nikos migrate maps: intent\/ -> maps\/ht\/ under group PAY \(dry run: nothing written\)$/m);
     expect(text).toMatch(/^  planning\/plan\.yaml\s+level team -> group, key PAY \(name and pillars kept, period Q4 2026\)$/m);
     expect(text).toMatch(/^  planning\/bets\/faster-checkout\.md\s+\(stub, from --new-bet\)$/m);
-    expect(text).toMatch(/^  maps\/ht\/assignments\.yaml\s+team "hello-todo", repo "\."$/m);
+    expect(text).not.toMatch(/assignments\.yaml/);
   });
 });
 
@@ -482,7 +481,7 @@ describe("the apply path, directly", () => {
     const plan = planMapsMigration(dir, { key: "HT", group: "PAY", bet: "checkout-speed", stub: false, renameIds: true, period: "Q4 2026", name: "Hello Todo", team: "t" });
     expect(targetProblems(dir, plan)).toEqual([]);
     applyMapsPlan(dir, plan, { git: true });
-    expect(existsSync(join(dir, "maps/ht/assignments.yaml"))).toBe(true);
+    expect(existsSync(join(dir, "maps/ht/assignments.yaml"))).toBe(false);
     expect(existsSync(join(dir, "intent"))).toBe(false);
   });
 });

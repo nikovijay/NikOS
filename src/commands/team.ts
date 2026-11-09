@@ -1,19 +1,16 @@
 // `nikos team`: a team repo's identity and members. `init` makes a code repo a team repo, `join`
 // takes work from a group repo, `member` edits who is on the team, and `show` says where the team
-// stands. The work itself is fetched by `nikos sync` (src/team/sync.ts).
-import { rmSync } from "node:fs";
+// stands. A team's stories are its own maps, which its delivery.yaml files say how far along they are.
 import { basename, join, resolve } from "node:path";
 import { isSeq, parse, stringify, type Document, type YAMLSeq } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
-import { assignedMaps, keyOf, ownMapsOf } from "../lib/maps.js";
+import { ownMapsOf } from "../lib/maps.js";
 import { ownRepo } from "../lib/git.js";
 import { read } from "../lib/project.js";
 import { store } from "../lib/store.js";
-import { ignoreAssigned, isTeamRepo, openTeam, parseTeam, saveTeam, teamDocument, TEAM_FILE, clashingGroups, copyDirOf, type TeamMember } from "../lib/team.js";
-import { storyFiles } from "../lib/state-files.js";
+import { isTeamRepo, openTeam, parseTeam, saveTeam, teamDocument, TEAM_FILE, clashingGroups, type TeamMember } from "../lib/team.js";
 import { repoEntry } from "../planning/upstream.js";
-import { dropFromLock, groupStatus, teamSync } from "../team/sync.js";
-import { copyKeys, KEY, keyClash } from "../lib/keys.js";
+import { KEY } from "../lib/keys.js";
 
 /** The team commands that change or read nikos.team.yaml need one. Named once, so each refuses alike. */
 const NO_TEAM = "run nikos team init first";
@@ -57,7 +54,6 @@ export function teamInit(dir: string, opts: { repo?: string; name?: string; key?
   const text = `# The team: who is on it, its key, and the repos it takes work from. Edit with nikos team.\n${stringify({ format_version: version, name, repo, ...key, groups: [], members: [] })}`;
   parseTeam(text); // refuses a bad name before anything is written
   store().write(join(root, TEAM_FILE), text, { create: true });
-  ignoreAssigned(root);
   return { repo, name };
 }
 
@@ -80,10 +76,10 @@ function listIn(doc: Document, key: string): YAMLSeq {
 }
 
 /**
- * `nikos team join <repo>`: add a source to take stories from, then fetch it. A source is a group
- * plan or another team that owns maps. One that isn't a usable source is left out.
+ * `nikos team join <repo>`: add a source the team takes work from. Nothing is fetched: a team's
+ * stories come from its own maps.
  */
-export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?: string; url?: string } = {}): { repo: string; commit?: string; stories: number; unresolved?: string } {
+export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?: string; url?: string } = {}): { repo: string } {
   const root = resolve(dir);
   requireTeam(root);
   if (!REPO_PATH.test(repo)) throw new Error(`'${repo}' is ${NOT_A_REPO}`);
@@ -94,40 +90,10 @@ export function teamJoin(dir: string, repo: string, opts: { ref?: string; host?:
   if (clash) throw new Error(`${clash[0]} and ${clash[1]} can't both be groups: one path sits inside the other`);
   const entry = { repo, ...(opts.ref ? { ref: opts.ref } : {}), ...(opts.host ? { host: opts.host } : {}), ...(opts.url ? { url: opts.url } : {}) };
   repoEntry(entry, TEAM_FILE); // throws with the reason, before the file changes
-
-  const before = read(join(root, TEAM_FILE));
   const doc = teamDocument(root);
   listIn(doc, "groups").add(block(doc.createNode(entry)));
   saveTeam(root, doc);
-
-  // Undo the join when the group can't be used: the team file, the copy, its lock entry, and any
-  // status mark the first sync wrote for a story another team holds.
-  const marks = new Map(storyFiles(join(root, "status")).map((f) => [f.path, read(f.path)]));
-  const undo = () => {
-    store().write(join(root, TEAM_FILE), before);
-    rmSync(copyDirOf(root, repo), { recursive: true, force: true });
-    dropFromLock(root, repo);
-    for (const [path, text] of marks) store().write(path, text);
-  };
-  let got;
-  try {
-    got = teamSync(root, { only: repo }).groups.find((g) => g.repo === repo);
-  } catch (err) {
-    undo();
-    throw err;
-  }
-  if (got?.invalid) {
-    undo();
-    throw new Error(`${repo} ${got.unresolved}`);
-  }
-  // Its key must be unused across the chain: this team's, and the copies it reads as sources or joined plans (amendment D5).
-  const key = got?.commit ? keyOf(copyDirOf(root, repo)) : undefined;
-  const problem = key ? keyClash(root, "team", repo, key, [join(root, ".nikos", "assigned"), join(root, ".nikos", "upstream")]) : undefined;
-  if (problem) {
-    undo();
-    throw new Error(problem);
-  }
-  return { repo, commit: got?.commit, stories: got?.stories ?? 0, unresolved: got?.unresolved };
+  return { repo };
 }
 
 /** `nikos team member add`: a name, and optionally a role and a handle. Names only: no email addresses. */
@@ -158,8 +124,8 @@ export function memberRemove(dir: string, name: string): void {
   saveTeam(root, doc);
 }
 
-/** `nikos team show`: the team, its members, each group's last sync, and the stories held per map. */
-export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[] {
+/** `nikos team show`: the team, its members, the repos it takes work from, and its own maps. */
+export function teamShow(dir: string): string[] {
   const root = resolve(dir);
   requireTeam(root);
   const team = openTeam(root);
@@ -167,15 +133,7 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
   out.push(team.members.length ? "Members:" : "Members: none yet (nikos team member add)");
   for (const m of team.members) out.push(`  ${m.name}${m.role ? `, ${m.role}` : ""}${m.handle ? ` (@${m.handle})` : ""}`);
   out.push(team.groups.length ? "Takes work from:" : ownMapsOf(root).length ? "Takes work from: no other repo" : "Takes work from: none yet (nikos team join <group or team repo>)");
-  for (const g of team.groups) {
-    const st = groupStatus(root, g, { remote: !opts.offline });
-    if (!st.synced) {
-      out.push(`  ${g.repo}: not synced (nikos sync)`);
-      continue;
-    }
-    out.push(`  ${g.repo}: synced ${st.entry!.commit.slice(0, 7)} ${st.entry!.synced}`);
-    if (st.moved) out.push(`    stale: group moved since the last sync (nikos sync)`);
-  }
+  for (const g of team.groups) out.push(`  ${g.repo}`);
   const own = ownMapsOf(root);
   if (own.length) {
     out.push("Own maps:");
@@ -183,15 +141,6 @@ export function teamShow(dir: string, opts: { offline?: boolean } = {}): string[
       const map = (parse(read(join(m.dir, "storymap.yaml"))) ?? {}) as { key?: string; releases?: { stories?: string[] }[] };
       const count = (map.releases ?? []).reduce((n, r) => n + (r.stories?.length ?? 0), 0);
       out.push(`  ${team.key}-${map.key ?? m.id}: ${count} ${count === 1 ? "story" : "stories"}`);
-    }
-  }
-  const maps = assignedMaps(root);
-  if (maps.length) {
-    out.push("Assigned:");
-    for (const m of maps) {
-      const map = (parse(read(join(m.dir, "storymap.yaml"))) ?? {}) as { key?: string; releases?: { stories?: string[] }[] };
-      const count = (map.releases ?? []).reduce((n, r) => n + (r.stories?.length ?? 0), 0);
-      out.push(`  ${keyOf(m.copyRoot!)}-${map.key ?? m.id}: ${count} ${count === 1 ? "story" : "stories"}`);
     }
   }
   return out;
@@ -202,7 +151,7 @@ const USAGE = `Usage:
   nikos team join <group repo> [--ref <branch>] [--host <host> | --url <git url>] [--dir <path>]
   nikos team member add "<name>" [--role "<role>"] [--handle <username>] [--dir <path>]
   nikos team member remove "<name>" [--dir <path>]
-  nikos team show [--offline] [--dir <path>]`;
+  nikos team show [--dir <path>]`;
 
 export function runTeam(args: string[]): number {
   const [sub, ...rest] = args;
@@ -224,10 +173,7 @@ export function runTeam(args: string[]): number {
     } else if (sub === "join" && positional[0]) {
       if (rest.includes("--home")) throw new Error("a team's home is set with nikos join <plan> --home: nikos team join takes work from a group, and doesn't set one");
       const r = teamJoin(dir, positional[0], { ref: flag("ref"), host: flag("host"), url: flag("url") });
-      if (r.unresolved) {
-        console.error(`✗ Couldn't reach ${r.repo}: ${r.unresolved}\n  It's saved in ${TEAM_FILE}. Check the repo path, or give --url or --host. Once it can be reached, run: nikos sync`);
-        return 1;
-      } else console.log(`✓ Joined ${r.repo} (at ${r.commit?.slice(0, 7)}). ${r.stories} ${r.stories === 1 ? "story is" : "stories are"} given to this team.`);
+      console.log(`✓ Joined ${r.repo}`);
     } else if (sub === "member" && positional[0] === "add" && positional[1]) {
       const m = memberAdd(dir, positional[1], { role: flag("role"), handle: flag("handle") });
       console.log(`✓ ${m.name} added${m.role ? ` as ${m.role}` : ""}`);
@@ -235,7 +181,7 @@ export function runTeam(args: string[]): number {
       memberRemove(dir, positional[1]);
       console.log(`✓ ${positional[1]} removed`);
     } else if (sub === "show") {
-      console.log(teamShow(dir, { offline: rest.includes("--offline") }).join("\n"));
+      console.log(teamShow(dir).join("\n"));
     } else {
       console.error(USAGE);
       return 1;

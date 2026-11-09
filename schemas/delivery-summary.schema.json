@@ -18,7 +18,6 @@
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*-[0-9]+$" },
-          "team": { "type": "string", "minLength": 1 },
           "status": { "type": "string", "minLength": 1 },
           "approval": { "enum": ["none", "approved"] },
           "approved_by": { "type": "string", "minLength": 1, "maxLength": 80 },

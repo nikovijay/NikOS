@@ -234,8 +234,8 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     out.push(`✓ Made ${a.name} a team repo (${TEAM_FILE})`);
     if (!own) next.push(`Put this repo on GitHub or GitLab. Then tell nikOS its path with ${cli} team init --repo and the path, like ${cli} team init --repo acme/${slugify(basename(a.dir))}`);
     if (a.group) {
-      const j = teamJoin(a.dir, a.group);
-      out.push(j.unresolved ? `! Couldn't reach ${a.group} yet (${j.unresolved}). It's saved, and ${cli} sync fetches its work once it can.` : `✓ Takes work from ${a.group}`);
+      teamJoin(a.dir, a.group);
+      out.push(`✓ Takes work from ${a.group}`);
     } else next.push(`Link it to its group: ${cli} team join and the group repo's path, like ${cli} team join acme/checkout-group`);
   }
   if (a.kind !== "product" && a.kind !== "team") {
@@ -251,10 +251,9 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     if (a.kind === "group") {
       if (a.sameTeam) {
         next.push(
-          `Make a bet, a story map for it, and give the map to this repo's team. Use your own names in place of faster-checkout and CHK:`,
+          `Make a bet, and a story map for it. Use your own names in place of faster-checkout and CHK:`,
           `     ${cli} planning bet new faster-checkout`,
           `     ${cli} map new --bet faster-checkout --key CHK`,
-          `     ${cli} assign "${a.name}" --repo .`,
         );
       } else next.push(`Teams join later: each team runs ${cli} team init in its own repo, then ${cli} team join with this repo's path.`);
       next.push(`Link it to the plan above: ${cli} join and that plan's repo path, like ${cli} join acme/payments-plan`);

@@ -82,11 +82,11 @@ describe("ci setup", () => {
 });
 
 describe("ci in a team repo", () => {
-  it("fetches the assigned stories before it validates and verifies them", () => {
+  it("validates and verifies its own maps, with no sync step", () => {
     const workflow = githubWorkflow("js", teamRepo());
-    const sync = workflow.search(/nikos@[^\s]+ sync/);
-    expect(sync).toBeGreaterThan(-1);
-    expect(sync).toBeLessThan(workflow.search(/nikos@[^\s]+ validate/));
+    expect(workflow).not.toMatch(/nikos@[^\s]+ sync/);
+    expect(workflow.search(/nikos@[^\s]+ validate/)).toBeGreaterThan(-1);
+    expect(workflow.search(/nikos@[^\s]+ verify/)).toBeGreaterThan(-1);
   });
 });
 

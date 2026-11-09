@@ -1,20 +1,15 @@
 // The one write path. Every change the dashboard, the change file (nikos apply) and the chat
 // makes goes through runOp: it checks the op's name, the level of the plan, and the ids, then calls
 // the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
-// planning, story map and assignment files, so nothing is written until a person says so.
+// planning and story map files, so nothing is written until a person says so.
 import { join, relative, resolve, sep } from "node:path";
 import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
 import { newActivity, newStep, renameActivity, renameStep } from "../commands/step.js";
 import { newStory, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
-import { assign, unassign } from "../commands/assign.js";
-import { homeOf, resolveStoryMap, mapDirs } from "../lib/maps.js";
+import { resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
 import { isTeamRepo } from "../lib/team.js";
-import { isDone } from "../lib/project.js";
-import { loadMapData, readAssignments, holderOf } from "../lib/assignments.js";
-import { loadStates } from "../lib/state-files.js";
-import { readTeamIndex, readTeamStory } from "../team/status.js";
 import { addDownstream } from "./rollout.js";
 import { setSetting } from "../lib/settings.js";
 import { checkIn, editKr, newKr, reviseTarget } from "./krs.js";
@@ -49,8 +44,6 @@ export type OpName =
   | "release.remove"
   | "release.reorder"
   | "map.new"
-  | "assign"
-  | "unassign"
   | "setting.set"
   | "downstream.add";
 
@@ -83,8 +76,6 @@ const GROUP: OpName[] = [
   "release.remove",
   "release.reorder",
   "map.new",
-  "assign",
-  "unassign",
 ];
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
@@ -112,8 +103,6 @@ const NAMES: Record<OpName, true> = {
   "release.remove": true,
   "release.reorder": true,
   "map.new": true,
-  assign: true,
-  unassign: true,
   "setting.set": true,
   "downstream.add": true,
 };
@@ -151,8 +140,6 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "release.remove": ["map"],
   "release.reorder": ["to", "map"],
   "map.new": ["bet", "key", "map"],
-  assign: ["name", "activities", "releases", "stories", "replace", "map"],
-  unassign: ["stories", "activities", "releases", "map"],
   "setting.set": ["key", "value"],
   "downstream.add": ["name", "repo", "home"],
 };
@@ -160,7 +147,7 @@ const ARGS: Partial<Record<OpName, string[]>> = {
 /**
  * Ops that edit a file that already exists. In a dry run they need the expect the snapshot gave, so
  * a change made against an older version is skipped. Creates don't carry one (their ids are made
- * from the current files). assign and unassign can't be checked from a page yet, so they're not here.
+ * from the current files).
  */
 export const EDITS = new Set<OpName>([
   "checkin",
@@ -198,7 +185,6 @@ const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : unde
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
 const refs = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === "string" && v ? [v] : []);
 /** A selector list. Empty means no selector at all, the whole part (the form's blank field, and the CLI's no-flag case). */
-const list = (v: unknown): string[] | undefined => (Array.isArray(v) && v.length ? v.map(String) : undefined);
 
 /** Refuse an op before anything is read or written: unknown name, team repo, level, and ids. */
 function precheck(root: string, op: Op): void {
@@ -226,18 +212,6 @@ function checkFile(abs: string, label: string, expect: string | undefined): void
 function checkStoryMap(root: string, map: string | undefined, expect: string | undefined): void {
   const ref = resolveStoryMap(root, map);
   checkFile(join(ref.dir, "storymap.yaml"), `maps/${ref.id}/storymap.yaml`, expect);
-}
-
-/** Whether a story has work done in the team that holds it (group state when no team holds it). */
-function doneInTeam(root: string, map: string | undefined, id: string): boolean {
-  const ref = resolveStoryMap(root, map);
-  const holder = holderOf(readAssignments(ref.dir), loadMapData(ref.dir), id);
-  // The owner's own state: at the team root for a team's own map, in the map's folder for a group's.
-  if (!holder || holder.repo === ".") return isDone(loadStates(homeOf(ref))[id]?.status);
-  const got = readTeamStory(root, holder.repo, id, readTeamIndex(root));
-  // No good copy of the team's: fall back to the group's own state, as assign does.
-  if (got) return isDone(got.status?.status);
-  return isDone(loadStates(homeOf(ref))[id]?.status);
 }
 
 /** Run one op against the store in use. Throws the command's own message. */
@@ -326,11 +300,8 @@ function apply(root: string, op: Op): string {
       return `Added ${r.id} to release ${r.release}`;
     }
     case "story.rename": {
-      if (doneInTeam(root, map, t.story) && a.confirm !== true) {
-        throw new Error(`${t.story} is done in its team's copy: renaming it can leave that copy changed or behind. Confirm the rename to go ahead`);
-      }
       renameStory(root, { map, id: t.story, title: String(a.title ?? "") }, expect);
-      return `Renamed ${t.story}. Team copies may show it as changed or behind until they sync`;
+      return `Renamed ${t.story}`;
     }
     case "story.move":
       checkStoryMap(root, map, expect);
@@ -373,24 +344,6 @@ function apply(root: string, op: Op): string {
       const r = newMap({ bet: str(a.bet), key: str(a.key) }, root);
       return `Created maps/${r.id} for bet ${a.bet}`;
     }
-    case "assign": {
-      checkFile(join(resolveStoryMap(root, map).dir, "assignments.yaml"), "assignments.yaml", expect);
-      const r = assign(root, String(a.name ?? ""), {
-        repo: t.team,
-        activities: list(a.activities),
-        releases: list(a.releases)?.map(Number),
-        stories: list(a.stories),
-        map,
-        includeDone: false,
-        replace: a.replace === true,
-      });
-      return `${r.team} now has ${r.stories} ${r.stories === 1 ? "story" : "stories"} in ${r.map}`;
-    }
-    case "unassign": {
-      checkFile(join(resolveStoryMap(root, map).dir, "assignments.yaml"), "assignments.yaml", expect);
-      const r = unassign(root, { team: t.team, map, stories: list(a.stories), activities: list(a.activities), releases: list(a.releases)?.map(Number) });
-      return `Took ${r.removed.length} ${r.removed.length === 1 ? "story" : "stories"} from ${r.team}`;
-    }
     case "setting.set": {
       const key = String(a.key ?? "");
       setSetting(root, key, a.value);
@@ -405,7 +358,7 @@ function apply(root: string, op: Op): string {
 }
 
 /** The text of the files a dry run needs: planning, the story maps, settings, and the copies of other plans. */
-const SNAPSHOT = ["planning", "maps", "intent", "nikos.settings.yaml", "nikos.team.yaml", ".nikos/upstream", ".nikos/teams"];
+const SNAPSHOT = ["planning", "maps", "intent", "nikos.settings.yaml", "nikos.team.yaml", ".nikos/upstream"];
 
 function snapshotFiles(root: string): Record<string, string> {
   const out: Record<string, string> = {};

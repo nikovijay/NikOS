@@ -11,7 +11,9 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { renderMap, storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { featureOf } from "../commands/story.js";
 import { BET_ID } from "../lib/bets.js";
-import { mapDirs, resolveStoryMap } from "../lib/maps.js";
+import { keyOfMap, mapDirs, resolveStoryMap } from "../lib/maps.js";
+import { loadMapData, mapStoryIds } from "../lib/map-data.js";
+import { readDeliverySummary } from "../lib/delivery-summary.js";
 import { read, walk } from "../lib/project.js";
 import { store } from "../lib/store.js";
 import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, onBaseBranch, ownRepo, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
@@ -26,18 +28,14 @@ import { alignsList } from "./levels.js";
 import { renderDashboard } from "./ui.js";
 import { runOp, vetOp, type Op } from "./ops.js";
 import { parse } from "yaml";
-import { groupMaps, mapViews, readTeamIndex } from "../team/status.js";
 import { betsAndStoryMaps, okrLadder, okrsAndBets } from "./views.js";
 
 const MAX_BODY = 100_000;
-const NOT_IN_SNAPSHOT = "not in this snapshot";
 
 /** What planningData includes. An editable snapshot is own-only unless it's --with-linked. */
 export interface DataOptions {
   ownOnly?: boolean;
   linked?: boolean;
-  /** Team status from the cache (the live dashboard). Off in snapshots. */
-  teamStatus?: boolean;
 }
 const VIEW_NAME = /^[a-z0-9-]+$/;
 const VIEW_FILE = /^[a-z0-9-]+\.html$/;
@@ -126,55 +124,49 @@ function upstreamRef(upstream: Upstream, ref: string | undefined) {
 }
 
 /**
- * The story maps of a group, each with its parts and every story's status from its team's copy.
- * Reads the cache only: nothing is fetched. A map that doesn't read is listed with its problem.
+ * The story maps of this repo, each with every story's status from the map's delivery summary
+ * (maps/<key>/delivery.yaml), so the page reads what was committed, never a live file. A map that
+ * doesn't read is listed with its problem.
  */
-function mapsData(root: string, teamStatus = true) {
+function mapsData(root: string) {
   if (!mapDirs(root).length) return [];
-  // Without team status (an editable snapshot), the parts and stories still come from the group's own files.
-  const index = teamStatus ? readTeamIndex(root) : { teams: {}, holders: {} };
-  return groupMaps(root).map((gm) => {
+  return mapDirs(root).map((dir) => {
+    const id = basename(dir);
+    const key = keyOfMap(dir) ?? id;
     try {
-      const ref = resolveStoryMap(root, gm.id);
+      const ref = resolveStoryMap(root, id);
       const sm = storyMapOfRef(ref);
       const info = new Map<string, { title: string; activity: string; release: number }>();
       for (const r of sm.releases) for (const s of r.stories) info.set(s.id, { title: s.title, activity: s.activity, release: r.number });
       for (const s of sm.unreleased) info.set(s.id, { title: s.title, activity: s.activity, release: 0 });
-      const stories = mapViews(root, gm, index).map((v) => {
-        const i = info.get(v.id);
-        const file = featureOf(ref, v.id);
+      const summary = readDeliverySummary(dir);
+      const byId = new Map((summary?.stories ?? []).map((s) => [s.id, s]));
+      const stories = mapStoryIds(loadMapData(dir)).map((sid) => {
+        const i = info.get(sid);
+        const s = byId.get(sid);
+        const file = featureOf(ref, sid);
         return {
-          id: v.id,
-          title: i?.title ?? v.id,
+          id: sid,
+          title: i?.title ?? sid,
           activity: i?.activity ?? "",
           release: i?.release ?? 0,
-          team: v.team ?? "",
-          repo: v.repo ?? "",
-          status: teamStatus ? v.status : NOT_IN_SNAPSHOT,
-          freshness: teamStatus ? v.freshness : "not-fetched",
-          reason: teamStatus ? v.reason : "Team status is not in this snapshot",
-          fetched: teamStatus ? (v.fetched ?? null) : null,
+          status: s?.status ?? "todo",
+          freshness: s ? (s.proof ?? "summary") : "no-summary",
+          reason: s?.proof ? "not current with its feature: nikos map status says what to run" : s ? "" : "no summary yet: run nikos map status",
           hash: file ? hash(read(file)) : "",
         };
       });
       return {
-        id: gm.id,
-        key: gm.key,
-        title: sm.project || gm.key,
+        id,
+        key,
+        title: sm.project || key,
         storymapHash: hash(read(join(ref.dir, "storymap.yaml"))),
         // The bet this map specs: the storymap.yaml's own bet key, so the page can show each map under its bet.
         bet: (parse(read(join(ref.dir, "storymap.yaml"))) as any)?.bet ?? null,
-        parts: gm.list.map((a) => ({
-          team: a.team,
-          repo: a.repo,
-          ...(a.activities ? { activities: a.activities } : {}),
-          ...(a.releases ? { releases: a.releases } : {}),
-          ...(a.stories ? { stories: a.stories } : {}),
-        })),
         stories,
       };
     } catch (err) {
-      return { id: gm.id, key: gm.key, title: gm.key, storymapHash: "", parts: [], stories: [], problem: (err as Error).message.split("\n")[0] };
+      return { id, key, title: key, storymapHash: "", stories: [], problem: (err as Error).message.split("\n")[0] };
     }
   });
 }
@@ -183,7 +175,7 @@ function mapsData(root: string, teamStatus = true) {
 export function planningData(root: string, mapId?: string, opts: DataOptions = {}) {
   const plan = loadPlan(root) ?? null;
   const story = storyMapOf(root, mapId);
-  // An editable snapshot embeds the other plans only with --with-linked, and never their team status.
+  // An editable snapshot embeds the other plans only with --with-linked.
   const copies = !opts.ownOnly || !!opts.linked;
   const upstream = copies ? loadUpstream(root) : [];
   const problems: string[] = [];
@@ -264,9 +256,6 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
         .map((f) => f.slice(0, -".html".length))
         .sort()
     : [];
-  const teamStatus = opts.teamStatus !== false;
-  const index = readTeamIndex(root);
-  const fetched = teamStatus ? (Object.values(index.teams).map((t) => t.fetched).filter((d): d is string => !!d).sort().at(-1) ?? null) : null;
   const out: any = {
     project: plan?.name ?? (story.project || basename(root)),
     today: today(),
@@ -278,8 +267,7 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
     upstream,
     // The plans below this one, from the copies the last rollout fetched: loading never fetches.
     downstream: copies && existsSync(join(root, "planning", "downstream.yaml")) ? rollout(root, { offline: true }) : null,
-    maps: mapsData(root, teamStatus),
-    teamIndex: { fetched },
+    maps: mapsData(root),
     views,
     problems,
   };
@@ -347,7 +335,7 @@ export function exportEditable(root: string, file: string, opts: EditableOptions
       }
     }
   }
-  const data: any = planningData(root, undefined, { ownOnly: true, linked, teamStatus: false });
+  const data: any = planningData(root, undefined, { ownOnly: true, linked });
   const source = sourceOf(root);
   const copies = linked
     ? [...new Set([...loadUpstream(root).map((u) => u.repo), ...(data.downstream?.plans ?? []).filter((p: any) => p.repo && p.state !== "unreachable").map((p: any) => p.repo as string)])]

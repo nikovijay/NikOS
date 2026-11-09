@@ -108,7 +108,7 @@ describe("the onboarding wizard", () => {
     const lines = setUp(a, dir);
     const plan = parse(readFileSync(join(dir, "planning/plan.yaml"), "utf8"));
     expect(plan).toMatchObject({ level: "group", key: "PAY", period: "Q1 2027" });
-    expect(lines.join("\n")).toContain('assign "Checkout Group" --repo .');
+    expect(lines.join("\n")).toContain("map new --bet faster-checkout --key CHK");
     expect(lines.join("\n")).toContain("planning bet new faster-checkout");
     expect(existsSync(join(dir, "intent"))).toBe(false);
     expect(existsSync(join(dir, "nikos.team.yaml"))).toBe(false);

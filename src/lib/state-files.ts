@@ -22,8 +22,6 @@ export type StoryState = {
   ticket?: string;
   tested_commit?: string;
   evidence?: { run_at: string; runner: string; commit: string; ok: boolean };
-  reassigned_to?: string;
-  reassigned_on?: string;
 };
 
 /**

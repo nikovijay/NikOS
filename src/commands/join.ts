@@ -8,7 +8,7 @@ import { REPO_PATH } from "../lib/bets.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting, type Resolved } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { keyClash } from "../lib/keys.js";
-import { isTeamRepo, openTeam, saveTeam, teamDocument, TEAM_FILE, type TeamFile } from "../lib/team.js";
+import { isTeamRepo, openTeam, saveTeam, teamDocument, type TeamFile } from "../lib/team.js";
 import { paths } from "../planning/model.js";
 import { readLock, sync, upstreamEntries, type SyncReport } from "../planning/upstream.js";
 
@@ -89,8 +89,7 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
   const fetched = !report.unresolved.some((u) => u.repo === input.repo);
   // Its key must be its own across the chain: this repo's, and the copies already here (amendment D5).
   const fetchedKey = fetched && store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml")))?.key : undefined;
-  // A team's copies are its own chain (.nikos/upstream) and the groups it takes work from (.nikos/assigned).
-  const copies = team ? [paths(root).cache, join(root, ".nikos", "assigned")] : [paths(root).cache];
+  const copies = [paths(root).cache];
   const clash = typeof fetchedKey === "string" ? keyClash(root, team ? "team" : "plan", input.repo, fetchedKey, copies) : undefined;
   if (clash) {
     undo();

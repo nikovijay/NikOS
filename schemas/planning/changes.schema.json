@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nikos.tools/schemas/planning/changes",
   "title": "nikOS planning change file",
-  "description": "The changes an editable planning export queued, for nikos apply. Operations only: no credentials and no commands. The args of downstream.add and assign can't set a url, host or ref: nikos refuses them.",
+  "description": "The changes an editable planning export queued, for nikos apply. Operations only: no credentials and no commands. The args of downstream.add can't set a url, host or ref: nikos refuses them.",
   "type": "object",
   "required": ["format", "format_version", "plan", "source", "operations"],
   "additionalProperties": false,
@@ -63,8 +63,6 @@
             "release.remove",
             "release.reorder",
             "map.new",
-            "assign",
-            "unassign",
             "setting.set",
             "downstream.add"
           ]

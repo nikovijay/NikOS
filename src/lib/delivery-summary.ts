@@ -11,8 +11,6 @@ export const DELIVERY_SUMMARY = "delivery.yaml";
 
 export interface SummaryStory {
   id: string;
-  /** Older summaries named the repo holding the story's status here. Nothing writes it now. */
-  team?: string;
   status: string;
   approval: "none" | "approved";
   approved_by?: string;

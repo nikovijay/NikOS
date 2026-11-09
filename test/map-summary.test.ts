@@ -131,7 +131,6 @@ describe("the summary a map's files say", () => {
   it("a map gets a summary only in a repo's maps/ folder: intent/ and a team's copy of a group's map get none", () => {
     expect(hasSummary({ root: "/r", dir: "/r/intent" })).toBe(false);
     expect(hasSummary({ root: "/r", dir: "/r/maps/chk", id: "chk" })).toBe(true);
-    expect(hasSummary({ root: "/r", dir: "/r/.nikos/assigned/x/maps/chk", id: "chk", team: true })).toBe(false);
     expect(hasSummary({ root: "/r", dir: "/r/maps/inb", id: "inb", team: true, own: true })).toBe(true);
   });
 });

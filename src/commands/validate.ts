@@ -7,18 +7,17 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { assignedMaps, groupKeyOf, keyOfMap, mapDirs, mapOwnerOf, NO_OWNER, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { groupKeyOf, keyOfMap, mapDirs, mapOwnerOf, NO_OWNER, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { hasSummary, summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
 import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
-import { ASSIGNMENTS, checkAssignments, loadMapData, mapStoryIds, readAssignments, storiesOf } from "../lib/assignments.js";
-import { TEAM_FILE, clashingGroups, isTeamRepo, openTeam, relPath, storyMapClash, type TeamFile } from "../lib/team.js";
+import { loadMapData } from "../lib/map-data.js";
+import { TEAM_FILE, clashingGroups, isTeamRepo, openTeam, storyMapClash, type TeamFile } from "../lib/team.js";
 import { schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
-import { groupStatus } from "../team/sync.js";
 import { upstreamEntries } from "../planning/upstream.js";
 
 export interface Issue {
@@ -93,10 +92,10 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
 
 /**
  * Check one story map: intent/, or maps/<id> with --map (or the group's only map). A team repo is
- * checked as a team: its group copies, its status and its delivery approvals.
+ * checked as a team: its own maps, its status and its delivery approvals.
  */
-export function validate(start: string, map?: string, opts: { remote?: boolean } = {}): ValidationResult {
-  if (isTeamRepo(start)) return validateTeam(start, opts);
+export function validate(start: string, map?: string): ValidationResult {
+  if (isTeamRepo(start)) return validateTeam(start);
   return validateMap(resolveStoryMap(start, map));
 }
 
@@ -133,36 +132,8 @@ export function validateGroup(root: string): ValidationResult {
     warnings.push(...r.warnings);
     stories += r.stories;
     releases += r.releases;
-    checkMapAssignments(dir, id, errors, warnings);
   }
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
-}
-
-/**
- * A map's assignments.yaml, when it has one: its schema, each selector against the map, and a
- * story held by two teams. Stories nobody holds yet are warnings: a new map has no file at all.
- */
-function checkMapAssignments(dir: string, id: string, errors: Issue[], warnings: Issue[]): void {
-  const file = `maps/${id}/${ASSIGNMENTS}`;
-  if (!store().exists(join(dir, ASSIGNMENTS))) return;
-  let list;
-  try {
-    list = readAssignments(dir);
-  } catch (err) {
-    errors.push({ file, message: (err as Error).message.replace(`${ASSIGNMENTS}: `, "") });
-    return;
-  }
-  let map;
-  try {
-    map = loadMapData(dir);
-  } catch {
-    return; // validateMap reports the storymap's own problems
-  }
-  for (const message of checkAssignments(map, list, `maps/${id}`).errors) errors.push({ file, message });
-  const held = new Set(list.flatMap((a) => storiesOf(map, a)));
-  for (const story of mapStoryIds(map)) {
-    if (!held.has(story)) warnings.push({ file, message: `${story} has no team yet`, hint: `nikos assign "<team>" --repo <path> --map ${id}` });
-  }
 }
 
 /**
@@ -194,10 +165,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
-  // A team's copy has no state.yaml or approvals, and neither has a team's own map: the team's status is checked by validateTeam.
-  const copy = ref.team === true && !ref.own;
-  const team = copy;
-
+  // A team's own map has no state.yaml: its status is checked by validateTeam.
   const storymap = loadYaml(dir, "storymap.yaml", errors);
   const state = ref.team ? undefined : loadYaml(dir, "state.yaml", errors);
 
@@ -366,7 +334,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
 
   // Approvals are optional: approvals.yaml (or approvals/<ID>.yaml) appears with the first sign-off.
   const signoffs: { id: string; a: Approval; file: string; key: string }[] = [];
-  if (!team && store().exists(join(dir, "approvals.yaml"))) {
+  if (store().exists(join(dir, "approvals.yaml"))) {
     const approvals = loadYaml(dir, "approvals.yaml", errors);
     if (approvals !== undefined && !checkApprovals(approvals)) {
       for (const e of checkApprovals.errors ?? []) {
@@ -377,7 +345,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       for (const [id, a] of Object.entries(approvals.approvals ?? {}) as [string, Approval][]) signoffs.push({ id, a, file: "approvals.yaml", key: `approvals.${id}` });
     }
   }
-  for (const f of team ? [] : storyFiles(approvalsDir(dir))) {
+  for (const f of storyFiles(approvalsDir(dir))) {
     const file = `approvals/${f.id}.yaml`;
     const a = loadYaml(dir, file, errors);
     if (a === undefined) continue;
@@ -407,7 +375,6 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     const file = featureIds.get(id)!;
     for (const dep of deps) {
       if (dep === id) errors.push({ file, message: `${id} depends on itself` });
-      else if (!featureIds.has(dep) && !mapStories.has(dep) && team) warnings.push({ file, message: `${id} depends on ${dep}, which isn't in this team's assigned stories`, hint: `nikos next doesn't wait on ${dep} here: check with the team that holds it` });
       else if (!featureIds.has(dep) && !mapStories.has(dep)) errors.push({ file, message: `@depends-${dep} names a story that doesn't exist` });
       else if (statusOf(dep) === "cancelled" && !isDone(statusOf(id))) warnings.push({ file, message: `${id} depends on ${dep}, which is cancelled`, hint: `drop the @depends-${dep} tag, or bring ${dep} back with nikos state set ${dep} todo` });
       else if ((mapStories.get(dep) ?? 0) > (mapStories.get(id) ?? Infinity)) {
@@ -440,11 +407,9 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       // The bet is optional (RFC rule 5): a map with none is valid, and counts toward no bet.
       if (typeof storymap.bet !== "string") {
         // nothing to check: the bet is optional
-      } else if (ref.team && CROSS_REF.test(storymap.bet)) {
-        // A team's map names a bet in a plan above it. Its own maps check it against the plan the team joins; a copy was checked where it was written.
-        if (ref.own) crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
-      } else if (ref.team && !ref.own && !store().isDir(betsDir)) {
-        // A copy of another team's map: the team's bets aren't copied, so its bet is checked where the map was written.
+      } else if (ref.own && CROSS_REF.test(storymap.bet)) {
+        // A team's map names a bet in a plan above it: it's checked against the plan the team joins.
+        crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
       } else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
     } else {
       if (storymap.bet !== undefined) errors.push({ file: "storymap.yaml", message: "intent/ names bets in releases: bet: is only for maps/<id>", hint: "move the bet to bets: on each release" });
@@ -499,11 +464,10 @@ function checkDeliverySummary(ref: StoryMapRef, errors: Issue[]): void {
 }
 
 /**
- * A team repo: its nikos.team.yaml, each group it takes work from (synced or not), the copies of
- * the assigned stories, and the team's own status and delivery approvals for them. remote also
- * asks each group whether it has moved on since the last sync.
+ * A team repo: its nikos.team.yaml, its own maps, and the team's own status and delivery approvals
+ * for their stories.
  */
-export function validateTeam(root: string, opts: { remote?: boolean } = {}): ValidationResult {
+export function validateTeam(root: string): ValidationResult {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   let team: TeamFile | undefined;
@@ -516,15 +480,6 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
   if (clash) errors.push({ file: "intent/", message: clash, hint: "a team's own maps go in maps/<key>/: nikos migrate maps moves intent/ there (with a team key and a home)" });
   const nested = clashingGroups(team?.groups.map((g) => g.repo) ?? []);
   if (nested) errors.push({ file: TEAM_FILE, message: `${nested[0]} and ${nested[1]} can't both be groups: one path sits inside the other` });
-
-  for (const g of team?.groups ?? []) {
-    const st = groupStatus(root, g, { remote: opts.remote });
-    if (!st.synced) {
-      warnings.push({ file: TEAM_FILE, message: `group ${g.repo}: not synced yet`, hint: "run nikos sync" });
-      continue;
-    }
-    if (st.moved) warnings.push({ file: TEAM_FILE, message: `group ${g.repo} moved since the last sync`, hint: "run nikos sync" });
-  }
 
   // A team's own maps: each is checked as a map, its folder is named for its key, and each key is used once here.
   const owner = new Map<string, string>();
@@ -541,7 +496,7 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
   }
   if ((own.length || joined.length) && team && !team.home) errors.push({ file: TEAM_FILE, message: "a team that joins a plan or owns a map needs one home (nikos join <plan repo> --home)" });
   for (const ref of own) {
-    const prefix = relPath(root, ref.dir);
+    const prefix = `maps/${ref.id}`;
     const r = validateMap(ref);
     for (const e of r.errors) errors.push({ ...e, file: `${prefix}/${e.file}` });
     for (const w of r.warnings) warnings.push({ ...w, file: `${prefix}/${w.file}` });
@@ -550,23 +505,8 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
     if (key && key.toLowerCase() !== ref.id) errors.push({ file: `${prefix}/storymap.yaml`, message: `${prefix} has key '${key}', so its folder should be maps/${key.toLowerCase()}` });
     if (key && ownKeys.has(key)) errors.push({ file: `${prefix}/storymap.yaml`, message: `${ownKeys.get(key)} and ${prefix} both use key '${key}'`, hint: "give each map a key of its own" });
     else if (key) ownKeys.set(key, prefix);
-    checkMapAssignments(ref.dir, ref.id!, errors, warnings);
     for (const f of loadMapData(ref.dir).features) {
       if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two places in this team`, hint: "keep each story in one map" });
-      owner.set(f.id, prefix);
-      hashes.set(f.id, specHash(f.text));
-    }
-  }
-
-  // Each copy is a map, checked as one; a story id can be in one copy only.
-  for (const ref of assignedMaps(root)) {
-    const prefix = relPath(root, ref.dir);
-    const r = validateMap(ref);
-    for (const e of r.errors) errors.push({ ...e, file: `${prefix}/${e.file}` });
-    for (const w of r.warnings) warnings.push({ ...w, file: `${prefix}/${w.file}` });
-    releases += r.releases;
-    for (const f of loadMapData(ref.dir).features) {
-      if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two synced copies`, hint: "run nikos sync, or assign the story to one team" });
       owner.set(f.id, prefix);
       hashes.set(f.id, specHash(f.text));
     }
@@ -582,8 +522,7 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
       continue;
     }
     if (!owner.has(f.id)) {
-      // A story that moved to another team is kept as history, marked; nothing else to say.
-      if (!entry.reassigned_to) warnings.push({ file, message: `${f.id} has status but isn't in any synced copy`, hint: "nikos sync will mark it reassigned, if another team has it" });
+      warnings.push({ file, message: `${f.id} has status but isn't in any of this team's maps`, hint: "add the story to one of the team's maps, or remove the status file" });
       continue;
     }
     const hash = hashes.get(f.id);
@@ -653,9 +592,9 @@ export function runValidate(args: string[]): number {
   const i = args.indexOf("--map");
   const start = args[0] && !args[0].startsWith("--") ? args[0] : process.cwd();
   try {
-    // A team checks its copies and status; a group with maps/ and no --map checks every map and the group's own rules.
+    // A team checks its maps and status; a group with maps/ and no --map checks every map and the group's own rules.
     const r = isTeamRepo(start)
-      ? validateTeam(start, { remote: true })
+      ? validateTeam(start)
       : !(i >= 0) && mapDirs(start).length
         ? validateGroup(start)
         : validate(start, i >= 0 ? args[i + 1] : undefined);

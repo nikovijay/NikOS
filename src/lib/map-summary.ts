@@ -4,7 +4,7 @@
 // read the committed delivery.yaml (see lib/delivery-summary.ts).
 import { basename } from "node:path";
 import { approvalLapse, loadApprovals } from "./approvals.js";
-import { loadMapData, mapStoryIds } from "./assignments.js";
+import { loadMapData, mapStoryIds } from "./map-data.js";
 import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./delivery-summary.js";
 import { keyOf, mapOwnerOf, NO_OWNER, type StoryMapRef } from "./maps.js";
 import { isDone, specHash } from "./project.js";
@@ -31,7 +31,7 @@ export interface SummaryBody {
   stories: SummaryBodyStory[];
 }
 
-/** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/, not a team's copy of a group's map). */
+/** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/). */
 export const hasSummary = (ref: StoryMapRef): boolean => !!ref.id && (!ref.team || !!ref.own);
 
 /** The owner a map's story ids and summary carry: its storymap owner, else the repo's group or team key. */

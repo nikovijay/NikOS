@@ -1,7 +1,6 @@
-// Review fixes on the team amendment: canonical bet names match across repos, a format 1 team file can't
-// carry a key, team show lists a team's own maps, assign refuses --repo . for another team, team join
-// refuses --home, a join clashes with a key in the assigned copies, a refused join keeps a plan it didn't add,
-// validate checks an own map's local bet without a bets folder, and migrate maps --help prints its usage.
+// Review fixes on the team amendment: canonical bet names match across repos, validate checks an own
+// map's local bet without a bets folder, migrate maps --help prints its usage, a planning status line
+// spaces its unit, and a team's new map needs its home.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +10,6 @@ import { parseTeam, openTeam } from "../src/lib/team";
 import { teamInit, teamShow, runTeam } from "../src/commands/team";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
-import { assign } from "../src/commands/assign";
 import { validate } from "../src/commands/validate";
 import { joinPlan } from "../src/commands/join";
 import { runMigrateMaps } from "../src/commands/migrate-maps";
@@ -50,43 +48,6 @@ describe("a bet named in another repo matches the same bet here", () => {
   });
 });
 
-describe("a team file's key needs format 2, as its home does", () => {
-  it("refuses a key in a format 1 file, and reads one in format 2", () => {
-    expect(() => parseTeam("format_version: 1\nname: Web\nrepo: acme/web\nkey: WEB\ngroups: []\nmembers: []\n")).toThrow("key needs format_version 2");
-    expect(parseTeam("format_version: 2\nname: Web\nrepo: acme/web\nkey: WEB\ngroups: []\nmembers: []\n").key).toBe("WEB");
-  });
-});
-
-describe("team show lists a team's own maps and its key and home", () => {
-  it("names the key and home in the header, and lists each own map with its stories", () => {
-    const t = teamWithMap();
-    const lines = teamShow(t, { offline: true });
-    expect(lines[0]).toBe("Web team (acme/web-team), key WEB, home acme/payments-group");
-    expect(lines).toContain("Own maps:");
-    expect(lines).toContain("  WEB-INB: 1 story");
-  });
-});
-
-describe("assign in a team repo names this team for --repo .", () => {
-  it("refuses another team's name with --repo .", () => {
-    const t = teamWithMap();
-    expect(() => assign(t, "Ledger API", { repo: ".", stories: ["WEB-INB-1"] })).toThrow("isn't this team (Web team)");
-  });
-  it("accepts this team's own name with --repo .", () => {
-    const t = teamWithMap();
-    expect(() => assign(t, "Web team", { repo: ".", stories: ["WEB-INB-1"] })).not.toThrow();
-  });
-});
-
-describe("team join refuses --home", () => {
-  it("says the home is set with nikos join, and writes nothing", () => {
-    const t = teamRepo();
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(runTeam(["join", "acme/payments-group", "--home", "--dir", t])).toBe(1);
-    expect(String(err.mock.calls[0][0])).toContain("a team's home is set with nikos join <plan> --home");
-  });
-});
-
 describe("validate checks an own map's local bet even with no planning/bets folder", () => {
   it("reports a bet the team doesn't have", () => {
     // The map names a bet the team has; the bet is then renamed in the map and the team's bets folder removed.
@@ -104,32 +65,6 @@ describe("migrate maps --help prints its usage", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     expect(await runMigrateMaps(["--help"])).toBe(0);
     expect(String(log.mock.calls[0][0])).toMatch(/^Usage: nikos migrate maps/);
-  });
-});
-
-describe("a team's join checks its key against the groups it takes work from", () => {
-  it("refuses a plan whose key a group copy already holds", () => {
-    const t = teamRepo();
-    teamInit(t, { repo: "acme/checkout-web", name: "Checkout web", key: "WEB" });
-    write(join(t, ".nikos/assigned/acme/payments/checkout-group/planning/plan.yaml"), "name: Checkout PAY\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
-    const pay = groupRepo("PAY", mkdtempSync(join(tmpdir(), "nikos-pay-")));
-    expect(() => joinPlan(t, { repo: "acme/payments-other", url: pay, home: true })).toThrow(/PAY/);
-  });
-});
-
-describe("a refused join keeps the plan it didn't add", () => {
-  it("leaves a plan that was already joined, and its copy, when a later re-run is refused", () => {
-    const t = teamRepo();
-    teamInit(t, { repo: "acme/checkout-web", name: "Checkout web", key: "WEB" });
-    const grp = groupRepo("PAY", mkdtempSync(join(tmpdir(), "nikos-keep-")));
-    joinPlan(t, { repo: "acme/payments-group", url: grp, home: true });
-    expect(openTeam(t).home).toBe("acme/payments-group");
-    // The group now names a key the chain already holds: a re-run is refused, and the copy it already had stays.
-    write(join(grp, "planning/plan.yaml"), "name: Checkout CO\nkey: CO\nperiod: Q1 2027\nlevel: group\npillars: []\n");
-    commitAll(grp, "rekey");
-    write(join(t, ".nikos/upstream/acme/company-plan/planning/plan.yaml"), "name: Acme\nkey: CO\nperiod: Q1 2027\nlevel: company\npillars: []\n");
-    expect(() => joinPlan(t, { repo: "acme/payments-group", url: grp })).toThrow();
-    expect(existsSync(join(t, ".nikos/upstream/acme/payments-group"))).toBe(true);
   });
 });
 

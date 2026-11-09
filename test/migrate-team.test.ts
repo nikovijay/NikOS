@@ -81,7 +81,7 @@ describe("nikos migrate maps in a team repo", () => {
     expect(sm).toMatchObject({ key: "HT", bet: "checkout-speed" });
     expect(sm.releases[0].stories).toEqual(["WEB-HT-1", "WEB-HT-2"]);
     expect(readFileSync(join(dir, "maps/ht/features/tasks/add-task.feature"), "utf8")).toMatch(/^@WEB-HT-1 /);
-    expect(parse(readFileSync(join(dir, "maps/ht/assignments.yaml"), "utf8"))).toEqual([{ team: "Web team", repo: "." }]);
+    expect(existsSync(join(dir, "maps/ht/assignments.yaml"))).toBe(false);
     expect(parse(readFileSync(join(dir, "nikos.team.yaml"), "utf8"))).toMatchObject({ format_version: 2, key: "WEB", home: "acme/payments-group", name: "Web team" });
     expect(existsSync(join(dir, "planning/plan.yaml"))).toBe(false);
     expect(validate(dir).errors).toEqual([]);

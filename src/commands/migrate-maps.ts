@@ -450,8 +450,6 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
     files.set(`planning/bets/${a.bet}.md`, stubBetText(a.bet, a.team));
     creates.push(`planning/bets/${a.bet}.md`);
   }
-  files.set(`${target}/assignments.yaml`, stringify([{ team: a.team, repo: "." }]));
-  creates.push(`${target}/assignments.yaml`);
 
   // Runner config, CODEOWNERS and .gitignore: rewritten only when the line is one of the known forms.
   const notChanged: string[] = [];
@@ -571,7 +569,7 @@ function otherMentions(root: string, olds: string[]): string[] {
 function groupErrors(root: string): string[] {
   try {
     return [
-      ...(isTeamRepo(root) ? validateTeam(root, {}).errors : validateGroup(root).errors).map((e) => `${e.file}: ${e.message}`),
+      ...(isTeamRepo(root) ? validateTeam(root).errors : validateGroup(root).errors).map((e) => `${e.file}: ${e.message}`),
       ...planningIssues(root)
         .filter((i) => !i.warning)
         .map((i) => `${i.file}: ${i.message}`),
@@ -631,7 +629,6 @@ export function renderPlan(p: MapsPlan, dry: boolean): string[] {
     if (p.teamLine) out.push("Changes", `  ${TEAM_FILE.padEnd(30)} ${p.teamLine}`);
   } else out.push("Creates", `  ${"planning/plan.yaml".padEnd(30)} ${planLine(p)}`);
   for (const f of p.creates) if (f.startsWith("planning/bets/")) out.push(`  ${f.padEnd(30)} (stub, from --new-bet)`);
-  out.push(`  ${`maps/${p.folder}/assignments.yaml`.padEnd(30)} ${p.owner === "team" ? `this team's share` : `team "${p.team}", repo "."`}`.replace(/ +$/, ""));
   if (p.renames.length) {
     out.push(`Ids (--rename-ids): ${count(p.renames.length, "id")}, ${count(p.edits, "edit")} in ${count(p.editedFiles, "file")}`, `  ${p.renames.map(([o, n]) => `${o} -> ${n}`).join(", ")}`);
   }
@@ -880,8 +877,8 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
     "",
     `Moved to maps/${plan.folder}/${branch ? ` on ${branch}` : ""}. ${opts.commit ? "" : "Review the changes, then commit: git add -A && git commit."}`.trim(),
     plan.owner === "team"
-      ? `This team owns maps/${plan.folder}/: its stories are ${plan.group}-${plan.key}-n. Give another team part of it with nikos assign "<team>" --repo <their repo> --stories <ids>, and that team runs nikos team join <this repo>.`
-      : `This repo holds the whole map as its own team (${plan.team}, --repo .). Once it's merged, give another team part of it with nikos assign "<team>" --repo <their repo> --stories <ids>, and that team runs nikos team join.`,
+      ? `This team owns maps/${plan.folder}/: its stories are ${plan.group}-${plan.key}-n. nikos map status writes its delivery.yaml: commit it with the stories.`
+      : `This repo holds the whole map in maps/${plan.folder}/. nikos map status writes its delivery.yaml: commit it with the stories.`,
   ];
   let committed: boolean | undefined;
   if (opts.commit) {

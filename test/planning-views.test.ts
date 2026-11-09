@@ -8,7 +8,6 @@ import { newKr } from "../src/planning/krs";
 import { planningData } from "../src/planning/server";
 import { betsAndStoryMaps, NOTE, okrLadder, okrsAndBets } from "../src/planning/views";
 import { renderDashboard } from "../src/planning/ui";
-import { assign } from "../src/commands/assign";
 import { commitAll, companyRepo, departmentRepo, groupRepo } from "./planning-fixture";
 
 describe("OKRs and bets", () => {
@@ -88,17 +87,12 @@ describe("bets and story maps", () => {
     expect(v.maps[0].stories.map((s) => s.id)).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
   });
 
-  it("with no team read yet, a team's stories say not fetched, and the footnote says nothing is fetched", () => {
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", stories: ["PAY-CHK-1"] });
-    commitAll(g, "assign");
-    const data = planningData(g);
-    expect(data.teamIndex.fetched).toBeNull();
-    const row = data.maps[0].stories.find((s) => s.id === "PAY-CHK-1")!;
-    expect(row).toMatchObject({ team: "Checkout web", repo: "acme/checkout-web" });
-    expect(row.freshness).toBe("not-fetched");
-    expect(row.reason).toContain("hasn't been fetched");
-    expect(betsAndStoryMaps(data).foot).toBe(NOTE.groupNotFetched);
+  it("a story's status is the one its map's delivery.yaml says, and the footnote says nothing is fetched", () => {
+    const data = planningData(groupRepo("PAY"));
+    const row = data.maps[0].stories.find((s: any) => s.id === "PAY-CHK-1")!;
+    expect(row).toMatchObject({ status: "todo", freshness: "summary" });
+    expect(data).not.toHaveProperty("teamIndex");
+    expect(betsAndStoryMaps(data).foot).toBe(NOTE.groupFoot);
   });
 
   it("a group's page has no key results of its own, and links to the story maps", () => {

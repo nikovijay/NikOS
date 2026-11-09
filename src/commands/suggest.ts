@@ -92,7 +92,7 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
   const options = planningOptions(dir);
   const problems = validateGroup(dir).errors.length;
   if (problems) options.unshift({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in maps/`, do: "Run nikos validate and fix each error it lists." });
-  options.push({ label: "See each team's status on the maps", do: "Run nikos map status for each map and summarise who has what, and what's done and approved." });
+  options.push({ label: "See each map's status", do: "Run nikos map status for each map and summarise what's done and approved, and what needs attention." });
   options.push({ label: `Pick a story map to work on (${list(ids)})`, do: "Ask which map, then run nikos suggest --map <id> for that map's options." });
   return { summary: `${ids.length} story maps: ${parts.join(" · ")}`, options: options.slice(0, MAX) };
 }

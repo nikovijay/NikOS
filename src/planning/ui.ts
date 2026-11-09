@@ -537,32 +537,22 @@ function ladderView() {
   return viewBar('ladder', v) + pageHead('OKR ladder', v.foot) + '<div class="panel">' + tree(cols, links, 'This plan\'s key results and the key results above them') + '</div>';
 }
 
-// The group's page: each bet, with the story maps that spec it under it, and each map's parts and story rows.
+// The group's page: each bet, with the story maps that spec it under it, and each map's story rows.
 function groupMapsView() {
   var v = D.pages.betsAndStoryMaps;
   var mapPanel = function (m) {
-    var parts = m.parts.map(function (p) {
-      var what = p.releases ? 'releases ' + p.releases.join(', ') : p.activities ? 'activities ' + p.activities.join(', ') : p.stories ? 'stories ' + p.stories.join(', ') : 'the whole map';
-      return '<li class="row"><span><strong>' + esc(p.team) + '</strong><span class="muted"> · ' + esc(p.repo) + ' · ' + esc(what) + '</span></span>' +
-        (EDIT ? '<span class="spacer"></span><button type="button" data-op-unassign="' + esc(p.repo) + '" data-map="' + esc(m.id) + '">Take back this part</button>' : '') + '</li>';
-    }).join('');
     var rows = m.stories.map(function (s) {
       var done = s.status === 'done' || s.status === 'approved';
       // The map id goes with the rename, so a group with several maps knows which one the story is in.
       var rename = EDIT ? opForm('story.rename', { story: s.id }, s.hash, [{ name: 'title', label: 'Title', value: s.title }], 'Rename', '',
-        '<input type="hidden" data-field="map" value="' + esc(m.id) + '">' + (done ? '<label class="check"><input type="checkbox" data-confirm> A team has finished this story. Rename it anyway</label>' : '')) : '';
+        '<input type="hidden" data-field="map" value="' + esc(m.id) + '">' + (done ? '<label class="check"><input type="checkbox" data-confirm> This story is done. Rename it anyway</label>' : '')) : '';
       return '<li class="story-row"><span class="sid">' + esc(s.id) + '</span><span><strong>' + esc(s.title) + '</strong> ' + chip(statusWord(s.status), s.status === 'done' || s.status === 'approved' ? 'green' : s.status === 'in_progress' ? 'blue' : '') + '</span>' +
-        '<span class="muted">' + esc(s.team || 'No team yet') + (s.reason ? ' · ' + esc(s.reason) : '') + '</span>' +
+        (s.reason ? '<span class="muted">' + esc(s.reason) + '</span>' : '') +
         (EDIT ? '<details><summary>Rename</summary>' + rename + '</details>' : '') + '</li>';
     }).join('');
     return '<div class="panel"><div class="row"><span class="eyebrow">Story map</span>' + chip(m.key, 'id') + '</div><h3 style="margin-top:6px">' + esc(m.title) + '</h3>' +
       (m.problem ? '<div class="notice">' + esc(m.problem) + '</div>' : '') +
-      (parts ? '<h4>Teams</h4><ul class="checkins">' + parts + '</ul>' : '<p class="muted">No team has a part of this map yet. ' + (EDIT ? 'Use Assign below.' : 'Assign one with <code>nikos assign</code>.') + '</p>') +
-      (rows ? '<h4>Stories</h4><ul class="checkins">' + rows + '</ul>' : '<p class="muted">No stories in this map yet. Add one with <code>nikos story add</code>.</p>') +
-      (EDIT ? opForm('assign', { team: '' }, '', [
-        { name: 'team', targetKey: 'team', label: 'Team repo (owner/repo, or . for this repo)', placeholder: 'acme/checkout-web' }, { name: 'name', label: 'Team name' },
-        { name: 'map', label: 'Map', value: m.id }, { name: 'releases', kind: 'list', label: 'Releases (blank for the whole map)' }
-      ], 'Assign', 'Saves to maps/' + m.id + '/assignments.yaml') : '') + '</div>';
+      (rows ? '<h4>Stories</h4><ul class="checkins">' + rows + '</ul>' : '<p class="muted">No stories in this map yet. Add one with <code>nikos story add</code>.</p>') + '</div>';
   };
   var block = function (b) {
     var mine = v.maps.filter(function (m) { return m.bet === b.id; });
@@ -853,13 +843,11 @@ function submitForm(form) {
   var done = busy(form.querySelector('[data-op-submit]'), 'Saving…');
   return Promise.resolve(apiOp(op, target, args, expect)).then(done, done);
 }
-// The clicks on forms, the unassign button, the reload button, the git buttons and copy.
+// The clicks on forms, the reload button, the git buttons and copy.
 document.addEventListener('click', function (e) {
   var t = e.target;
   var submit = closest(t, '[data-op-submit]');
   if (submit) return submitForm(closest(submit, '[data-op-form]'));
-  var un = closest(t, '[data-op-unassign]');
-  if (un) { var undo = busy(un, 'Taking back…'); return Promise.resolve(apiOp('unassign', { team: un.getAttribute('data-op-unassign') }, { map: un.getAttribute('data-map') }, '')).then(undo, undo); }
   var act = closest(t, '[data-act]');
   if (act && act.getAttribute('data-act') === 'reload') { NOTICE = ''; return reload(); }
   var git = closest(t, '[data-git]');

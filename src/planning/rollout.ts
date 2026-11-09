@@ -238,7 +238,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       const m = loadBet(dir, id).meta;
       const up = alignsList(m.aligns_to);
       // A copy's bet counts the owner's delivery summary; a story with none yet says so, and the owner's nikos map status fixes it.
-      const d = delivery(dir, id, { groupState: true });
+      const d = delivery(dir, id);
       const missing = d.stories.filter((s) => s.freshness === "no-summary").length;
       const note = missing ? `; ${missing} with no summary yet: run nikos map status in ${repo}` : "";
       // The age of the summary the count reads, as the plan line says it.
@@ -432,7 +432,7 @@ export function deliveryBelow(root: string, self: string | undefined, bet: strin
   for (const b of bets) {
     if (!targets.has(b.ref)) continue;
     try {
-      const d = delivery(b.dir, b.id, { groupState: true });
+      const d = delivery(b.dir, b.id);
       if (d.stories.length) out.push(`bet ${b.id} in ${b.repo}, ${describeDelivery(d)}${d.summaryAsOf ? `, ${summaryAge({ read_at: d.summaryAsOf })}` : ""}`);
     } catch {
       // a copy whose map doesn't read shows nothing here; its own line in the rollout says so
