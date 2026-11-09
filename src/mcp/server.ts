@@ -85,8 +85,8 @@ export function createServer(repo: string): McpServer {
       }
     });
 
-  tool("status", "Where things stand, and two to four things the person could do next. Call it at the start and end of every request.", {}, () => {
-    const s = suggest(root);
+  tool("status", "Where things stand, and two to four things the person could do next. Call it at the start and end of every request. In a group repo with several maps, map picks one; without it, each map's progress.", { map: z.string().optional() }, (a) => {
+    const s = suggest(root, a.map);
     return text(`${s.summary}\n${s.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`, s as unknown as Record<string, unknown>);
   }, true);
   tool("validate", "Check the story map is well formed: intent/, or each maps/<id> in a group repo (map picks one): the story map, state, features and approvals.", { map: z.string().optional() }, (a) => {

@@ -69,9 +69,9 @@ check fails, say so and show the output.
 The person talks; you run the commands. End by asking what they want to do
 next:
 
-- Run `nikos suggest --json`. Say its `summary` in one line, then offer its
-  `options` as the choices: labels word for word, the first one as the
-  recommendation.
+- Run `nikos suggest --json` (with `--map <id>` when you're working on one map of
+  a group's). Say its `summary` in one line, then offer its `options` as the
+  choices: labels word for word, the first one as the recommendation.
 - Ask with your tool's multiple-choice question if it has one, otherwise as a
   short numbered list. Always leave room for them to say something else.
 - Never hand the person a command to run. When they pick an option, do what its
