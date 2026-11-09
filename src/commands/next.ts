@@ -28,12 +28,13 @@ export function dependencies(intentDir: string): Map<string, string[]> {
 }
 
 /** The first todo story in run.queue, then in story map order, whose dependencies are all done. */
-export function next(dir: string, mapId?: string): NextResult {
+/** states: each story's status, in place of the map's own (a rollout passes the owner's delivery summary). */
+export function next(dir: string, mapId?: string, opts: { states?: Record<string, { status?: string }> } = {}): NextResult {
   const ref = storyMapFor(dir, { map: mapId });
   const intentDir = ref.dir;
   const map = parse(read(join(intentDir, "storymap.yaml")));
   const state = store().exists(join(intentDir, "state.yaml")) ? parse(read(join(intentDir, "state.yaml"))) : undefined;
-  const stories: Record<string, { status?: string }> = loadStates(homeOf(ref));
+  const stories: Record<string, { status?: string }> = opts.states ?? loadStates(homeOf(ref));
   const mapOrder: string[] = (map?.releases ?? [])
     .slice()
     .sort((a: any, b: any) => a.number - b.number)

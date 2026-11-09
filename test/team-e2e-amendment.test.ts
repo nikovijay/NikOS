@@ -32,8 +32,8 @@ vi.mock("../src/commands/verify", async (importOriginal) => {
 });
 beforeEach(() => vi.mocked(verify).mockClear());
 
-const BET = (id: string, primary?: string) =>
-  `---\nid: ${id}\nowner: Product\nhypothesis: Faster inbox keeps people paying.\nkrs:\n  ${primary ? `primary: ${primary}\n  ` : ""}also: []\nreview_on: 2027-03-31\nconfidence: medium\ndependencies: []\noutcome: open\nreviews: []\n---\n\n## Why we think so\nTesters said checkout is slow.\n`;
+const BET = (id: string, primary?: string, alignsTo?: string) =>
+  `---\nid: ${id}\nowner: Product\nhypothesis: Faster inbox keeps people paying.\nkrs:\n  ${primary ? `primary: ${primary}\n  ` : ""}also: []\n${alignsTo ? `aligns_to:\n  - ${alignsTo}\n` : ""}review_on: 2027-03-31\nconfidence: medium\ndependencies: []\noutcome: open\nreviews: []\n---\n\n## Why we think so\nTesters said checkout is slow.\n`;
 
 /** A team repo with its key, an origin (so its delivery summary names it) and nothing joined yet. */
 function team(key: string, repo: string, name: string): string {
@@ -57,10 +57,13 @@ describe("the amendment, end to end", () => {
     commitAll(company, "company bet");
 
     // The department joins the company, and the group joins the department as its home.
+    // The department's bet aims at the company's bet, and the group's bet at the department's: the group's map delivers both.
     const dept = departmentRepo(company);
+    write(join(dept, "planning/bets/inbox-match.md"), BET("inbox-match", undefined, "acme/company-plan#one-inbox"));
+    commitAll(dept, "department bet");
     const group = groupRepo("PAY");
     git(group, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
-    write(join(group, "planning/bets/faster-checkout.md"), BET("faster-checkout"));
+    write(join(group, "planning/bets/faster-checkout.md"), BET("faster-checkout", undefined, "acme/payments-plan#inbox-match"));
     commitAll(group, "bet card");
     joinPlan(group, { repo: "acme/payments-plan", url: dept, home: true });
     commitAll(group, "join the department");
@@ -141,8 +144,37 @@ describe("the amendment, end to end", () => {
     // Team A's map is for the company's bet: it shows under that bet in the tree, on team A's line, and in the company's status.
     expect(byName("Web team").maps).toEqual([{ map: "inb", bet: "acme/company-plan#one-inbox", stories: 2, done: 1, approved: 1, inProgress: 0, asOf: expect.any(String) }]);
     expect(text).toContain("    map inb → acme/company-plan#one-inbox: 1 of 2 stories done (1 approved), 0 in progress");
-    expect(text).toContain("  ├─ bet one-inbox (acme/company-plan)\n  │  └─ map inb (Web team): 1 of 2 stories done (1 approved)");
-    expect(planningStatus(company)).toContain("one-inbox — delivery: in the plans below: map inb in acme/web-team, 1 of 2 stories done (1 approved)");
+    expect(text).toContain(
+      "  ├─ bet one-inbox (acme/company-plan)\n  │  ├─ bet inbox-match (Payments)\n  │  │  └─ bet faster-checkout (Payments group)\n  │  └─ map inb (Web team): 1 of 2 stories done (1 approved)",
+    );
+    // The company's bet card says what delivers it below: the group's bet, through the department's, and team A's map.
+    expect(planningStatus(company)).toContain(
+      "one-inbox — delivery: in the plans below: bet faster-checkout in acme/payments-group, Building, 1 of 3 done, read today",
+    );
+    expect(planningStatus(company)).toContain("; map inb in acme/web-team, 1 of 2 stories done (1 approved)");
+    // The department's bet has no stories of its own: its line in the rollout says the group's bet delivers it.
+    expect(text).toContain("    bet inbox-match: in the plans below: bet faster-checkout in acme/payments-group, Building, 1 of 3 done");
+    // The group's next is the first story its summary doesn't count done, not PAY-CHK-1.
+    expect(byName("Payments group").next?.id).toBe("PAY-CHK-2");
+
+    // The group changes PAY-CHK-1's scenario after it was proved. Its map status says the proof is for an older feature,
+    // the summary carries that, and the company no longer counts the story done.
+    const card = join(group, "maps/chk/features/pay/pay-by-card.feature");
+    write(card, readFileSync(card, "utf8").replace(/Then .*/, "Then the card is charged once and a receipt is sent"));
+    commitAll(group, "reword PAY-CHK-1");
+    const changed = mapStatus(group);
+    expect(changed[0].stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ freshness: "changed" });
+    writeSummaries(group, changed);
+    commitAll(group, "delivery, after the change");
+    expect(readDeliverySummary(join(group, "maps/chk"))?.stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ status: "done", proof: "changed" });
+    const after = rollout(company);
+    const groupAfter = after.plans.find((p) => p.name === "Payments group")!;
+    expect(groupAfter.delivery).toMatchObject({ stories: 3, done: 0, notCurrent: 1 });
+    expect(groupAfter.next?.id).toBe("PAY-CHK-2");
+    const afterText = formatRollout(after);
+    expect(afterText).toContain("delivery: 0 of 3 stories done, 0 in progress, 1 not current with its feature");
+    expect(afterText).toContain("bet faster-checkout: Building, 0 of 3 done, 1 not current with its feature");
+    expect(planningStatus(company)).toContain("bet faster-checkout in acme/payments-group, Building, 0 of 3 done, 1 not current with its feature");
 
     // Both teams keep a valid file.
     expect(validate(a).errors).toEqual([]);

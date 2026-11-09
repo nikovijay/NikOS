@@ -422,7 +422,13 @@ current, and its delivery approval holds, or approval isn't required here (`appr
 the dashboard, the rollout) reads each group's committed `maps/<key>/delivery.yaml`,
 written by `nikos map status` in the group's repo. Rollouts never fetch a team repo: the
 delivery is the owner's summary, and it says how old that summary is. A story the summary
-doesn't list counts as having no summary yet, not as done.
+doesn't list counts as having no summary yet, not as done. A story the summary marks
+`proof: changed` (or `behind`, `unverified`) was proved against an older feature: it counts as
+not current with its feature, not as done.
+
+A bet with no stories of its own, such as a company bet, shows what delivers it below: the bets
+aligned to it, and to those, down the plans, and any map aimed at it, each with its counts, as the
+last `nikos planning rollout` read them.
 
 `nikos assign` reads a holder's done state from its copy when it's fetched. The
 refusal names where it read the status and when the copy was fetched. With no copy,

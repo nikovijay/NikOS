@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2 (2026-11-09)
+
+### Fixed
+
+- A bet with no stories of its own (a company bet that a department's bet and a group's bet deliver) no longer says "Not started" in `nikos planning status`, the dashboard's Bets page or the rollout. It names what delivers it below, with each bet's and map's counts, as the last `nikos planning rollout` read them.
+- A story whose proof is for an older version of its feature is no longer counted done above the group. `nikos map status` writes `proof: changed` (or `behind`, `unverified`) beside it in `delivery.yaml`. The rollout, `planning status` and the dashboard then say "1 not current with its feature", as the group's own page does. A summary with this field can't be read by 0.4.1 or earlier: upgrade the plans above with the group.
+- The rollout's `next` for a group reads each story's status from its committed `delivery.yaml`, not the group's own `state.yaml`, so it no longer names a story the summary counts done. A story whose proof isn't current isn't next either: it is work to redo.
+- `nikos suggest` on a company or department plan with no story map offers the plan's menu (check in, review a bet, the rollout, the plan) instead of "nikOS isn't set up". On a group with several maps it shows each map's progress instead of failing, and `--map` now reaches every check it runs. The MCP `status` tool takes `map` too.
+
 ## 0.4.1 (2026-11-09)
 
 ### Fixed

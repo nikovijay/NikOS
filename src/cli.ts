@@ -137,7 +137,7 @@ Commands:
                    (cancelled needs --reason)
   approve <id>...  Sign off done stories: in your terminal, or --via chat when
                    you've answered an agent's "Do you want to approve …?"
-  suggest          What to do next: where things stand and a short menu (--json, --brief)
+  suggest          What to do next: where things stand and a short menu (--json, --brief, --map)
   company init     Write a company plan repo that departments join, or a department's with
                    --level department (--name, --period, --departments, --repo, --host)
   group init       Write a group plan repo: bets aimed at the department's key results,

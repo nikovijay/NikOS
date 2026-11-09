@@ -16,8 +16,8 @@ import { loadStates } from "../lib/state-files.js";
 import { storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
-import { delivery, describeDelivery, mapCounts, mapDeliveryIn, type Delivery } from "./delivery.js";
-import { summaryAge } from "../lib/delivery-summary.js";
+import { delivery, describeDelivery, doneHere, mapCounts, mapDeliveryIn, type Delivery } from "./delivery.js";
+import { readDeliverySummary, summaryAge } from "../lib/delivery-summary.js";
 import { copyKeys, duplicateKeys } from "../lib/keys.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
@@ -44,7 +44,7 @@ export interface DownstreamPlan {
    * That plan is this repo, or for a plan further down, `via` as rollout fetched it.
    */
   synced?: { on: string; commit: string; current?: boolean };
-  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number; noSummary?: number; asOf?: string };
+  delivery?: { stories: number; done: number; approved: number; inProgress: number; releases: number; noSummary?: number; notCurrent?: number; asOf?: string };
   /** Its maps that deliver a bet in another plan (a team's map for a company bet, say), each with its own counts. */
   maps?: MapFor[];
   /** The story its team builds next, as nikos next would say. */
@@ -67,12 +67,14 @@ export interface MapFor {
   approved: number;
   inProgress: number;
   noSummary?: number;
+  /** Done by the team, but its proof isn't for the current feature. */
+  notCurrent?: number;
   asOf?: string;
 }
 
 /** A map's line: its counts, and the age of the summary they come from. */
 export const describeMap = (m: MapFor) =>
-  `${m.done} of ${m.stories} stories done${m.approved ? ` (${m.approved} approved)` : ""}, ${m.inProgress} in progress${m.asOf ? `, ${summaryAge({ read_at: m.asOf })}` : ""}${
+  `${m.done} of ${m.stories} stories done${m.approved ? ` (${m.approved} approved)` : ""}, ${m.inProgress} in progress${m.notCurrent ? `, ${m.notCurrent} not current with its feature` : ""}${m.asOf ? `, ${summaryAge({ read_at: m.asOf })}` : ""}${
     m.noSummary ? `; ${m.noSummary} with no summary yet` : ""
   }`;
 
@@ -182,7 +184,8 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       const all = mapDeliveryIn(dir);
       deliv = {
         stories: all.stories.length + all.noSummary.length,
-        done: all.stories.filter((s) => isDone(s.status)).length,
+        done: all.stories.filter(doneHere).length,
+        ...(all.stories.some((s) => s.proof) ? { notCurrent: all.stories.filter((s) => s.proof).length } : {}),
         approved: all.stories.filter((s) => s.approval === "approved").length,
         inProgress: all.stories.filter((s) => s.status === "in_progress").length,
         releases: all.releases,
@@ -199,7 +202,11 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       for (const ref of refs) {
         if (ref.team) continue;
         try {
-          const id = next(dir, ref.id).story;
+          // A map with a summary: each story's status is the summary's, not the group's state (a team holds it). A proof that
+          // isn't current is work to redo, so it isn't next.
+          const summary = readDeliverySummary(ref.dir);
+          const states = summary && Object.fromEntries(summary.stories.map((s) => [s.id, { status: s.proof && isDone(s.status) ? "needs_rework" : s.status }]));
+          const id = next(dir, ref.id, states ? { states } : {}).story;
           if (!id) continue;
           nextUp = { id, title: titles.get(id) ?? id };
           break;
@@ -381,38 +388,78 @@ export function rollout(root: string, opts: { offline?: boolean; as?: string } =
     }
   }
   flagStoppedParents(plans, ownStops);
+  // A bet below with no stories of its own (a department's bet, say) says what delivers it further down.
+  for (const p of plans) {
+    for (const b of p.bets) {
+      if (!b.delivery.startsWith("Not started")) continue;
+      const below = deliveryBelow(root, p.repo, b.id);
+      if (below.length) b.delivery = belowText(below).replace(" (from the last nikos planning rollout)", "");
+    }
+  }
   // Two copies below with one key would name their story ids the same: an error, not a warning (amendment D5).
   const problems = duplicateKeys(copyKeys(cache(root))).map((d) => `key ${d.key} is used by ${d.repos.join(" and ")}: give one of them another key`);
   return { ...(self ? { repo: self } : {}), decisions: latestDecisions(root), plans, problems, tree: alignment(root, self, plans) };
 }
 
 /**
- * The maps in the last rollout's copies that deliver one of this repo's bets, e.g. a team's map for a
- * company bet. Read from .nikos/downstream/ as the last nikos planning rollout fetched it: nothing is fetched here.
+ * What delivers a bet, in the copies the last nikos planning rollout fetched: the bets aligned to it, and to
+ * those, down the plans, that have stories, and the maps another repo aims at any of them (a team's map for
+ * a company bet). Nothing is fetched here.
  */
-export function mapsBelow(root: string, self: string | undefined, bet: string): (MapFor & { repo: string })[] {
+export function deliveryBelow(root: string, self: string | undefined, bet: string): string[] {
   if (!self || !existsSync(indexOf(root))) return [];
   const index: Record<string, unknown> = JSON.parse(readFileSync(indexOf(root), "utf8"));
-  const want = `${self}#${bet}`;
-  return Object.keys(index).flatMap((repo) => {
-    const dir = copyOf(root, repo);
-    if (!existsSync(dir)) return [];
-    try {
-      return mapDeliveryIn(dir).maps.filter((m) => m.bets.includes(want)).map((m) => ({ repo, map: m.map, bet: want, ...mapCounts(m) }));
-    } catch {
-      return [];
+  const copies = Object.keys(index).flatMap((repo) => (existsSync(copyOf(root, repo)) ? [{ repo, dir: copyOf(root, repo) }] : []));
+  const bets = copies.flatMap((c) =>
+    betIds(c.dir).flatMap((id) => {
+      try {
+        return [{ ...c, id, ref: `${c.repo}#${id}`, up: alignsList(loadBet(c.dir, id).meta.aligns_to) }];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  const targets = new Set([`${self}#${bet}`]);
+  for (let grew = true, depth = 0; grew && depth < MAX_DEPTH; depth++) {
+    grew = false;
+    for (const b of bets) {
+      if (targets.has(b.ref) || !b.up.some((u) => targets.has(u))) continue;
+      targets.add(b.ref);
+      grew = true;
     }
-  });
+  }
+  const out: string[] = [];
+  for (const b of bets) {
+    if (!targets.has(b.ref)) continue;
+    try {
+      const d = delivery(b.dir, b.id, { groupState: true });
+      if (d.stories.length) out.push(`bet ${b.id} in ${b.repo}, ${describeDelivery(d)}${d.summaryAsOf ? `, ${summaryAge({ read_at: d.summaryAsOf })}` : ""}`);
+    } catch {
+      // a copy whose map doesn't read shows nothing here; its own line in the rollout says so
+    }
+  }
+  for (const c of copies) {
+    try {
+      for (const m of mapDeliveryIn(c.dir).maps) {
+        const hit = m.bets.find((x) => targets.has(x) && !x.startsWith(`${c.repo}#`));
+        if (hit) out.push(`map ${m.map} in ${c.repo}, ${describeMap({ map: m.map, bet: hit, ...mapCounts(m) })}`);
+      }
+    } catch {
+      // as above
+    }
+  }
+  return out;
 }
 
+const belowText = (below: string[]) => `in the plans below: ${below.join("; ")} (from the last nikos planning rollout)`;
+
 /**
- * A bet's delivery as words: its own maps' counts, or for a bet with no stories here (a company bet a
- * team's map delivers), the maps below it, as the last rollout read them.
+ * A bet's delivery as words: its own maps' counts, or for a bet with no stories here (a company bet that a
+ * group's bet or a team's map delivers), what delivers it below, as the last rollout read it.
  */
 export function betDeliveryText(root: string, id: string, d: Delivery): string {
-  const below = d.stories.length ? [] : mapsBelow(root, ownRepo(root), id);
-  if (!below.length) return describeDelivery(d);
-  return `in the plans below: ${below.map((m) => `map ${m.map} in ${m.repo}, ${describeMap(m)}`).join("; ")} (from the last nikos planning rollout)`;
+  const below = d.stories.length ? [] : deliveryBelow(root, ownRepo(root), id);
+  return below.length ? belowText(below) : describeDelivery(d);
 }
 
 type Source = { plan: string; repo?: string; krs: { id: string; title: string; aligns_to?: string[] }[]; bets: { id: string; krs: string[]; aligns_to?: string[] }[]; maps?: MapFor[] };
@@ -569,7 +616,7 @@ export function formatRollout(r: Rollout): string {
       const d = p.delivery;
       const age = d.asOf ? `, ${summaryAge({ read_at: d.asOf })}` : "";
       const missing = d.noSummary ? `; ${d.noSummary} ${d.noSummary === 1 ? "story has" : "stories have"} no summary yet: run nikos map status in ${p.repo}` : "";
-      out.push(`    delivery: ${d.done} of ${d.stories} stories done${d.approved ? ` (${d.approved} approved)` : ""}, ${d.inProgress} in progress${age}${missing}`);
+      out.push(`    delivery: ${d.done} of ${d.stories} stories done${d.approved ? ` (${d.approved} approved)` : ""}, ${d.inProgress} in progress${d.notCurrent ? `, ${d.notCurrent} not current with its feature` : ""}${age}${missing}`);
     }
     for (const m of p.maps ?? []) out.push(`    map ${m.map} → ${m.bet}: ${describeMap(m)}`);
     if (p.next) out.push(`    next: ${p.next.id} ${p.next.title}`);

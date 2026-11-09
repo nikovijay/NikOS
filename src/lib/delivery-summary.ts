@@ -15,6 +15,8 @@ export interface SummaryStory {
   status: string;
   approval: "none" | "approved";
   approved_by?: string;
+  /** Set when the team's proof isn't for the current feature: the plans above don't count the story done. */
+  proof?: "changed" | "behind" | "unverified";
   read_at: string;
 }
 
