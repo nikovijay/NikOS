@@ -120,14 +120,16 @@ export function describeJoin(r: JoinResult): string {
   if (!r.fetched) {
     return [
       `✗ Couldn't fetch ${r.repo}: ${why}`,
-      `  It's ${r.added ? "now" : "still"} listed in planning/upstream.yaml, so nothing is inherited from it yet. Check the repo path and that you can clone it,`,
-      "  then run nikos planning sync. To drop it, remove it from planning/upstream.yaml.",
+      `  It's ${r.added ? "now" : "still"} listed in planning/upstream.yaml, but nothing comes from it until it can be fetched.`,
+      "  Check the repo path is right and that you can clone it. Then run: nikos planning sync",
+      "  To stop following it, delete its entry from planning/upstream.yaml.",
     ].join("\n");
   }
-  const lines = [r.added ? `Joined ${r.repo}: added to planning/upstream.yaml` : `Already joined to ${r.repo}`];
-  for (const s of r.sync.synced) lines.push(`  ✓ ${s.repo} at ${s.commit.slice(0, 7)}${s.via ? ` (above ${s.via})` : ""}`);
+  const lines = [r.added ? `✓ Joined ${r.repo}. It's listed in planning/upstream.yaml.` : `This repo already follows ${r.repo}.`];
+  lines.push("Fetched a read-only copy of:");
+  for (const s of r.sync.synced) lines.push(`  ✓ ${s.repo} at ${s.commit.slice(0, 7)}${s.via ? ` (the plan above ${s.via})` : ""}`);
   for (const u of r.sync.unresolved) lines.push(`  ? ${u.repo}: ${u.reason}`);
-  lines.push("", "Settings here now:", formatSettings(r.settings));
+  lines.push("", "The settings that now apply here:", formatSettings(r.settings), "", "Nothing in this repo moved.");
   return lines.join("\n");
 }
 
@@ -139,7 +141,7 @@ export function runJoin(args: string[]): number {
   // --home is a switch, so the repo may come straight after it.
   const repo = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--home"));
   if (!repo) {
-    console.error("Usage: nikos join <owner/repo | group/subgroup/project> [--home] [--host gitlab.com] [--url <git url>] [--ref <branch>] [--dir <path>]");
+    console.error("✗ Which plan should this repo join? Give its repo path. For example: nikos join acme/company-plan\n\nUsage: nikos join <owner/repo | group/subgroup/project> [--home] [--host gitlab.com] [--url <git url>] [--ref <branch>] [--dir <path>]");
     return 1;
   }
   try {

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The planning dashboard (`nikos serve`) is redesigned: clearer page titles and hierarchy, key result cards with their status, bets titled in words with their delivery and outcome side by side, a check-in form on each key result, and empty states that say what's missing and how to add it. It follows the system's light or dark setting, and works at phone width: the sidebar becomes a row of tabs, and the OKR columns and timeline scroll sideways. Every page meets WCAG 2.2 AA contrast, can be used with a keyboard (a skip link, visible focus, focus moved to the title on each page), and names its parts for screen readers. Save buttons say "Saving…" until the save comes back. Saves, Push, the token and the exports work as before.
+- The story map page uses the same colours and type, follows dark mode, links back to the plan, and says what to do when it has no stories.
+- `nikos start` asks plain questions. In your home folder, it asks what to call the new folder, and an answer like yes or no is asked again instead of making a folder called `yes`. Before writing anything it shows what it will set up and the full path, and asks to go ahead. Its next steps are numbered, and none has a placeholder left to fill in: when the repo isn't on GitHub or GitLab yet, it says so instead of printing `<owner>/…`.
+- A mistyped command gets the nearest one, in two lines, instead of the whole help: `Unknown command 'serv'. Did you mean: nikos serve?`. `nikos planning` does the same, and a planning command with something missing shows just its own usage.
+- `nikos serve` says in plain words that the dashboard is running, which link to open, that the link is private, and where changes are saved.
+- The help (`nikos help`, `nikos planning help`) is grouped by task and written in everyday words, and the messages of `company init`, `group init`, `team init`, `join`, `doctor`, `apply` and the common errors were rewritten the same way. `nikos doctor` ends with a one-line summary.
+
 ## 0.4.2 (2026-11-09)
 
 ### Fixed

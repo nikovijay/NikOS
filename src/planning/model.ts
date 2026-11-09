@@ -116,16 +116,16 @@ export const krText = (data: any) => yamlText(data, ["aligns_to"]);
 
 export function loadBet(root: string, id: string): Bet {
   const path = join(paths(root).bets, `${id}.md`);
-  if (!store().exists(path)) throw new Error(`No bet called '${id}' (planning/bets/${id}.md)`);
+  if (!store().exists(path)) throw new Error(`No bet called '${id}' (planning/bets/${id}.md). See every bet with: nikos planning status`);
   const text = store().read(path);
   const fm = parseFrontMatter(text);
-  if (!fm) throw new Error(`planning/bets/${id}.md has no front matter`);
+  if (!fm) throw new Error(`planning/bets/${id}.md is missing its details block: the lines between --- at the top of the file`);
   return { meta: fm.meta, body: fm.body, file: relative(root, path), hash: hash(text) };
 }
 
 export function loadKr(root: string, id: string): Kr {
   const path = join(paths(root).krs, `${id}.yaml`);
-  if (!store().exists(path)) throw new Error(`No key result called '${id}' (planning/krs/${id}.yaml)`);
+  if (!store().exists(path)) throw new Error(`No key result called '${id}' (planning/krs/${id}.yaml). See every key result with: nikos planning status`);
   const text = store().read(path);
   return { data: parse(text), file: relative(root, path), hash: hash(text) };
 }

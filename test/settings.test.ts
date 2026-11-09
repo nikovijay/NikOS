@@ -169,7 +169,7 @@ describe("join, when the plan can't be fetched", () => {
     expect(r.fetched).toBe(false);
     const text = describeJoin(r);
     expect(text.split("\n")[0]).toMatch(/^✗ Couldn't fetch acme\/product\/company-plan: /);
-    expect(text).toContain("It's now listed in planning/upstream.yaml, so nothing is inherited from it yet");
+    expect(text).toContain("It's now listed in planning/upstream.yaml, but nothing comes from it until it can be fetched.");
     expect(text).not.toContain("Joined");
     expect(readFileSync(join(root, "planning/upstream.yaml"), "utf8")).toContain("acme/product/company-plan");
   });

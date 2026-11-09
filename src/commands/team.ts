@@ -218,16 +218,16 @@ export function runTeam(args: string[]): number {
       const key = flag("key");
       // A team with a key can own maps once it has a home; any team can take work from a group or another team.
       const nextSteps = key
-        ? `  Next: give it a home with nikos join <plan> --home, then own a map with nikos map new --bet <bet> --key <MAP>.\n  Or take work from a group or team: nikos team join <repo>`
-        : `  Take work from a group next: nikos team join <group repo>`;
+        ? `Next steps:\n  1. Give it a home plan, the plan its own maps belong to: nikos join and that plan's repo path with --home, like nikos join acme/payments-plan --home\n  2. Make a story map for one of its bets: nikos map new --bet and the bet's id, with --key and a short map key\n  Or take work from a group or another team instead: nikos team join and that repo's path, like nikos team join acme/checkout-group`
+        : `Next step: take work from a group, with nikos team join and the group repo's path, like nikos team join acme/checkout-group`;
       console.log(`${r.keyAdded ? `✓ ${r.name} now has key ${key}` : `✓ Created ${TEAM_FILE} for ${r.name} (${r.repo})`}\n${nextSteps}`);
     } else if (sub === "join" && positional[0]) {
       if (rest.includes("--home")) throw new Error("a team's home is set with nikos join <plan> --home: nikos team join takes work from a group, and doesn't set one");
       const r = teamJoin(dir, positional[0], { ref: flag("ref"), host: flag("host"), url: flag("url") });
       if (r.unresolved) {
-        console.error(`✗ ${r.repo} can't be reached: ${r.unresolved}. It stays in ${TEAM_FILE}: check its --url or --host, or run nikos sync once it's reachable`);
+        console.error(`✗ Couldn't reach ${r.repo}: ${r.unresolved}\n  It's saved in ${TEAM_FILE}. Check the repo path, or give --url or --host. Once it can be reached, run: nikos sync`);
         return 1;
-      } else console.log(`✓ Joined ${r.repo} @ ${r.commit?.slice(0, 7)}: ${r.stories} ${r.stories === 1 ? "story" : "stories"} assigned to this team`);
+      } else console.log(`✓ Joined ${r.repo} (at ${r.commit?.slice(0, 7)}). ${r.stories} ${r.stories === 1 ? "story is" : "stories are"} given to this team.`);
     } else if (sub === "member" && positional[0] === "add" && positional[1]) {
       const m = memberAdd(dir, positional[1], { role: flag("role"), handle: flag("handle") });
       console.log(`✓ ${m.name} added${m.role ? ` as ${m.role}` : ""}`);

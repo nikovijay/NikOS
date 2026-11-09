@@ -44,14 +44,14 @@ describe("the flags", () => {
     const co = companyRepo();
     const { errors } = spies();
     expect(await runPlanning(["serve", "--editable", "--dir", co])).toBe(1);
-    expect(errors.join("\n")).toContain("--editable needs --export FILE");
+    expect(errors.join("\n")).toContain("--editable needs a file to save to");
   });
 
   it("--with-linked without --editable is an error", async () => {
     const co = companyRepo();
     const { errors } = spies();
     expect(await runPlanning(["serve", "--with-linked", "--export", outFile(), "--dir", co])).toBe(1);
-    expect(errors.join("\n")).toContain("--with-linked needs --editable");
+    expect(errors.join("\n")).toContain("--with-linked only works with --editable");
   });
 
   it("writes the file in every flag order", async () => {
@@ -89,7 +89,7 @@ describe("the editable file", () => {
     const html = readFileSync(file, "utf8");
     expect(html).toContain("function idProblem(kind, id)");
     expect(html).toContain("function krFieldProblems(fields, mode)");
-    expect(html).toContain("Checked here: field rules only");
+    expect(html).toContain("This page checks each field; the full check runs when someone runs nikos apply");
   });
 
   it("by default embeds only this level's own files: no upstream or downstream keys", async () => {

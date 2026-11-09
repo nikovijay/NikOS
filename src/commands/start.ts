@@ -12,11 +12,12 @@ import { init, keyFor } from "./init.js";
 import { suggest, type Suggestion } from "./suggest.js";
 import { setupVerify } from "./verify.js";
 import { createInterface } from "node:readline/promises";
-import { askOnboarding, setUp } from "./onboard.js";
+import { askOnboarding, Cancelled, setUp } from "./onboard.js";
 import { cliCommand } from "../lib/cli-version.js";
 import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
 import { KEY } from "../lib/keys.js";
 import { BELOW, planYaml, type PlanLevel } from "../lib/group-plan.js";
+import { ownRepo } from "../lib/git.js";
 
 export type { PlanLevel };
 
@@ -60,8 +61,8 @@ export interface CompanyResult {
   skipped: string[];
   /** A group's key. */
   key?: string;
-  /** The line each department or team runs (or asks their agent to) to join. */
-  join: string;
+  /** The line each department or team runs (or asks their agent to) to join. Undefined until the repo's path is known. */
+  join?: string;
 }
 
 /** A group's key: the GROUP in its story ids. */
@@ -81,8 +82,9 @@ export function companyInit(dir: string, opts: { name: string; key?: string; per
   const key = level === "group" ? (opts.key ?? keyFor(name)).toUpperCase() : undefined;
   if (key !== undefined && !GROUP_KEY.test(key)) throw new Error(`'${key}' isn't a valid group key (letters and digits, starting with a letter, up to 10)`);
   const root = resolve(dir);
-  const repo = opts.repo ?? `<owner>/${basename(root)}`;
-  const join_ = `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}`;
+  // The repo's path, from --repo or its origin remote. With neither, the join line waits until it's known.
+  const repo = opts.repo ?? ownRepo(root);
+  const join_ = repo ? `npx -y nikos@latest join ${repo}${opts.host && opts.host !== "github.com" ? ` --host ${opts.host}` : ""}` : undefined;
   // A company with no departments between it and its groups: they plan against it directly.
   const below = opts.groupsDirect && level === "company" ? "Groups" : BELOW[level];
   const holds = level === "group" ? "bets, aimed at the department's key results" : "objectives, key results and bets";
@@ -109,9 +111,9 @@ ${below} plan against it from their own repos, and inherit the settings in
 From the repo below it, ask your agent to "join our ${level} plan", or run:
 
 \`\`\`
-${join_}
+${join_ ?? "npx -y nikos@latest join"}
 \`\`\`
-
+${join_ ? "" : "\nfollowed by this repo's path as it shows on GitHub or GitLab (owner/name).\n"}
 It links your repo, fetches a read-only copy of this plan, and shows the settings you inherit.
 Nothing in your repo moves.
 `,
@@ -145,13 +147,17 @@ export async function runStart(args: string[]): Promise<number> {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
       const cwd = flag("dir") ?? process.cwd();
-      const answers = await askOnboarding(cwd, (q, s) => rl.question(`${q}${s ? ` [${s}]` : ""}: `));
+      const answers = await askOnboarding(cwd, (q, s) => rl.question(`${q}${s ? ` [${s}]` : ""}${/[?)]$/.test(q) && !s ? " " : ": "}`));
       rl.close();
       console.log("");
       for (const line of setUp(answers, cwd)) console.log(line);
       return 0;
     } catch (err) {
       rl.close();
+      if (err instanceof Cancelled) {
+        console.log(err.message);
+        return 0;
+      }
       console.error(`✗ ${(err as Error).message}`);
       return 1;
     }
@@ -161,7 +167,7 @@ export async function runStart(args: string[]): Promise<number> {
     for (const d of r.done) console.log(`✓ ${d}`);
     for (const a of r.ask) console.log(`? ${a}`);
     console.log(`\n${r.next.summary}\n${r.next.options.map((o, n) => `  ${n + 1}. ${o.label}`).join("\n")}`);
-    console.log(`\nSee it: ${cliCommand()} serve`);
+    console.log(`\nSee it in your browser: ${cliCommand()} serve`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
@@ -169,6 +175,7 @@ export async function runStart(args: string[]): Promise<number> {
   }
 }
 
+// Shown when a required option is missing. The examples run as they are.
 const USAGE: Record<PlanLevel, string> = {
   company: 'Usage: nikos company init --name "<company>" [--level department] [--period "Q1 2027"] [--departments "Payments, Growth"] [--repo owner/company-plan] [--host gitlab.com] [--dir <path>]',
   department: 'Usage: nikos company init --level department --name "<department>" [--period "Q1 2027"] [--departments "<groups>"] [--repo owner/payments-plan] [--host gitlab.com] [--dir <path>]',
@@ -184,27 +191,35 @@ function runPlanInit(args: string[], fixed?: PlanLevel): number {
   };
   const asked = flag("level");
   if (!fixed && asked && asked !== "company" && asked !== "department") {
-    console.error(asked === "group" ? "✗ A group plan is set up with nikos group init" : `✗ --level is company or department, not '${asked}'`);
+    console.error(asked === "group" ? "✗ A group plan has its own command: nikos group init" : `✗ --level can be company or department, not '${asked}'`);
     return 1;
   }
   const level: PlanLevel = fixed ?? (asked as PlanLevel | undefined) ?? "company";
   if (flag("key") !== undefined && level !== "group") {
-    console.error("✗ --key is for group plans");
+    console.error("✗ Only a group plan has a key. Leave out --key, or use nikos group init");
     return 1;
   }
   if (sub !== "init" || !flag("name")) {
-    console.error(USAGE[level]);
+    const example = { company: 'nikos company init --name "Acme" --period "Q1 2027"', department: 'nikos company init --level department --name "Payments"', group: 'nikos group init --name "Checkout" --key CHK' }[level];
+    console.error(`${sub === "init" ? `✗ It needs the ${level}'s name, with --name. For example:\n  ${example}\n\n` : ""}${USAGE[level]}`);
     return 1;
   }
   try {
     const dir = flag("dir") ?? process.cwd();
     const r = companyInit(dir, { name: flag("name")!, key: flag("key"), period: flag("period"), departments: flag("departments")?.split(","), repo: flag("repo"), host: flag("host"), level });
+    const cli = cliCommand();
     if (r.key && flag("key") === undefined) console.log(`Group key ${r.key} (from the name; set another with --key)`);
-    if (r.created.length) console.log(`Created:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
-    if (r.skipped.length) console.log(`Skipped (already there):\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
-    console.log(`\n${BELOW[level]} join it with:\n  ${r.join}${existsSync(join(dir, ".git")) ? "" : "\n\nThis folder isn't a git repo yet: create the repo on GitHub or GitLab and push it, so others can join."}`);
-    if (level !== "company") console.log(`\nLink it to the plan above with: ${cliCommand()} join <repo path of the ${level === "group" ? "department" : "company"} plan>`);
-    console.log(`\nSee it: ${cliCommand()} serve`);
+    if (r.created.length) console.log(`Made the ${level} plan in ${resolve(dir)}:\n${r.created.map((f) => `  + ${f}`).join("\n")}`);
+    if (r.skipped.length) console.log(`Left alone, because they were already there:\n${r.skipped.map((f) => `  = ${f}`).join("\n")}`);
+    const next: string[] = [];
+    if (!existsSync(join(dir, ".git"))) next.push(`Make it a git repo and put it on GitHub or GitLab, so others can reach it: git init, then push it.`);
+    next.push(r.join ? `${BELOW[level]} join it with: ${r.join}` : `${BELOW[level]} join it with ${cli} join and this repo's path, once it's on GitHub or GitLab. Or run this command again with --repo and that path, to print the exact line.`);
+    if (level !== "company") {
+      const above = level === "group" ? "department" : "company";
+      next.push(`Link it to the ${above} plan: ${cli} join and that plan's repo path, like ${cli} join acme/${above === "company" ? "company-plan" : "payments-plan"}`);
+    }
+    next.push(`See it in your browser: ${cli} serve`);
+    console.log(`\nNext steps:\n${next.map((l, n) => `  ${n + 1}. ${l}`).join("\n")}`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

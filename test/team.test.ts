@@ -169,7 +169,7 @@ describe("nikos team, review fixes", () => {
     try {
       expect(runTeam(["join", "acme/payments/checkout-group", "--dir", t, "--url", "/nope/checkout-group"])).toBe(1);
       const said = err.mock.calls.flat().join("\n");
-      expect(said).toContain("can't be reached");
+      expect(said).toContain("Couldn't reach acme/payments/checkout-group");
       expect(said).not.toContain("fatal:");
     } finally {
       err.mockRestore();

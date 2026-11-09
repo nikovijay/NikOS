@@ -208,7 +208,7 @@ export async function runApply(args: string[]): Promise<number> {
     } else file = a;
   }
   if (!file) {
-    console.error("✗ nikos apply needs a change file: nikos apply <file.nikos.json>");
+    console.error("✗ Which changes file should it apply? Give its name, for example: nikos apply plan-changes-2026-11-09.nikos.json");
     return 1;
   }
   const interactive = !!process.stdin.isTTY && !process.env.CI;
