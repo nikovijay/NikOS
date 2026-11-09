@@ -18,6 +18,8 @@ import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { readAssignments } from "../src/lib/assignments";
 import { verify } from "../src/commands/verify";
 import { doctor } from "../src/commands/doctor";
+import { show } from "../src/commands/show";
+import { validate } from "../src/commands/validate";
 import { git, write, commitAll } from "./team-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
@@ -120,6 +122,29 @@ describe("a team's own map: assign and map status", () => {
     expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place", delivery: "approved by Ada Lovelace" });
     writeSummaries(a, [m]);
     expect(readDeliverySummary(join(a, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ team: ".", status: "done", approval: "approved", approved_by: "Ada Lovelace" });
+  });
+
+  it("committing the map's delivery.yaml and a new share leaves the team's approval current", () => {
+    const a = owner();
+    assign(a, "Web team", { repo: ".", stories: ["WEB-INB-1"] });
+    commitAll(a, "assign");
+    setState("WEB-INB-1", "in_progress", { dir: a, by: "Ada" });
+    setState("WEB-INB-1", "done", { dir: a, by: "Ada" });
+    commitAll(a, "done");
+    approve("WEB-INB-1", { dir: a, by: "Ada Lovelace", date: "2027-01-06" });
+    commitAll(a, "approved");
+    writeSummaries(a, mapStatus(a));
+    // An uncommitted delivery summary isn't uncommitted code: done on another story isn't held up by it.
+    setState("WEB-INB-2", "in_progress", { dir: a, by: "Ada" });
+    expect(setState("WEB-INB-2", "done", { dir: a, by: "Ada" }).dirty).toBeFalsy();
+    assign(a, "iOS team", { repo: "acme/ios-team", stories: ["WEB-INB-2"] });
+    commitAll(a, "delivery and a share");
+    expect(show("WEB-INB-1", a)).not.toContain("has changed since it was tested");
+    expect(validate(a).warnings.map((w) => w.message).join("\n")).not.toContain("has changed since it was tested");
+    // Code is still code.
+    write(join(a, "src/pay.js"), "// changed\n");
+    commitAll(a, "code, after approval");
+    expect(show("WEB-INB-1", a)).toContain("The code has changed since it was tested");
   });
 
   it("doctor suggests a CODEOWNERS rule for the assignments, naming the home's lead or a placeholder", () => {

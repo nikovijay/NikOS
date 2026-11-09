@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 (2026-11-09)
+
+### Fixed
+
+- In a team repo that owns a map, committing `maps/<key>/delivery.yaml` (written by `nikos map status`) or `maps/<key>/assignments.yaml` (written by `nikos assign`) no longer makes the team's approvals read as stale: `nikos validate`, `show` and `approve` said "the code has changed since it was tested". Neither file is code, as a team's `status/` and `approvals/` aren't. An uncommitted `delivery.yaml` no longer counts as uncommitted code for `nikos state set … done` either.
+
 ## 0.4.0 (2026-11-09)
 
 Part of the teams amendment (see `docs/rfcs/plans-bets-story-maps.md`, "Amendment status", for what is built and where it differs). A team can own story maps, give its stories to other teams, and report their delivery through committed summaries. A repo that doesn't opt in (a 0.3.0 team with no key, home, map or joined plan) behaves as before.
