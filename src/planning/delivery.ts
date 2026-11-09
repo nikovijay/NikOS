@@ -120,8 +120,10 @@ export function delivery(root: string, bet: string, opts: DeliveryOptions = {}):
           continue;
         }
         if (s.status === "cancelled") continue;
-        stories.push({ id, status: s.status, freshness: "summary" });
-        if (isDone(s.status)) done++;
+        stories.push({ id, status: s.status, freshness: s.proof ?? "summary" });
+        // A proof that isn't for the current feature isn't done here, as the owner's map status says.
+        if (s.proof) notCurrent.push(id);
+        else if (isDone(s.status)) done++;
       }
     } else if (ref.team) {
       // A team's own map: its status is its own, judged against the map's feature.
@@ -171,13 +173,13 @@ export interface MapDelivery {
   map: string;
   /** The bets its map names, as <repo>#<id> when it names another repo's. */
   bets: string[];
-  stories: { id: string; status: string; approval: string }[];
+  stories: { id: string; status: string; approval: string; proof?: string }[];
   noSummary: string[];
   asOf?: string;
 }
 
-export function mapDeliveryIn(dir: string): { stories: { id: string; status: string; approval: string }[]; noSummary: string[]; releases: number; asOf?: string; maps: MapDelivery[] } {
-  const stories: { id: string; status: string; approval: string }[] = [];
+export function mapDeliveryIn(dir: string): { stories: MapDelivery["stories"]; noSummary: string[]; releases: number; asOf?: string; maps: MapDelivery[] } {
+  const stories: MapDelivery["stories"] = [];
   const noSummary: string[] = [];
   const maps: MapDelivery[] = [];
   let releases = 0;
@@ -195,7 +197,7 @@ export function mapDeliveryIn(dir: string): { stories: { id: string; status: str
       for (const id of ids) {
         const s = byId.get(id);
         if (!s) one.noSummary.push(id);
-        else if (s.status !== "cancelled") one.stories.push({ id, status: s.status, approval: s.approval });
+        else if (s.status !== "cancelled") one.stories.push({ id, status: s.status, approval: s.approval, ...(s.proof ? { proof: s.proof } : {}) });
       }
     } else if (!ref.team && !assignedIn(ref.dir).length) {
       // A group's map with no assignments: its own state. A team's map with no summary yet is counted as no summary yet, not from the group's folder.
@@ -212,10 +214,14 @@ export function mapDeliveryIn(dir: string): { stories: { id: string; status: str
   return { stories, noSummary, releases, ...(asOf ? { asOf } : {}), maps };
 }
 
+/** Done, as the plans above count it: a done story whose proof isn't for the current feature isn't. */
+export const doneHere = (s: { status: string; proof?: string }) => isDone(s.status) && !s.proof;
+
 /** A map's counts, as the rollout prints them. */
 export const mapCounts = (m: MapDelivery) => ({
   stories: m.stories.length + m.noSummary.length,
-  done: m.stories.filter((s) => isDone(s.status)).length,
+  done: m.stories.filter(doneHere).length,
+  ...(m.stories.some((s) => s.proof) ? { notCurrent: m.stories.filter((s) => s.proof).length } : {}),
   approved: m.stories.filter((s) => s.approval === "approved").length,
   inProgress: m.stories.filter((s) => s.status === "in_progress").length,
   ...(m.noSummary.length ? { noSummary: m.noSummary.length } : {}),

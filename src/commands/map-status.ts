@@ -179,6 +179,7 @@ export function writeSummaries(root: string, results: MapStatus[], now: Date = n
           status: s.status,
           approval: r.approvers[s.id] ? "approved" : "none",
           ...(r.approvers[s.id] ? { approved_by: r.approvers[s.id] } : {}),
+          ...(s.freshness === "changed" || s.freshness === "behind" || s.freshness === "unverified" ? { proof: s.freshness } : {}),
           read_at,
         })),
       };

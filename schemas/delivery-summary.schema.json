@@ -22,6 +22,7 @@
           "status": { "type": "string", "minLength": 1 },
           "approval": { "enum": ["none", "approved"] },
           "approved_by": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "proof": { "enum": ["changed", "behind", "unverified"] },
           "read_at": { "type": "string", "minLength": 1 }
         }
       }
