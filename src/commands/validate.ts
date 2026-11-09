@@ -7,7 +7,9 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { assignedMaps, groupKeyOf, keyOfMap, mapDirs, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { assignedMaps, groupKeyOf, keyOfMap, mapDirs, mapOwnerOf, NO_OWNER, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { hasSummary, summaryBody, summaryDrift } from "../lib/map-summary.js";
+import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
@@ -108,7 +110,8 @@ export function validateGroup(root: string): ValidationResult {
   if (store().exists(join(root, "intent", "storymap.yaml"))) {
     errors.push({ file: "intent/storymap.yaml", message: "this repo has both intent/ and maps/: keep one", hint: "move intent/ into maps/<id>/, or remove maps/" });
   }
-  if (!groupKeyOf(root)) errors.push({ file: "planning/plan.yaml", message: "has no key", hint: "add key: <KEY> to it, then retry" });
+  // The group key only names the ids of a map with no owner of its own.
+  if (!groupKeyOf(root) && mapDirs(root).some((d) => !mapOwnerOf(d))) errors.push({ file: "planning/plan.yaml", message: "has no key", hint: "add key: <KEY> to it, then retry" });
   const owner = new Map<string, string>();
   let stories = 0;
   let releases = 0;
@@ -434,8 +437,10 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       // A group's map names its one bet in bet:, so its releases and stories don't name bets.
       for (const r of storymap.releases ?? []) if (r?.bets !== undefined) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove bets: from release ${r?.number}` });
       for (const id of Object.keys(storymap.story_bets ?? {})) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove story_bets from ${id}` });
-      if (typeof storymap.bet !== "string") errors.push({ file: "storymap.yaml", message: `maps/${ref.id}/storymap.yaml has no bet: add bet: <bet-id>, the group bet this map specs` });
-      else if (ref.team && CROSS_REF.test(storymap.bet)) {
+      // The bet is optional (RFC rule 5): a map with none is valid, and counts toward no bet.
+      if (typeof storymap.bet !== "string") {
+        // nothing to check: the bet is optional
+      } else if (ref.team && CROSS_REF.test(storymap.bet)) {
         // A team's map names a bet in a plan above it. Its own maps check it against the plan the team joins; a copy was checked where it was written.
         if (ref.own) crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
       } else if (ref.team && !ref.own && !store().isDir(betsDir)) {
@@ -451,7 +456,46 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     }
   }
 
+  if (hasSummary(ref)) checkDeliverySummary(ref, errors);
+
   return { dir, errors, warnings, stories: mapStories.size, releases: storymap?.releases?.length ?? 0 };
+}
+
+/**
+ * A map's delivery.yaml must say what the map's files say now. nikos map status, state set, approve
+ * and map new write it, so a difference means a hand edit or a change that skipped nikOS. The plans
+ * above read this file, so CI goes red until it is written again and committed.
+ */
+function checkDeliverySummary(ref: StoryMapRef, errors: Issue[]): void {
+  const file = DELIVERY_SUMMARY;
+  const hint = "run nikos map status, then commit it";
+  if (!store().exists(join(ref.dir, "storymap.yaml"))) return; // validateMap reports the missing storymap
+  let body;
+  try {
+    body = summaryBody(ref.root, ref.dir);
+  } catch (err) {
+    // A storymap that doesn't read is reported above; a map with no owner is reported here.
+    if ((err as Error).message === NO_OWNER) errors.push({ file: "storymap.yaml", message: NO_OWNER });
+    return;
+  }
+  if (!store().exists(join(ref.dir, file))) {
+    errors.push({ file, message: "is missing", hint });
+    return;
+  }
+  let onDisk: unknown;
+  try {
+    onDisk = parse(read(join(ref.dir, file)));
+  } catch (err) {
+    errors.push({ file, message: `is not valid YAML: ${(err as Error).message.split("\n")[0]}`, hint });
+    return;
+  }
+  const problems = schemaProblems("delivery-summary.schema.json", onDisk);
+  if (problems.length) {
+    errors.push({ file, message: problems[0], hint });
+    return;
+  }
+  const drift = summaryDrift(body, onDisk);
+  if (drift) errors.push({ file, message: drift.message, hint });
 }
 
 /**
@@ -488,7 +532,7 @@ export function validateTeam(root: string, opts: { remote?: boolean } = {}): Val
   let releases = 0;
   const ownKeys = new Map<string, string>();
   const own = ownMapsOf(root);
-  if (own.length && !team?.key) errors.push({ file: TEAM_FILE, message: "a team that owns a map needs a key (nikos team init --key WEB)" });
+  if (own.length && !team?.key && own.some((r) => !mapOwnerOf(r.dir))) errors.push({ file: TEAM_FILE, message: "a team that owns a map needs a key (nikos team init --key WEB)" });
   let joined: string[] = [];
   try {
     joined = upstreamEntries(root).map((e) => e.repo);

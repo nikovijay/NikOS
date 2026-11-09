@@ -8,6 +8,7 @@ import { store } from "../lib/store.js";
 import { createStoryState, loadStates, perStory, statePath, storyStatePath, type StoryHome } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
+import { hasSummary, writeMapSummary } from "../lib/map-summary.js";
 
 const PRIORITIES = ["must", "should", "could"] as const;
 
@@ -106,6 +107,8 @@ Feature: ${title}
   store().write(feature, text, { create: true });
   store().write(mapPath, map.toString(yamlOpts));
   createStoryState(homeOf(ref), id, { status: "todo" });
+  // A new story changes the map's state and summary, so its delivery.yaml is written with it.
+  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return { id, release, feature, validation: validate(intentDir) };
 }
 

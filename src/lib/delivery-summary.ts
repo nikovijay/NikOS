@@ -1,5 +1,6 @@
-// The delivery summary a map's owner commits: maps/<key>/delivery.yaml, written by nikos map status
-// from the status of each team it read. The plans above read it, so no rollout fetches a team repo.
+// The delivery summary a map's owner commits: maps/<key>/delivery.yaml, worked out from the map's
+// own files (see lib/map-summary.ts) and written by nikos map status, state set, approve and map new.
+// The plans above read it, so no rollout reads a map's live state.
 // An approval here is the name it was given, not a verified identity (the amendment, rule 11).
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
@@ -10,8 +11,8 @@ export const DELIVERY_SUMMARY = "delivery.yaml";
 
 export interface SummaryStory {
   id: string;
-  /** The repo holding the story's status, "." for the owner, or "none" when nobody holds it. */
-  team: string;
+  /** Older summaries named the repo holding the story's status here. Nothing writes it now. */
+  team?: string;
   status: string;
   approval: "none" | "approved";
   approved_by?: string;
@@ -23,6 +24,7 @@ export interface SummaryStory {
 export interface DeliverySummary {
   format_version: 1;
   map: string;
+  /** The map's owner (its storymap owner, else the repo's group key). */
   owner: string;
   read_at: string;
   stories: SummaryStory[];
@@ -34,7 +36,7 @@ export function writeDeliverySummary(mapDir: string, summary: DeliverySummary): 
   if (problems.length) throw new Error(`${DELIVERY_SUMMARY}: ${problems[0]}`);
   const path = join(mapDir, DELIVERY_SUMMARY);
   // Overwritten on each run: it is generated, and read_at moves with every run.
-  store().write(path, `# Written by nikos map status from the teams' status it read. Commit it: the plans above read it.\n${stringify(summary)}`);
+  store().write(path, `# Written by nikos map status from the map's own files. Commit it: the plans above read it.\n${stringify(summary)}`);
   return path;
 }
 

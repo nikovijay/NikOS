@@ -25,6 +25,7 @@ import { isTeamRepo } from "../lib/team.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
+import { hasSummary, writeMapSummary } from "../lib/map-summary.js";
 
 /** Who is approving: git's user.name, or the login name when git has none. */
 export function approver(dir: string): string {
@@ -94,6 +95,8 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
 
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
   writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(ref.team ? { tested_commit: tested } : {}) });
+  // The map's delivery.yaml shows the approval, so it's written with it.
+  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return { story, by: opts.by, on };
 }
 

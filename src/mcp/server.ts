@@ -171,8 +171,8 @@ export function createServer(repo: string): McpServer {
     const r = rollout(root, { offline: a.offline });
     return text(formatRollout(r), { ...r });
   }, true);
-  tool("map_status", "How each team assigned to this group's stories is doing: its status for each story, whether that status was proved against the current feature, its delivery approval, and the group's intent approval. Teams are fetched read-only. offline: read the copies already fetched.", { map: z.string().optional(), offline: z.boolean().optional() }, (a) => {
-    const r = mapStatus(root, { map: a.map, offline: a.offline });
+  tool("map_status", "How each story in this repo's maps is doing, local and read from the maps' own files: its status, whether that status was proved against the current feature, and its approval.", { map: z.string().optional() }, (a) => {
+    const r = mapStatus(root, { map: a.map });
     return text(r.map(formatMapStatus).join("\n\n"), { ...statusJson(r) });
   }, true);
   tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {

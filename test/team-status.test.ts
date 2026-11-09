@@ -1,17 +1,7 @@
-// The freshness rules, branch by branch (classify), and what a group keeps from a team's repo.
+// The freshness rules, branch by branch (classify), against a team's status.
 import { describe, it, expect } from "vitest";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { assign } from "../src/commands/assign";
-import { teamJoin } from "../src/commands/team";
-import { setState } from "../src/commands/state";
-import { teamSync } from "../src/team/sync";
 import { classify, type Facts } from "../src/team/status";
-import { mapStatus } from "../src/commands/map-status";
-import { specHash, read } from "../src/lib/project";
-import { parse } from "yaml";
-import { readFileSync } from "node:fs";
-import { groupRepo, teamRepo, write, commitAll, feature } from "./team-fixture";
+import { feature } from "./team-fixture";
 
 const H = "aaaaaaaaaaaa";
 const OLD = "bbbbbbbbbbbb";
@@ -125,39 +115,3 @@ describe("classify", () => {
   });
 });
 
-describe("what a group keeps from a team's repo", () => {
-  it("keeps only status, approvals and the team file, and a state set stamps the spec hash it was written against", () => {
-    const g = groupRepo("PAY");
-    assign(g, "web", { repo: "acme/checkout-web", releases: [1] });
-    commitAll(g, "assign");
-    const t = teamRepo();
-    teamJoin(t, "acme/pay/checkout-group", { url: g });
-    commitAll(t, "join");
-    setState("PAY-CHK-1", "in_progress", { dir: t });
-    commitAll(t, "start");
-    const copy = join(t, ".nikos/assigned/acme/pay/checkout-group/maps/chk/features/pay/pay-by-card.feature");
-    expect(parse(readFileSync(join(t, "status/PAY-CHK-1.yaml"), "utf8")).spec_hash).toBe(specHash(read(copy)));
-
-    // The group changes the feature; the team's copy is stale until it syncs, and the stamp shows it.
-    write(join(g, "maps/chk/features/pay/pay-by-card.feature"), feature("PAY-CHK-1", "pay", 1, "Pay by card, with a receipt"));
-    commitAll(g, "edit feature");
-    teamSync(t);
-    expect(parse(readFileSync(join(t, "status/PAY-CHK-1.yaml"), "utf8")).spec_hash).not.toBe(specHash(read(copy)));
-  });
-
-  it("a team's code is not kept in the group's copy: only status, approvals and the team file", () => {
-    const g = groupRepo("PAY");
-    const web = teamRepo();
-    assign(g, "web", { repo: "acme/checkout-web", releases: [1], url: web });
-    commitAll(g, "assign");
-    teamJoin(web, "acme/pay/checkout-group", { url: g });
-    commitAll(web, "join");
-    setState("PAY-CHK-1", "in_progress", { dir: web });
-    commitAll(web, "start");
-    mapStatus(g);
-    const copy = join(g, ".nikos/teams/acme/checkout-web");
-    expect(existsSync(join(copy, "status/PAY-CHK-1.yaml"))).toBe(true);
-    expect(existsSync(join(copy, "package.json"))).toBe(false);
-    expect(existsSync(join(copy, ".git"))).toBe(false);
-  });
-});

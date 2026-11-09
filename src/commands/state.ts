@@ -3,6 +3,7 @@ import { STORY_ID, read, specHash } from "../lib/project.js";
 import { homeOf, storyMapFor } from "../lib/maps.js";
 import { codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
+import { hasSummary, writeMapSummary } from "../lib/map-summary.js";
 import { validate } from "./validate.js";
 import { verify, type VerifyResult } from "./verify.js";
 
@@ -140,6 +141,8 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     else doc.deleteIn([...entry, "cancelled_reason"]);
     doc.setIn([...entry, "updated"], opts.date ?? new Date().toISOString().slice(0, 10));
   }, { create: !!ref.team });
+  // The map's delivery.yaml says what its files say: written with each change, so `nikos validate` finds it current.
+  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return result;
 }
 

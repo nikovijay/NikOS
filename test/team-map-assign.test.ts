@@ -78,50 +78,36 @@ describe("a team's own map: assign and map status", () => {
     expect(() => assign(b, "x", { repo: "acme/x", stories: ["WEB-INB-2"] })).toThrow("this is a team repo: assignments are made in the group repo");
   });
 
-  it("reads its own stories in place and the other team's status, and writes its delivery.yaml", () => {
+  it("reads its own stories from its own status, and writes its delivery.yaml with no team in it", () => {
     const a = owner();
-    const b = teamAt("IOS", "acme/ios-team", "iOS team");
-    assign(a, "Web team", { repo: ".", stories: ["WEB-INB-1"] });
-    assign(a, "iOS team", { repo: "acme/ios-team", stories: ["WEB-INB-2"], url: b });
-    commitAll(a, "assign");
-    teamJoin(b, "acme/web-team", { url: a });
-    expect(teamSync(b).groups.map((g) => g.stories)).toEqual([1]);
-    setState("WEB-INB-2", "in_progress", { dir: b, by: "Priya" });
-    setState("WEB-INB-2", "done", { dir: b, by: "Priya" });
-    approve("WEB-INB-2", { dir: b, by: "Priya Shah", date: "2027-01-06" });
-    commitAll(b, "delivered");
-
+    setState("WEB-INB-1", "in_progress", { dir: a, by: "Priya" });
+    commitAll(a, "start");
     const [m] = mapStatus(a);
     expect(m.map).toBe("inb");
-    expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place" });
-    expect(m.stories.find((s) => s.id === "WEB-INB-2")).toMatchObject({ team: "iOS team", freshness: "current", delivery: "approved by Priya Shah" });
-
-    const written = writeSummaries(a, [m]).written;
-    expect(written).toEqual([join(a, "maps/inb/delivery.yaml")]);
+    expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "in_progress", approval: "none" });
+    expect(writeSummaries(a, [m])).toEqual([join(a, "maps/inb/delivery.yaml")]);
     const summary = readDeliverySummary(join(a, "maps/inb"));
-    expect(summary).toMatchObject({ map: "inb", owner: "acme/web-team" });
-    expect(summary?.stories.find((s) => s.id === "WEB-INB-2")).toMatchObject({ team: "acme/ios-team", status: "done", approval: "approved", approved_by: "Priya Shah" });
+    expect(summary).toMatchObject({ map: "inb", owner: "WEB" });
+    expect(summary?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "in_progress", approval: "none" });
+    expect(summary?.stories.find((s) => s.id === "WEB-INB-1")).not.toHaveProperty("team");
     // The team's own state is in its status/ at the root, and the map has no state file of its own.
     expect(existsSync(join(a, "maps/inb/state.yaml"))).toBe(false);
-    expect(status(a, "WEB-INB-1")).toMatchObject({ status: "todo" });
+    expect(status(a, "WEB-INB-1")).toMatchObject({ status: "in_progress" });
   });
 
   it("shows the team's approval of its own share, and writes it to delivery.yaml", () => {
     const a = owner();
-    assign(a, "Web team", { repo: ".", stories: ["WEB-INB-1"] });
-    commitAll(a, "assign");
     setState("WEB-INB-1", "in_progress", { dir: a, by: "Ada" });
     setState("WEB-INB-1", "done", { dir: a, by: "Ada" });
     commitAll(a, "done");
-    // Done with no approval yet: still in place, nothing to approve shown.
-    expect(mapStatus(a)[0].stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place", delivery: "n/a (in place)" });
+    // Done with no approval yet: nothing to approve shown.
+    expect(mapStatus(a)[0].stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "done", approval: "none" });
     approve("WEB-INB-1", { dir: a, by: "Ada Lovelace", date: "2027-01-06" });
     commitAll(a, "approved");
     const [m] = mapStatus(a);
-    expect(m.own).toBe(true);
-    expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ holder: ".", freshness: "in-place", delivery: "approved by Ada Lovelace" });
+    expect(m.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ approval: "approved", approved_by: "Ada Lovelace" });
     writeSummaries(a, [m]);
-    expect(readDeliverySummary(join(a, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ team: ".", status: "done", approval: "approved", approved_by: "Ada Lovelace" });
+    expect(readDeliverySummary(join(a, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
   });
 
   it("committing the map's delivery.yaml and a new share leaves the team's approval current", () => {
@@ -157,8 +143,8 @@ describe("a team's own map: assign and map status", () => {
     expect(existsSync(join(a, "CODEOWNERS"))).toBe(false);
   });
 
-  it("a team with no map of its own is still refused by map status with the 0.3.0 wording", () => {
+  it("a team with no map of its own has no status to read", () => {
     const plain = teamAt(undefined, "acme/plain-team", "Plain team");
-    expect(() => mapStatus(plain)).toThrow("this is a team repo: run nikos map status in the group repo");
+    expect(() => mapStatus(plain)).toThrow("no story maps in maps/");
   });
 });

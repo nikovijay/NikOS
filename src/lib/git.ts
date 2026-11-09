@@ -22,15 +22,28 @@ export function headOf(root: string): string | undefined {
  */
 const TEAM_OWN = [":!status", ":!approvals", ":!nikos.team.yaml", ":!.nikos", ":(exclude,glob)maps/*/assignments.yaml", ":(exclude,glob)maps/*/delivery.yaml"];
 
+/**
+ * Paths nikOS writes about a map's own status and sign-offs (its state, approvals and delivery summary).
+ * They change with each move and sign-off, not with the code, so they never lapse an approval.
+ */
+const BOOKKEEPING = [
+  ":!.nikos",
+  ":(exclude,glob)maps/*/state.yaml",
+  ":(exclude,glob)maps/*/state/**",
+  ":(exclude,glob)maps/*/approvals.yaml",
+  ":(exclude,glob)maps/*/approvals/**",
+  ":(exclude,glob)maps/*/delivery.yaml",
+];
+
 /** Whether the code (everything but a team's own status, approvals, copies, shares and delivery summaries) changed since a commit. */
 export function codeChangedSince(root: string, commit: string): boolean {
-  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...TEAM_OWN], { cwd: root, encoding: "utf8" });
+  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...TEAM_OWN, ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status !== 0;
 }
 
 /** Whether the code has uncommitted changes (a team's own status and approvals don't count). */
 export function codeIsDirty(root: string): boolean {
-  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...TEAM_OWN], { cwd: root, encoding: "utf8" });
+  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...TEAM_OWN, ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status === 0 && r.stdout.trim() !== "";
 }
 

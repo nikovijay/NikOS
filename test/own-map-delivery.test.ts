@@ -2,7 +2,7 @@
 // the team's own status/ (rule 9). A map the summary doesn't cover counts as no summary yet, never todo
 // from a folder that holds no state for it.
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
@@ -36,9 +36,9 @@ describe("a team's own map with no assignments", () => {
     write(join(t, "status/WEB-INB-1.yaml"), "status: done\n");
     const results = mapStatus(t);
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ assigned: true, map: "inb" });
+    expect(results[0]).toMatchObject({ map: "inb" });
     expect(results[0].stories.map((s) => [s.id, s.status])).toEqual([["WEB-INB-1", "done"]]);
-    expect(writeSummaries(t, results, new Date("2026-11-08T09:00:00Z")).written).toEqual([join(t, "maps/inb/delivery.yaml")]);
+    expect(writeSummaries(t, results, new Date("2026-11-08T09:00:00Z"))).toEqual([join(t, "maps/inb/delivery.yaml")]);
     expect(existsSync(join(t, "maps/inb/delivery.yaml"))).toBe(true);
     expect(parse(readFileSync(join(t, "maps/inb/delivery.yaml"), "utf8")).stories[0]).toMatchObject({ id: "WEB-INB-1", status: "done" });
   });
@@ -56,6 +56,7 @@ describe("a team's own map with no assignments", () => {
   it("with no summary yet counts its stories as no summary yet, not as todo", () => {
     const t = teamWithOwnMap();
     write(join(t, "status/WEB-INB-1.yaml"), "status: done\n");
+    rmSync(join(t, "maps/inb/delivery.yaml")); // newMap writes one; this case has none
     const d = mapDeliveryIn(t);
     expect(d.stories).toEqual([]);
     expect(d.noSummary).toEqual(["WEB-INB-1"]);

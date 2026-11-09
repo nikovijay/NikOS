@@ -15,6 +15,7 @@ import { planYaml } from "../lib/group-plan.js";
 import { store } from "../lib/store.js";
 import { count, read, walk } from "../lib/project.js";
 import { mapDirs } from "../lib/maps.js";
+import { writeMapSummary } from "../lib/map-summary.js";
 import { isTeamRepo, openTeam, TEAM_FILE } from "../lib/team.js";
 import { upstreamEntries } from "../planning/upstream.js";
 import { branchExists, commitPaths, currentBranch, gitIn, isGit, pathOf, statusOf, switchNewBranch } from "../lib/git.js";
@@ -591,6 +592,14 @@ export function targetProblems(root: string, plan: MapsPlan): string[] {
     for (const m of plan.moves) rmSync(join(tmp, m.from), { force: true });
     rmSync(join(tmp, "intent"), { recursive: true, force: true });
     for (const [rel, body] of plan.files) store().write(join(tmp, rel), body);
+    // Each new map's delivery.yaml, as the real apply writes it: a map that can't be summarised is reported by the checks.
+    for (const dir of mapDirs(tmp)) {
+      try {
+        writeMapSummary(tmp, dir);
+      } catch {
+        // the checks below say what is wrong with the map
+      }
+    }
     return groupErrors(tmp);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
@@ -700,6 +709,7 @@ export function applyMapsPlan(root: string, p: MapsPlan, opts: { git: boolean; b
     }
     for (const rel of p.removes) rmSync(join(root, rel), { force: true });
     for (const [rel, body] of p.files) store().write(join(root, rel), body);
+    for (const dir of mapDirs(root)) writeMapSummary(root, dir);
     removeEmptyDirs(join(root, "intent"));
     if (existsSync(join(root, "intent"))) {
       throw new MigrateError(`Something is left under intent/, so the migration stopped: ${entriesUnder(root, "intent").files.slice(0, 5).join(", ")}`);
@@ -889,7 +899,8 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
  */
 function commitMigration(root: string, plan: MapsPlan): { ok: boolean; error?: string } {
   const intentTracked = gitIn(root, ["ls-files", "--", "intent"]).stdout.trim() !== "";
-  const paths = [...new Set([...(intentTracked ? ["intent"] : []), ...plan.moves.map((m) => m.to), ...plan.files.keys()])];
+  const summaries = mapDirs(root).map((dir) => join(relative(root, dir), "delivery.yaml"));
+  const paths = [...new Set([...(intentTracked ? ["intent"] : []), ...plan.moves.map((m) => m.to), ...plan.files.keys(), ...summaries])];
   const r = commitPaths(root, paths, commitMessage(plan.folder));
   return r.ok ? { ok: true } : { ok: false, error: r.error ?? "git commit failed" };
 }

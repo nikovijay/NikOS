@@ -147,9 +147,10 @@ Story maps and stories
   map              Save the story map as a page you can open offline
                    (--out, default storymap.html; --map)
   map new          Make a story map for one bet, in maps/<key>/. In a group repo, or a team
-                   repo with a key and a home (--bet <bet-id or repo#bet-id>, --key <KEY>)
-  map status       See how each team is doing on the stories it was given, and save it to
-                   maps/<key>/delivery.yaml to commit (--map, --offline, --json saves nothing)
+                   repo with a key and a home (--bet <bet-id or repo#bet-id>, --key <KEY>,
+                   --owner <KEY> for the story ids, e.g. WEB-CHK-1)
+  map status       How each story in this repo's maps is doing, and save it to
+                   maps/<key>/delivery.yaml to commit (--map, --json saves nothing)
   validate [dir]   Check the intent/ folder is well formed
   show <id>        Sum up a story: its feature, status, plan, bets and decisions
   next             Show the next story to build

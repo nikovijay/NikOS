@@ -87,7 +87,7 @@ describe("a bet's delivery says how old the summary it counts is", () => {
     write(join(grp, "planning/plan.yaml"), "name: Payments group\nlevel: group\nkey: PAY\n");
     write(join(grp, "maps/chk/storymap.yaml"), "format_version: 1\nproject: chk\nkey: CHK\nbet: pay-card\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-CHK-1]\n");
     const old = new Date(Date.now() - 3 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, "Z");
-    const summary: DeliverySummary = { format_version: 1, map: "chk", owner: "acme/payments-group", read_at: old, stories: [{ id: "PAY-CHK-1", team: "acme/web", status: "done", approval: "none", read_at: old }] };
+    const summary: DeliverySummary = { format_version: 1, map: "chk", owner: "PAY", read_at: old, stories: [{ id: "PAY-CHK-1", team: "acme/web", status: "done", approval: "none", read_at: old }] };
     writeDeliverySummary(join(grp, "maps/chk"), summary);
     commitAll(grp, "map");
     write(join(co, "planning/downstream.yaml"), `- name: Payments\n  repo: acme/payments-group\n  url: ${grp}\n`);
@@ -109,7 +109,7 @@ describe("a delivery summary is rewritten on each run", () => {
   it("writes the same map's summary twice without an EEXIST, and the second read_at wins", () => {
     const dir = tmp("sum");
     write(join(dir, "maps/am/README.md"), "");
-    const base = { format_version: 1 as const, map: "am", owner: "acme/payments-group" };
+    const base = { format_version: 1 as const, map: "am", owner: "PAY" };
     writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-01T00:00:00Z", stories: [] });
     expect(() => writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-02T00:00:00Z", stories: [] })).not.toThrow();
     expect(readDeliverySummary(join(dir, "maps/am"))?.read_at).toBe("2027-01-02T00:00:00Z");

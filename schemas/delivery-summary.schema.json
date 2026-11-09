@@ -8,13 +8,13 @@
   "properties": {
     "format_version": { "const": 1 },
     "map": { "type": "string", "minLength": 1, "maxLength": 40 },
-    "owner": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$" },
+    "owner": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
     "read_at": { "type": "string", "minLength": 1 },
     "stories": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "team", "status", "approval", "read_at"],
+        "required": ["id", "status", "approval", "read_at"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*-[0-9]+$" },

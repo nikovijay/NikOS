@@ -286,17 +286,33 @@ export function storyMapsOf(root: string): StoryMapRef[] {
 }
 
 export const NO_GROUP_KEY = "planning/plan.yaml has no key: add key: <KEY> to it, then retry";
-export const NO_TEAM_KEY = "nikos.team.yaml: a team that owns a map needs a key (nikos team init --key WEB, or key: WEB in nikos.team.yaml)";
+export const NO_TEAM_KEY = "nikos.team.yaml: a team that owns a map needs a key (nikos team init --key WEB), or an owner: in its storymap.yaml";
+export const NO_OWNER = "this map has no owner: add owner: <KEY> to its storymap.yaml, or a key to planning/plan.yaml (the fallback)";
+/** An owner: uppercase letters and digits, up to 10, e.g. WEB. */
+export const OWNER = /^[A-Z][A-Z0-9]{0,9}$/;
+
+/** A story map's owner from its storymap.yaml, e.g. WEB; undefined when it names none (or doesn't read). */
+export function mapOwnerOf(dir: string): string | undefined {
+  try {
+    const owner = (parse(read(join(dir, "storymap.yaml"))) as { owner?: unknown } | null)?.owner;
+    return typeof owner === "string" ? owner : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * The prefix on a story's id: the map's key for intent/, or <GROUP>-<MAP> for a map in a group
- * repo, e.g. PAY-CHK, so the id is unique across the company. A team's own map takes the team's
- * key (WEB-INB), and a team's copy reads the key of the repo it was copied from.
+ * The prefix on a story's id: the map's key for intent/, or <OWNER>-<MAP> for a map in a group
+ * repo, e.g. WEB-CHK, so the id is unique across the company. The map's owner comes first; a map
+ * with no owner takes the group key of its repo (planning/plan.yaml, then nikos.team.yaml), e.g. PAY-CHK.
+ * A team's copy reads the key of the repo it was copied from.
  */
 export function storyPrefix(ref: StoryMapRef, key: string): string {
   if (!ref.id) return key;
+  const owner = mapOwnerOf(ref.dir);
+  if (owner) return `${owner}-${key}`;
   const group = keyOf(ref.copyRoot ?? ref.root);
-  if (!group) throw new Error(ref.own ? NO_TEAM_KEY : NO_GROUP_KEY);
+  if (!group) throw new Error(NO_OWNER);
   return `${group}-${key}`;
 }
 
