@@ -16,10 +16,13 @@ export function headOf(root: string): string | undefined {
   return r.status === 0 ? r.stdout.trim() : undefined;
 }
 
-/** Paths a team repo writes about itself: its status and approvals, its identity file, and the copies it fetched. Changes there aren't code. */
-const TEAM_OWN = [":!status", ":!approvals", ":!nikos.team.yaml", ":!.nikos"];
+/**
+ * Paths a team repo writes about itself: its status and approvals, its identity file, the copies it fetched,
+ * and each map's shares and delivery summary (nikos assign, nikos map status). Changes there aren't code.
+ */
+const TEAM_OWN = [":!status", ":!approvals", ":!nikos.team.yaml", ":!.nikos", ":(exclude,glob)maps/*/assignments.yaml", ":(exclude,glob)maps/*/delivery.yaml"];
 
-/** Whether the code (everything but a team's own status, approvals and copies) changed since a commit. */
+/** Whether the code (everything but a team's own status, approvals, copies, shares and delivery summaries) changed since a commit. */
 export function codeChangedSince(root: string, commit: string): boolean {
   const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...TEAM_OWN], { cwd: root, encoding: "utf8" });
   return r.status !== 0;
