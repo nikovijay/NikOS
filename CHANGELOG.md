@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **nikOS Plan: the company's plan in one repo.** `nikos plan init` makes a planning repo with a folder for each level: `planning/company/`, `planning/departments/<id>/`, `planning/groups/<id>/` and `planning/teams/<KEY>/`. Add them with `nikos plan add department|group|team`. Key results, bets, check-ins, target changes and reviews work as `nikos planning` does, in the area named with `--in` or the area folder you're in. The company plans by year and departments by quarter: a department's key result needs `--period 2027-Q1` inside the company's year, and is due at the quarter's end. Ids are unique within the company, so links inside the repo are just ids. A link goes up a level, never down. Settings come down the folders: each area's `settings.yaml` changes what nobody above it locked. `nikos plan status` and `nikos plan validate` cover the whole company. See `docs/plan.md`. This is the first of the changes in `docs/rfcs/plan-and-spec.md`. The dashboard, and delivery from code repos, come in later releases.
+
 ## 0.4.3 (2026-11-09)
 
 ### Changed

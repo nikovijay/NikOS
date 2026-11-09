@@ -26,6 +26,7 @@ import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
 import { help as planningHelp, runPlanning } from "./planning/cli.js";
+import { help as planRepoHelp, runPlanRepo } from "./plan/cli.js";
 import { runServeCommand } from "./commands/serve.js";
 import { runApply } from "./planning/apply.js";
 import { runAssign } from "./commands/assign.js";
@@ -39,7 +40,8 @@ import { closest } from "./lib/closest.js";
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   init: runInit,
   validate: runValidate,
-  plan: runPlan,
+  // plan new <story> starts a story's plan; every other plan command is the company's planning repo.
+  plan: (args: string[]) => (args[0] === "new" ? runPlan(args) : runPlanRepo(args)),
   clear: runClear,
   verify: runVerify,
   ci: runCi,
@@ -116,6 +118,8 @@ Get started
   suggest          Say where things stand and what to do next (--json, --brief, --map)
 
 Plans: objectives, key results and bets
+  plan <cmd>       The company's plan in one repo, with a folder for each department, group
+                   and team. Run nikos plan help to see how (plan init, add, kr, bet, checkin)
   company init     Make a company plan that departments plan under. Add --level department
                    for a department's plan (--name, --period, --departments, --repo, --host)
   group init       Make a group plan: bets aimed at a department's key results. A group has
@@ -225,7 +229,7 @@ async function main(argv: string[]): Promise<number> {
   // `<command> --help` prints help and runs nothing: some commands write files whatever their arguments.
   // `migrate maps` has its own, longer help.
   if ((rest.includes("--help") || rest.includes("-h")) && !(cmd === "migrate" && rest[0] === "maps")) {
-    console.log(cmd === "planning" ? planningHelp : commandHelp(cmd));
+    console.log(cmd === "planning" ? planningHelp : cmd === "plan" && rest[0] !== "new" ? planRepoHelp : commandHelp(cmd));
     return 0;
   }
   // `nikos map` alone writes the page, which a team can have; `map new` writes a map.

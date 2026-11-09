@@ -6,6 +6,7 @@ import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
 import { delivery } from "./delivery.js";
 import { crossRefs, runSync } from "./upstream.js";
 import { runServe } from "./server.js";
+import { findPlanRepo } from "../plan/repo.js";
 import { closest } from "../lib/closest.js";
 import { addDownstream, betDeliveryText, formatRollout, rollout } from "./rollout.js";
 
@@ -103,6 +104,10 @@ export async function runPlanning(args: string[]): Promise<number> {
   const { positional, all, opt, has } = parseArgs(args, ["editable", "with-linked"]);
   const root = findRoot(opt("dir") ?? process.cwd());
   const [cmd, sub, id, extra] = positional;
+  if (cmd && cmd !== "help" && findPlanRepo(root)) {
+    console.error(`✗ This is a planning repo, where every level has a folder. Use nikos plan ${cmd} instead.\nSee every plan command: nikos plan help`);
+    return 1;
+  }
   try {
     switch (cmd) {
       case undefined:

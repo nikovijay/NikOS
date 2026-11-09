@@ -2,13 +2,15 @@
 // and teams inherit them through planning/upstream.yaml (synced into .nikos/upstream/), and can
 // change any value the levels above haven't locked. Each value remembers where it came from.
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { REPO_PATH } from "./bets.js";
 import { isTeamRepo, openTeam, teamOptedIn } from "./team.js";
+import { areaOf, type Area } from "../planning/model.js";
+import { chainOf } from "../plan/repo.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -105,6 +107,8 @@ export function resolveSettings(root: string): Resolved {
 
 /** resolveSettings, with the problems found in the levels above (a group copy that doesn't read, or two locks that disagree). */
 export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
+  const area = areaOf(root);
+  if (area) return areaSettings(area);
   // A team that has opted in takes its home's locks. Any other team repo with a planning/ folder is a 0.3.0 repo that
   // reads its joined plans as before, so only a team with no planning/ folder, or one that has opted in, takes teamSettings.
   const r = resolve(root);
@@ -197,14 +201,42 @@ function teamSettings(root: string): { resolved: Resolved; problems: string[] } 
   return { resolved: out, problems };
 }
 
+/** An area's own settings file: the company's is nikos.settings.yaml at the root, any other area's is its settings.yaml. */
+const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.repo, SETTINGS_FILE) : join(area.dir, "settings.yaml"));
+
+/**
+ * The settings for an area of a planning repo: the company's, then each level down the folders to
+ * this one. Each level changes what nobody above it locked. See docs/rfcs/plan-and-spec.md, rule 6.
+ */
+function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
+  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
+  const problems: string[] = [];
+  for (const level of chainOf(area)) {
+    const path = areaSettingsFile(level);
+    if (!store().exists(path)) continue;
+    const text = store().read(path);
+    const bad = checkSettingsText(text);
+    if (bad) {
+      problems.push(`${level.rel}'s settings are skipped: ${bad.replace(SETTINGS_FILE, relative(area.repo, path))}`);
+      continue;
+    }
+    const data = parse(text) ?? {};
+    for (const [key, value] of Object.entries(flatten(data))) if (!out[key].lockedBy) out[key] = { value, from: level.rel };
+    for (const key of data.locked ?? []) if (out[key] && !out[key].lockedBy) out[key].lockedBy = level.rel;
+  }
+  return { resolved: out, problems };
+}
+
 export const settingValue = <T>(root: string, key: string): T => resolveSettings(root)[key].value as T;
 
 /** Change a setting in this repo's own file, unless a level above locked it. */
 export function setSetting(root: string, key: string, value: unknown): string {
   if (!(key in DEFAULTS)) throw new Error(`'${key}' isn't a setting. Settings: ${Object.keys(DEFAULTS).join(", ")}`);
   const current = resolveSettings(root)[key];
-  if (current.lockedBy && current.lockedBy !== "this repo") throw new Error(`${key} is locked by ${current.lockedBy}, so it can't be changed here`);
-  const path = join(root, SETTINGS_FILE);
+  const area = areaOf(root);
+  const own = area ? area.rel : "this repo";
+  if (current.lockedBy && current.lockedBy !== own) throw new Error(`${key} is locked by ${current.lockedBy}, so it can't be changed here`);
+  const path = area ? areaSettingsFile(area) : join(root, SETTINGS_FILE);
   const doc = parseDocument(store().exists(path) ? store().read(path) : "# nikOS settings. Departments, groups and teams that plan against this repo inherit them.\nformat_version: 1\n");
   doc.setIn(key.split("."), value);
   const text = doc.toString({ lineWidth: 0, flowCollectionPadding: false });
