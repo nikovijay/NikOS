@@ -12,13 +12,13 @@ export function runServeCommand(args: string[]): Promise<number> | number {
   };
   const root = resolve(opt("dir") ?? process.cwd());
   if (!store().exists(join(root, "intent", "storymap.yaml")) && !store().isDir(join(root, "planning"))) {
-    console.error("✗ Nothing to show here yet: this folder has no intent/ or planning/. Set it up with nikos start (a team's product) or nikos company init (a company plan).");
+    console.error(`✗ There's nothing to show in ${root} yet: it has no story map (intent/) and no plan (planning/).\n  To set it up, run: nikos start`);
     return 1;
   }
   const exportTo = opt("export");
   // A bare --export (no file) would otherwise start the live server.
   if (args.includes("--export") && (exportTo === undefined || exportTo.startsWith("--"))) {
-    console.error("✗ --export needs a file: --export <file>");
+    console.error("✗ --export needs a file name. For example: nikos serve --export plan.html");
     return 1;
   }
   return runServe(root, {

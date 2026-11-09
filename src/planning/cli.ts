@@ -6,34 +6,54 @@ import { checkIn, isStale, latest, newKr, reviseTarget } from "./krs.js";
 import { delivery } from "./delivery.js";
 import { crossRefs, runSync } from "./upstream.js";
 import { runServe } from "./server.js";
+import { closest } from "../lib/closest.js";
 import { addDownstream, betDeliveryText, formatRollout, rollout } from "./rollout.js";
 
-export const help = `nikos planning — bets, key results and the planning dashboard
+export const help = `nikos planning: key results, bets and check-ins
+
+A key result is a number you want to move by a date, from a baseline to a target.
+A bet is what you believe will move it, and why. It has a review date, not a deadline.
 
 Usage: nikos planning <command> [options] [--dir <repo>]
 
 Commands:
-  bet new <id>       Write planning/bets/<id>.md
-                     (--owner, --hypothesis, --review YYYY-MM-DD, --kr <primary>, --also <ref>,
-                      --aligns-to <repo path>#<bet> (repeat for several: bets in the plan directly above),
-                      --team, --starts, --deadline, --confidence low|medium|high, --dependency, --evidence)
-  bet review <id> <continue|change|stop|complete>  Add a dated review decision (--why, --outcome won|lost)
-  kr new <id>        Write planning/krs/<id>.yaml: company and department plans only
+  kr new <id>        Add a key result, in planning/krs/<id>.yaml. Company and department plans only
                      (--title, --owner, --baseline, --target, --by YYYY-MM-DD, --unit, --objective,
-                      --aligns-to <repo path>#<kr> (repeat for several), --stale-after <days>)
-  kr target <id> <n> Revise a key result's target; the original is kept
-  checkin <kr> <value>  Add a dated check-in (--note, --evidence, --date)
-  status             Every bet's delivery and outcome, every key result's latest value
-  validate           Check planning/ against its schemas and the rules for its level
-  sync [--check]     Fetch the plans in planning/upstream.yaml read-only into .nikos/upstream/
-  downstream add <name>  List a department or team below this plan (--repo <path>, --host gitlab.com,
-                     --url <git url> for any other host, an SSH url or a local repo; --home <repo>
-                     when it is homed in another plan this one doesn't own)
-  rollout            How the plans below this one are doing: joined, last synced, delivery, and
-                     the key results and bets that point here (--json, --offline, --as <repo path>)
-  serve              Open the local dashboard (--port). --export <file> writes it as one offline page;
-                     add --editable to queue changes in that page and download them as a change
-                     file for nikos apply (--with-linked embeds the plans above and below, read-only)`;
+                     --aligns-to <repo path>#<kr> to link it to one above (repeat for several),
+                     --stale-after <days> before it asks for a check-in)
+  kr target <id> <n> Move a key result's target. The original target stays on record
+  checkin <kr> <value>  Record the key result's value today (--note, --evidence, --date)
+  bet new <id>       Add a bet, in planning/bets/<id>.md
+                     (--owner, --hypothesis, --review YYYY-MM-DD, --kr <the key result it moves>,
+                     --also <another key result>, --aligns-to <repo path>#<bet> for a bet in the plan
+                     directly above (repeat for several), --team, --starts, --deadline,
+                     --confidence low|medium|high, --dependency, --evidence)
+  bet review <id> <continue|change|stop|complete>  Record a review: what you decided and why
+                     (--why, --outcome won|lost when you complete it)
+  status             Show every key result's latest value, and every bet's delivery and outcome
+  validate           Check the planning/ folder is well formed for its level
+  sync [--check]     Fetch a read-only copy of the plans listed in planning/upstream.yaml,
+                     into .nikos/upstream/ (--check only says whether they're current)
+  downstream add <name>  List a department or team that plans under this one
+                     (--repo <path>, --host gitlab.com, --url <git url> for any other host, an SSH
+                     url or a local repo; --home <repo> when its home is a plan this one doesn't own)
+  rollout            See how the plans under this one are doing: who joined, when they last
+                     synced, delivery, and what points here (--json, --offline, --as <repo path>)
+  serve              Open the dashboard (--port). --export <file> saves it as one offline page;
+                     add --editable so people can suggest changes in it and download them as a file
+                     for nikos apply (--with-linked includes the plans above and below, read-only)`;
+
+/** The help's lines for one command: its entries, and the lines that continue them. */
+function entryOf(cmd: string): string {
+  const out: string[] = [];
+  let on = false;
+  for (const line of help.split("\n")) {
+    if (/^  \S/.test(line)) on = line.trim().split(/\s/)[0] === cmd;
+    else if (!/^     /.test(line)) on = false;
+    if (on) out.push(`nikos planning ${line.trim()}`.replace(/^nikos planning (\(|--)/, "    $1"));
+  }
+  return out.join("\n");
+}
 
 /** Flags and positional words. A flag takes the next word as its value, unless it's a flag in `bools`, which never takes one. */
 export function parseArgs(args: string[], bools: string[] = []) {
@@ -178,7 +198,7 @@ export async function runPlanning(args: string[]): Promise<number> {
         return 0;
       }
       case "serve":
-        if (has("export") && opt("export") === "true") throw new Error("--export needs a file: --export <file>");
+        if (has("export") && opt("export") === "true") throw new Error("--export needs a file name. For example: nikos planning serve --export plan.html");
         return await runServe(root, {
           port: opt("port") ? Number(opt("port")) : undefined,
           exportTo: opt("export"),
@@ -187,7 +207,14 @@ export async function runPlanning(args: string[]): Promise<number> {
           withLinked: has("with-linked"),
         });
     }
-    console.error(`Unknown planning command.\n\n${help}`);
+    // A typo gets the nearest command; a known command with something missing gets its own lines of the help.
+    const known = ["bet", "kr", "checkin", "status", "validate", "sync", "downstream", "rollout", "serve", "help"];
+    if (!known.includes(cmd)) {
+      const near = closest(cmd, known);
+      console.error(`Unknown planning command '${cmd}'.${near ? ` Did you mean: nikos planning ${near}?` : ""}\nSee every planning command: nikos planning help`);
+      return 1;
+    }
+    console.error(`✗ Something is missing. How to use it:\n\n${entryOf(cmd)}\n\nSee every planning command: nikos planning help`);
     return 1;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

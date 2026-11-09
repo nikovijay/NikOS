@@ -414,17 +414,19 @@ export async function startServer(root: string, opts: StartOptions = {}): Promis
 /** `nikos planning serve`: run the dashboard until Ctrl+C, or export it to one file. */
 export async function runServe(root: string, opts: { port?: number; exportTo?: string; map?: string; editable?: boolean; withLinked?: boolean } = {}): Promise<number> {
   if (opts.withLinked && !opts.editable) {
-    console.error("✗ --with-linked needs --editable");
+    console.error("✗ --with-linked only works with --editable. Try: nikos serve --export plan.html --editable --with-linked");
     return 1;
   }
   if (opts.editable) {
     if (!opts.exportTo) {
-      console.error("✗ --editable needs --export FILE");
+      console.error("✗ --editable needs a file to save to. Try: nikos serve --export plan.html --editable");
       return 1;
     }
     try {
       const { wrote } = exportEditable(root, opts.exportTo, { withLinked: opts.withLinked, notice: (line) => console.log(line) });
-      console.log(`Wrote ${wrote}`);
+      console.log(`Saved an editable copy of the dashboard: ${wrote}`);
+      console.log("Send it to the people you plan with. They open it in a browser, make changes and download a changes file.");
+      console.log("When they send that file back, apply it here with nikos apply and the file's name.");
       return 0;
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);
@@ -433,13 +435,19 @@ export async function runServe(root: string, opts: { port?: number; exportTo?: s
   }
   if (opts.exportTo) {
     const { wrote } = exportSnapshot(root, opts.exportTo);
-    console.log(`Wrote ${wrote}`);
+    console.log(`Saved the dashboard as one page: ${wrote}`);
+    console.log("It opens in any browser, works offline and can't change anything.");
     return 0;
   }
   const srv = await startServer(root, { port: opts.port, map: opts.map });
-  console.log(`nikOS planning dashboard: ${srv.url}`);
-  console.log("Saves write this repo's planning, maps and assignments. On a git repo they go on a branch; nothing is pushed unless you click Push.");
-  console.log("Press Ctrl+C to stop.");
+  console.log("The dashboard is running. Open this link in your browser:");
+  console.log(`  ${srv.url}`);
+  console.log("");
+  console.log("The link has a private key in it, so keep it to yourself.");
+  console.log(isGit(root)
+    ? "Changes you make there are saved on a new branch in this repo. Nothing is pushed until you click Push."
+    : "Changes you make there are saved to the files in this folder.");
+  console.log("Press Ctrl+C to stop the dashboard.");
   return new Promise<number>((ok) => {
     const stop = () => {
       srv.close().then(() => ok(0));

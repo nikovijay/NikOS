@@ -83,7 +83,7 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
     // A group that is its own team (or just runs validate in CI) keeps the runner and CI lines it had as an intent/ repo.
     if (runner && runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "ok", found: runner });
     const ci = CI_FILES.find((f) => existsSync(join(root, f)));
-    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "validate and scenarios don't run on pull or merge requests", next: "Add the pipeline with nikos ci setup" });
+    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "validate and scenarios don't run on pull or merge requests", next: "Run nikos ci setup, so every pull or merge request runs the checks" });
     add(
       v.errors.length
         ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in maps/`, next: "Run nikos validate and fix what it lists" }
@@ -110,11 +110,11 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
         ? runsFolder(root, runner, "intent/features")
           ? { name: "scenario runner", status: "ok", found: runner }
           : { name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." }
-        : { name: "scenario runner", status: "fail", found: detectStack(root) ? "no Cucumber runner yet" : "no runner, and the stack isn't clear", next: "Set one up with nikos verify setup, so stories can be proved done" },
+        : { name: "scenario runner", status: "fail", found: detectStack(root) ? "no Cucumber runner yet (it runs each story's scenarios)" : "no Cucumber runner yet, and nikOS can't tell which language this project uses", next: "Run nikos verify setup. Then a story's scenarios can prove it's done" },
     );
 
     const ci = CI_FILES.find((f) => existsSync(join(root, f)));
-    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "scenarios don't run on pull or merge requests", next: "Add the pipeline with nikos ci setup" });
+    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "scenarios don't run on pull or merge requests", next: "Run nikos ci setup, so every pull or merge request runs the checks" });
   }
 
   const settings = resolveSettings(root);
@@ -343,7 +343,7 @@ function planChecks(root: string, add: (c: Check) => void) {
   add(
     n
       ? { name: "decisions", status: "ok", found: `${count(n, "decision")} in planning/decisions.md` }
-      : { name: "decisions", status: "ok", found: store().exists(decisionsPath(root)) ? "none recorded yet" : "no planning/decisions.md yet", next: 'Record one with nikos decide "<title>" --why "<why>"' },
+      : { name: "decisions", status: "ok", found: store().exists(decisionsPath(root)) ? "none recorded yet" : "no planning/decisions.md yet", next: 'Record one when you make it, for example: nikos decide "Use cards only at launch" --why "Most buyers pay by card"' },
   );
 }
 
@@ -373,8 +373,15 @@ export function runDoctor(args: string[]): number {
   try {
     const checks = doctor(root, { offline: args.includes("--offline") });
     const mark = { ok: "✓", warn: "!", fail: "✗" };
+    console.log(`Checking ${resolve(root)}\n`);
     for (const c of checks) console.log(`${mark[c.status]} ${c.name}: ${c.found}${c.next ? `\n    → ${c.next}` : ""}`);
-    return checks.some((c) => c.status === "fail") ? 1 : 0;
+    const fails = checks.filter((c) => c.status === "fail").length;
+    const warns = checks.filter((c) => c.status === "warn").length;
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    console.log(
+      `\n${fails ? `${plural(fails, "problem", "problems")} to fix (✗)` : "Nothing is broken."}${warns ? ` ${plural(warns, "thing", "things")} worth a look (!).` : fails ? "" : " Everything looks good."}${fails || warns ? " Each one says what to do next (→)." : ""}`,
+    );
+    return fails ? 1 : 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;

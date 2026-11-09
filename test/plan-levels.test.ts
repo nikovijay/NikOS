@@ -198,7 +198,7 @@ describe("group key", () => {
     const c = mkdtempSync(join(tmpdir(), "nikos-gc-"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(runCompany(["init", "--name", "Acme", "--key", "ACME", "--dir", c])).toBe(1);
-    expect(err.mock.calls.flat().join("\n")).toContain("--key is for group plans");
+    expect(err.mock.calls.flat().join("\n")).toContain("Only a group plan has a key");
     err.mockRestore();
 
     const g = mkdtempSync(join(tmpdir(), "nikos-gw-"));

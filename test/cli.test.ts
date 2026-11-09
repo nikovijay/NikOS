@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
+import { closest } from "../src/lib/closest";
 
 const root = join(__dirname, "..");
 const cli = (...args: string[]) => spawnSync(process.execPath, ["--import", "tsx", join(root, "src/cli.ts"), ...args], { encoding: "utf8" });
@@ -30,5 +31,30 @@ describe("cli", () => {
       expect(r.stdout).toContain(args[0] === "planning" ? "nikos planning" : `nikos ${args[0]}`);
       expect(readdirSync(dir)).toEqual([]);
     }
+  });
+
+  it("suggests the nearest command for a typo, in two short lines and not the whole help", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-typo-"));
+    const r = cliIn(dir, "serv");
+    expect(r.status).toBe(1);
+    expect(r.stderr).toBe("Unknown command 'serv'. Did you mean: nikos serve?\nSee every command: nikos help\n");
+    expect(cliIn(dir, "frobnicate").stderr).toBe("Unknown command 'frobnicate'.\nSee every command: nikos help\n");
+    expect(readdirSync(dir)).toEqual([]);
+  });
+});
+
+describe("closest", () => {
+  const names = ["serve", "start", "story", "state", "doctor", "planning", "help", "assign", "sync"];
+  it("finds a missing, extra, changed or swapped letter, and the start of a name", () => {
+    expect(closest("serv", names)).toBe("serve");
+    expect(closest("sevre", names)).toBe("serve");
+    expect(closest("hlep", names)).toBe("help");
+    expect(closest("doctr", names)).toBe("doctor");
+    expect(closest("plan", names)).toBe("planning");
+    expect(closest("assing", names)).toBe("assign");
+  });
+  it("says nothing when no name is close", () => {
+    expect(closest("xyz", names)).toBeUndefined();
+    expect(closest("deploy", names)).toBeUndefined();
   });
 });
