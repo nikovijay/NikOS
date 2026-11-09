@@ -1,6 +1,6 @@
 {
   "name": "nikos",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Spec-driven development for AI coding agents: story maps, Gherkin acceptance criteria and a done gate for Claude Code, Codex and Cursor",
   "license": "MIT",
   "author": "Niko Vijay",
