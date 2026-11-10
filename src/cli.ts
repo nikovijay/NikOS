@@ -141,8 +141,9 @@ Decisions, exports and tools
   mcp              Let Claude Desktop, Cursor, Codex and other apps use nikOS (--dir <repo>)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
-  migrate maps     Move an intent/ story map from nikOS 0.2 into maps/<key>/. Shows the plan
-                   first: --dry-run, --yes and --help for every option
+  migrate maps     Move an intent/ story map from nikOS 0.2 into maps/<key>/, converting its
+                   files to the current format. Shows the plan first: --dry-run, --yes and
+                   --help for every option
 
   --version        Show which version of nikOS this is
   help             Show this list

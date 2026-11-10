@@ -6,7 +6,7 @@ description: Plan objectives, key results and bets in the repo's planning/ folde
 # nikos-planning
 
 Planning sets direction; the nikOS story map handles delivery. Planning lives
-in `planning/` at the repo root, next to `intent/`:
+in `planning/` at the repo root, next to `maps/`:
 
 ```
 planning/
@@ -20,8 +20,8 @@ planning/
 ```
 
 A bet never lists its stories. The story map says which bets it delivers: in a
-group repo, each map under `maps/<id>/` names its one bet in `bet:`; in an
-`intent/` repo, a release in `intent/storymap.yaml` carries `bets: [<bet-id>]` (or
+group repo, each map under `maps/<id>/` names its one bet in `bet:`; in a
+repo with one map, a release in `maps/<key>/storymap.yaml` carries `bets: [<bet-id>]` (or
 `owner/repo#bet-id` for another repo's bet), and `story_bets:` overrides that
 for a single story. A bet's delivery status (Shipped, Building, Not started)
 is worked out from those stories; its outcome (open, awaiting evidence, won,
@@ -36,7 +36,7 @@ the dashboard, so the same checks always run.
 
 With no `planning/` folder yet, set one up before planning: for a company or
 department, `nikos company init` in a folder of its own (the nikOS skill's
-onboard playbook walks through it); a group's bets aim at a department's key results, and each story map names its owner team in `storymap.yaml` (see wizard.md). Never put company goals in `intent/constitution.md`: that's one
+onboard playbook walks through it); a group's bets aim at a department's key results, and each story map names its owner team in `storymap.yaml` (see wizard.md). Never put company goals in `constitution.md`: that's one
 product's vision, not the company's plan.
 
 ## How to work

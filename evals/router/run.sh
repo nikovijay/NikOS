@@ -12,7 +12,7 @@ for f in "$root"/evals/router/0${1:-*}-*.md; do
   cp -R "$root/examples/hello-todo/." "$dir"
   mkdir -p "$dir/.claude/skills"
   cp -R "$root/skills/nikos-mode" "$dir/.claude/skills/"
-  sed -i.bak 's/forgetting/forgeting/' "$dir/intent/features/tasks/add-a-task.feature" && rm "$dir/intent/features/tasks/add-a-task.feature.bak"
+  sed -i.bak 's/forgetting/forgeting/' "$dir/maps/ht/features/tasks/add-a-task.feature" && rm "$dir/maps/ht/features/tasks/add-a-task.feature.bak"
   prompt="$(sed -n 's/^\*\*Prompt:\*\* //p' "$f")"
   (cd "$dir" && git init -q && claude -p "$prompt" --permission-mode acceptEdits --max-turns 25 < /dev/null > "$out/$n.txt" 2>&1) || true
   echo "$n → $out/$n.txt"

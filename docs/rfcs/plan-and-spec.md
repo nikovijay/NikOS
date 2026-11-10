@@ -249,9 +249,11 @@ The rules:
    assignments of part of a map to another repo. That removes
    `assignments.yaml`, `nikos assign`, `nikos sync`, `.nikos/assigned` and
    `nikos team join`.
-3. **Story ids are unchanged:** the team key, the map key and a number
-   (`WEB-CHK-3`). They are checked unique when the repo joins the plan, using
-   the team keys in the planning repo.
+3. **Story ids are the owner, the map key and a number.** A map with an
+   `owner` gives `WEB-CHK-3`. A map with no owner gives its group key's
+   prefix when the repo joins a plan (`PAY-CHK-3`), and a solo map keeps its
+   bare key and a number (`HT-1`, `CHK-3`). Ids are checked unique when the
+   repo joins the plan, using the team keys in the planning repo.
 4. **`nikos map status` gets simpler.** It writes `delivery.yaml` from the
    repo's own state and approvals, with `proof:` as 0.4.2 added. It no longer
    fetches other repos. `nikos validate`, and so CI, flags a `delivery.yaml`

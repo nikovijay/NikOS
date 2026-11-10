@@ -66,13 +66,13 @@ Things you can say:
 
 When a story is done, your agent asks "Do you want to approve HT-3: Reorder
 tasks?". Your answer is the sign-off. It's recorded in
-`intent/approvals.yaml`, and your agent never approves on its own.
+`maps/ht/approvals/HT-3.yaml`, and your agent never approves on its own.
 
 ## The loop
 
 ```bash
-npx -y nikos@latest init                # create intent/ with a starter story
-# write the story's scenarios in intent/features/
+npx -y nikos@latest init                # create maps/<key>/ with a starter story
+# write the story's scenarios in maps/<key>/features/
 npx -y nikos@latest verify setup        # add a Cucumber runner for your stack
 npx -y nikos@latest verify TC-1         # run the story: it fails until it's built
 # build it, then
@@ -86,36 +86,36 @@ point that needs you.
 ## What lives in your repo
 
 ```text
-intent/
-├── constitution.md      who it's for, the problem, what proves it works
-├── storymap.yaml        activities and steps, releases, and the order to build stories in
-├── state.yaml           each story's status: todo, in_progress, needs_rework, done, cancelled
-├── approvals.yaml       people's sign-offs on done stories (optional)
-│                        (or state/<ID>.yaml and approvals/<ID>.yaml, one per story)
-├── decisions.md         why things are the way they are, append-only
-├── features/            one .feature file per story; its scenarios are the criteria
-│   └── <activity>/<story>.feature
-└── plans/               how each story will be built, versioned: <story>.v<N>.md
+constitution.md      who it's for, the problem, what proves it works (at the root)
+decisions.md         why things are the way they are, append-only (at the root)
+maps/
+└── ht/                  one story map, in a folder named by its key
+    ├── storymap.yaml    activities and steps, releases, and the order to build stories in
+    ├── state.yaml       each story's status: todo, in_progress, needs_rework, done, cancelled
+    ├── approvals/       people's sign-offs on done stories, one file per story (optional)
+    ├── features/        one .feature file per story; its scenarios are the criteria
+    │   └── <activity>/<story>.feature
+    └── plans/           how each story will be built, versioned: <story>.v<N>.md
 ```
 
 Every file is plain text you can read, review and diff. The full format:
 [docs/format.md](docs/format.md). Tools that work with these files without a
 shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked example:
-[examples/hello-todo](examples/hello-todo/intent).
+[examples/hello-todo](examples/hello-todo/maps/ht).
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `nikos start` | Set this repo up in one go: `intent/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
+| `nikos start` | Set this repo up in one go: `maps/<key>/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
 | `nikos serve` | Open the dashboard: the plan's key results, bets, OKR ladder and story maps. `--export <file> --editable` writes an offline page that queues changes |
 | `nikos apply <file>` | Apply a changes file from an editable dashboard page. It goes on a new branch, and nothing is pushed (`--commit`, `--pr`) |
-| `nikos init` | Create `intent/` in this repo |
+| `nikos init` | Create `maps/<key>/`, with `constitution.md` and `decisions.md` at the root, in this repo |
 | `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |
-| `nikos validate` | Check `intent/` (or each `maps/<id>` in a group repo) is well formed, and each map's `delivery.yaml` is current |
-| `nikos story add "<title>"` | Add a story to the map, state and a starter feature. In a group repo with several story maps, pass `--map <id>` |
-| `nikos map new --bet <bet-id> --key <KEY> [--owner <KEY>]` | In a group repo, make a story map for one of its bets, in `maps/<key>/`. Its stories get ids like `PAY-CHK-12`, or `WEB-CHK-12` with `--owner WEB` |
+| `nikos validate` | Check each story map in `maps/` and the root `constitution.md` are well formed, and each map's `delivery.yaml` is current |
+| `nikos story add "<title>"` | Add a story to the map, state and a starter feature. With several story maps, pass `--map <key>` |
+| `nikos map new --key <KEY> [--bet <bet-id>] [--owner <KEY>]` | Make a story map in `maps/<key>/`, for one of a group's bets or on its own. Its stories get ids like `PAY-CHK-12`, `WEB-CHK-12` with `--owner WEB`, or `CHK-12` |
 | `nikos step add "<title>"` | Add a step under an activity |
 | `nikos release add\|rename\|move\|reorder\|remove` | Define releases and move stories between them, keeping feature tags in step |
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
@@ -126,10 +126,9 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
-| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`, or `intent/approvals.yaml` in a repo with `intent/`) |
+| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`) |
 | `nikos next` | Print the next story to build |
-| `nikos migrate per-story` | Give each story its own state and approval file, so parallel branches never conflict |
-| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/` in a group repo. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
+| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`, converting it to the current format. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
 | `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |

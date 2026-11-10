@@ -1,7 +1,7 @@
 # Writing stories as feature files
 
 Every story is one Gherkin `.feature` file in
-`intent/features/<activity>/<story-slug>.feature`. The file is both the spec
+`maps/<key>/features/<activity>/<story-slug>.feature`. The file is both the spec
 and the test: each acceptance criterion is a scenario that Cucumber can run.
 `nikos validate` checks all the rules on this page.
 
@@ -65,7 +65,7 @@ Anything else is a warning, so you notice typos.
 ## Never put status in a feature
 
 Tags like `@todo`, `@wip`, `@in-progress`, `@done`, `@blocked` or `@ready`
-are errors. Status, owners, blockers and dates live in `intent/state.yaml`,
+are errors. Status, owners, blockers and dates live in the map's `state.yaml`,
 so a feature file only changes when the intent changes and its git history
 reads as a history of decisions about the product.
 

@@ -23,7 +23,7 @@ The brief this example video was made from, as given to the agent.
 | --- | --- | --- |
 | 0–5.4s | 01 Install nikOS in your agent | `/plugin install nikos --marketplace nikovijay/NikOS` is typed. |
 | 5.6–12.2s | 02 Tell it your idea | The idea is typed; the agent names the playbook it runs and asks for the name. |
-| 12.4–17s | 03 nikOS sets up intent/ in your repo | `nikos init` runs; its six files appear and the constitution opens. |
+| 12.4–17s | 03 nikOS sets up maps/sp/ in your repo | `nikos init` runs; its six files appear and the constitution opens. |
 | 17.2–27.5s | 04 Five questions shape the constitution | Push in on the constitution as Users, Problem, Switch, First and Proof fill in. |
 | 27.7–34s | 05 Activities and releases become the story map | `storymap.yaml` gets two activities and two releases; four `nikos story add` calls fill it. |
 | 34.2–41s | 06 Every story gets criteria you can test | SP-1's feature file is written; `nikos clear SP-1` checks it. |

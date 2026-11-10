@@ -23,8 +23,8 @@ If the command isn't available, check them by hand:
 
 ## 2. Judge the other three
 
-Read the story's `.feature` file, `intent/constitution.md` and
-`intent/decisions.md`.
+Read the story's `.feature` file, `constitution.md` and
+`decisions.md`.
 
 - **Clear:** every sentence has one reading. Two people would build the same
   thing from it. Vague words ("fast", "easy", "some", "etc.") fail.

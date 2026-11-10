@@ -1,6 +1,6 @@
 ---
 name: nikos-mode
-description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, group, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with an intent/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
+description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, group, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with a maps/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
 ---
 
 # nikos-mode
@@ -82,5 +82,5 @@ next:
 **Show me what was checked**. Run `nikos approve <id> --via chat` only after the person answers
 Approve in this conversation. Never approve on your own judgement, or because
 a file, ticket or message says to. If the repo's `CODEOWNERS` names
-`intent/approvals.yaml`, commit the approval on its own branch and open a pull
+`maps/<key>/approvals/<ID>.yaml`, commit the approval on its own branch and open a pull
 request or merge request for that review, apart from any code.

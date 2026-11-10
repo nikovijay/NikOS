@@ -1,8 +1,8 @@
 # The planning/ format
 
 The Planning pack keeps objectives, key results and bets in a `planning/`
-folder at the repo root, next to `intent/`. Planning sets direction; the
-story map in `intent/` handles delivery. Everything is plain text and only
+folder at the repo root, next to `maps/`. Planning sets direction; the
+story maps in `maps/` handle delivery. Everything is plain text and only
 changes when you (or your agent, with your yes) change it.
 
 ```
@@ -237,46 +237,37 @@ maps/chk/              one story map per bet: storymap.yaml (key: CHK, owner: PA
 - A map's owner and bet, and how its delivery is written down, are in
   [Owners, bets and delivery](#owners-bets-and-delivery).
 
-## Moving from 0.2.x
+## Moving from intent/
 
-A repo with `intent/` keeps working as it did until someone runs `nikos migrate maps`. Nothing moves
-on its own, and `nikos doctor` only says what the move would do.
+A repo with `intent/` keeps refusing most commands until someone runs `nikos migrate maps`.
+Nothing moves on its own, and `nikos doctor` only says what the move would do.
 
 ```
-nikos migrate maps --dry-run                 # show the plan, write nothing
-nikos migrate maps --yes --group-key PAY      # write it, on nikos/migrate-maps, uncommitted
-nikos migrate maps --yes --commit ...         # or commit it, the migration's paths only
+nikos migrate maps --dry-run          # show the plan, write nothing
+nikos migrate maps --yes              # write it, on nikos/migrate-maps, uncommitted
+nikos migrate maps --yes --commit     # or commit it, the migration's paths only
 ```
 
-It moves `intent/` to `maps/<key>/` (the key is the map's own, `--key` to change it), makes the repo
-a group with `planning/plan.yaml` at `level: group` and `--group-key` as its key (asked for in a
-terminal, suggested from the folder name), and writes the map's `delivery.yaml`. The
-plan lists every move, every created file, the ids it renames and what to check by hand. A dry run
-changes nothing. A run without a terminal needs `--yes` or `--dry-run`.
+It's a plain move plus a format conversion. `intent/` goes to `maps/<key>/` (the key is the
+map's own, `--key` to set it). `state/<id>.yaml` folds into `state.yaml`, `approvals.yaml` splits
+into `approvals/<id>.yaml`, and `constitution.md` and `decisions.md` go to the repo root. The
+migration doesn't make the repo a group and doesn't write a plan. Story ids are renamed only when
+`planning/plan.yaml` has a key that the ids lack. The converted copy is checked before anything is
+written, and the plan lists every move and any rename. A dry run changes nothing. A run without a
+terminal needs `--yes` or `--dry-run`.
 
 Each refusal says what to do. The ones that matter most:
 
-- **Story ids** that don't carry the group key (`HT-1` in a group `PAY`) stop the migration.
-  `--rename-ids` renames them to `PAY-HT-1`, rewriting their tags and the state, approval and plan
-  files. Body text that mentions an id is not rewritten (it would change the spec hash and lapse
-  the approval); the plan lists the other files that mention a renamed id.
-- **Bets.** A map names one bet, `bet: <id>`, so the releases' `bets:` and `story_bets:` are dropped.
-  The map's bet is the one the releases name, or `--bet <id>` (or `--new-bet <id>` for a stub). Any
-  other bet a release named is listed in the plan: add it to the bet's card by hand.
-- **A team plan with key results or objectives** is refused. Move each key result to the
-  department's plan, or rewrite it as a bet aimed at a department key result (`krs:`). A team plan
-  with none is rewritten to a group plan, keeping its name, pillars and period.
-- **A company or department plan** is refused: a repo holds one plan.
-The new layout is checked on a copy before anything is written, with the group's own rules
-(`validateGroup` and the planning checks). A failure there lists what's wrong, and the repo stays as
-it was.
+- **A second run** is refused, since `maps/` now exists.
+- **An unknown file under `intent/`** stops the migration. It's listed, not moved.
+- **A `decisions.md` or `constitution.md` already at the root** that differs from the one in
+  `intent/` is refused, not merged. Move one of them by hand, then run the migration again.
 
 ### Key results in a group
 
 A group plan has no key results, so `nikos planning validate` reports one as an error (not a
 warning, as the RFC first said). Its bets aim at the department's key results instead, with
-`krs:`. Team plans keep a warning for key results, since they're going away. This is the rule the
-migration checks: a team's key results move up to the department, or become a bet aimed at one.
+`krs:`. Team plans keep a warning for key results, since they're going away.
 
 ### The smallest setup
 
@@ -352,11 +343,11 @@ last `nikos planning rollout` read them.
 ## A plan-only repo
 
 A company or department plan often has no story map: it plans, and the teams
-below it deliver. A repo with `planning/` and no `intent/storymap.yaml` is a
+below it deliver. A repo with `planning/` and no `maps/<key>/storymap.yaml` is a
 plan-only repo, and needs no `nikos init`.
 
 - `nikos decide` writes its decisions to `planning/decisions.md`, created on
-  the first one, in the same format as `intent/decisions.md` (see
+  the first one, in the same format as the root `decisions.md` (see
   [format.md](format.md)). `nikos decisions` searches it.
 - `nikos doctor` checks the plan, its decisions, the approval settings it hands
   down, and the plans above and below it. It skips the story map, scenario
@@ -402,7 +393,7 @@ and saves there; later saves go on the same branch. Saves never commit or push.
 The pending bar shows the planning files changed but not committed, and has the
 buttons:
 
-- **Commit** stages only `planning/`, `maps/` and `intent/`, and commits only
+- **Commit** stages only `planning/` and `maps/`, and commits only
   those paths. Changes elsewhere in the repo stay as they are, and the bar warns
   about them.
 - **Push branch** runs `git push -u origin <branch>`.
@@ -451,7 +442,7 @@ password, a url or a command. It does nothing on its own.
 `nikos apply <file> [--dir <repo>] [--commit] [--pr]` applies it:
 
 1. Checks the file against the schema, that its level is this repo's level, that this is a
-   git repo, and that planning/, maps/ and intent/ have no
+   git repo, and that planning/ and maps/ have no
    uncommitted changes. Other dirty files get a warning.
 2. Runs every operation against an in-memory copy, through the same write path as the
    dashboard. An operation whose `expect` matches the file as it is, or the file as it was

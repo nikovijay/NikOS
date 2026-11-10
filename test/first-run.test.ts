@@ -194,7 +194,7 @@ describe("the skills on a first run", () => {
     expect(onboard).toContain("Never set nikOS up in the home folder");
     expect(onboard).toContain("Never take one word as both the name and the key without asking");
     expect(onboard).toContain("nikos serve");
-    expect(read("tools/planning/skills/nikos-planning/SKILL.md")).toContain("Never put company goals in `intent/constitution.md`");
+    expect(read("tools/planning/skills/nikos-planning/SKILL.md")).toContain("Never put company goals in `constitution.md`");
     expect(read("hooks/cursor-session-start.mjs")).toContain('["npx", ["-y", "nikos@latest"]]');
   });
 });

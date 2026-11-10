@@ -7,7 +7,7 @@ runs a local dashboard where you can see and edit the plan.
 - **Bets live in `planning/bets/`.** Each has an owner, a hypothesis, the key
   results it should move, a review date and every review decision since.
 - **The story map says which bets it delivers.** A release in
-  `intent/storymap.yaml` carries `bets: [<bet-id>]`; in a group repo, each map
+  `maps/<key>/storymap.yaml` carries `bets: [<bet-id>]`; in a group repo, each map
   under `maps/<id>/` names its one bet in `bet:`. A bet's delivery status comes
   from those stories, and is never confused with its outcome.
 - **Key results keep their history.** Check-ins are dated and only ever

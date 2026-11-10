@@ -19,7 +19,7 @@ describe("interface decisions", () => {
 
   it("plans the next story by reading interface decisions and citing the one it reuses", () => {
     expect(step(3)).toMatch(/^Run `nikos decisions interface`, then `nikos plan new <story-id>`/);
-    expect(step(3)).toContain("`Reuses: <decision title> (intent/decisions.md:<lines>)`");
+    expect(step(3)).toContain("`Reuses: <decision title> (decisions.md:<lines>)`");
     expect(step(3)).toMatch(/change one, stop and ask/);
     expect(step(7)).toContain("`--category interface`");
   });
