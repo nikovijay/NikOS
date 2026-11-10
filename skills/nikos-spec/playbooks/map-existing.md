@@ -4,7 +4,7 @@ Draft the story map from a product that already exists, so a team sees its own
 product mapped rather than an empty template. Nothing is written until the
 person agrees to the draft.
 
-1. Run `nikos start` if `maps/` doesn't exist yet.
+1. Run `nikos start --map --name "<name>" --key <KEY>` if `maps/` doesn't exist yet.
 2. Survey the code: entry points, routes or screens, commands, and the tests that exist. Group what the product does into three to seven activities: the areas a person uses it for, in the order they'd use them.
 3. Under each activity, list the steps a person takes, and a story for each thing the product already lets them do, in the user's words (As a… I want… So that…), with the files that implement it.
 4. Show the draft as activities, steps and stories. Let the person rename, merge, drop or add. Write nothing until they agree.

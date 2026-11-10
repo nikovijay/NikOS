@@ -22,7 +22,7 @@ import { show } from "../commands/show.js";
 import { setState, type Status } from "../commands/state.js";
 import { newActivity, newStep } from "../commands/step.js";
 import { start as startRepo } from "../commands/start.js";
-import { initPlanRepo } from "../plan/repo.js";
+import { findPlanRepo, initPlanRepo } from "../plan/repo.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate, validateGroup } from "../commands/validate.js";
@@ -36,7 +36,8 @@ import { importTickets, linkTicket, recordTicket, ticketMoves } from "../command
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const playbookDir = [join(here, "../../skills/nikos-spec/playbooks"), join(here, "../skills/nikos-spec/playbooks")].find((d) => existsSync(d));
+/** The playbooks for one skill (nikos-spec or nikos-plan), found next to the package or in the source tree. */
+const playbooksOf = (skill: string) => [join(here, `../../skills/${skill}/playbooks`), join(here, `../skills/${skill}/playbooks`)].find((d) => existsSync(d));
 
 export const INSTRUCTIONS = `nikOS keeps a product's story map, stories and acceptance criteria in the repo, and a story
 is only done when its Cucumber scenarios pass. The person talks; you call these tools.
@@ -75,6 +76,8 @@ const QUESTION = { type: "object" as const, properties: { decision: { type: "str
 export function createServer(repo: string): McpServer {
   const root = resolve(repo);
   const server = new McpServer({ name: "nikos", version: version() }, { instructions: INSTRUCTIONS });
+  // A planning repo (or one of its area folders) gets the plan's playbooks as prompts; a code repo gets the story map's.
+  const playbookDir = playbooksOf(findPlanRepo(root) ? "nikos-plan" : "nikos-spec");
   const tool = (name: string, description: string, input: z.ZodRawShape, fn: (a: any) => Result | Promise<Result>, readOnly = false) =>
     server.registerTool(name, { description, inputSchema: input, annotations: { readOnlyHint: readOnly } }, async (a: any) => {
       try {

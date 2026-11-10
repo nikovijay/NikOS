@@ -14,7 +14,7 @@ const PRIORITIES = ["must", "should", "could"] as const;
 export interface StoryInput {
   title: string;
   activity: string;
-  /** The map, in a group repo with several: maps/<map>. */
+  /** The map, when a code repo has several: maps/<map>. */
   map?: string;
   /** A step of that activity. */
   step?: string;

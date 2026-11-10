@@ -237,12 +237,6 @@ describe("group validation", () => {
     expect(validateGroup(dup).errors.map((e) => e.message)).toContain("maps/chk and maps/ret both use key 'CHK'");
   });
 
-  it("accepts a group with no key: its maps need no owner or key of their own", () => {
-    const root = oneMap();
-    write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
-    expect(validateGroup(root).errors.map((e) => e.message)).not.toContain("has no key");
-  });
-
   it("doctor reads a group with maps, and counts stories and maps", () => {
     const root = oneMap();
     newStory({ title: "Add a task", activity: "tasks" }, root);
@@ -277,14 +271,6 @@ describe("review fixes for group maps", () => {
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8") + "story_bets:\n  ACME-CHK-1: [faster-checkout]\n");
     expect(validate(root, "chk").errors.map((e) => e.message)).toContain("maps/chk names its bet in bet:, so releases and stories don't name bets: remove story_bets from ACME-CHK-1");
 
-  });
-
-  it("a group with no key reports no key error, and no false prefix errors", () => {
-    const root = oneMap();
-    write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
-    const messages = validateGroup(root).errors.map((e) => e.message);
-    expect(messages.filter((m) => m === "has no key")).toHaveLength(0);
-    expect(messages.some((m) => m.includes("must start with"))).toBe(false);
   });
 
   it("reports a map whose storymap.yaml won't parse, and checks the rest", () => {

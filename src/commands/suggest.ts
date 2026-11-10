@@ -77,7 +77,7 @@ export function suggest(dir: string, mapId?: string, opts: { area?: string } = {
     return {
       summary: "nikOS isn't set up in this repo yet.",
       options: [
-        { label: "Set up nikOS here", do: "Run the start playbook: nikos start, then the first story through to passing." },
+        { label: "Set up nikOS here", do: 'Run the start playbook: nikos start --map --name "<name>" --key <KEY>, with the name and key from the repo, then take the first story through to passing.' },
         { label: "Map what this repo already does", do: "Run the map-existing playbook: draft the story map from the existing code, then prove what's there with scenarios." },
         { label: "Link this repo to a company plan", do: "Ask which repo holds the company's plan, then run nikos join <repo path> (add --host for GitLab). It lists this repo in that plan, on a branch for review." },
       ],
@@ -133,7 +133,7 @@ export function suggest(dir: string, mapId?: string, opts: { area?: string } = {
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
 
   add({ label: "Add a story", do: "Ask what the person wants the product to do next, then add it with nikos story add and write its scenarios." });
-  add({ label: "Look at the story map", do: "Run nikos map, or open the planning dashboard's map if it's running, and show the person." });
+  add({ label: "Look at the story map", do: "Run nikos map to see it in the terminal, or nikos serve to open it in the browser, and show the person." });
 
   // The release being worked on: the first that isn't complete, or the last.
   const current = map.releases.find((r) => !complete(r)) ?? map.releases.at(-1);

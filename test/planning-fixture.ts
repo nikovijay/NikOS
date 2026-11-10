@@ -9,7 +9,7 @@ import { commitAll, git } from "./repo-fixture";
 
 export { git, write, commitAll, groupRepo, codeRepo } from "./repo-fixture";
 
-// The git identity the dashboard and nikos apply commit with is set in repo-fixture.
+// The git identity the dashboard commits with is set in repo-fixture.
 
 /** A company's planning repo on origin acme/company-plan, with one key result: kr-1. */
 export function companyRepo(): string {

@@ -190,10 +190,11 @@ describe("map ops", () => {
 });
 
 describe("cleanup", () => {
-  it("leaves no scratch folder behind after a dry run", () => {
+  it("leaves the files as they were after a dry run", () => {
     const co = area();
+    const before = kr1(co);
     runOps(co, [{ op: "kr.edit", target: { kr: "kr-1" }, args: { title: "x" }, expect: kr1(co) }]);
-    expect(existsSync(join(co, ".nikos", "downstream"))).toBe(false);
+    expect(kr1(co)).toBe(before);
     rmSync(co, { recursive: true, force: true });
   });
 

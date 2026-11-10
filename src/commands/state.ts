@@ -69,7 +69,7 @@ export class StateError extends Error {
 
 export interface StateOptions {
   dir?: string;
-  /** The map, in a group repo with several. */
+  /** The map, when a code repo has several. */
   map?: string;
   by?: string;
   date?: string;

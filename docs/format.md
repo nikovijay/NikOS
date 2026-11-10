@@ -241,7 +241,7 @@ summary: One to three plain sentences on the approach.
 ## 1. Store tasks locally
 **Why:** tasks survive a refresh.
 **Criteria:** AC1
-**Files:** src/store.ts
+**Files:** src/lib/store.ts
 
 Notes for the agent.
 ```
@@ -257,8 +257,9 @@ existing file.
 **Purpose:** why things are the way they are. Append-only; never rewrite an
 entry, add a new one that supersedes it.
 
-**Path:** `decisions.md` at the repo root, or `planning/decisions.md` in a company or
-department plan with no story map (see [plan.md](plan.md))
+**Path:** `decisions.md` at the repo root. In a planning repo, each area keeps its own at
+`planning/<area>/decisions.md`: the company's is `planning/company/decisions.md`, and
+`nikos decide --in <area>` picks another (see [plan.md](plan.md))
 
 **Format:** Markdown. One `##` entry per decision, newest last:
 

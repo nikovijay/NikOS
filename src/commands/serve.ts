@@ -19,12 +19,12 @@ export function runServeCommand(args: string[]): Promise<number> | number {
     console.error(`✗ ${old}`);
     return 1;
   }
-  if (isPlanRepo(root)) {
-    console.error("✗ This is a planning repo: it holds the company's plan, not story maps. To see the plan, run: nikos plan serve");
-    return 1;
-  }
   if (!mapDirs(root).length) {
-    console.error(`✗ There's nothing to show in ${root} yet: it has no story map (maps/).\n  To set it up, run: nikos start`);
+    if (isPlanRepo(root)) {
+      console.error("✗ This is a planning repo: it holds the company's plan, not story maps. To see the plan, run: nikos plan serve");
+      return 1;
+    }
+    console.error(`✗ There's nothing to show in ${root} yet: it has no story map (maps/).\n  To set it up, run: nikos start --map --name "<name>" --key <KEY>`);
     return 1;
   }
   const map = opt("map");

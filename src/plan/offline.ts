@@ -46,7 +46,7 @@ function notice(text) {
 }
 function show(key) {
   if (!has(key)) {
-    notice("That page isn't in this file. Export without --at to include every area.");
+    notice("That page isn't in this file. Export without --in to include every area.");
     return;
   }
   document.title = pages[key].title;

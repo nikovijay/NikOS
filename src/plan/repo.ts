@@ -237,6 +237,7 @@ export function initPlanRepo(dir: string, input: { name: string; year: string; p
   const repo = resolve(dir);
   if (isPlanRepo(repo)) throw new Error(`${join(repo, "planning", "company")} already exists: this is already a planning repo`);
   if (store().exists(join(repo, "planning", "plan.yaml"))) throw new Error("This repo has a plan of the old kind (planning/plan.yaml). Make the company's planning repo in a new folder.");
+  if (store().isDir(join(repo, "maps")) || store().isDir(join(repo, "intent"))) throw new Error("This repo has a story map (maps/ or intent/), so it's a code repo, and a code repo can't also hold the company's plan. Make the planning repo in its own folder.");
   if (!input.name?.trim()) throw new Error("The company needs a name (--name)");
   if (!YEAR.test(input.year ?? "")) throw new Error(`The company plans by year: give one as --year ${new Date().getUTCFullYear() + 1}`);
   const plan = { name: input.name.trim(), period: input.year, pillars: input.pillars ?? [], ...(input.owner ? { owner: input.owner } : {}) };

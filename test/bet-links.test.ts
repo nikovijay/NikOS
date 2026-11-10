@@ -52,8 +52,8 @@ describe("bet links", () => {
 describe("nikos show", () => {
   it("lists the map's bet for each story", () => {
     const dir = copyExample();
-    expect(show("HT-1", dir)).toContain("Bets: fewer-missed-tasks (planning/bets/fewer-missed-tasks.md) — from the story map");
-    expect(show("HT-3", dir)).toContain("Bets: fewer-missed-tasks (planning/bets/fewer-missed-tasks.md) — from the story map");
+    expect(show("HT-1", dir)).toContain("Bets: fewer-missed-tasks — from the story map");
+    expect(show("HT-3", dir)).toContain("Bets: fewer-missed-tasks — from the story map");
   });
 
   it("names no bets when the map names none", () => {

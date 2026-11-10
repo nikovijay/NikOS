@@ -49,7 +49,7 @@ planning/
 - **Links go up.** A key result aligns to key results above it, and a bet to
   bets above it. A bet aims at key results at its own level or above. A team's
   bets may align to any department's or group's bet.
-- **Settings come down the folders.** The company's are in `planning/company/`.
+- **Settings come down the folders.** The company's are in `nikos.settings.yaml` at the planning repo's root.
   Each department, group or team can change what nobody above it locked. A code
   repo linked to the plan keeps its own settings and doesn't inherit them.
 
@@ -179,9 +179,9 @@ server, and the file's own script moves between its pages. Its links keep the
 place in the address bar, in both `?at=` and `#at=`, so reloading it shows the
 same page.
 
-- **Without `--at`**, the file holds every area's pages.
-- **With `--at`**, it holds that area's pages only. A link to another area says
-  the page isn't in the file, and `--export` without `--at` includes every area.
+- **Without `--in`**, the file holds every area's pages.
+- **With `--in`**, it holds that area's pages only. A link to another area says
+  the page isn't in the file, and `--export` without `--in` includes every area.
 
 The file names the code repos it reads, so share it only with people who may
 see them.

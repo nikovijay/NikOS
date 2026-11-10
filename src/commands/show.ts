@@ -10,7 +10,7 @@ import { codeChangedSince } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
-import { BET_ID, betsFor } from "../lib/bets.js";
+import { betsFor } from "../lib/bets.js";
 import { decisionEntries } from "./decisions.js";
 
 const yamlFile = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
@@ -81,9 +81,8 @@ export function show(story: string, dir: string, mapId?: string): string {
   }
 
   const { bets, from, release: rn } = betsFor(map, story);
-  const where = (b: string) => (BET_ID.test(b) ? `${b} (planning/bets/${b}.md)` : b);
   const provenance = from === "map" ? "the story map" : from === "story" ? "the story" : `release ${rn}`;
-  out.push(bets.length ? `Bets: ${bets.map(where).join(", ")} — from ${provenance}` : "Bets: none");
+  out.push(bets.length ? `Bets: ${bets.join(", ")} — from ${provenance}` : "Bets: none");
 
   const decisions = decisionEntries(dir).filter((e) => e.title.includes(`(${story})`));
   out.push(decisions.length ? "Decisions:" : "Decisions: none recorded for this story");

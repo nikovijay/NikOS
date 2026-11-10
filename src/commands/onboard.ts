@@ -96,12 +96,6 @@ const MENU = [
   "Type 1 or 2",
 ].join("\n");
 
-/** What each choice makes, for the summary before anything is written. */
-const WHAT: Record<Kind, string> = {
-  plan: "A company plan, in a planning repo",
-  spec: "A story map for this code",
-};
-
 export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Promise<OnboardAnswers> {
   // A repo with intent/ is migrated, not set up again: say so before asking anything.
   if (existsSync(join(cwd, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
@@ -152,7 +146,6 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
   const summary = [
     "Here's what nikOS will set up:",
     kind === "plan" ? `  A company plan for ${name}, planning ${year}${pillars?.length ? `, pillars ${pillars.join(", ")}` : ""}` : `  A story map for ${name}, story key ${key}${planRepo ? `, linked to the plan in ${planRepo}` : ""}`,
-    `  ${WHAT[kind]}`,
     `  In ${where}`,
     ...(gitInit ? ["  As a new git repo"] : isRepo(dir) ? ["  In the git repo that's already there"] : ["  It won't be a git repo"]),
     "Go ahead?",

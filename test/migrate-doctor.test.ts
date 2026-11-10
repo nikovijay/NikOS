@@ -8,7 +8,7 @@ import { copyExample, rootOf } from "./helpers";
 import { groupRepo, write } from "./repo-fixture";
 
 describe("doctor on a repo with intent/", () => {
-  it("fails the story map check and says to run nikos migrate maps", () => {
+  it("fails the story map check and says to move intent/ by hand", () => {
     const root = rootOf(copyExample());
     mkdirSync(join(root, "intent"));
     const story = doctor(root, { offline: true }).find((c) => c.name === "story map")!;

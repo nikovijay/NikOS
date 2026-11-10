@@ -13,8 +13,6 @@ export const REPO_PATH = new RegExp(`^${SEGMENT}(?:/${SEGMENT})+$`);
 /** A bet or key result in another repo: <repo path>#id, e.g. acme/company-plan#d30-retention. */
 export const CROSS_REF = new RegExp(`^${SEGMENT}(?:/${SEGMENT})+#[a-z0-9]+(-[a-z0-9]+)*$`);
 
-export const isBetRef = (ref: string) => BET_ID.test(ref) || CROSS_REF.test(ref);
-
 export interface StoryBets {
   bets: string[];
   from: "story" | "release" | "map" | "none";

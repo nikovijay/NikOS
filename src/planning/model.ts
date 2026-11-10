@@ -19,7 +19,6 @@ const schema = (name: string) => ajv.compile(JSON.parse(readFileSync(join(schema
 export const checkBet = schema("bet.schema.json");
 export const checkKr = schema("kr.schema.json");
 
-export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const today = () => new Date().toISOString().slice(0, 10);
 
 /** The levels of a planning repo, by the folder under planning/ that holds them. */

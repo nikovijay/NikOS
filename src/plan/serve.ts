@@ -19,7 +19,7 @@ export interface PlanServeOptions {
   port?: number;
   /** Skip the refresh of the code repos' copies on start. */
   offline?: boolean;
-  /** The area the first page shows, named as --in names it (--at is the same). Unknown names are an error. */
+  /** The area the first page shows, named as --in names it (--at is an older alias, not in the help). Unknown names are an error. */
   at?: string;
   /** Runs git for the save buttons. Tests pass a runner that records the calls. */
   run?: Runner;

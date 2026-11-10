@@ -1,6 +1,5 @@
-// The one write path. Every change the dashboard, the change file (nikos apply) and the chat
-// makes goes through runOp: it checks the op's name, the level of the plan, and the ids, then calls
-// the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
+// The one write path. Every change the dashboard and the chat makes goes through runOp: it checks
+// the op's name, the level of the plan, and the ids, then calls the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
 // planning and story map files, so nothing is written until a person says so.
 import { join, relative, resolve, sep } from "node:path";
 import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";

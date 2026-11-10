@@ -6,8 +6,9 @@ uses. Each code repo keeps its own file. A code repo linked to the company's
 plan with `nikos join` does not inherit settings from it: it keeps its own.
 
 Inside the company's planning repo the areas do share settings. The company sets
-them once in `planning/company/`, and each department, group and team inherits
-them down the folders, and can change anything the levels above haven't locked.
+them once, in `nikos.settings.yaml` at the planning repo's root, and each department,
+group and team inherits them down the folders, and can change anything the levels
+above haven't locked.
 
 ```yaml
 format_version: 1
@@ -59,8 +60,8 @@ To make approvals need the right reviewer, protect the main branch and add a
 
 ## Settings in the company's plan
 
-In the planning repo, the company's settings live in `planning/company/` and
-every area inherits them down the folders: `planning/departments/<id>/`,
+In the planning repo, the company's settings live in `nikos.settings.yaml` at the
+root, and every area inherits them down the folders: `planning/departments/<id>/`,
 `planning/groups/<id>/` and `planning/teams/<KEY>/`. Each level resolves from
 the defaults, then the company, then each level down to the area itself. A
 locked value stays as the level that locked it set it. If two levels lock the
@@ -77,12 +78,6 @@ nikos join acme/engineering/payments-plan --host gitlab.com   # on GitLab
 `planning/repos.yaml`, on a `nikos/join` branch for the plan's owner to review,
 so the plan can read its story maps' delivery. Nothing else in the code repo
 moves, and its settings stay as they are.
-
-## Checking a repo
-
-`nikos doctor` checks the story map, the scenario runner, CI, approvals and the
-tracker. For each one it says what it found, and the next thing to do when
-something's missing. Your agent runs it when something seems off.
 
 ## Checking a repo
 

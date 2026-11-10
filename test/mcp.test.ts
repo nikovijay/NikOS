@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { createServer, INSTRUCTIONS } from "../src/mcp/server";
 import { init } from "../src/commands/init";
+import { initPlanRepo } from "../src/plan/repo";
 import { setupVerify } from "../src/commands/verify";
 import { setState } from "../src/commands/state";
 import { copyExample, rootOf } from "./helpers";
@@ -43,6 +44,15 @@ describe("nikos mcp", () => {
     expect((build.messages[0].content as any).text).toContain("using the nikos tools");
     expect(client.getInstructions()).toBe(INSTRUCTIONS);
     expect(INSTRUCTIONS).toContain("Never hand the person a command to run.");
+  });
+
+  it("a planning repo gets the plan playbooks as prompts, and no story map ones", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-mcp-plan-"));
+    initPlanRepo(dir, { name: "Acme", year: "2027" });
+    const { client } = await connect(dir);
+    const prompts = (await client.listPrompts()).prompts.map((p) => p.name);
+    expect(prompts).toEqual(expect.arrayContaining(["wizard", "status", "setup"]));
+    expect(prompts).not.toContain("build-a-story");
   });
 
   it("reads and changes the repo through tools", async () => {

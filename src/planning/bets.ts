@@ -1,4 +1,4 @@
-// Bet cards in planning/bets/<id>.md: what we believe, the key results it should move,
+// Bet cards in planning/<area>/bets/<id>.md: what we believe, the key results it should move,
 // when we review it, and every review decision since.
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
@@ -29,7 +29,7 @@ function checked(meta: any): any {
   return meta;
 }
 
-/** Write planning/bets/<id>.md. Never overwrites an existing bet. */
+/** Write planning/<area>/bets/<id>.md. Never overwrites an existing bet. */
 export function newBet(input: BetInput, root: string): string {
   if (!BET_ID.test(input.id)) throw new Error(`'${input.id}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`);
   if (!input.owner?.trim()) throw new Error("A bet needs an owner (--owner)");

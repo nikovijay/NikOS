@@ -4,7 +4,7 @@ import { STORY_ID, decisionsPath, read } from "../lib/project.js";
 import { formatResult, validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
 import { isPlanRepo } from "../planning/model.js";
-import { areaFor, findArea, findPlanRepo } from "../plan/repo.js";
+import { areaFor, findArea, findPlanRepo, oldLayoutProblem } from "../plan/repo.js";
 
 const PLAN_DECISIONS = `# Decisions
 
@@ -26,6 +26,8 @@ export interface DecisionInput {
 
 /** Append a dated entry to decisions.md. Earlier entries are never touched. */
 export function decide(input: DecisionInput, dir: string): string {
+  const old = oldLayoutProblem(dir);
+  if (old) throw new Error(old);
   const title = input.title.trim();
   if (!title) throw new Error("A decision needs a title");
   if (!input.why.trim()) throw new Error("Say why: what you chose and what you rejected (--why)");

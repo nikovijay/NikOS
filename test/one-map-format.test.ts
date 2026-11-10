@@ -13,7 +13,7 @@ import { copyExample, rootOf } from "./helpers";
 import { groupRepo, write } from "./repo-fixture";
 
 describe("intent/ is refused, with the migrate hint", () => {
-  it("validate and doctor both say to run nikos migrate maps", () => {
+  it("validate and doctor both say to move intent/ by hand", () => {
     const root = rootOf(copyExample());
     mkdirSync(join(root, "intent"));
     expect(() => validate(root)).toThrow("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");

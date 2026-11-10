@@ -1,4 +1,4 @@
-// nikos plan serve --export: one offline file. With --at it holds that area's pages; without, every area's.
+// nikos plan serve --export: one offline file. With --in it holds that area's pages; without, every area's.
 // The file's own script moves between the pages it holds, so every link in it must have its page.
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,7 +24,7 @@ function queriesIn(body: string): string[] {
 }
 
 describe("nikos plan serve --export", () => {
-  it("holds only the area --at names, and links to other areas say they aren't in the file", async () => {
+  it("holds only the area --in names, and links to other areas say they aren't in the file", async () => {
     const out = target();
     await exportPlanPage(acmePlan(), out, { offline: true, at: "departments/finance" });
     const html = readFileSync(out, "utf8");
@@ -34,11 +34,11 @@ describe("nikos plan serve --export", () => {
     expect(keys.every((k) => k.startsWith("at=departments%2Ffinance"))).toBe(true);
     expect(keys).toContain("at=departments%2Ffinance");
     expect(html).toContain("Close days");
-    expect(html).toContain("That page isn't in this file. Export without --at to include every area.");
+    expect(html).toContain("That page isn't in this file. Export without --in to include every area.");
     expect(html).toContain("Finance");
   });
 
-  it("holds every area's pages with no --at, and the file starts on the company", async () => {
+  it("holds every area's pages with no --in, and the file starts on the company", async () => {
     const out = target();
     await exportPlanPage(acmePlan(), out, { offline: true });
     const html = readFileSync(out, "utf8");

@@ -117,8 +117,6 @@ function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
   return { resolved: out, problems };
 }
 
-export const settingValue = <T>(root: string, key: string): T => resolveSettings(root)[key].value as T;
-
 /** Change a setting in this repo's own file, unless a level above locked it. */
 export function setSetting(root: string, key: string, value: unknown): string {
   if (!(key in DEFAULTS)) throw new Error(`'${key}' isn't a setting. Settings: ${Object.keys(DEFAULTS).join(", ")}`);

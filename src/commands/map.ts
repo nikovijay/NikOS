@@ -9,6 +9,7 @@ import { parse, stringify } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
+import { isPlanRepo } from "../planning/model.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { OWNER, mapDirs, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
@@ -541,6 +542,7 @@ const MAP_KEY = KEY;
  * Refuses with the same messages the command line gives.
  */
 export function newMap(input: { bet?: string; key?: string; owner?: string }, dir: string): { id: string; key: string; ids: string; dir: string } {
+  if (isPlanRepo(dir)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos map new in one of those.");
   const old = oldLayoutProblem(dir);
   if (old) throw new Error(old);
   const bet = input.bet;
