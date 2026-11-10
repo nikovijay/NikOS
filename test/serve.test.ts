@@ -35,6 +35,24 @@ function serve(args: string[]): { code: number; out: string; err: string } {
 }
 
 describe("nikos serve in a code repo", () => {
+  it("with several maps and none picked, lists them, and each opens its own map", async () => {
+    const root = rootOf(copyExample());
+    const first = readFileSync(join(root, "maps", "ht", "storymap.yaml"), "utf8");
+    mkdirSync(join(root, "maps", "pay"), { recursive: true });
+    writeFileSync(join(root, "maps", "pay", "storymap.yaml"), first.replace(/^key: .*$/m, "key: PAY"));
+    const srv = await start(root);
+    const list = await (await fetch(`http://127.0.0.1:${srv.port}/`)).text();
+    expect(list).toContain('href="/?map=ht"');
+    expect(list).toContain('href="/?map=pay"');
+    const one = await (await fetch(`http://127.0.0.1:${srv.port}/?map=ht`)).text();
+    expect(one).toContain("Story map");
+    expect(one).not.toContain("No stories yet");
+    const r = serve(["--dir", root, "--export", join(root, "x.html")]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Say which one to save with --map");
+    expect(serve(["--dir", root, "--map", "nope", "--export", join(root, "x.html")]).err).toContain("There's no story map called 'nope'");
+  });
+
   it("shows the story map at / and has no other page", async () => {
     const srv = await start(rootOf(copyExample()));
     const page = await fetch(`http://127.0.0.1:${srv.port}/`);
