@@ -81,7 +81,9 @@ function deliveredBy(d: BetDelivery | undefined): string {
 
 /** How a bet aims at a key result, as a phrase: "Aims at close-days", or "Through a bet below close-days" for a bet below one that does. */
 const aimText = (how: "primary" | "also" | "via", of: string) => (how === "primary" ? `Aims at ${of}` : how === "also" ? `Also aims at ${of}` : `Through a bet below ${of}`);
-const mapText = (m: DrillMap) => `${repoLabel(m)} · ${m.key}${m.owner ? ` · owner ${m.owner}` : ""}${m.title ? ` · ${m.title}` : ""} · read ${m.age}`;
+// The age already says "read …", and a map's title is often just its key, so neither is repeated.
+const mapText = (m: DrillMap) =>
+  `${repoLabel(m)} · ${m.key}${m.owner ? ` · owner ${m.owner}` : ""}${m.title && m.title.toLowerCase() !== m.key.toLowerCase() ? ` · ${m.title}` : ""} · ${m.age}`;
 
 // Every link carries the quarter the page shows, so a chosen quarter survives a click. The company has none: its key results are for the year.
 const periodFor = (rel: string, period?: string) => (rel === "company" ? undefined : period);
@@ -184,7 +186,7 @@ function quarters(page: AreaPage, state: PageState): string {
 /** The form that checks a key result in: the new value, and it saves on the area's nikos branch. Live page only. */
 function checkinForm(k: KrRef, live: boolean): string {
   if (!live) return "";
-  return `<form class="save" data-op="checkin" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}"><label>New value <input name="value" type="number" step="any" required></label><button type="submit">Check in</button><span class="save-msg" role="status"></span></form>`;
+  return `<form class="save" data-op="checkin" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>New value <input name="value" type="number" step="any" required></label><button type="submit">Check in</button><span class="save-msg" role="status"></span></form>`;
 }
 
 /** The form that adds a bet in this area. Live page only. */
@@ -511,9 +513,10 @@ document.addEventListener("submit", function (e) {
     args[f.name] = f.type === "number" ? Number(v) : v;
   }
   if (out) out.textContent = "Saving…";
-  call("POST", "/api/op", { op: form.getAttribute("data-op"), area: form.getAttribute("data-area"), target: target, args: args }).then(function (res) {
+  call("POST", "/api/op", { op: form.getAttribute("data-op"), area: form.getAttribute("data-area"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
     if (out) out.textContent = res.ok ? res.body.message + (res.body.branch ? " on " + res.body.branch : "") : errorOf(res);
-    if (res.ok) pendingBar();
+    // Saved: show the message for a moment, then load the page again so its figures and versions are the new ones.
+    if (res.ok) setTimeout(function () { location.reload(); }, 800);
   }, function () { if (out) out.textContent = gone(); });
 });
 pendingBar();

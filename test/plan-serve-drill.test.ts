@@ -45,6 +45,9 @@ describe("a drill-down with a story map", () => {
     expect(bet).toContain("<h3>Story maps that deliver it</h3>");
     expect(bet).toContain("acme/payments-web · chk");
     expect(bet).toContain("read today (2026-11-10)");
+    // The age is said once, and a title that is only the map's key isn't repeated.
+    expect(bet).not.toContain("read read");
+    expect(bet).not.toMatch(/· chk · chk/i);
   });
 
   it("says a map was not read yet when the copy was never refreshed, and the page still works", async () => {

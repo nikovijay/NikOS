@@ -66,6 +66,18 @@ function recorder(): { calls: string[][]; run: Runner } {
 const CLOSE = "planning/departments/finance/krs/close-days.yaml";
 
 describe("a save from the plan dashboard", () => {
+  it("the check-in form carries the version the page read, so what the browser sends is accepted", async () => {
+    const repo = gitPlan();
+    const plan = await start(repo);
+    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance`).then((r) => r.text());
+    const form = html.match(/<form class="save" data-op="checkin"[^>]*>/)?.[0] ?? "";
+    const attr = (name: string) => (form.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "").replace(/&quot;/g, '"');
+    expect(attr("data-expect")).toBe(versionOf(repo, CLOSE));
+    const r = await post(plan, "/api/op", { op: attr("data-op"), area: attr("data-area"), target: JSON.parse(attr("data-target")), args: { value: 8 }, expect: attr("data-expect") });
+    expect(r.status).toBe(200);
+    expect(readFileSync(join(repo, CLOSE), "utf8")).toContain("value: 8");
+  });
+
   it("writes the area's own file, on a nikos branch named for the area", async () => {
     const repo = gitPlan();
     const plan = await start(repo);

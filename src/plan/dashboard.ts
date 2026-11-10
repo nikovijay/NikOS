@@ -48,6 +48,8 @@ export interface KrRef {
   progress: number;
   latest: { value: number; date: string } | null;
   stale: boolean;
+  /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
+  version: string;
 }
 
 /** A key result on an area's page: the ladder row, plus its objective, targets and what it aligns to. */
@@ -295,7 +297,8 @@ function krAncestors(repo: string, aligns: string[], on: string, problems?: stri
 }
 
 function krRef(area: Area, id: string, on: string): KrRef {
-  const d = loadKr(area.dir, id).data;
+  const kr = loadKr(area.dir, id);
+  const d = kr.data;
   const last = latest(d);
   return {
     id,
@@ -309,6 +312,7 @@ function krRef(area: Area, id: string, on: string): KrRef {
     progress: progress(d),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(d, on),
+    version: kr.hash,
   };
 }
 
