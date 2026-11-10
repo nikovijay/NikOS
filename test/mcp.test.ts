@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
@@ -85,4 +85,16 @@ describe("nikos mcp", () => {
     expect((await yes.call("approve", { ids: ["FX-1"] })).text).toMatch(/^FX-1: approved by /);
     expect(parse(readFileSync(join(root, "maps/fx/approvals/FX-1.yaml"), "utf8")).via).toBe("app");
   }, 60_000);
+});
+
+describe("nikos mcp init", () => {
+  it("says which map folder it made, and refuses a repo still on intent/", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-mcp-init-"));
+    const { call } = await connect(root);
+    expect((await call("init", { key: "NEW" })).text).toMatch(/^Created \d+ files for maps\/new\/\./);
+    expect(existsSync(join(root, "maps/new/storymap.yaml"))).toBe(true);
+    const old = mkdtempSync(join(tmpdir(), "nikos-mcp-old-"));
+    mkdirSync(join(old, "intent"));
+    expect(await connect(old).then((c) => c.call("init"))).toMatchObject({ isError: true, text: expect.stringContaining("this repo has intent/: run nikos migrate maps") });
+  });
 });

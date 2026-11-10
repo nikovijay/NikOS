@@ -145,7 +145,7 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 }
 
 /**
- * Whether a runner config runs the folder of stories: intent/features, or a maps/ folder for a group.
+ * Whether a runner config runs the folder of stories: a maps/ folder (one or more maps).
  * Comments don't count, so the template's header can't make a stale path look right. A config with no
  * paths of its own runs its defaults, so it passes.
  */

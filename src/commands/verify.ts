@@ -51,14 +51,14 @@ function stackOrThrow(root: string): Stack {
 
 /**
  * The behave.ini text for this repo. behave takes folders, not globs, and fails on one that doesn't
- * exist, so a group repo lists the folder of each map that has features. A 0.2.x repo keeps the template's line.
+ * exist, so it lists the folder of each map that has features, one indented line each. A repo with
+ * no such map keeps the template's placeholder line.
  */
 export function behavePaths(root: string, template: string): string {
-  if (existsSync(join(root, "intent"))) return template;
   const folders = mapDirs(root).filter((m) => existsSync(join(m, "features")));
   if (!folders.length) return template;
   const lines = folders.map((m) => `    maps/${basename(m)}/features`);
-  return template.replace(/^paths = intent\/features$/m, ["paths =", ...lines].join("\n"));
+  return template.replace(/^paths = maps\/<key>\/features$/m, ["paths =", ...lines].join("\n"));
 }
 
 /** Write the runner config and step stubs for the repo's stack. Never overwrites a file. */

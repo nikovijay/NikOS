@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { briefOf, storyboard, writeVideo } from "../src/commands/video";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 // hello-todo: HT-1 (done) and HT-2 (in progress) in "tasks", HT-3 (todo).
 
@@ -21,6 +21,12 @@ describe("nikos video", () => {
     expect(brief).toContain("| 01 Manage tasks | HT-1 Add a task |");
     expect(brief).toContain("- **Out:** anything not built yet: HT-2 See today's top three; HT-3 Reorder tasks.");
     expect(brief).not.toMatch(/\| [^|]*HT-[23]/); // never in a beat
+  });
+
+  it("reads the constitution from the repo root, and says so when it is missing", () => {
+    const dir = copyExample();
+    rmSync(join(rootOf(dir), "constitution.md"));
+    expect(() => storyboard(dir)).toThrow("No constitution.md");
   });
 
   it("refuses when nothing is done, so a video never shows unbuilt work", () => {

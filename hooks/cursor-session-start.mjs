@@ -14,9 +14,9 @@ try {
   // No input, or not JSON: fall back to the working directory.
 }
 const root = (Array.isArray(input.workspace_roots) && input.workspace_roots[0]) || process.cwd();
-// A story map is any maps/<key>/storymap.yaml.
+// A story map is any maps/<key>/storymap.yaml. A repo still on intent/ gets suggest too, for its migrate hint.
 const mapsDir = join(root, "maps");
-const hasMap = existsSync(mapsDir) && readdirSync(mapsDir).some((d) => existsSync(join(mapsDir, d, "storymap.yaml")));
+const hasMap = (existsSync(mapsDir) && readdirSync(mapsDir).some((d) => existsSync(join(mapsDir, d, "storymap.yaml")))) || existsSync(join(root, "intent"));
 let context = "";
 if (hasMap) {
   // NIKOS_CLI points at a local build, for testing this script.

@@ -114,9 +114,27 @@ describe("conversation rules", () => {
   it("the Claude Code plugin tells the agent where things stand at session start", () => {
     const hooks = JSON.parse(readFileSync(join(__dirname, "../hooks/hooks.json"), "utf8"));
     const cmd = hooks.hooks.SessionStart[0].hooks[0].command as string;
-    expect(cmd).toContain("[ -f intent/storymap.yaml ]");
+    expect(cmd).toContain("ls maps/*/storymap.yaml");
+    expect(cmd).toContain("[ -d intent ]");
     expect(cmd).toContain("npx -y nikos@latest suggest --brief");
     expect(cmd).toMatch(/\|\| true$/);
+  });
+
+  it("the session hook runs suggest only in a repo with a story map (or intent/, for its migrate hint), and never elsewhere", () => {
+    const cmd = (JSON.parse(readFileSync(join(__dirname, "../hooks/hooks.json"), "utf8")).hooks.SessionStart[0].hooks[0].command) as string;
+    // A fake npx that says it ran, so the test shows whether the hook called nikos.
+    const bin = mkdtempSync(join(tmpdir(), "hook-bin-"));
+    writeFileSync(join(bin, "npx"), '#!/bin/sh\necho NIKOS_RAN\n', { mode: 0o755 });
+    const run = (dir: string) => spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+    const bare = mkdtempSync(join(tmpdir(), "hook-bare-"));
+    expect(run(bare)).toMatchObject({ status: 0, stdout: "" });
+    const withMap = mkdtempSync(join(tmpdir(), "hook-map-"));
+    mkdirSync(join(withMap, "maps/ab"), { recursive: true });
+    writeFileSync(join(withMap, "maps/ab/storymap.yaml"), "key: AB\n");
+    expect(run(withMap).stdout).toContain("NIKOS_RAN");
+    const old = mkdtempSync(join(tmpdir(), "hook-old-"));
+    mkdirSync(join(old, "intent"));
+    expect(run(old).stdout).toContain("NIKOS_RAN");
   });
 
   it("Codex uses the same hook file, and Cursor its own sessionStart hook", () => {

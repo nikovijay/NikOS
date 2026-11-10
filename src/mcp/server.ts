@@ -86,7 +86,7 @@ export function createServer(repo: string): McpServer {
     const s = suggest(root, a.map);
     return text(`${s.summary}\n${s.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`, s as unknown as Record<string, unknown>);
   }, true);
-  tool("validate", "Check the story map is well formed: intent/, or each maps/<id> in a group repo (map picks one): the story map, state, features and approvals.", { map: z.string().optional() }, (a) => {
+  tool("validate", "Check the story maps are well formed: each maps/<key> (map picks one), with its story map, state, features and approvals, and the constitution.md at the root.", { map: z.string().optional() }, (a) => {
     const v = validate(root, a.map);
     return text(formatResult(v), { errors: v.errors, warnings: v.warnings });
   }, true);
@@ -149,7 +149,7 @@ export function createServer(repo: string): McpServer {
     const r = importTickets(a.tickets, root, { release: a.release, map: a.map });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
   });
-  tool("start", "Set this repo up in one go as a product's repo: intent/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A group repo with maps/ isn't set up this way: its story maps are made with nikos map new in the terminal. Companies and departments use company_init.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("start", "Set this repo up in one go as a product's repo: its first story map in maps/<key>/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A repo with maps/ already isn't set up this way: its story maps are added with nikos map new in the terminal. Companies and departments use company_init.",{ name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = startRepo(root, a);
     return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
   });
@@ -174,9 +174,9 @@ export function createServer(repo: string): McpServer {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
   });
-  tool("init", "Set up nikOS in this repo as a product's single repo: intent/ with a starter story. In a group repo, story maps live in maps/ (one per bet), and a repo with intent/ moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/ (one per bet in a group). A repo with intent/ is refused: it moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
-    return text(`Created ${r.created.length} files in intent/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
+    return text(`Created ${r.created.length} files for maps/${basename(r.mapDir)}/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
   });
   tool("add_story", "Add a story to the map and state, with a starter feature file to write its scenarios in.", {
     title: z.string(), activity: z.string(), step: z.string().optional(), release: z.number().int().optional(), priority: z.enum(["must", "should", "could"]).optional(), map: z.string().optional(),

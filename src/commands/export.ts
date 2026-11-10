@@ -4,7 +4,8 @@
 import { writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { isDone } from "../lib/project.js";
-import { storyMapOf, type MapRelease, type MapStory, type StoryMap } from "./map.js";
+import { resolveStoryMap } from "../lib/maps.js";
+import { storyMapOfRef, type MapRelease, type MapStory, type StoryMap } from "./map.js";
 
 export const FORMATS = ["prd", "linear", "jira"] as const;
 export type Format = (typeof FORMATS)[number];
@@ -135,7 +136,8 @@ export function toJira(m: StoryMap, projectKey: string) {
 
 export function exportMap(dir: string, format: Format, opts: { release?: number; projectKey?: string; map?: string } = {}): string {
   if (!FORMATS.includes(format)) throw new Error(`'${format}' is not a format (${FORMATS.join(", ")})`);
-  const full = storyMapOf(dir, opts.map);
+  // Several maps need a pick: exporting none of them would print an empty story map.
+  const full = storyMapOfRef(resolveStoryMap(dir, { map: opts.map }));
   if (opts.release !== undefined && !full.releases.some((r) => r.number === opts.release)) {
     throw new Error(`There is no release ${opts.release}. Releases: ${full.releases.map((r) => r.number).join(", ")}`);
   }
