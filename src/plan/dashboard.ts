@@ -71,10 +71,19 @@ export interface BetRef {
 export interface DashBet extends BetRef {
   team: string;
   hypothesis: string;
+  starts: string;
   review_on: string;
+  deadline: string;
   krs: { primary: string | null; also: string[] };
   /** The bets above it that it aligns to, found in the company. */
   aligns_to: BetRef[];
+}
+
+/** A bet below an area's bets or key results, that delivers them: how it does, and the key result or bet it's of. */
+export interface BelowBet extends BetRef {
+  /** primary and also: it aims at the key result. via: a bet below one that does. child: a bet below one of the area's bets. */
+  how: "primary" | "also" | "via" | "child";
+  of: string;
 }
 
 /** A story map that delivers a bet: where it lives, who owns it, and how old its read is. */
@@ -103,6 +112,10 @@ export interface AreaPage {
   bets: DashBet[];
   /** The bets above the area's bets, that the ladder's right column shows. */
   aboveBets: BetRef[];
+  /** What was widened: the levels above the ladder, and the levels below it. */
+  widen: { up: boolean; down: boolean };
+  /** The bets below the area's bets and key results. Only when it widened down. */
+  belowBets: BelowBet[];
   repos: RepoRead[];
   /** What the page says before the rest: an unknown area, or a quarter with no key results. */
   notices: string[];
@@ -237,13 +250,35 @@ export function pickPeriod(periods: string[], requested: string | undefined, tod
 
 /** The key result a reference names, wherever it's held in the company, as a ladder row. Undefined when there's none. */
 export function aboveKr(repo: string, id: string, on: string = new Date().toISOString().slice(0, 10)): KrRef | undefined {
+  return holderKr(repo, id, on)?.ref;
+}
+
+/** A key result held somewhere in the company, as a ladder row, with the references it aligns to. */
+function holderKr(repo: string, id: string, on: string): { ref: KrRef; aligns: string[] } | undefined {
   let holder: Area;
   try {
     holder = areaHolding(repo, id, "key result");
   } catch {
     return undefined;
   }
-  return krRef(holder, id, on);
+  return { ref: krRef(holder, id, on), aligns: alignsList(loadKr(holder.dir, id).data.aligns_to) };
+}
+
+/** Every key result above the given references, through aligns_to, each once. A cycle ends. */
+function krAncestors(repo: string, aligns: string[], on: string): KrRef[] {
+  const out = new Map<string, KrRef>();
+  const seen = new Set<string>();
+  const queue = [...aligns];
+  while (queue.length) {
+    const ref = queue.shift()!;
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    const hit = holderKr(repo, ref, on);
+    if (!hit) continue;
+    out.set(`${hit.ref.rel}/${hit.ref.id}`, hit.ref);
+    queue.push(...hit.aligns);
+  }
+  return [...out.values()];
 }
 
 function krRef(area: Area, id: string, on: string): KrRef {
@@ -263,6 +298,9 @@ function krRef(area: Area, id: string, on: string): KrRef {
   };
 }
 
+/** A bet's date as the plan writes it, or "" when it has none. */
+const dateOf = (v: unknown): string => (typeof v === "string" ? v : v instanceof Date ? v.toISOString().slice(0, 10) : "");
+
 interface BetRec {
   id: string;
   area: Area;
@@ -270,7 +308,9 @@ interface BetRec {
   team: string;
   hypothesis: string;
   outcome: string;
+  starts: string;
   review_on: string;
+  deadline: string;
   krs: { primary: string | null; also: string[] };
   aligns: string[];
 }
@@ -290,7 +330,9 @@ function betRecords(repo: string): { bets: Map<string, BetRec>; problems: string
           team: m.team ?? "",
           hypothesis: m.hypothesis ?? "",
           outcome: m.outcome ?? "",
+          starts: dateOf(m.starts),
           review_on: m.review_on ?? "",
+          deadline: dateOf(m.deadline),
           krs: { primary: m.krs?.primary ?? null, also: m.krs?.also ?? [] },
           aligns: alignsList(m.aligns_to),
         });
@@ -348,8 +390,9 @@ function betRefOf(rec: BetRec, deliveries: PlanDeliveries): BetRef {
  * An area's page: its key results and bets, what they align to above, its delivery and the period it
  * shows. A group's or team's key results are the ones its bets aim at. Files that won't load are problems.
  */
-export function areaPage(repo: string, area: Area, opts: { period?: string; notices?: string[]; deliveries: PlanDeliveries; now: Date }): AreaPage {
+export function areaPage(repo: string, area: Area, opts: { period?: string; notices?: string[]; deliveries: PlanDeliveries; now: Date; widen?: { up: boolean; down: boolean } }): AreaPage {
   const today = opts.now.toISOString().slice(0, 10);
+  const widen = opts.widen ?? { up: false, down: false };
   const tree = areaTree(repo);
   const { bets: records, problems: betProblems } = betRecords(repo);
   const problems = [...betProblems];
@@ -386,13 +429,14 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       const quarterly = holder.level === "department" && d.period !== undefined;
       if (quarterly && period !== undefined && String(d.period) !== period) continue;
       const row = krRef(holder, id, today);
+      const aligns = alignsList(d.aligns_to);
       krs.push({
         ...row,
         objective: d.objective ?? "",
         baseline: d.baseline,
         target: d.target,
-        aligns_to: alignsList(d.aligns_to),
-        above: alignsList(d.aligns_to).flatMap((r) => {
+        aligns_to: aligns,
+        above: aligns.flatMap((r) => {
           const hit = aboveKr(repo, r, today);
           return hit ? [hit] : [];
         }),
@@ -401,8 +445,11 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       problems.push((err as Error).message.split("\n")[0]);
     }
   }
+  // One level above by default; widened, every level above through aligns_to.
   const aboveKrs = new Map<string, KrRef>();
-  for (const k of krs) for (const a of k.above) aboveKrs.set(`${a.rel}/${a.id}`, a);
+  for (const k of krs) {
+    for (const a of widen.up ? krAncestors(repo, k.aligns_to, today) : k.above) aboveKrs.set(`${a.rel}/${a.id}`, a);
+  }
 
   const bets: DashBet[] = ownBets.map((b) => {
     const aligns = b.aligns.flatMap((ref) => {
@@ -413,13 +460,40 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       ...betRefOf(b, opts.deliveries),
       team: b.team,
       hypothesis: b.hypothesis,
+      starts: b.starts,
       review_on: b.review_on,
+      deadline: b.deadline,
       krs: b.krs,
       aligns_to: aligns,
     };
   });
   const aboveBets = new Map<string, BetRef>();
-  for (const b of bets) for (const a of b.aligns_to) aboveBets.set(`${a.rel}/${a.id}`, a);
+  for (const b of bets) {
+    const up = widen.up ? upLevels(records, b.id).flat().map((r) => betRefOf(r, opts.deliveries)) : b.aligns_to;
+    for (const a of up) aboveBets.set(`${a.rel}/${a.id}`, a);
+  }
+
+  // Widened down: the bets below the area's bets, and the bets that aim at its key results, with the bets below those.
+  const belowBets: BelowBet[] = [];
+  if (widen.down) {
+    const listed = new Set(ownBets.map((b) => b.id));
+    const children = childrenOf(records);
+    for (const b of ownBets) {
+      for (const c of below(b.id, children)) {
+        if (listed.has(c)) continue;
+        listed.add(c);
+        belowBets.push({ ...betRefOf(records.get(c)!, opts.deliveries), how: "child", of: b.id });
+      }
+    }
+    for (const k of krs) {
+      for (const [id, aim] of aimsAt(records, k.id)) {
+        if (listed.has(id)) continue;
+        listed.add(id);
+        const how = aim === "via" ? "via" : aim;
+        belowBets.push({ ...betRefOf(records.get(id)!, opts.deliveries), how, of: k.id });
+      }
+    }
+  }
 
   const warnings = opts.deliveries.warnings;
   const parent = parentOf(area);
@@ -441,6 +515,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     aboveKrs: [...aboveKrs.values()],
     bets,
     aboveBets: [...aboveBets.values()],
+    widen,
+    belowBets,
     repos: opts.deliveries.repos,
     notices,
     warnings,
@@ -453,15 +529,7 @@ export function drillKr(repo: string, krId: string, deliveries: PlanDeliveries, 
   const kr = aboveKr(repo, krId, now.toISOString().slice(0, 10));
   if (!kr) return undefined;
   const { bets } = betRecords(repo);
-  const children = childrenOf(bets);
-  const aims = new Map<string, DrillBet["aims"]>();
-  for (const b of bets.values()) {
-    if (b.krs.primary === krId) aims.set(b.id, "primary");
-    else if (b.krs.also.includes(krId)) aims.set(b.id, "also");
-  }
-  for (const [id, how] of [...aims]) {
-    if (how === "primary" || how === "also") for (const under of below(id, children)) if (!aims.has(under)) aims.set(under, "via");
-  }
+  const aims = aimsAt(bets, krId);
   const maps = mapRefOf(repo, deliveries);
   const areas = new Map<string, DrillArea>();
   for (const area of listAreas(repo)) areas.set(area.rel, { rel: area.rel, level: area.level, id: area.id, name: nameOf(area), bets: [] });
@@ -497,15 +565,12 @@ export function drillBet(repo: string, betId: string, deliveries: PlanDeliveries
   };
 }
 
-/** The bets above a bet, through aligns_to, level by level. Each bet is visited once, so a cycle ends. */
-export function upChain(repo: string, betId: string, deliveries?: PlanDeliveries): UpChain | undefined {
-  const { bets } = betRecords(repo);
-  const root = bets.get(betId);
-  if (!root) return undefined;
+/** The bets above a bet, through aligns_to, level by level: level 0 is what it aligns to directly. Each bet is visited once, so a cycle ends. */
+function upLevels(bets: Map<string, BetRec>, betId: string): BetRec[][] {
   const seen = new Set([betId]);
-  const levels: UpChain["levels"] = [];
+  const levels: BetRec[][] = [];
   let frontier = [betId];
-  for (let depth = 1; frontier.length; depth++) {
+  while (frontier.length) {
     const next: BetRec[] = [];
     for (const id of frontier) {
       for (const ref of bets.get(id)?.aligns ?? []) {
@@ -515,10 +580,34 @@ export function upChain(repo: string, betId: string, deliveries?: PlanDeliveries
         next.push(hit);
       }
     }
-    if (next.length) levels.push({ depth, bets: next.map((b) => betRefOf(b, deliveries ?? emptyDeliveries)) });
+    if (next.length) levels.push(next);
     frontier = next.map((b) => b.id);
   }
-  return { bet: betRefOf(root, deliveries ?? emptyDeliveries), levels, krs: root.krs };
+  return levels;
+}
+
+/** The bets above a bet, through aligns_to, level by level. Each bet is visited once, so a cycle ends. */
+export function upChain(repo: string, betId: string, deliveries?: PlanDeliveries): UpChain | undefined {
+  const { bets } = betRecords(repo);
+  const root = bets.get(betId);
+  if (!root) return undefined;
+  const d = deliveries ?? emptyDeliveries;
+  const levels = upLevels(bets, betId).map((list, i) => ({ depth: i + 1, bets: list.map((b) => betRefOf(b, d)) }));
+  return { bet: betRefOf(root, d), levels, krs: root.krs };
+}
+
+/** The bets that aim at a key result (primary or also), and the bets below those, with how each one does. */
+function aimsAt(bets: Map<string, BetRec>, krId: string): Map<string, DrillBet["aims"]> {
+  const children = childrenOf(bets);
+  const aims = new Map<string, DrillBet["aims"]>();
+  for (const b of bets.values()) {
+    if (b.krs.primary === krId) aims.set(b.id, "primary");
+    else if (b.krs.also.includes(krId)) aims.set(b.id, "also");
+  }
+  for (const [id, how] of [...aims]) {
+    if (how === "primary" || how === "also") for (const under of below(id, children)) if (!aims.has(under)) aims.set(under, "via");
+  }
+  return aims;
 }
 
 const emptyDeliveries: PlanDeliveries = { cached: false, bets: new Map(), stories: new Map(), repos: [], warnings: [] };
