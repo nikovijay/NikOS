@@ -19,8 +19,9 @@ interface Opened {
   releases: YAMLSeq<YAMLMap>;
 }
 
-function open(dir: string, mapId?: string): Opened {
-  const mapDir = resolveStoryMap(dir, { map: mapId }).dir;
+/** The release list of the map that holds a story (by id) or the one named (or the only one). */
+function open(dir: string, mapId?: string, story?: string): Opened {
+  const mapDir = resolveStoryMap(dir, { map: mapId, story }).dir;
   const mapPath = join(mapDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
@@ -112,7 +113,7 @@ export function renameRelease(input: { map?: string; number: number; title?: str
 
 /** Move a story to another release (to the end of its build order), keeping its feature tag in step. */
 export function moveStory(input: { map?: string; id: string; to: number }, dir: string) {
-  const o = open(dir, input.map);
+  const o = open(dir, input.map, input.id);
   const target = find(o, input.to);
   const from = o.releases.items.find((r) => storiesOf(r).includes(input.id));
   if (!from) throw new Error(`${input.id} is not in any release in storymap.yaml`);

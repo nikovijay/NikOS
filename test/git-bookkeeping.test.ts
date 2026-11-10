@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codeChangedSince, codeIsDirty, headOf } from "../src/lib/git";
+import { codeChangedSince, codeIsDirty, headOf, unrelatedDirty } from "../src/lib/git";
 import { git, write, commitAll } from "./repo-fixture";
 
 /** A repo with code and one map's files, committed; returns the repo and the commit the proof ran at. */
@@ -60,5 +60,24 @@ describe("bookkeeping never counts as code", () => {
 
   it("a folder that isn't a git repo is not dirty", () => {
     expect(codeIsDirty(mkdtempSync(join(tmpdir(), "nikos-nogit-")))).toBe(false);
+  });
+
+  it("the repo's root decisions.md and constitution.md are bookkeeping: editing them never lapses an approval", () => {
+    const { dir, tested } = repo();
+    write(join(dir, "decisions.md"), "# Decisions\n\n## 2027-01-06 — Cards only\n");
+    write(join(dir, "constitution.md"), "# Constitution\n");
+    expect(codeIsDirty(dir)).toBe(false);
+    expect(unrelatedDirty(dir)).toEqual([]);
+    commitAll(dir, "decide");
+    expect(codeChangedSince(dir, tested)).toBe(false);
+  });
+
+  it("a root file that isn't nikOS's own is unrelated dirt, and a code change still counts", () => {
+    const { dir, tested } = repo();
+    write(join(dir, "notes.txt"), "scratch\n");
+    expect(unrelatedDirty(dir)).toEqual(["?? notes.txt"]);
+    write(join(dir, "src/app.ts"), "export const app = 5;\n");
+    commitAll(dir, "code");
+    expect(codeChangedSince(dir, tested)).toBe(true);
   });
 });

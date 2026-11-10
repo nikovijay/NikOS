@@ -231,7 +231,6 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
           ? 'Ask your coding agent to "plan this period\'s bets for the group".'
           : 'Ask your coding agent to "plan this period\'s objectives and key results".',
   );
-  if (a.kind === "product" || a.kind === "both") next.push(`Later, if several repos should share this story map, ${cli} migrate maps moves it into a group.`);
   out.push("", "Next steps:");
   let n = 0;
   for (const line of next) out.push(line.startsWith("     ") ? line : `  ${++n}. ${line}`);

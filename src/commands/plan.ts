@@ -30,7 +30,7 @@ export function planVersions(mapDir: string, story: string): number[] {
 
 export function newPlan(story: string, opts: NewPlanOptions = {}): string {
   if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const mapDir = resolveStoryMap(opts.dir ?? process.cwd(), { map: opts.map }).dir;
+  const mapDir = resolveStoryMap(opts.dir ?? process.cwd(), { story, map: opts.map }).dir;
   const mapPath = join(mapDir, "storymap.yaml");
   if (store().exists(mapPath)) {
     const map = parse(read(mapPath));

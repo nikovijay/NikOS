@@ -120,7 +120,7 @@ describe("the onboarding wizard", () => {
     const lines = setUp(a, dir);
     expect(existsSync(join(dir, "maps/tc/storymap.yaml"))).toBe(true);
     expect(lines.some((l) => l.includes("See it in your browser: "))).toBe(true);
-    expect(lines.join("\n")).toContain("migrate maps moves it into a group.");
+    expect(lines.join("\n")).not.toContain("migrate maps moves it into a group");
   });
 
   it("start refuses a repo that has maps/", () => {

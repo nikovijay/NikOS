@@ -8,7 +8,7 @@
 //   saw the question or gave the answer.
 // - tracker: a person moved the story's ticket to a status mapped to approved (nikos tracker
 //   record), when tracker.approvals is on.
-// A repo can go further and protect approvals.yaml with CODEOWNERS, so every approval also
+// A repo can go further and protect a map's approvals/ with CODEOWNERS, so every approval also
 // needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";

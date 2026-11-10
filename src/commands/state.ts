@@ -11,7 +11,7 @@ export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancell
 
 /**
  * The moves docs/format.md allows. `done` also needs the story's scenarios to pass; `cancelled`
- * needs a reason. Approval isn't a status: it's a person's entry in approvals.yaml.
+ * needs a reason. Approval isn't a status: it's a person's file in the map's approvals/ folder.
  */
 const MOVES: Record<Status, Status[]> = {
   todo: ["in_progress", "cancelled"],

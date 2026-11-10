@@ -149,7 +149,7 @@ export function renameStory(dir: string, input: { map?: string; id: string; titl
   const title = input.title?.trim();
   if (!title) throw new Error("A story needs a title");
   if (/[\r\n]/.test(title)) throw new Error("A title is one line (no line breaks)");
-  const ref = resolveStoryMap(dir, { map: input.map });
+  const ref = resolveStoryMap(dir, { story: input.id, map: input.map });
   const file = featureOf(ref, input.id);
   if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
   const text = read(file);
@@ -175,7 +175,7 @@ function dropState(home: StoryHome, id: string): void {
  * Refused when any work is recorded against it.
  */
 export function removeStory(dir: string, input: { map?: string; id: string }, expect?: string): { removed: string; validation: ValidationResult } {
-  const ref = resolveStoryMap(dir, { map: input.map });
+  const ref = resolveStoryMap(dir, { story: input.id, map: input.map });
   const file = featureOf(ref, input.id);
   if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
   checkHash(input.id, read(file), expect);

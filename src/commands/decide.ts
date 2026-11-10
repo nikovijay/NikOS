@@ -30,7 +30,7 @@ export function decide(input: DecisionInput, dir: string): string {
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
   const path = decisionsPath(dir);
   if (!store().exists(path)) {
-    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first, or `nikos company init` for a company or department plan.");
+    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
     store().write(path, PLAN_DECISIONS, { create: true });
   }
 
