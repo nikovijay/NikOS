@@ -14,11 +14,16 @@ import { newStory } from "../src/commands/story";
 import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { verify } from "../src/commands/verify";
 import { fetchCopy } from "../src/lib/fetch-copy";
+import { spawnSync } from "node:child_process";
 import { groupRepo, git, write, commitAll } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/commands/verify")>();
   return { ...real, verify: vi.fn(() => ({ stack: "js", command: "cucumber-js", status: 0, output: "1 scenario (1 passed)" })) };
+});
+vi.mock("node:child_process", async (importOriginal) => {
+  const real = await importOriginal<typeof import("node:child_process")>();
+  return { ...real, spawnSync: vi.fn(real.spawnSync) };
 });
 vi.mock("../src/lib/fetch-copy", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/lib/fetch-copy")>();
@@ -54,11 +59,26 @@ const CARD = "maps/inb/features/getting-started/pay-by-card.feature";
 describe("nikos map status: a group's map", () => {
   it("reads each story's state and approval from the map's own files, with no git or network call", () => {
     const g = groupRepo("PAY");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    vi.mocked(spawnSync).mockClear();
     const rs = mapStatus(g);
     expect(rs).toHaveLength(1);
     expect(rs[0]).toMatchObject({ map: "chk", key: "CHK", owner: "PAY", counts: { stories: 3, done: 0, approved: 0, notCurrent: 0 } });
     expect(story(rs, "PAY-CHK-1")).toMatchObject({ status: "todo", approval: "none" });
     expect(fetchCopy).not.toHaveBeenCalled();
+    expect(spawnSync).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("a cancelled story is not behind, even when its feature changed after it was started", () => {
+    const g = groupRepo("PAY");
+    setState("PAY-CHK-1", "in_progress", { dir: g });
+    setState("PAY-CHK-1", "cancelled", { dir: g, reason: "dropped" });
+    reword(join(g, "maps/chk/features/pay/pay-by-card.feature"));
+    const rs = mapStatus(g);
+    expect(story(rs, "PAY-CHK-1")).toMatchObject({ status: "cancelled" });
+    expect(JSON.stringify(rs)).not.toContain("behind");
   });
 
   it("a done story is done, and an approval that holds shows who gave it", () => {

@@ -51,11 +51,21 @@ describe("the owner field in storymap.yaml", () => {
     expect(messages(r).filter((m) => m.includes("must start with") || m.includes("feature file") || m.includes("unknown story"))).toEqual([]);
   });
 
-  it("a story id with the group's prefix is refused in a map whose owner is WEB, and so is a mix of both", () => {
+  it("a story id with the group's prefix is refused in a map whose owner is WEB", () => {
     const g = groupRepo("PAY");
     setOwner(g, "WEB");
     const r = messages(validate(g, "chk"));
     expect(r).toContain("story PAY-CHK-1 must start with WEB-CHK-");
+    expect(r).toContain("story PAY-CHK-3 must start with WEB-CHK-");
+  });
+
+  it("a map whose owner is WEB refuses a mix of prefixes, one message per story with the other prefix", () => {
+    const g = groupRepo("PAY");
+    setOwner(g, "WEB");
+    renameIds(g, "PAY-CHK-1", "WEB-CHK-1");
+    const r = messages(validate(g, "chk"));
+    expect(r).not.toContain("story WEB-CHK-1 must start with WEB-CHK-");
+    expect(r).toContain("story PAY-CHK-2 must start with WEB-CHK-");
     expect(r).toContain("story PAY-CHK-3 must start with WEB-CHK-");
   });
 

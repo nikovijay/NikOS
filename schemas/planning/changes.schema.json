@@ -69,7 +69,7 @@
         },
         "target": {
           "type": "object",
-          "propertyNames": { "enum": ["kr", "bet", "story", "activity", "step", "release", "map", "team"] },
+          "propertyNames": { "enum": ["kr", "bet", "story", "activity", "step", "release", "map"] },
           "additionalProperties": { "type": "string" }
         },
         "args": { "type": "object", "description": "The arguments the op reads, by name. A name the op doesn't read is refused." },

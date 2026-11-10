@@ -68,7 +68,7 @@ window.nikos.op(op, target, args, expect): Promise<{ ok, message, changed, branc
   The same change the dashboard makes: POST /api/op, with { op, target, args, expect }. The op names and their
   levels are in src/planning/ops.ts. Story and activity ids are checked the way the commands check them.
 
-expect is the hash of the item as data() returned it. A save rejected with status 409 means the file changed on disk: call data() again and apply the change to the new version. Other rejections carry the reason. Saves write only the planning, maps and assignments paths of this repo.
+expect is the hash of the item as data() returned it. A save rejected with status 409 means the file changed on disk: call data() again and apply the change to the new version. Other rejections carry the reason. Saves write only the planning/, maps/ and intent/ paths of this repo.
 `;
 
 /** The script every custom view gets. It saves through the same endpoints, with the same token and hash checks. */

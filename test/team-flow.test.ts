@@ -142,7 +142,7 @@ describe("a repo's flow: the review's edge cases", () => {
     const { t } = setup();
     write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, updated: 2027-01-05 }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n");
     commitAll(t, "status");
-    expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("was tested at no commit");
+    expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("was done with no recorded test commit");
   });
 
   it("show and validate say when the code has changed since an approval was tested", () => {

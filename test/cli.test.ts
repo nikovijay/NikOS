@@ -44,14 +44,14 @@ describe("cli", () => {
 });
 
 describe("closest", () => {
-  const names = ["serve", "start", "story", "state", "doctor", "planning", "help", "assign", "sync"];
+  const names = ["serve", "start", "story", "state", "doctor", "planning", "help", "approve", "validate"];
   it("finds a missing, extra, changed or swapped letter, and the start of a name", () => {
     expect(closest("serv", names)).toBe("serve");
     expect(closest("sevre", names)).toBe("serve");
     expect(closest("hlep", names)).toBe("help");
     expect(closest("doctr", names)).toBe("doctor");
     expect(closest("plan", names)).toBe("planning");
-    expect(closest("assing", names)).toBe("assign");
+    expect(closest("approev", names)).toBe("approve");
   });
   it("says nothing when no name is close", () => {
     expect(closest("xyz", names)).toBeUndefined();

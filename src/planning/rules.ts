@@ -4,7 +4,7 @@
 // module together (ui.ts does). Messages match the commands' own, word for word.
 
 /** An id of the given kind, or the message saying why it can't be one. */
-export function idProblem(kind: "kr" | "bet" | "story" | "activity" | "step" | "release" | "map" | "team", id: string): string | undefined {
+export function idProblem(kind: "kr" | "bet" | "story" | "activity" | "step" | "release" | "map", id: string): string | undefined {
   if (typeof id !== "string") return "'" + String(id) + "' is not an id";
   const words = /^[a-z0-9]+(-[a-z0-9]+)*$/;
   if (kind === "kr") return words.test(id) ? undefined : "'" + id + "' is not a key result id (lowercase words joined by hyphens)";
@@ -14,10 +14,6 @@ export function idProblem(kind: "kr" | "bet" | "story" | "activity" | "step" | "
   if (kind === "map") return words.test(id) ? undefined : "'" + id + "' is not a map id (lowercase words joined by hyphens)";
   if (kind === "release") return /^[0-9]+$/.test(id) ? undefined : "'" + id + "' is not a release number";
   if (kind === "story") return /^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$/.test(id) ? undefined : "'" + id + "' is not a story id (e.g. HT-1, or PAY-CHK-12 in a group)";
-  if (kind === "team") {
-    const path = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/.test(id) && !/(^|\/)\.{1,2}(\/|$)/.test(id);
-    return id === "." || path ? undefined : "'" + id + "' is not a team repo path (owner/repo)";
-  }
   return "'" + id + "' is not a kind of id nikOS knows";
 }
 

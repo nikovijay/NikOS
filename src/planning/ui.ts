@@ -933,7 +933,7 @@ pendingRefresh();
 const QUEUE_JS = String.raw`
 var QUEUE = [];
 var MADE_BY = '';
-var KINDS = { kr: 'kr', bet: 'bet', story: 'story', activity: 'activity', step: 'step', release: 'release', map: 'map', team: 'team' };
+var KINDS = { kr: 'kr', bet: 'bet', story: 'story', activity: 'activity', step: 'step', release: 'release', map: 'map' };
 // The field rules the commands share, checked here too. Ids and fields only: the full check runs at nikos apply.
 function pageProblem(op, t, a) {
   var keys = Object.keys(t || {});

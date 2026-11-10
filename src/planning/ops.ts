@@ -168,7 +168,7 @@ export const EDITS = new Set<OpName>([
 ]);
 
 
-const TARGET_KINDS: Record<string, "kr" | "bet" | "story" | "activity" | "step" | "release" | "map" | "team"> = {
+const TARGET_KINDS: Record<string, "kr" | "bet" | "story" | "activity" | "step" | "release" | "map"> = {
   kr: "kr",
   bet: "bet",
   story: "story",
@@ -176,7 +176,6 @@ const TARGET_KINDS: Record<string, "kr" | "bet" | "story" | "activity" | "step" 
   step: "step",
   release: "release",
   map: "map",
-  team: "team",
 };
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);

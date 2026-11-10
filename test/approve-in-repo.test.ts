@@ -11,6 +11,7 @@ import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
 import { verify } from "../src/commands/verify";
 import { codeChangedSince, headOf } from "../src/lib/git";
+import { validate } from "../src/commands/validate";
 import { git, write, commitAll, groupRepo } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
@@ -42,6 +43,30 @@ describe("approve in a group's repo with git", () => {
     write(join(g, "src/checkout.js"), "export const pay = () => 2;\n");
     commitAll(g, "code after done");
     expect(() => approve("PAY-CHK-2", { dir: g, by: "Priya Shah" })).toThrow("the code has changed since");
+  });
+
+  it("a commit of only nikOS's own files keeps an approval current, and a later code commit brings the warning back", () => {
+    const g = groupRepo("PAY");
+    write(join(g, "src/checkout.js"), "export const pay = () => {};\n");
+    commitAll(g, "code");
+    const tested = headOf(g)!;
+    setState("PAY-CHK-1", "in_progress", { dir: g });
+    setState("PAY-CHK-1", "done", { dir: g });
+    commitAll(g, "done");
+    approve("PAY-CHK-1", { dir: g, by: "Priya Shah", date: "2027-01-06" });
+    commitAll(g, "approve");
+    const codeWarnings = () => validate(g, "chk").warnings.filter((w) => w.message.includes("the code has changed since it was tested"));
+
+    // Only state, approvals and delivery.yaml change here: the code the approval tested is the same.
+    setState("PAY-CHK-2", "in_progress", { dir: g });
+    commitAll(g, "bookkeeping");
+    expect(codeChangedSince(g, tested)).toBe(false);
+    expect(codeWarnings()).toEqual([]);
+
+    write(join(g, "src/checkout.js"), "export const pay = () => 1;\n");
+    commitAll(g, "code after approval");
+    expect(codeChangedSince(g, tested)).toBe(true);
+    expect(codeWarnings().map((w) => w.message)).toEqual([expect.stringContaining("PAY-CHK-1")]);
   });
 
   it("refuses approval over uncommitted code", () => {

@@ -126,7 +126,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
-| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
+| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`, or `intent/approvals.yaml` in a repo with `intent/`) |
 | `nikos next` | Print the next story to build |
 | `nikos migrate per-story` | Give each story its own state and approval file, so parallel branches never conflict |
 | `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/` in a group repo. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |

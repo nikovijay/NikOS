@@ -155,6 +155,8 @@ export function renameStory(dir: string, input: { map?: string; id: string; titl
   const text = read(file);
   checkHash(input.id, text, expect);
   store().write(file, text.replace(/^(\s*Feature:)[^\n]*/m, (_all, head: string) => `${head} ${title}`));
+  // The Feature line is in the spec hash, so the proof of a story that has one changes with it.
+  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return { file, validation: validate(ref.dir) };
 }
 
@@ -193,5 +195,6 @@ export function removeStory(dir: string, input: { map?: string; id: string }, ex
   store().write(mapPath, map.toString(yamlOpts));
   store().remove(file);
   dropState(homeOf(ref), input.id);
+  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
   return { removed: input.id, validation: validate(ref.dir) };
 }

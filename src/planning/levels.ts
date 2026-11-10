@@ -156,7 +156,7 @@ export function levelIssues(root: string): PlanningIssue[] {
     issues.push({
       file: "planning/plan.yaml",
       warning: true,
-      message: "Team plans are going away: teams are assigned story maps by their group. Keep this team's key results and bets in the department's or group's plan.",
+      message: "Team plans are going away: a team's story map names its team with owner: in storymap.yaml (nikos map new --owner). Keep this team's key results and bets in the department's or group's plan.",
     });
   }
   if ((level === "group" || team) && plan?.objectives?.length) {

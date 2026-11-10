@@ -11,6 +11,7 @@
 - **This release changes the layout.** Each story map lives in the repo that builds it, under `maps/<key>/`, and its `storymap.yaml` can name an `owner` (a team key such as `WEB`). Its story ids are then `WEB-CHK-3`: `nikos map new --owner <KEY>` sets it, and a map with no owner takes the group key as before. A map's `bet:` is optional. A map's state and approvals are kept in its own folder.
 - `nikos map status` is local: it reads the map's own files, with no fetch, no `--offline` and no team section. It writes `maps/<key>/delivery.yaml` for each map, and the plans above read that committed file. `nikos state set`, `approve`, `map new`, `story new` and `nikos migrate maps` keep `delivery.yaml` current too.
 - `nikos validate` fails when a map's `delivery.yaml` is missing or no longer matches its files, such as after a hand edit. Run `nikos map status` and commit the result.
+- In a group's repo, approval now checks the code it was tested at, as a team's repo did: `nikos approve` refuses a story whose code changed since it was tested, or with uncommitted code, and `validate` warns about it. Approval lapses on a code change in group repos from this release. A story done before this release has no recorded test commit, so approve refuses it until its scenarios run again: `nikos state set <id> needs_rework`, then `in_progress`, `done`, and `approve`.
 
 ### Removed
 

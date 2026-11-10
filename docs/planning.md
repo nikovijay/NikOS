@@ -304,8 +304,8 @@ bet: faster-checkout  # optional: the bet this map delivers
 
 `nikos map status` prints each map's status and writes `maps/<key>/delivery.yaml` from the map's
 own state and approvals. It reads only this repo: no git fetch, no network, and no `--offline`.
-`nikos state set`, `approve`, `map new`, `story new` and `nikos migrate maps` write the file too, so it
-stays current as work moves. Commit it with the stories. `nikos validate` fails when a map's
+`nikos state set`, `approve`, `map new`, `story new`, `nikos migrate maps`, and a story renamed or removed
+through `nikos planning` or the dashboard write the file too, so it stays current as work moves. Commit it with the stories. `nikos validate` fails when a map's
 `delivery.yaml` is missing or no longer matches its files (after a hand edit, say): run
 `nikos map status` and commit the result. The plans above read the committed file, so a rollout shows
 what the default branch says.

@@ -75,8 +75,12 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (head && codeIsDirty(ref.root)) {
     throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
-  if (head && (!tested || codeChangedSince(ref.root, tested))) {
-    throw new StateError(`${story} was tested at ${tested?.slice(0, 7) ?? "no commit"}, and the code has changed since (HEAD is ${head?.slice(0, 7) ?? "no commit"}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
+  // A story done before its folder had a commit (or migrated with no evidence) has no commit to test against.
+  if (head && !tested) {
+    throw new StateError(`${story} was done with no recorded test commit, so nikOS can't tell what its proof covers: run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
+  }
+  if (head && codeChangedSince(ref.root, tested!)) {
+    throw new StateError(`${story} was tested at ${tested!.slice(0, 7)}, and the code has changed since (HEAD is ${head.slice(0, 7)}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
   const existing = loadApprovals(home)[story];
   if (existing && !approvalLapse(existing, entry, hash)) {

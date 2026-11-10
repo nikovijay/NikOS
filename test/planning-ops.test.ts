@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { runMapNew, newMap } from "../src/commands/map";
+import { setState } from "../src/commands/state";
+import { validate } from "../src/commands/validate";
 import { runOp, runOps } from "../src/planning/ops";
 import { newBet } from "../src/planning/bets";
 import { newKr, checkIn } from "../src/planning/krs";
@@ -167,6 +169,17 @@ describe("story, activity, step and release ops", () => {
     expect(existsSync(join(g, "maps/chk/features/confirm/see-receipt.feature"))).toBe(false);
     expect(readText(g, "maps/chk/storymap.yaml")).not.toContain("PAY-CHK-3");
     expect(readText(g, "maps/chk/state.yaml")).not.toContain("PAY-CHK-3");
+  });
+
+  it("story.rename and story.remove keep delivery.yaml current, so validate passes straight after them", () => {
+    const g = groupRepo("PAY");
+    const deliveryErrors = () => validate(g, "chk").errors.filter((e) => e.file === "delivery.yaml");
+    // A story in progress has a proof, which a rename makes behind.
+    setState("PAY-CHK-1", "in_progress", { dir: g });
+    runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay by debit card" } });
+    expect(deliveryErrors()).toEqual([]);
+    runOp(g, { op: "story.remove", target: { story: "PAY-CHK-3" }, args: { map: "chk" } });
+    expect(deliveryErrors()).toEqual([]);
   });
 
   it("activity.rename and step.rename: refuse an unknown id, and rename a known one", () => {

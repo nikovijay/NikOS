@@ -69,7 +69,8 @@ export function summaryBody(root: string, dir: string): SummaryBody {
     let proof: Proof | undefined;
     if (isDone(status) && !state?.spec_hash) proof = "unverified";
     else if (isDone(status) && state?.spec_hash !== hash) proof = "changed";
-    else if (!isDone(status) && state?.spec_hash && state.spec_hash !== hash) proof = "behind";
+    // A cancelled story isn't being worked on, so an older feature doesn't make it behind.
+    else if (!isDone(status) && status !== "cancelled" && state?.spec_hash && state.spec_hash !== hash) proof = "behind";
     return {
       id,
       status,
