@@ -302,6 +302,8 @@ describe("applying the plan", () => {
     const story = readFileSync(join(dir, "maps/ht/storymap.yaml"), "utf8");
     expect(story).toContain("bet: checkout-speed");
     expect(story).toContain("stories: [PAY-HT-1, PAY-HT-2, PAY-HT-12]");
+    // The plan's key is the map's owner now: its story ids keep the prefix.
+    expect(story).toContain("owner: PAY");
     expect(story).not.toContain("bets:");
     const feat = readFileSync(join(dir, "maps/ht/features/tasks/reorder-tasks.feature"), "utf8");
     expect(feat.split("\n")[0]).toBe("@PAY-HT-2 @release-1 @must @activity-tasks @depends-PAY-HT-1");

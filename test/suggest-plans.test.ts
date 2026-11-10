@@ -18,10 +18,10 @@ const brief = (dir: string) => {
   return out;
 };
 
-/** The payments group with a second map, hr, so nothing can pick a map for you. */
+/** The payments map repo with a second map, hr, so nothing can pick a map for you. */
 function twoMaps(): string {
   const group = groupRepo("PAY");
-  newMap({ bet: "faster-checkout", key: "HR" }, group);
+  newMap({ bet: "faster-checkout", key: "HR", owner: "PAY" }, group);
   newStory({ title: "Show a line to a reviewer", activity: "getting-started", map: "hr" }, group);
   commitAll(group, "a second map");
   return group;

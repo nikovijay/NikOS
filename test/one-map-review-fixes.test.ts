@@ -47,7 +47,6 @@ describe("story ids after a plan key is added", () => {
   it("a story added to a bare-id map keeps the bare prefix, and the map validates", () => {
     const root = fresh();
     init(root, { name: "Hello Todo", key: "HT" });
-    write(join(root, "planning/plan.yaml"), "name: Hello\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
     const added = newStory({ title: "Second", activity: "getting-started" }, join(root, "maps/ht"));
     expect(added.id).toBe("HT-2");
     expect(messages(validate(root))).toEqual([]);

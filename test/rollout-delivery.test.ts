@@ -19,6 +19,8 @@ function setup(summary: DeliverySummary["stories"]) {
 
   const grp = groupRepo("PAY");
   git(grp, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
+  // The bet the maps aim at: the rollout lists the bets its plan has a card for.
+  write(join(grp, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
   write(join(grp, "maps/hr/storymap.yaml"), "format_version: 1\nproject: hr\nkey: HR\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-HR-1]\n");
   write(join(grp, "maps/hr/state.yaml"), "format_version: 1\nstories:\n  PAY-HR-1: { status: done }\n");
   writeDeliverySummary(join(grp, "maps/hr"), { version: 1, map: "hr", owner: "PAY", read_at: NOW, stories: [{ id: "PAY-HR-1", status: "done", approval: "none", read_at: NOW }] });

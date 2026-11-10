@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { companyInit } from "../src/commands/start";
-import { joinPlan } from "../src/commands/join";
+import { sync } from "../src/planning/upstream";
 import { doctor } from "../src/commands/doctor";
 import { newBet, reviewBet } from "../src/planning/bets";
 import { formatRollout, rollout } from "../src/planning/rollout";
@@ -65,7 +65,7 @@ describe("a stopped bet in the root plan flags what aims at it", () => {
     // The department copies the company's bets, so its own page can see the bet above is stopped.
     write(join(dept, "planning/upstream.yaml"), `- repo: acme/company-plan\n  url: ${co}\n`);
     commitAll(dept, "upstream");
-    joinPlan(dept, { repo: "acme/company-plan" });
+    sync(dept);
     const page = okrsAndBets(planningData(dept));
     const above = page.betsAbove.find((b: any) => b.ref === "acme/company-plan#big-bet")!;
     expect(above.stoppedOn).toBe("2027-02-01");

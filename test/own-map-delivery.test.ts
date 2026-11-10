@@ -18,10 +18,9 @@ function ownMapRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "nikos-own-delivery-"));
   write(join(dir, "package.json"), '{"name":"web","private":true}\n');
   git(dir, "init", "-q", "-b", "main");
-  write(join(dir, "planning/plan.yaml"), "name: Checkout\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
   write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
   commitAll(dir, "group");
-  newMap({ bet: "faster-checkout", key: "INB" }, dir);
+  newMap({ bet: "faster-checkout", key: "INB", owner: "PAY" }, dir);
   newStory({ title: "Pay by card", activity: "getting-started" }, dir);
   commitAll(dir, "map");
   return dir;

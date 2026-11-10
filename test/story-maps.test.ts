@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { copyExample, edit as editFile, exampleDir, rootOf } from "./helpers";
 import { mapDirs, repoRootOf, resolveStoryMap, storyMapsOf, storyPrefix } from "../src/lib/maps";
 import { isPlanOnly } from "../src/lib/project";
-import { runGroup } from "../src/commands/start";
 import { runMapNew, runMap } from "../src/commands/map";
 import { parse } from "yaml";
 import { newActivity } from "../src/commands/step";
@@ -22,11 +21,10 @@ const write = (path: string, text: string) => {
   writeFileSync(path, text);
 };
 
-/** A group repo with a key, and one map per id: maps/<id>/storymap.yaml. */
+/** A repo with one map per id: maps/<id>/storymap.yaml, each owned by ACME (so its story ids are ACME-<KEY>-n). */
 function groupRepo(maps: string[]): string {
   const root = mkdtempSync(join(tmpdir(), "nikos-group-"));
-  write(join(root, "planning/plan.yaml"), "name: Checkout\nkey: ACME\nperiod: Q1\nlevel: group\npillars: []\n");
-  for (const id of maps) write(join(root, "maps", id, "storymap.yaml"), `key: ${id.toUpperCase()}\nbet: ${id}\nactivities: []\nreleases: []\n`);
+  for (const id of maps) write(join(root, "maps", id, "storymap.yaml"), `key: ${id.toUpperCase()}\nowner: ACME\nbet: ${id}\nactivities: []\nreleases: []\n`);
   return root;
 }
 
@@ -86,12 +84,9 @@ describe("story map resolver", () => {
   });
 });
 
-/** A group repo made by nikos group init, with bet cards in planning/bets/. */
+/** A repo for story maps, with bet cards in planning/bets/ (a map's bet is checked for form only). */
 function newGroup(bets: string[] = ["faster-checkout"]): string {
   const root = mkdtempSync(join(tmpdir(), "nikos-newmap-"));
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  runGroup(["init", "--name", "Checkout", "--key", "ACME", "--dir", root]);
-  vi.restoreAllMocks();
   for (const b of bets) write(join(root, "planning/bets", `${b}.md`), `---\nid: ${b}\n---\n`);
   return root;
 }
@@ -126,8 +121,8 @@ describe("nikos map new", () => {
     const ok = ["--bet", "faster-checkout", "--key", "CHK", "--dir", root];
     expect(mapNew(["--bet", "faster-checkout", "--dir", root]).errors).toContain("nikos map new needs --key <KEY>");
     expect(mapNew(["--bet", "Bad Bet", "--key", "CHK", "--dir", root]).errors).toContain("'Bad Bet' is not a bet id");
-    expect(mapNew(["--bet", "acme/payments#faster", "--key", "CHK", "--dir", root]).errors).toContain("a map specs one of this group's bets, not another repo's");
-    expect(mapNew(["--bet", "no-card", "--key", "CHK", "--dir", root]).errors).toContain("no planning/bets/no-card.md: create it with nikos planning bet new");
+    expect(mapNew(["--bet", "acme/payments#faster", "--key", "CHK", "--dir", root]).errors).toContain("a map names one bet by its id, not another repo's bet");
+    expect(mapNew(["--bet", "no-card", "--key", "NC", "--dir", root]).code).toBe(0);
     expect(mapNew(["--bet", "faster-checkout", "--key", "chk", "--dir", root]).errors).toContain("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
     expect(mapNew(ok).code).toBe(0);
     expect(mapNew(["--bet", "faster-checkout", "--key", "CHK", "--dir", root]).errors).toContain("map key CHK is already used by maps/chk");
@@ -153,7 +148,7 @@ describe("nikos map new", () => {
 /** A group with one map for a bet, with an activity ready for stories. */
 function oneMap(bet = "faster-checkout", key = "CHK"): string {
   const root = newGroup([bet]);
-  mapNew(["--bet", bet, "--key", key, "--dir", root]);
+  mapNew(["--bet", bet, "--key", key, "--owner", "ACME", "--dir", root]);
   const id = key.toLowerCase();
   vi.spyOn(console, "log").mockImplementation(() => {});
   newActivity({ title: "Tasks", map: id }, root);
@@ -181,7 +176,7 @@ describe("story ids in a group map", () => {
 
   it("asks for --map when a group has two maps, and picks the one named", () => {
     const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", root]);
+    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
     vi.spyOn(console, "log").mockImplementation(() => {});
     newActivity({ title: "Pay", map: "pay" }, root);
     vi.restoreAllMocks();
@@ -218,10 +213,10 @@ describe("bets in a map", () => {
     expect(betsFor(map, "ACME-CHK-1")).toEqual({ bets: ["faster-checkout"], from: "map" });
   });
 
-  it("a map with no bet is valid, a bet with no card is named, and bets on releases or stories are named", () => {
+  it("a map with no bet is valid, a bet is checked for form only, and bets on releases or stories are named", () => {
     const root = oneMap();
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8").replace("bet: faster-checkout", "bet: no-card"));
-    expect(validate(root, "chk").errors.map((e) => e.message)).toContain("maps/chk names bet no-card, which has no planning/bets/no-card.md");
+    expect(validate(root, "chk").errors.map((e) => e.message).filter((m) => m.includes("no-card"))).toEqual([]);
 
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8").replace(/^bet: .*\n/m, ""));
     expect(validate(root, "chk").errors.map((e) => e.message).filter((m) => m.includes("bet"))).toEqual([]);
@@ -235,7 +230,7 @@ describe("bets in a map", () => {
 describe("group validation", () => {
   it("flags a folder that doesn't match its key, and two maps with one key", () => {
     const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", root]);
+    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
     // Rename the folder so it no longer matches its key.
     renameSync(join(root, "maps", "pay"), join(root, "maps", "wrong"));
     expect(validateGroup(root).errors.map((e) => e.message)).toContain("maps/wrong has key 'PAY', so its folder should be maps/pay");
@@ -263,7 +258,7 @@ describe("group validation", () => {
 describe("delivery across maps", () => {
   it("counts the stories of every map that specs the bet", () => {
     const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", root]);
+    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
     vi.spyOn(console, "log").mockImplementation(() => {});
     newActivity({ title: "Pay", map: "pay" }, root);
     vi.restoreAllMocks();
@@ -313,7 +308,7 @@ describe("review fixes for group maps", () => {
 
   it("reports a map whose storymap.yaml won't parse, and checks the rest", () => {
     const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", root]);
+    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
     write(mapFile(root, "pay"), "key: [\n  broken: yes\n");
     let errors: { message: string }[] = [];
     expect(() => {
@@ -333,7 +328,7 @@ describe("review fixes for group maps", () => {
 
   it("moves a story to done through its own map when a group has several", () => {
     const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", root]);
+    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
     vi.spyOn(console, "log").mockImplementation(() => {});
     newActivity({ title: "Pay", map: "pay" }, root);
     vi.restoreAllMocks();

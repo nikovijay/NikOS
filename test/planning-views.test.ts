@@ -95,12 +95,6 @@ describe("bets and story maps", () => {
     expect(betsAndStoryMaps(data).foot).toBe(NOTE.groupFoot);
   });
 
-  it("a group's page has no key results of its own, and links to the story maps", () => {
-    const page = renderDashboard({ data: planningData(groupRepo("PAY")), readOnly: true });
-    expect(page).toContain('data-nav="groupmaps" href="#/groupmaps">Bets and story maps');
-    expect(page).not.toContain('data-nav="krs" href="#/krs">Key results');
-    expect(page).not.toContain("Rollout");
-  });
 });
 
 describe("the snapshot page", () => {

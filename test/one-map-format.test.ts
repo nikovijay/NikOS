@@ -52,7 +52,7 @@ describe("story id prefixes", () => {
     return { root, dir: join(root, "maps", key.toLowerCase()), id: key.toLowerCase() };
   };
 
-  it("is the owner, else the group key, else nothing, and the label follows it", () => {
+  it("is the owner, else nothing, and the label follows it", () => {
     expect(storyPrefix(solo("CHK"), "CHK")).toBe("CHK");
     expect(labelOf(solo("CHK"))).toBe("CHK");
     expect(storyPrefix(solo("CHK", "WEB"), "CHK")).toBe("WEB-CHK");
@@ -70,7 +70,7 @@ describe("story id prefixes", () => {
 
   it("refuses a mix of prefixes in one map, and names each story that doesn't use the map's own", () => {
     const g = groupRepo("PAY");
-    write(join(g, "maps/chk/storymap.yaml"), readFileSync(join(g, "maps/chk/storymap.yaml"), "utf8").replace("key: CHK\n", "key: CHK\nowner: WEB\n").replace("PAY-CHK-3", "WEB-CHK-3").replace("stories: [PAY-CHK-1, PAY-CHK-2]", "stories: [WEB-CHK-1, PAY-CHK-2]"));
+    write(join(g, "maps/chk/storymap.yaml"), readFileSync(join(g, "maps/chk/storymap.yaml"), "utf8").replace("owner: PAY\n", "owner: WEB\n").replace("PAY-CHK-3", "WEB-CHK-3").replace("stories: [PAY-CHK-1, PAY-CHK-2]", "stories: [WEB-CHK-1, PAY-CHK-2]"));
     const messages = validate(g, "chk").errors.map((e) => e.message);
     expect(messages).toContain("story PAY-CHK-2 must start with WEB-CHK-");
     expect(messages).not.toContain("story WEB-CHK-1 must start with WEB-CHK-");

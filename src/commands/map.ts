@@ -537,8 +537,8 @@ const MAP_KEY = KEY;
 
 /**
  * A story map, as maps/<key lowercased>/: its storymap, state, approvals and features. Its story ids
- * take the owner (--owner, e.g. WEB), else the repo's key from planning/plan.yaml, else just the key.
- * A bet (--bet) is optional; it's checked against planning/bets/ only when the repo has planning/.
+ * take the owner (--owner, e.g. WEB), else just the key. A bet (--bet) is optional and must be a bet
+ * id: its card isn't looked up, since a code repo can't read a planning repo.
  * Refuses with the same messages the command line gives.
  */
 export function newMap(input: { bet?: string; key?: string; owner?: string }, dir: string): { id: string; key: string; ids: string; dir: string } {
@@ -549,10 +549,9 @@ export function newMap(input: { bet?: string; key?: string; owner?: string }, di
   if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
   if (bet !== undefined) {
     if (!BET_ID.test(bet)) {
-      if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
+      if (CROSS_REF.test(bet)) throw new Error("a map names one bet by its id, not another repo's bet");
       throw new Error(`'${bet}' is not a bet id`);
     }
-    if (store().isDir(join(dir, "planning")) && !store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
   }
   if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
   if (owner !== undefined && !OWNER.test(owner)) throw new Error("owner must be uppercase letters and digits, up to 10 (e.g. WEB)");
@@ -590,7 +589,7 @@ export function runMapNew(args: string[]): number {
   }
 }
 
-/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in a group repo. */
+/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in this repo. */
 export function runMap(args: string[]): number {
   if (args[0] === "new") return runMapNew(args.slice(1));
   if (args[0] === "status") return runMapStatus(args.slice(1));

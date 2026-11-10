@@ -138,7 +138,7 @@ function betRefs(storymap: any): { where: string; ref: string }[] {
 /** The local bet ids the releases name, in the order they appear, each once. */
 const namedBets = (storymap: any): string[] => [...new Set(betRefs(storymap).map((b) => b.ref).filter((r) => BET_ID.test(r)))];
 
-/** The plan's key, which story ids take as their prefix. Undefined when planning/plan.yaml names none. */
+/** The plan's key, which becomes the map's owner and so the prefix of its story ids. Undefined when planning/plan.yaml names none. */
 const planKeyOf = (root: string): string | undefined => {
   const key = yamlOf(join(root, "planning", "plan.yaml"))?.key;
   return typeof key === "string" ? key : undefined;
@@ -295,7 +295,8 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
     else dropped.push(`${where} ${ref}: a map names one bet, in bet:, so this link is dropped: name it by hand once its card is in planning/bets/`);
   }
   const renamed = renameIds(storyText, table);
-  const withKey = renamed.text.replace(/^key:.*$/m, (line) => `${line.replace(/^key:.*$/, `key: ${a.key}`)}${bet ? `\nbet: ${bet}` : ""}`);
+  // The plan's key becomes the map's owner, so its story ids keep the prefix they were renamed to.
+  const withKey = renamed.text.replace(/^key:.*$/m, (line) => `${line.replace(/^key:.*$/, `key: ${a.key}`)}${prefix ? `\nowner: ${prefix}` : ""}${bet ? `\nbet: ${bet}` : ""}`);
   const doc = parseDocument(withKey);
   doc.delete("story_bets");
   const releases = doc.get("releases");

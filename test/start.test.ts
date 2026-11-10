@@ -7,8 +7,6 @@ import { parse } from "yaml";
 import { companyInit, runStart, start } from "../src/commands/start";
 import { init } from "../src/commands/init";
 import { newActivity } from "../src/commands/step";
-import { joinPlan } from "../src/commands/join";
-import { resolveSettings } from "../src/lib/settings";
 import { validatePlanning } from "../src/planning/model";
 import { initPlanRepo } from "../src/plan/repo";
 import { copyExample } from "./helpers";
@@ -50,7 +48,7 @@ describe("activity add", () => {
 });
 
 describe("company init", () => {
-  it("writes a company plan repo that a team can join and inherit from", () => {
+  it("writes a company plan repo, with the join line a team runs", () => {
     const company = repo();
     const r = companyInit(company, { name: "Acme", period: "Q1 2027", departments: ["Payments", " Growth "], repo: "acme/product/company-plan", host: "gitlab.com" });
     expect(r.created).toEqual(["planning/plan.yaml", "nikos.settings.yaml", "planning/downstream.yaml", "README.md"]);
@@ -64,10 +62,6 @@ describe("company init", () => {
 
     spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "add", "."], { cwd: company });
     spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "plan"], { cwd: company });
-    const team = repo();
-    start(team, { name: "Checkout", key: "CO" });
-    joinPlan(team, { repo: "acme/product/company-plan", url: company });
-    expect(resolveSettings(team)["approval.policy"]).toEqual({ value: "optional", from: "acme/product/company-plan" });
   });
 });
 

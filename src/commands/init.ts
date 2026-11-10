@@ -55,7 +55,7 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   if (old) throw new Error(old);
   if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
   const mapDir = join(root, "maps", key.toLowerCase());
-  // The starter story's id carries the same label map new gives a story: the group key's, if the repo has one.
+  // The starter story's id carries the same label map new gives a story: the map's owner, if it has one.
   const first_id = `${storyPrefix({ root, dir: mapDir, id: key.toLowerCase() }, key)}-1`;
   const values: Record<string, string> = { project_name: name, project_slug: slugify(name), key, first_id };
   if (store().exists(join(mapDir, "storymap.yaml"))) throw new Error(`maps/${key.toLowerCase()}/ already exists`);

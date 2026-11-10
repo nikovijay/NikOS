@@ -4,7 +4,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { companyInit } from "../src/commands/start";
-import { joinPlan } from "../src/commands/join";
 import { newKr } from "../src/planning/krs";
 import { sync } from "../src/planning/upstream";
 import { commitAll, git, write } from "./repo-fixture";
@@ -31,7 +30,6 @@ export function departmentRepo(co: string): string {
   git(dept, "remote", "add", "origin", "https://github.com/acme/payments-plan.git");
   companyInit(dept, { name: "Payments", period: "Q1 2027", repo: "acme/payments-plan", level: "department" });
   write(join(dept, "planning/upstream.yaml"), `- repo: acme/company-plan\n  url: ${co}\n`);
-  joinPlan(dept, { repo: "acme/company-plan" });
   sync(dept);
   commitAll(dept, "department");
   return dept;

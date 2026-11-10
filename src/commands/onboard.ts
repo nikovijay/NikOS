@@ -194,8 +194,11 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     out.push(...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`));
     if (a.planRepo) {
       if (ownRepo(a.dir)) {
-        const listed = joinPlanRepo(a.dir, { plan: a.planRepo });
-        out.push(listed ? describeRepoJoin(listed) : `! Couldn't read ${a.planRepo} as a planning repo, so nothing was joined.`);
+        try {
+          out.push(describeRepoJoin(joinPlanRepo(a.dir, { plan: a.planRepo })));
+        } catch (err) {
+          out.push(`! ${(err as Error).message}`);
+        }
       } else next.push(`Link it to the company plan: set this repo's origin, then run ${cli} join ${a.planRepo}`);
     }
     next.push(`See it in your browser: ${cd}${cli} serve`);

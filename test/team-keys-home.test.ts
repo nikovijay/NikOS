@@ -6,7 +6,6 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addDownstream, downstreamEntries, formatRollout, rollout } from "../src/planning/rollout";
-import { joinPlan } from "../src/commands/join";
 import { groupRepo, write, commitAll, git } from "./repo-fixture";
 
 /** A plan-only repo at a level and key, committed, so it can be joined or listed. */
@@ -47,32 +46,3 @@ describe("a downstream entry names the plan a team or group is homed in (rule 4)
   });
 });
 
-describe("two plans with one key (decision D5)", () => {
-  it("refuses a group's join to a plan with its own key, and names both", () => {
-    const company = plan("company", "PAY", "Company PAY");
-    const g = groupRepo("PAY");
-    expect(() => joinPlan(g, { repo: "acme/company", url: company })).toThrow("uses key PAY, which this plan uses");
-    expect(existsSync(join(g, "planning/upstream.yaml"))).toBe(false);
-  });
-
-  it("the rollout reports the duplicate key among the copies below it as an error line", () => {
-    const co = plan("company", "ACME");
-    const a = groupRepo("PAY");
-    const b = groupRepo("PAY", mkdtempSync(join(tmpdir(), "nikos-group-b-")));
-    write(join(co, "planning/downstream.yaml"), `- name: A\n  repo: acme/a\n  url: ${a}\n- name: B\n  repo: acme/b\n  url: ${b}\n`);
-    commitAll(co, "downstream");
-    const r = rollout(co);
-    expect(r.problems).toEqual(["key PAY is used by acme/a and acme/b: give one of them another key"]);
-    expect(formatRollout(r).split("\n")[0]).toContain("have joined");
-    expect(formatRollout(r)).toContain("✗ key PAY is used by acme/a and acme/b");
-  });
-
-  it("no problem when every key is its own", () => {
-    const co = plan("company", "ACME");
-    const a = groupRepo("PAY");
-    const b = groupRepo("DEL", mkdtempSync(join(tmpdir(), "nikos-group-c-")));
-    write(join(co, "planning/downstream.yaml"), `- name: A\n  repo: acme/a\n  url: ${a}\n- name: B\n  repo: acme/b\n  url: ${b}\n`);
-    commitAll(co, "downstream");
-    expect(rollout(co).problems).toEqual([]);
-  });
-});

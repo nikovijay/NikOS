@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
 import { companyInit } from "../src/commands/start";
-import { joinPlan } from "../src/commands/join";
+import { sync } from "../src/planning/upstream";
 import { newKr } from "../src/planning/krs";
 import { newBet } from "../src/planning/bets";
 import { addDownstream, formatRollout, ownRepo, rollout } from "../src/planning/rollout";
@@ -39,7 +39,7 @@ function company() {
   const dept = repo("nikos-dept-");
   mkdirSync(join(dept, "planning"));
   writeFileSync(join(dept, "planning/upstream.yaml"), `- repo: acme/company-plan\n  url: ${co}\n`);
-  joinPlan(dept, { repo: "acme/company-plan" });
+  sync(dept);
   newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31", unit: "%", alignsTo: "acme/company-plan#kr-1" }, dept);
   commit(dept);
 
@@ -47,7 +47,7 @@ function company() {
   git(team, "init", "-q", "-b", "main");
   mkdirSync(join(team, "planning"), { recursive: true });
   writeFileSync(join(team, "planning/upstream.yaml"), `- repo: acme/payments-plan\n  url: ${dept}\n`);
-  joinPlan(team, { repo: "acme/payments-plan" });
+  sync(team);
   edit(join(team, "planning/krs/missed-important-tasks.yaml"), (t) => `${t}aligns_to: acme/payments-plan#pay-1\n`);
   commit(team);
   newBet({ id: "one-tap-pay", owner: "Payments", hypothesis: "We believe one-tap pay lifts conversion.", reviewOn: "2027-02-14", primary: "pay-1" }, dept);
@@ -161,14 +161,14 @@ describe("rollout", () => {
 
   it("is current once the plan below syncs again", () => {
     const { co, dept } = company();
-    joinPlan(dept, { repo: "acme/company-plan" });
+    sync(dept);
     commit(dept, "resync");
     expect(rollout(co).plans.find((p) => p.name === "Payments")?.synced?.current).toBe(true);
   });
 
   it("compares a plan further down with the plan it sits below", () => {
     const { co, dept, team } = company();
-    joinPlan(team, { repo: "acme/payments-plan" });
+    sync(team);
     commit(team, "resync");
     expect(rollout(co).plans.find((p) => p.name === "Checkout")?.synced?.current).toBe(true);
     writeFileSync(join(dept, "README.md"), "# Payments\n");

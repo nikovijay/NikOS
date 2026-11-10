@@ -215,9 +215,11 @@ function startMap(dir: string, flag: (n: string) => string | undefined, has: (n:
     for (const d of r.done) console.log(`✓ ${d}`);
     for (const a of r.ask) console.log(`? ${a}`);
     if (joinTo) {
-      const listed = joinPlanRepo(dir, { plan: joinTo, host: flag("host") });
-      if (!listed) throw new Error(`Couldn't read ${joinTo} as a planning repo (planning/company/), so nothing was joined. The story map is set up.`);
-      console.log(describeRepoJoin(listed));
+      try {
+        console.log(describeRepoJoin(joinPlanRepo(dir, { plan: joinTo, host: flag("host") })));
+      } catch (err) {
+        throw new Error(`${(err as Error).message} The story map is set up.`);
+      }
     }
     console.log(`\n${r.next.summary}\n${r.next.options.map((o, n) => `  ${n + 1}. ${o.label}`).join("\n")}`);
     console.log(`\nSee it in your browser: ${cliCommand()} serve`);

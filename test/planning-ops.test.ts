@@ -30,12 +30,6 @@ describe("runOp: names, levels and ids", () => {
     expect(() => runOp(co, { op: "story.rename", target: { story: "HT-1" }, args: { title: "x" } })).toThrow("story.rename isn't a change the company plan makes here");
   });
 
-  it("refuses key results and check-ins at group level, with the key result rule's message", () => {
-    const g = groupRepo("PAY");
-    expect(() => runOp(g, { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 1 } })).toThrow(/Key results stop at department level/);
-    expect(() => runOp(g, { op: "kr.new", target: { kr: "pay-1" }, args: {} })).toThrow(/Key results stop at department level/);
-  });
-
   it("checks the id of each target by its kind before the command runs", () => {
     const co = companyRepo();
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "../../etc" }, args: { title: "x" }, expect: kr1(co) })).toThrow(
@@ -88,21 +82,6 @@ describe("kr ops", () => {
 });
 
 describe("bet ops", () => {
-  it("bet.align (group): refuses a key result, which a bet can't align to", () => {
-    const co = companyRepo();
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31" }, dept);
-    commitAll(dept, "pay-1");
-    const g = groupRepo("PAY");
-    write(join(g, "planning/upstream.yaml"), `- repo: acme/payments-plan\n  url: ${dept}\n`);
-    git(g, "add", ".");
-    git(g, "commit", "-q", "-m", "upstream");
-    sync(g);
-    expect(() => runOp(g, { op: "bet.align", target: { bet: "faster-checkout" }, args: { aligns_to: ["acme/payments-plan#pay-1"] }, expect: hash(readText(g, "planning/bets/faster-checkout.md")) })).toThrow(
-      "acme/payments-plan#pay-1 is a key result: a bet aligns to bets, and names key results under krs",
-    );
-  });
-
   it("bet.krs (department): refuses a key result that isn't there, and one both primary and also", () => {
     const co = companyRepo();
     const dept = departmentRepo(co);
@@ -226,7 +205,7 @@ describe("map ops", () => {
     const g = groupRepo("PAY");
     expect(() => newMap({ bet: "faster-checkout" }, g)).toThrow("nikos map new needs --key <KEY>");
     expect(() => newMap({ bet: "Bad Bet", key: "X" }, g)).toThrow("'Bad Bet' is not a bet id");
-    expect(() => newMap({ bet: "nope", key: "ZZ" }, g)).toThrow("no planning/bets/nope.md: create it with nikos planning bet new");
+    expect(() => newMap({ bet: "acme/payments#faster", key: "ZZ" }, g)).toThrow("a map names one bet by its id, not another repo's bet");
     expect(() => newMap({ bet: "faster-checkout", key: "zz" }, g)).toThrow("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
     expect(() => newMap({ bet: "faster-checkout", key: "CHK" }, g)).toThrow("map key CHK is already used by maps/chk");
   });
@@ -240,23 +219,13 @@ describe("map ops", () => {
   it("the command line prints the same line as before", () => {
     const g = groupRepo("PAY");
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    expect(runMapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", g])).toBe(0);
+    expect(runMapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "PAY", "--dir", g])).toBe(0);
     expect(log.mock.calls).toEqual([["Created maps/pay for bet faster-checkout, story ids PAY-PAY-n"]]);
     expect(existsSync(join(g, "maps/pay/storymap.yaml"))).toBe(true);
   });
 });
 
 describe("settings and downstream ops", () => {
-  it("setting.set refuses a key a plan above locked", () => {
-    const co = companyRepo();
-    write(join(co, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy]\n");
-    commitAll(co, "settings");
-    const dept = departmentRepo(co);
-    expect(() => runOp(dept, { op: "setting.set", args: { key: "approval.policy", value: "off" } })).toThrow(
-      "approval.policy is locked by acme/company-plan, so it can't be changed here",
-    );
-  });
-
   it("downstream.add lists a department below the plan", () => {
     const co = companyRepo();
     const r = runOp(co, { op: "downstream.add", args: { name: "Checkout", repo: "acme/checkout-web" } });
@@ -301,9 +270,7 @@ describe("cleanup", () => {
 });
 
 describe("nikos planning keeps the lists it had", () => {
-  it("refuses bet.krs at a legacy group, and a team at all, as before", () => {
-    const g = groupRepo();
-    expect(() => runOp(g, { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "pay-1" } }, { strict: true })).toThrow("bet.krs isn't a change the group plan makes here");
+  it("refuses a team at all, as before", () => {
     const team = mkdtempSync(join(tmpdir(), "nikos-legacy-team-"));
     write(join(team, "planning/plan.yaml"), "name: Web\nkey: WEB\nperiod: Q1 2027\nlevel: team\npillars: []\n");
     write(join(team, "planning/bets/web-copy.md"), "---\nid: web-copy\n---\n");

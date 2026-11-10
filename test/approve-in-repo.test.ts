@@ -84,7 +84,6 @@ describe("approve in a folder with no git", () => {
   it("approves without a tested commit, and skips the git checks", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-nogit-"));
     try {
-      write(join(dir, "planning/plan.yaml"), "name: Checkout PAY\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
       write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
       newMap({ bet: "faster-checkout", key: "CHK", owner: "PAY" }, dir);
       newStory({ title: "Pay by card", activity: "getting-started" }, dir);

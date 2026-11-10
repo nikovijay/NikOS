@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 import { isPlanRepo } from "../planning/model.js";
 import { mapDirs } from "./maps.js";
 
-/** A story id: <KEY>-<n>, or <PREFIX>-<KEY>-<n> with an owner or group key, e.g. HT-1, WEB-CHK-12 or PAY-CHK-12. */
+/** A story id: <KEY>-<n>, or <PREFIX>-<KEY>-<n> with the map's owner, e.g. HT-1 or WEB-CHK-12. */
 export const STORY_ID_PATTERN = "^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$";
 export const STORY_ID = new RegExp(STORY_ID_PATTERN);
 

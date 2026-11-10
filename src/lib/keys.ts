@@ -1,8 +1,9 @@
 // Keys across the chain (amendment D5). A group's or department's key names its story ids, so two repos in
-// one chain can't share one. Joining refuses a clash it can see, and the rollout reports the ones
-// among the copies below it. A key is read from a copy's planning/plan.yaml.
+// one chain can't share one. The rollout reports the ones among the copies below it. A key is read from a
+// copy's planning/plan.yaml. Stage C of the plan cleanup removes this with the rollout.
 import { dirname, join, relative, sep } from "node:path";
-import { groupKeyOf } from "./maps.js";
+import { parse } from "yaml";
+import { store } from "./store.js";
 import { walk } from "./project.js";
 
 /** A key for a group, plan or map (D6): capital letters and digits, starting with a letter, up to 10. */
@@ -14,27 +15,26 @@ export interface CopyKey {
   key: string;
 }
 
+/** The key in a copy's planning/plan.yaml, or undefined. Only the rollout still reads these (stage C removes it). */
+function planKeyOf(dir: string): string | undefined {
+  try {
+    const key = (parse(store().read(join(dir, "planning", "plan.yaml"))) as { key?: unknown } | null)?.key;
+    return typeof key === "string" ? key : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Each copy under a .nikos/ folder that names a key, with its repo path. Scratch folders (.fetch) are skipped. */
 export function copyKeys(cacheDir: string): CopyKey[] {
   const roots = walk(cacheDir, join("planning", "plan.yaml")).map((p) => dirname(dirname(p)));
   const out: CopyKey[] = [];
   for (const dir of new Set(roots)) {
     if (dir.includes(`${sep}.fetch`)) continue;
-    const key = groupKeyOf(dir);
+    const key = planKeyOf(dir);
     if (key) out.push({ repo: relative(cacheDir, dir).split(sep).join("/"), key });
   }
   return out;
-}
-
-/**
- * Why a repo's key can't be used in this chain, or undefined. self is the joining repo: its own key
- * and each copy in cacheDirs, other than the repo's own copy, must differ.
- */
-export function keyClash(self: string, repo: string, key: string, cacheDirs: string[]): string | undefined {
-  if (groupKeyOf(self) === key) return `${repo} uses key ${key}, which this plan uses: give one of them another key`;
-  const other = cacheDirs.flatMap(copyKeys).find((c) => c.key === key && c.repo !== repo);
-  if (other) return `${repo} uses key ${key}, which ${other.repo} already uses: give one of them another key`;
-  return undefined;
 }
 
 /** The keys several copies share: each key with the repos that use it. Empty when every key is its own. */

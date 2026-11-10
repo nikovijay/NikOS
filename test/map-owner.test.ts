@@ -1,5 +1,5 @@
-// A map's owner: the storymap field that prefixes its story ids (WEB-CHK-3), the fallback to the
-// group key for a map with none, and nikos map new --owner. Each map keeps its own delivery.yaml.
+// A map's owner: the storymap field that prefixes its story ids (WEB-CHK-3), bare ids for a map with
+// none, and nikos map new --owner. Each map keeps its own delivery.yaml.
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,10 +21,10 @@ function renameIds(g: string, from: string, to: string) {
   }
 }
 
-/** The storymap, with an owner line added after its key. */
+/** The storymap, with its owner line set to owner (groupRepo writes PAY). */
 function setOwner(g: string, owner: string) {
   const p = join(g, "maps/chk/storymap.yaml");
-  write(p, readFileSync(p, "utf8").replace("key: CHK\n", `key: CHK\nowner: ${owner}\n`));
+  write(p, readFileSync(p, "utf8").replace(/^owner: .*$/m, `owner: ${owner}`));
 }
 
 const messages = (r: { errors: { message: string }[] }) => r.errors.map((e) => e.message);
@@ -52,9 +52,10 @@ describe("the owner field in storymap.yaml", () => {
     expect(messages(r).filter((m) => m.includes("must start with") || m.includes("feature file") || m.includes("unknown story"))).toEqual([]);
   });
 
-  it("a map whose owner is WEB accepts its group's prefix, since every story in it uses that one", () => {
+  it("a map whose owner is WEB accepts stories that all use WEB, and no others", () => {
     const g = groupRepo("PAY");
     setOwner(g, "WEB");
+    renameIds(g, "PAY-CHK", "WEB-CHK");
     expect(messages(validate(g, "chk")).filter((m) => m.includes("must start with"))).toEqual([]);
   });
 
@@ -68,15 +69,10 @@ describe("the owner field in storymap.yaml", () => {
     expect(r).toContain("story PAY-CHK-3 must start with WEB-CHK-");
   });
 
-  it("a map with no owner falls back to the group key from planning/plan.yaml", () => {
+  it("a map with no owner has bare KEY-n ids, and its delivery summary has no owner", () => {
     const g = groupRepo("PAY");
-    expect(storyPrefix(chk(g), "CHK")).toBe("PAY-CHK");
-    expect(messages(validate(g, "chk")).filter((m) => m.includes("must start with"))).toEqual([]);
-  });
-
-  it("a map with neither an owner nor a group key has bare KEY-n ids, and its delivery summary has no owner", () => {
-    const g = groupRepo("PAY");
-    write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
+    write(join(g, "maps/chk/storymap.yaml"), readFileSync(join(g, "maps/chk/storymap.yaml"), "utf8").replace(/^owner: .*\n/m, ""));
+    renameIds(g, "PAY-CHK", "CHK");
     expect(storyPrefix(chk(g), "CHK")).toBe("CHK");
     expect(messages(validate(g, "chk")).filter((m) => m.includes("must start with"))).toEqual([]);
     writeMapSummary(g, join(g, "maps/chk"));
@@ -107,13 +103,12 @@ describe("nikos map new --owner", () => {
     expect(() => newMap({ bet: "faster-checkout", key: "INB", owner: "ABCDEFGHIJK" }, g)).toThrow("owner must be uppercase letters and digits");
   });
 
-  it("a map with no owner and no group key gets bare ids: nothing is needed to make one", () => {
+  it("a map with no owner gets bare ids: nothing is needed to make one", () => {
     const g = groupRepo("PAY");
-    write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
     expect(newMap({ bet: "faster-checkout", key: "INB" }, g).ids).toBe("INB");
   });
 
-  it("does not write the group key as an owner when none is given", () => {
+  it("does not write an owner when none is given", () => {
     const g = groupRepo("PAY");
     newMap({ bet: "faster-checkout", key: "INB" }, g);
     expect(parse(readFileSync(join(g, "maps/inb/storymap.yaml"), "utf8"))).not.toHaveProperty("owner");
