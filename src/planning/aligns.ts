@@ -2,7 +2,7 @@
 // is checked against the synced copies of the plan above, the same way newKr and newBet check it.
 import { join } from "node:path";
 import { CROSS_REF } from "../lib/bets.js";
-import { betText, checkBet, checkKr, describeErrors, krText, loadBet, loadKr, paths, writePlanning } from "./model.js";
+import { areaOf, betText, checkBet, checkKr, describeErrors, krText, loadBet, loadKr, paths, writePlanning } from "./model.js";
 import { alignmentProblems, alignsValue, krTargetProblems, levelOf } from "./levels.js";
 
 /** Replace a key result's or bet's aligns_to with refs (none removes it). expect is the hash it was loaded at. */
@@ -36,7 +36,8 @@ export function setBetKrs(root: string, id: string, krs: { primary?: string; als
   const also = [...new Set((krs.also ?? []).map((r) => r.trim()).filter(Boolean))];
   if (primary && also.includes(primary)) throw new Error(`${primary} is both primary and also`);
   for (const ref of [primary, ...also].filter((r): r is string => !!r)) {
-    if (!CROSS_REF.test(ref)) loadKr(root, ref); // throws the same message as the other key result checks
+    // In a planning repo a key result may be in another area: krTargetProblems checks it there.
+    if (!CROSS_REF.test(ref) && !areaOf(root)) loadKr(root, ref); // throws the same message as the other key result checks
   }
   const problem = krTargetProblems(root, [primary, ...also].filter((r): r is string => !!r))[0];
   if (problem) throw new Error(problem);

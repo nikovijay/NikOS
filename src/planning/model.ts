@@ -29,17 +29,62 @@ export function findRoot(start: string): string {
   return basename(abs) === "planning" && !store().exists(join(abs, "planning")) ? dirname(abs) : abs;
 }
 
-export const paths = (root: string) => ({
-  planning: join(root, "planning"),
-  bets: join(root, "planning", "bets"),
-  krs: join(root, "planning", "krs"),
-  plan: join(root, "planning", "plan.yaml"),
-  views: join(root, "planning", "views"),
-  upstream: join(root, "planning", "upstream.yaml"),
-  lock: join(root, "planning", "upstream.lock"),
-  cache: join(root, ".nikos", "upstream"),
-  intent: join(root, "intent"),
-});
+/** The levels of a planning repo, by the folder under planning/ that holds them. */
+export const AREA_FOLDERS = { departments: "department", groups: "group", teams: "team" } as const;
+export type AreaLevel = "company" | (typeof AREA_FOLDERS)[keyof typeof AREA_FOLDERS];
+
+export interface Area {
+  /** The planning repo's root. */
+  repo: string;
+  level: AreaLevel;
+  /** The area's id: company, a department's or group's id, or a team's key. */
+  id: string;
+  dir: string;
+  /** As people write it: company, departments/finance, groups/payments, teams/WEB. */
+  rel: string;
+}
+
+/** A planning repo: one per company, with planning/company/ and a folder for each department, group and team. */
+export const isPlanRepo = (dir: string) => store().isDir(join(resolve(dir), "planning", "company"));
+
+/** The area a folder is, in a planning repo: planning/company or planning/<departments|groups|teams>/<id>. */
+export function areaOf(dir: string): Area | undefined {
+  const abs = resolve(dir);
+  const parent = dirname(abs);
+  if (basename(abs) === "company" && basename(parent) === "planning") {
+    const repo = dirname(parent);
+    return isPlanRepo(repo) ? { repo, level: "company", id: "company", dir: abs, rel: "company" } : undefined;
+  }
+  const kind = basename(parent) as keyof typeof AREA_FOLDERS;
+  if (!(kind in AREA_FOLDERS) || basename(dirname(parent)) !== "planning") return undefined;
+  const repo = dirname(dirname(parent));
+  if (!isPlanRepo(repo)) return undefined;
+  return { repo, level: AREA_FOLDERS[kind], id: basename(abs), dir: abs, rel: `${kind}/${basename(abs)}` };
+}
+
+/** Where file names are shown from: the planning repo's root for an area, else the repo itself. */
+export const labelRoot = (root: string) => areaOf(root)?.repo ?? root;
+
+/** The command that lists what's here: nikos plan status in a planning repo, nikos planning status elsewhere. */
+export const statusCommand = (root: string) => (areaOf(root) ? "nikos plan status" : "nikos planning status");
+
+// An area of a planning repo is laid out like a repo's planning/ folder: plan.yaml, krs/, bets/.
+export const paths = (root: string) => {
+  const area = areaOf(root);
+  const planning = area ? area.dir : join(root, "planning");
+  const base = area ? area.repo : root;
+  return {
+    planning,
+    bets: join(planning, "bets"),
+    krs: join(planning, "krs"),
+    plan: join(planning, "plan.yaml"),
+    views: join(planning, "views"),
+    upstream: join(planning, "upstream.yaml"),
+    lock: join(planning, "upstream.lock"),
+    cache: join(base, ".nikos", "upstream"),
+    intent: join(base, "intent"),
+  };
+};
 
 export const hash = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
 
@@ -70,7 +115,7 @@ export class StaleError extends Error {
 
 /** Write a planning file. With `expect`, refuse if the file on disk isn't the version that was loaded. */
 export function writePlanning(root: string, path: string, text: string, opts: { expect?: string; create?: boolean } = {}): string {
-  const rel = relative(root, path);
+  const rel = relative(labelRoot(root), path).split(sep).join("/");
   if (!path.startsWith(paths(root).planning + sep)) throw new Error(`Refusing to write outside planning/: ${rel}`);
   if (opts.expect !== undefined) {
     const current = store().exists(path) ? hash(store().read(path)) : "";
@@ -114,20 +159,22 @@ const yamlText = (data: unknown, flow: string[] = []) => {
 export const betText = (meta: any, body: string) => `---\n${yamlText(meta, ["krs.also", "aligns_to", "dependencies"])}---\n${body}`;
 export const krText = (data: any) => yamlText(data, ["aligns_to"]);
 
+const label = (root: string, path: string) => relative(labelRoot(root), path).split(sep).join("/");
+
 export function loadBet(root: string, id: string): Bet {
   const path = join(paths(root).bets, `${id}.md`);
-  if (!store().exists(path)) throw new Error(`No bet called '${id}' (planning/bets/${id}.md). See every bet with: nikos planning status`);
+  if (!store().exists(path)) throw new Error(`No bet called '${id}' (${label(root, path)}). See every bet with: ${statusCommand(root)}`);
   const text = store().read(path);
   const fm = parseFrontMatter(text);
-  if (!fm) throw new Error(`planning/bets/${id}.md is missing its details block: the lines between --- at the top of the file`);
-  return { meta: fm.meta, body: fm.body, file: relative(root, path), hash: hash(text) };
+  if (!fm) throw new Error(`${label(root, path)} is missing its details block: the lines between --- at the top of the file`);
+  return { meta: fm.meta, body: fm.body, file: label(root, path), hash: hash(text) };
 }
 
 export function loadKr(root: string, id: string): Kr {
   const path = join(paths(root).krs, `${id}.yaml`);
-  if (!store().exists(path)) throw new Error(`No key result called '${id}' (planning/krs/${id}.yaml). See every key result with: nikos planning status`);
+  if (!store().exists(path)) throw new Error(`No key result called '${id}' (${label(root, path)}). See every key result with: ${statusCommand(root)}`);
   const text = store().read(path);
-  return { data: parse(text), file: relative(root, path), hash: hash(text) };
+  return { data: parse(text), file: label(root, path), hash: hash(text) };
 }
 
 export const betIds = (root: string) => walk(paths(root).bets, ".md").map((p) => basename(p, ".md")).sort();
@@ -149,14 +196,17 @@ export interface PlanningIssue {
 export function validatePlanning(root: string): PlanningIssue[] {
   const issues: PlanningIssue[] = [];
   const krs = new Set(krIds(root));
-  const plan = loadPlan(root);
+  // An area's plan.yaml is checked with the rest of its planning repo (src/plan/repo.ts), and its bets'
+  // key results may be in any area above it.
+  const area = areaOf(root);
+  const plan = area ? undefined : loadPlan(root);
   if (plan !== undefined && !checkPlan(plan)) for (const m of describeErrors(checkPlan.errors)) issues.push({ file: "planning/plan.yaml", message: m });
   for (const id of krIds(root)) {
     let kr: Kr;
     try {
       kr = loadKr(root, id);
     } catch (err) {
-      issues.push({ file: `planning/krs/${id}.yaml`, message: (err as Error).message.split("\n")[0] });
+      issues.push({ file: label(root, join(paths(root).krs, `${id}.yaml`)), message: (err as Error).message.split("\n")[0] });
       continue;
     }
     if (!checkKr(kr.data)) for (const m of describeErrors(checkKr.errors)) issues.push({ file: kr.file, message: m });
@@ -167,7 +217,7 @@ export function validatePlanning(root: string): PlanningIssue[] {
     try {
       bet = loadBet(root, id);
     } catch (err) {
-      issues.push({ file: `planning/bets/${id}.md`, message: (err as Error).message.split("\n")[0] });
+      issues.push({ file: label(root, join(paths(root).bets, `${id}.md`)), message: (err as Error).message.split("\n")[0] });
       continue;
     }
     if (!checkBet(bet.meta)) {
@@ -176,7 +226,7 @@ export function validatePlanning(root: string): PlanningIssue[] {
     }
     if (bet.meta.id !== id) issues.push({ file: bet.file, message: `id '${bet.meta.id}' doesn't match the file name` });
     for (const ref of [bet.meta.krs.primary, ...(bet.meta.krs.also ?? [])].filter(Boolean)) {
-      if (!ref.includes("#") && !krs.has(ref)) issues.push({ file: bet.file, message: `links key result '${ref}', which has no planning/krs/${ref}.yaml` });
+      if (!area && !ref.includes("#") && !krs.has(ref)) issues.push({ file: bet.file, message: `links key result '${ref}', which has no planning/krs/${ref}.yaml` });
     }
   }
   return issues;

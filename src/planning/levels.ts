@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { CROSS_REF } from "../lib/bets.js";
 import { store } from "../lib/store.js";
 import { isTeamRepo } from "../lib/team.js";
-import { betIds, krIds, loadBet, loadKr, loadPlan, paths, validatePlanning, type PlanningIssue } from "./model.js";
+import { areaOf, betIds, krIds, loadBet, loadKr, loadPlan, paths, validatePlanning, type PlanningIssue } from "./model.js";
+import { areaAlignmentProblems, areaKrTargetProblems } from "../plan/repo.js";
 import { upstreamEntries } from "./upstream.js";
 
 /** How high a level sits: a plan may align only to one with a lower rank. Teams are the lowest. */
@@ -22,6 +23,9 @@ export const alignsValue = (refs: string[]) => (refs.length === 1 ? refs[0] : re
 
 /** The plan's level, or team for a team repo that has no plan.yaml. */
 export const levelOf = (root: string): string | undefined => {
+  // In a planning repo, the folder is the level.
+  const area = areaOf(root);
+  if (area) return area.level;
   const level = loadPlan(root)?.level;
   if (typeof level === "string") return level;
   return isTeamRepo(root) ? "team" : undefined;
@@ -62,6 +66,8 @@ function copyOf(root: string, repo: string): { copy: string; level?: string } | 
  */
 export function alignmentProblems(root: string, refs: string[], kind: "kr" | "bet", level = levelOf(root)): string[] {
   if (!refs.length) return [];
+  const area = areaOf(root);
+  if (area) return areaAlignmentProblems(area, refs, kind);
   const noun = kind === "kr" ? "key result" : "bet";
   if (level === "company") return [`A company ${noun} has no plan above it to align to`];
   const above = joinedRepos(root);
@@ -96,6 +102,8 @@ export function alignmentProblems(root: string, refs: string[], kind: "kr" | "be
  * a plan this one joins, ranked above it. A key result of a group plan gets the group wording.
  */
 export function krTargetProblems(root: string, refs: string[], level = levelOf(root)): string[] {
+  const area = areaOf(root);
+  if (area) return areaKrTargetProblems(area, refs);
   if (legacyTeam(root)) return [];
   const above = joinedRepos(root);
   const out: string[] = [];
@@ -121,6 +129,29 @@ export function krTargetProblems(root: string, refs: string[], level = levelOf(r
 /** The rules each level follows, as issues. Warnings don't fail validation. */
 export function levelIssues(root: string): PlanningIssue[] {
   const issues: PlanningIssue[] = [];
+  // An area of a planning repo: its own file and key results are checked with the repo (repoIssues), and its links here.
+  const area = areaOf(root);
+  if (area) {
+    for (const id of krIds(root)) {
+      try {
+        const kr = loadKr(root, id);
+        for (const m of areaAlignmentProblems(area, alignsList(kr.data?.aligns_to), "kr")) issues.push({ file: kr.file, message: m });
+      } catch {
+        // reported by validatePlanning
+      }
+    }
+    for (const id of betIds(root)) {
+      try {
+        const bet = loadBet(root, id);
+        const krs = bet.meta?.krs ?? {};
+        for (const m of areaAlignmentProblems(area, alignsList(bet.meta?.aligns_to), "bet")) issues.push({ file: bet.file, message: m });
+        for (const m of areaKrTargetProblems(area, [krs.primary, ...alignsList(krs.also)].filter((r): r is string => typeof r === "string"))) issues.push({ file: bet.file, message: m });
+      } catch {
+        // reported by validatePlanning
+      }
+    }
+    return issues;
+  }
   const plan = loadPlan(root);
   const level = levelOf(root);
   // A plan.yaml that says level team is the old team plan, kept loading with warnings.
