@@ -77,7 +77,7 @@ const GROUP: OpName[] = [
   "release.reorder",
   "map.new",
 ];
-// A planning area's group and team make bets that aim at department key results (bet.krs), so they are
+// A planning area's group and team make bets that aim at key results above them (bet.krs), so they are
 // listed here. A legacy planning repo keeps the lists it had: a group's bet.krs and a team are refused there.
 const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 // A team makes bets only: it has no key results, and its bets aim at the key results above it.

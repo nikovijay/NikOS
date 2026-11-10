@@ -86,33 +86,23 @@ describe("a save from the plan dashboard", () => {
     expect(git(repo, "status", "--porcelain")).toBe("");
   });
 
-  it("a group's bet takes a department key result, and names the group's branch", async () => {
+  it("a group's bet takes key results above it, and names the group's branch", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
     const bet = "planning/groups/payments/bets/faster-checkout.md";
-    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "close-days", also: [] }, expect: versionOf(repo, bet) });
+    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "close-days", also: ["revenue"] }, expect: versionOf(repo, bet) });
     expect(r.status).toBe(200);
     expect(r.body.branch).toBe(`nikos/plan-groups-payments-${today()}`);
+    expect(readFileSync(join(repo, bet), "utf8")).toContain("revenue");
   });
 
-  it("refuses a company key result for a group's bet: a group's bets aim at department key results", async () => {
-    const repo = gitPlan();
-    const plan = await start(repo);
-    const bet = "planning/groups/payments/bets/faster-checkout.md";
-    const before = readFileSync(join(repo, bet), "utf8");
-    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "revenue", also: [] }, expect: versionOf(repo, bet) });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toContain("revenue is a company key result");
-    expect(readFileSync(join(repo, bet), "utf8")).toBe(before);
-  });
-
-  it("refuses a company key result for a team's bet too", async () => {
+  it("a team's bet may aim at a company key result too", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
     const bet = "planning/teams/WEB/bets/web-bet.md";
     const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "web-bet" }, args: { primary: "revenue", also: [] }, expect: versionOf(repo, bet) });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toContain("revenue is a company key result");
+    expect(r.status).toBe(200);
+    expect(r.body.branch).toBe(`nikos/plan-teams-WEB-${today()}`);
   });
 
   it("refuses a key result that isn't in the company's plan", async () => {

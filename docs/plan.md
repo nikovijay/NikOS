@@ -47,9 +47,8 @@ planning/
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
 - **Links go up.** A key result aligns to key results above it, and a bet to
-  bets above it. A bet aims at key results at its own level or above, but a
-  group's or team's bets aim at department key results only. A team's bets may
-  align to any department's or group's bet.
+  bets above it. A bet aims at key results at its own level or above. A team's
+  bets may align to any department's or group's bet.
 - **Settings come down the folders.** The company's are in
   `nikos.settings.yaml` at the root. Each department, group or team can have
   a `settings.yaml` that changes what nobody above it locked.
