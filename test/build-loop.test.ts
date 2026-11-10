@@ -125,8 +125,8 @@ describe("build loop", () => {
 });
 
 describe("build-a-story playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
 
   it("plans, builds, verifies, records decisions and gates done", () => {
     const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);

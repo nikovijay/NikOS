@@ -5,7 +5,7 @@ import { decide } from "../src/commands/decide";
 import { findDecisions } from "../src/commands/decisions";
 import { copyExample, rootOf } from "./helpers";
 
-const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
+const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
 const step = (n: number) => new RegExp(`^${n}\\. (.+)$`, "m").exec(playbook)![1]!;
 
 describe("interface decisions", () => {

@@ -15,12 +15,6 @@
       "category": "Productivity"
     },
     {
-      "name": "nikos-planning",
-      "source": { "source": "local", "path": "./tools/planning" },
-      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
-      "category": "Productivity"
-    },
-    {
       "name": "nikos-ux",
       "source": { "source": "local", "path": "./tools/ux" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },

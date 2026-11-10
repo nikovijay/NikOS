@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { lintSkill, lintSkills } from "../src/lint/portable";
 
 const skillsDir = join(__dirname, "../skills");
-const router = join(skillsDir, "nikos-mode");
+const router = join(skillsDir, "nikos-spec");
 const ok = "---\nname: demo\ndescription: A demo skill.\n---\n\n# demo\n";
 
 describe("portable skills", () => {
@@ -34,7 +34,7 @@ describe("portable skills", () => {
   });
 });
 
-describe("nikos-mode router", () => {
+describe("nikos-spec router", () => {
   const skill = readFileSync(join(router, "SKILL.md"), "utf8");
   const index = readFileSync(join(router, "playbooks/index.md"), "utf8");
   const rows = [...index.matchAll(/^\| (\w[\w-]*) \| `([^`]+)` \|/gm)];

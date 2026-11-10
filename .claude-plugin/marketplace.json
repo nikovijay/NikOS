@@ -18,11 +18,6 @@
       "description": "The nikOS Video pack: make short product explainer videos from a brief."
     },
     {
-      "name": "nikos-planning",
-      "source": "./tools/planning",
-      "description": "The nikOS Planning pack: key results and bets linked to your story map, with check-ins and a local dashboard."
-    },
-    {
       "name": "nikos-ux",
       "displayName": "nikOS UX",
       "source": "./tools/ux",

@@ -186,17 +186,17 @@ describe("an old nikos on the PATH", () => {
 
 describe("the skills on a first run", () => {
   it("route setup in any folder to the onboard playbook, and run nikos@latest", () => {
-    const skill = read("skills/nikos-mode/SKILL.md");
-    expect(skill).toMatch(/description: Entry point for nikOS\. Use when someone has just installed nikOS or asks to set it up/);
+    const skill = read("skills/nikos-spec/SKILL.md");
+    expect(skill).toMatch(/description: Entry point for nikOS Spec, the code side of nikOS\. Use when someone has just installed nikOS or asks to set it up/);
     expect(skill).toContain("npx -y nikos@latest --version");
-    const index = read("skills/nikos-mode/playbooks/index.md");
+    const index = read("skills/nikos-spec/playbooks/index.md");
     // Second, after a new product idea, and before every playbook for a repo that's already set up.
-    expect([...index.matchAll(/^\| ([\w-]+) \| `/gm)].map((m) => m[1]).slice(0, 3)).toEqual(["idea-to-blueprint", "onboard", "company"]);
-    const onboard = read("skills/nikos-mode/playbooks/onboard.md");
+    expect([...index.matchAll(/^\| ([\w-]+) \| `/gm)].map((m) => m[1]).slice(0, 3)).toEqual(["idea-to-blueprint", "onboard", "start"]);
+    const onboard = read("skills/nikos-spec/playbooks/onboard.md");
     expect(onboard).toContain("Never set nikOS up in the home folder");
     expect(onboard).toContain("Never take one word as both the name and the key without asking");
     expect(onboard).toContain("nikos serve");
-    expect(read("tools/planning/skills/nikos-planning/SKILL.md")).toContain("Never put company goals in `constitution.md`");
+    expect(read("skills/nikos-plan/SKILL.md")).toContain("Never put company goals in `constitution.md`");
     expect(read("hooks/cursor-session-start.mjs")).toContain('["npx", ["-y", "nikos@latest"]]');
   });
 });

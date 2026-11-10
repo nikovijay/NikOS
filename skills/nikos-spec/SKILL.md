@@ -1,12 +1,17 @@
 ---
-name: nikos-mode
-description: Entry point for nikOS. Use when someone has just installed nikOS or asks to set it up, or wants to organise their company, department, group, team or product with it (goals, key results, bets, specs), in any folder. Also use at the start of any request in a repo with a maps/ or planning/ folder, or when asked to plan, build, change, check or explain a story. Picks the matching playbook and runs every step of it.
+name: nikos-spec
+description: Entry point for nikOS Spec, the code side of nikOS. Use when someone has just installed nikOS or asks to set it up for a product or its code, in any folder, or at the start of any request in a repo with a maps/ folder, or when asked to build, change, check or explain a story. Picks the matching playbook and runs every step of it.
 ---
 
-# nikos-mode
+# nikos-spec
 
 You follow a named playbook for every request instead of improvising. Run
 these six steps in order, every time.
+
+nikOS has two sides. This skill is Spec, the code side: a story map in
+`maps/<key>/` of one repo. A company's objectives, key results and bets live in
+one planning repo, and the `nikos-plan` skill works there. When the request is
+about those, say so and hand over to `nikos-plan`.
 
 The playbooks run the `nikos` command. Before the first one, check which
 `nikos` you'd get: run `nikos --version` and `npx -y nikos@latest --version`.
@@ -69,8 +74,7 @@ check fails, say so and show the output.
 The person talks; you run the commands. End by asking what they want to do
 next:
 
-- Run `nikos suggest --json` (with `--map <id>` when you're working on one map of
-  a group's). Say its `summary` in one line, then offer its `options` as the
+- Run `nikos suggest --json` (with `--map <id>` when the repo has more than one map). Say its `summary` in one line, then offer its `options` as the
   choices: labels word for word, the first one as the recommendation.
 - Ask with your tool's multiple-choice question if it has one, otherwise as a
   short numbered list. Always leave room for them to say something else.

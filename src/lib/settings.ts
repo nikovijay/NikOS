@@ -127,7 +127,7 @@ export function setSetting(root: string, key: string, value: unknown): string {
   const own = area ? area.rel : "this repo";
   if (current.lockedBy && current.lockedBy !== own) throw new Error(`${key} is locked by ${current.lockedBy}, so it can't be changed here`);
   const path = area ? areaSettingsFile(area) : join(root, SETTINGS_FILE);
-  const doc = parseDocument(store().exists(path) ? store().read(path) : "# nikOS settings. Departments and groups that plan against this repo inherit them.\nformat_version: 1\n");
+  const doc = parseDocument(store().exists(path) ? store().read(path) : "# nikOS settings for this repo.\nformat_version: 1\n");
   doc.setIn(key.split("."), value);
   const text = doc.toString({ lineWidth: 0, flowCollectionPadding: false });
   if (!check(parse(text))) {

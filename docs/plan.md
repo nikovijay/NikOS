@@ -49,9 +49,9 @@ planning/
 - **Links go up.** A key result aligns to key results above it, and a bet to
   bets above it. A bet aims at key results at its own level or above. A team's
   bets may align to any department's or group's bet.
-- **Settings come down the folders.** The company's are in
-  `nikos.settings.yaml` at the root. Each department, group or team can have
-  a `settings.yaml` that changes what nobody above it locked.
+- **Settings come down the folders.** The company's are in `planning/company/`.
+  Each department, group or team can change what nobody above it locked. A code
+  repo linked to the plan keeps its own settings and doesn't inherit them.
 
 ## Commands
 
@@ -78,7 +78,7 @@ Check-ins, target changes and reviews find the key result or bet by its id,
 wherever it is.
 
 `nikos plan new <story-id>` still starts a new version of a story's plan, as
-before. In a planning repo, `nikos planning …` points you to `nikos plan …`.
+before. Run it in a code repo.
 
 ## Delivery from code repos
 

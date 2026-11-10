@@ -111,8 +111,7 @@ describe("nikos join to a planning repo", () => {
       const code = codeRepo();
       expect(runJoin(["--dir", code, "--url", oldPlan(), "acme/company-plan"])).toBe(1);
       expect(err.join("\n")).toContain("a plan of the old kind");
-      expect(existsSync(join(code, "planning/upstream.yaml"))).toBe(false);
-      expect(existsSync(join(code, "planning/repos.yaml"))).toBe(false);
+      expect(existsSync(join(code, "planning"))).toBe(false);
     } finally {
       spy.mockRestore();
     }
@@ -196,8 +195,7 @@ describe("nikos join to a planning repo", () => {
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co })).toThrow("a plan of the old kind");
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co, push: true })).toThrow("a plan of the old kind");
     expect(tempJoins()).toEqual(before);
-    expect(existsSync(join(code, "planning/upstream.yaml"))).toBe(false);
-    expect(existsSync(join(code, "planning/repos.yaml"))).toBe(false);
+    expect(existsSync(join(code, "planning"))).toBe(false);
   });
   it("nikos join takes --push and the repo path after it, and reports where the branch is", () => {
     const origin = planOnOrigin();

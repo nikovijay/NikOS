@@ -43,7 +43,7 @@ describe("a repo's own map", () => {
     const t = ownMapRepo();
     write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: done }\n");
     writeSummaries(t, mapStatus(t), new Date("2026-11-08T09:00:00Z"));
-    // The state moves on after the summary was written: the rollout still reads the summary.
+    // The state moves on after the summary was written: the plan still reads the summary.
     write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: todo }\n");
     const summary = readDeliverySummary(join(t, "maps/inb"), "code");
     expect(summary?.stories).toEqual([expect.objectContaining({ id: "PAY-INB-1", status: "done" })]);

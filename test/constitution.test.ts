@@ -35,8 +35,8 @@ describe("constitution lint", () => {
 });
 
 describe("idea-to-blueprint playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/idea-to-blueprint.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/idea-to-blueprint.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
 
   it("goes from idea to a validated, CLEAR-checked spec and is routed first for new ideas", () => {
     const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
@@ -50,8 +50,8 @@ describe("idea-to-blueprint playbook", () => {
 });
 
 describe("validate playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/validate.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/validate.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
   const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
 
   it("drafts outreach and records results back into the constitution", () => {

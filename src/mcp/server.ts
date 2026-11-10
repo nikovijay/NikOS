@@ -1,6 +1,6 @@
 // `nikos mcp`: nikOS as a local MCP server, for Claude Desktop, Cursor, Codex, Claude Code and any
 // other app that runs MCP servers on your machine. It works on one repo folder. Its tools are the
-// CLI's commands; its prompts are the playbooks; its instructions carry the rules nikos-mode
+// CLI's commands; its prompts are the playbooks; its instructions carry the rules nikos-spec
 // follows, so the conversation works the same without installing a skill.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -36,7 +36,7 @@ import { importTickets, linkTicket, recordTicket, ticketMoves } from "../command
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
+const playbookDir = [join(here, "../../skills/nikos-spec/playbooks"), join(here, "../skills/nikos-spec/playbooks")].find((d) => existsSync(d));
 
 export const INSTRUCTIONS = `nikOS keeps a product's story map, stories and acceptance criteria in the repo, and a story
 is only done when its Cucumber scenarios pass. The person talks; you call these tools.

@@ -20,6 +20,11 @@ be marked done until its scenarios pass. Your agent follows a named playbook
 for each request instead of improvising, and every decision is written down
 where the next person (or agent) can find it.
 
+nikOS has two sides. **Spec** is the code side: each repo keeps its story map
+in `maps/<key>/`. **Plan** is the company's objectives, key results and bets,
+in one planning repo with a folder for each department, group and team. A code
+repo can be linked to the plan, and the plan reads each one's delivery.
+
 It works with Claude Code, Codex and Cursor, and brings spec-driven
 development, behaviour-driven development (BDD) with Gherkin and Cucumber,
 user story mapping and acceptance criteria to agentic coding.
@@ -40,14 +45,16 @@ scenario, with every command and the output you should see.
 | Cursor | Add `https://github.com/nikovijay/NikOS` as a plugin marketplace |
 | Claude Desktop, or any app that runs MCP servers | `npx -y nikos@latest mcp --dir <repo>` as a local MCP server: see [docs/install.md](docs/install.md#any-app-that-runs-mcp-servers) |
 
-Then tell your agent what you want to organise ("set up nikOS for my
-company", "set up nikOS for this product"): the `nikos-mode` skill asks a few
-questions and sets up the right repo. The skills run the `nikos` command
-through `npx -y nikos@latest`, so there's nothing else to install. More in
-[docs/install.md](docs/install.md).
+Then tell your agent what you want to set up ("set up the company's plan",
+"set up nikOS for this product"). The `nikos-plan` skill plans the company, and
+the `nikos-spec` skill sets up a code repo's story map. The skills run the
+`nikos` command through `npx -y nikos@latest`, so there's nothing else to
+install. More in [docs/install.md](docs/install.md).
 
-Without an agent, run `npx -y nikos@latest start` in a terminal: it asks the
-same questions. Then `npx -y nikos@latest serve` opens the dashboard.
+Without an agent, run `npx -y nikos@latest start` in a terminal: it asks whether
+you're setting up the company's plan or a story map for this code, and then a
+few questions. Then `npx -y nikos@latest serve` opens the story map, and
+`npx -y nikos@latest plan serve` opens the plan.
 
 ## Talk to it
 
@@ -57,7 +64,7 @@ In Claude Code, Codex and Cursor, it also does this when a session starts.
 Things you can say:
 
 - "Set up nikOS here", or "Map what this repo already does"
-- "Set nikOS up for our company" (a company plan every team joins)
+- "Set up our company's plan" (objectives, key results and bets, with a folder for each team)
 - "What should we build next?"
 - "Add a story: people can share a list with one other person"
 - "Build HT-3"
@@ -107,20 +114,22 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 
 | Command | What it does |
 | --- | --- |
-| `nikos start` | Set this repo up in one go: `maps/<key>/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
-| `nikos serve` | Open the dashboard of this repo's story maps. `--export <file>` writes it as one offline page |
+| `nikos start` | Set this folder up: `--plan` makes the company's planning repo, `--map` (with `--name` and `--key`, and `--join <planning repo>`) makes a story map for this code with a scenario runner for its stack and CI for its host. In a terminal with no flags, it asks which |
+| `nikos plan init` | Make the company's planning repo: `planning/company/`, with a folder for each department, group and team under `planning/` |
+| `nikos plan add department\|group\|team <id>` | Add an area to the company's plan |
+| `nikos plan kr new`, `plan checkin`, `plan bet new`, `plan bet review` | Key results, check-ins and bets, in the area named with `--in` (`nikos plan help` lists them all) |
+| `nikos serve` | Open this repo's story map in the browser. `--export <file>` writes it as one offline page. In a planning repo, use `nikos plan serve` |
 | `nikos init` | Create `maps/<key>/`, with `constitution.md` and `decisions.md` at the root, in this repo |
 | `nikos activity add "<title>"` | Add an activity to the story map |
 | `nikos validate` | Check each story map in `maps/` and the root `constitution.md` are well formed, and each map's `delivery.yaml` is current |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature. With several story maps, pass `--map <key>` |
-| `nikos map new --key <KEY> [--bet <bet-id>] [--owner <KEY>]` | Make a story map in `maps/<key>/`, for one of a group's bets or on its own. Its stories get ids like `PAY-CHK-12`, `WEB-CHK-12` with `--owner WEB`, or `CHK-12` |
+| `nikos map new --key <KEY> [--bet <bet-id>] [--owner <KEY>]` | Make a story map in `maps/<key>/`, for a bet of the company's plan or on its own. Its stories get ids like `PAY-CHK-12`, `WEB-CHK-12` with `--owner WEB`, or `CHK-12` |
 | `nikos step add "<title>"` | Add a step under an activity |
 | `nikos release add\|rename\|move\|reorder\|remove` | Define releases and move stories between them, keeping feature tags in step |
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
-| `nikos plan new <id>` | Start the next version of a story's plan |
 | `nikos plan status [--in <area>] [--json]` | The plan's key results and bets, each bet's delivery from the code repos listed in `planning/repos.yaml`, and how old each copy is ([docs/plan.md](docs/plan.md)) |
-| `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files under `.nikos/` |
+| `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files in the planning repo |
 | `nikos plan serve [--in <area>] [--export <file>]` | Run the planning dashboard and print its link: one area at a time, with its key results, bets, ladder and each bet's delivery. `--export <file>` writes it as one offline page, for one area with `--in` or for every area without ([docs/plan.md](docs/plan.md)) |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
@@ -130,7 +139,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`) |
 | `nikos next` | Print the next story to build |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
-| `nikos join <repo>` | Join a plan in another repo. A planning repo gets this repo listed on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). A code repo keeps its own settings ([docs/settings.md](docs/settings.md)) |
+| `nikos join <repo>` | Run in a code repo: list it in the company's planning repo (`planning/repos.yaml`) on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). Settings aren't inherited: a code repo keeps its own ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |

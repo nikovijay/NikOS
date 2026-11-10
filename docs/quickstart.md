@@ -149,6 +149,6 @@ Install nikOS in your agent tool ([docs/install.md](install.md)), then ask:
 
 > Add a story for splitting the bill between people, and build it.
 
-The `nikos-mode` skill picks the right playbook: it writes the story,
+The `nikos-spec` skill picks the right playbook: it writes the story,
 checks it, plans it, builds it, and stops at "done" only when the new
 scenario passes.

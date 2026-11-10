@@ -97,6 +97,6 @@ describe("suggest in a planning repo", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-code-menu-"));
     init(dir, { name: "Tip Calc", key: "TC" });
     const s = suggest(dir);
-    expect(JSON.stringify(s)).not.toMatch(/nikos plan|nikos planning|Check in on|bet review/);
+    expect(JSON.stringify(s)).not.toMatch(/nikos plan|Check in on|bet review/);
   });
 });

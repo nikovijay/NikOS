@@ -1,6 +1,6 @@
 # Principles
 
-One line each: the principle, then when it applies. nikos-mode reads this on
+One line each: the principle, then when it applies. nikos-spec reads this on
 every request.
 
 | Principle | Applies when |

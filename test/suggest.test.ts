@@ -82,7 +82,7 @@ describe("suggest", () => {
     vi.setSystemTime(new Date("2026-12-02T12:00:00Z"));
     const all = labels(rootOf(intent));
     expect(all).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Add a story", "Look at the story map"]);
-    expect(JSON.stringify(suggest(rootOf(intent)))).not.toMatch(/nikos planning|nikos plan |bet review|Check in on/);
+    expect(JSON.stringify(suggest(rootOf(intent)))).not.toMatch(/nikos plan|bet review|Check in on/);
   });
 
   it("skips cancelled stories", () => {
@@ -93,8 +93,8 @@ describe("suggest", () => {
 });
 
 describe("conversation rules", () => {
-  const skill = readFileSync(join(__dirname, "../skills/nikos-mode/SKILL.md"), "utf8");
-  const build = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
+  const skill = readFileSync(join(__dirname, "../skills/nikos-spec/SKILL.md"), "utf8");
+  const build = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
 
   it("ends every request with nikos suggest as a short menu, and never hands over commands", () => {
     expect(skill).toContain("## 6. Ask what's next");

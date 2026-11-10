@@ -70,7 +70,7 @@ Get started
                    (--name, --key, --join <planning repo>). In a terminal, with no flags, it asks
                    which one, then a few questions. An agent passes the flags
   serve            Open this repo's story map in your browser
-                   (--port; --export <file> saves it as one page you can share)
+                   (--port, --map; --export <file> saves it as one page you can share)
   doctor           Check this repo is set up well, and say what to do next (--offline)
   suggest          Say where things stand and what to do next (--json, --brief, --map; in a
                    planning repo, --in <area>)
@@ -87,7 +87,7 @@ Plans: objectives, key results and bets
 Story maps and stories
   init             Make maps/<key>/ in this repo for its story map (--name, --key)
   story add "<title>"  Add a story to the story map, with a starter feature file
-                   (--activity, --step, --release, --priority, --map in a group repo)
+                   (--activity, --step, --release, --priority, --map when there is more than one map)
   activity add "<title>"  Add an activity: a big thing people do with the product (--id)
   step add "<title>"   Add a step under an activity (--activity, --id)
   release add "<title>"  Add the next release (--goal)
@@ -98,7 +98,7 @@ Story maps and stories
   release check <n>    Check whether a release is ready to ship (--run runs its scenarios again)
   map              Save the story map as a page you can open offline
                    (--out, default storymap.html; --map)
-  map new          Make a story map for one bet, in maps/<key>/ (--bet <bet-id or repo#bet-id>,
+  map new          Make a story map in maps/<key>/ (--bet <bet-id>, the bet it delivers,
                    --key <KEY>, --owner <KEY> for the story ids, e.g. WEB-CHK-1)
   map status       How each story in this repo's maps is doing, and save it to
                    maps/<key>/delivery.yaml to commit (--map, --json saves nothing)
