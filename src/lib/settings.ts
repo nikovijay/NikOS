@@ -61,34 +61,61 @@ export function checkSettingsText(text: string): string | undefined {
   return `${SETTINGS_FILE}: ${e.instancePath.replace(/^\//, "").replace(/\//g, ".") || "(root)"} ${e.message}`;
 }
 
-/** A repo's own settings file, parsed and checked. */
-export function readSettings(root: string): { values: Record<string, unknown>; locked: string[] } {
-  const path = join(root, SETTINGS_FILE);
-  if (!store().exists(path)) return { values: {}, locked: [] };
-  const text = store().read(path);
-  const bad = checkSettingsText(text);
-  if (bad) throw new Error(bad);
-  const data = parse(text) ?? {};
-  return { values: flatten(data), locked: data.locked ?? [] };
+/** One level of settings, parsed and checked: the label a value from it carries, and its data. */
+export interface SettingsLevel {
+  label: string;
+  data: any;
+}
+
+/** A value a level tried to set, which a level above had locked. It is ignored. */
+export interface IgnoredSetting {
+  key: string;
+  level: string;
+  lockedBy: string;
 }
 
 /**
+ * Layer settings levels over the defaults, top to bottom. A level changes only what the levels above
+ * haven't locked, and its own locked list locks keys for the levels below. A value a level tries to
+ * change and can't is returned as ignored. Planning areas and code repos both layer this way.
+ */
+export function layerSettings(levels: SettingsLevel[]): { resolved: Resolved; ignored: IgnoredSetting[] } {
+  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
+  const ignored: IgnoredSetting[] = [];
+  for (const level of levels) {
+    for (const [key, value] of Object.entries(flatten(level.data))) {
+      if (out[key].lockedBy) ignored.push({ key, level: level.label, lockedBy: out[key].lockedBy! });
+      else out[key] = { value, from: level.label };
+    }
+    for (const key of level.data?.locked ?? []) if (out[key] && !out[key].lockedBy) out[key].lockedBy = level.label;
+  }
+  return { resolved: out, ignored };
+}
+
+const formatIgnored = (i: IgnoredSetting) => `${i.key} from ${i.level} is ignored: ${i.lockedBy} locks it`;
+
+/**
  * The settings that apply to a repo. In a planning repo that's its area's chain (areaSettings). A code
- * repo takes only its own nikos.settings.yaml over the defaults: nothing is inherited into it.
+ * repo's own nikos.settings.yaml layers over the defaults the same way.
  */
 export function resolveSettings(root: string): Resolved {
   return resolveSettingsDetailed(root).resolved;
 }
 
-/** resolveSettings, with the problems found in the levels above (a settings file that doesn't read). */
+/** resolveSettings, with the problems found in the levels (a settings file that doesn't read, or a value a level above locked). */
 export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
   const area = areaOf(root);
   if (area) return areaSettings(area);
-  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
-  const own = readSettings(root);
-  for (const [key, value] of Object.entries(own.values)) out[key] = { value, from: "this repo" };
-  for (const key of own.locked) if (out[key]) out[key].lockedBy = "this repo";
-  return { resolved: out, problems: [] };
+  const path = join(root, SETTINGS_FILE);
+  const levels: SettingsLevel[] = [];
+  if (store().exists(path)) {
+    const text = store().read(path);
+    const bad = checkSettingsText(text);
+    if (bad) throw new Error(bad);
+    levels.push({ label: "this repo", data: parse(text) ?? {} });
+  }
+  const { resolved, ignored } = layerSettings(levels);
+  return { resolved, problems: ignored.map(formatIgnored) };
 }
 
 /** An area's own settings file: the company's is nikos.settings.yaml at the root, any other area's is its settings.yaml. */
@@ -99,8 +126,8 @@ const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.r
  * this one. Each level changes what nobody above it locked. See docs/rfcs/plan-and-spec.md, rule 6.
  */
 function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
-  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const problems: string[] = [];
+  const levels: SettingsLevel[] = [];
   for (const level of chainOf(area)) {
     const path = areaSettingsFile(level);
     if (!store().exists(path)) continue;
@@ -110,11 +137,10 @@ function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
       problems.push(`${level.rel}'s settings are skipped: ${bad.replace(SETTINGS_FILE, relative(area.repo, path))}`);
       continue;
     }
-    const data = parse(text) ?? {};
-    for (const [key, value] of Object.entries(flatten(data))) if (!out[key].lockedBy) out[key] = { value, from: level.rel };
-    for (const key of data.locked ?? []) if (out[key] && !out[key].lockedBy) out[key].lockedBy = level.rel;
+    levels.push({ label: level.rel, data: parse(text) ?? {} });
   }
-  return { resolved: out, problems };
+  const { resolved, ignored } = layerSettings(levels);
+  return { resolved, problems: [...problems, ...ignored.map(formatIgnored)] };
 }
 
 /** Change a setting in this repo's own file, unless a level above locked it. */
