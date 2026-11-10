@@ -9,7 +9,7 @@ import { newMap } from "../commands/map.js";
 import { resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
 import { setSetting } from "../lib/settings.js";
-import { checkIn, editKr, newKr, reviseTarget } from "./krs.js";
+import { checkIn, editKr, markStep, newKr, reviseTarget } from "./krs.js";
 import { editBet, newBet, reviewBet } from "./bets.js";
 import { setAligns, setBetKrs } from "./aligns.js";
 import { levelOf, planningIssues } from "./levels.js";
@@ -24,6 +24,7 @@ export type OpName =
   | "kr.edit"
   | "kr.target"
   | "kr.align"
+  | "kr.step"
   | "bet.new"
   | "bet.edit"
   | "bet.review"
@@ -53,7 +54,7 @@ export interface Op {
   expect?: string;
 }
 
-const COMPANY: OpName[] = ["checkin", "kr.new", "kr.edit", "kr.target", "bet.new", "bet.edit", "bet.review", "bet.krs", "setting.set"];
+const COMPANY: OpName[] = ["checkin", "kr.new", "kr.edit", "kr.target", "kr.step", "bet.new", "bet.edit", "bet.review", "bet.krs", "setting.set"];
 const DEPARTMENT: OpName[] = [...COMPANY, "kr.align", "bet.align"];
 const GROUP: OpName[] = [
   "bet.new",
@@ -89,6 +90,7 @@ const NAMES: Record<OpName, true> = {
   "kr.edit": true,
   "kr.target": true,
   "kr.align": true,
+  "kr.step": true,
   "bet.new": true,
   "bet.edit": true,
   "bet.review": true,
@@ -130,10 +132,11 @@ export const OP_LEVELS = levelsOf(AREA_GROUP, TEAM);
  */
 const ARGS: Partial<Record<OpName, string[]>> = {
   checkin: ["value", "note", "evidence", "date"],
-  "kr.new": ["title", "owner", "baseline", "target", "by", "unit", "objective", "aligns_to", "stale_after_days"],
+  "kr.new": ["title", "owner", "baseline", "target", "by", "unit", "objective", "direction", "kind", "steps", "aligns_to", "ladders_up", "stale_after_days"],
   "kr.target": ["target"],
   "kr.align": ["aligns_to"],
-  "bet.new": ["owner", "hypothesis", "review_on", "review", "team", "starts", "deadline", "primary", "also", "aligns_to", "confidence", "dependencies", "evidence"],
+  "kr.step": ["name", "date"],
+  "bet.new": ["owner", "hypothesis", "review_on", "review", "team", "starts", "deadline", "primary", "also", "aligns_to", "ladders_up", "confidence", "dependencies", "evidence"],
   "bet.review": ["decision", "reason", "outcome"],
   "bet.align": ["aligns_to"],
   "bet.krs": ["primary", "also"],
@@ -163,6 +166,7 @@ export const EDITS = new Set<OpName>([
   "kr.edit",
   "kr.target",
   "kr.align",
+  "kr.step",
   "bet.edit",
   "bet.review",
   "bet.align",
@@ -247,7 +251,11 @@ function apply(root: string, op: Op): string {
           by: String(a.by ?? ""),
           unit: typeof a.unit === "string" ? a.unit : undefined,
           objective: str(a.objective),
+          direction: str(a.direction) as "up" | "down" | undefined,
+          kind: str(a.kind) as "number" | "milestone" | undefined,
+          steps: refs(a.steps),
           alignsTo: refs(a.aligns_to),
+          laddersUp: str(a.ladders_up),
           staleAfterDays: a.stale_after_days ? num(a.stale_after_days) : undefined,
         },
         root,
@@ -265,6 +273,9 @@ function apply(root: string, op: Op): string {
     case "kr.align":
       setAligns(root, "kr", t.kr, refs(a.aligns_to), expect);
       return `Aligned ${t.kr}`;
+    case "kr.step":
+      markStep(root, t.kr, String(a.name ?? ""), str(a.date), expect);
+      return `Marked '${String(a.name ?? "").trim()}' done in ${t.kr}`;
     case "bet.new":
       newBet(
         {
@@ -278,6 +289,7 @@ function apply(root: string, op: Op): string {
           primary: str(a.primary),
           also: refs(a.also),
           alignsTo: refs(a.aligns_to),
+          laddersUp: str(a.ladders_up),
           confidence: a.confidence as any,
           dependencies: refs(a.dependencies),
           evidence: str(a.evidence),

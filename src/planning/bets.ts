@@ -19,6 +19,8 @@ export interface BetInput {
   also?: string[];
   /** The bets in the plan directly above that this one aligns to: none, one or several. */
   alignsTo?: string[];
+  /** Free text: what this ladders up to, until a link is written. Not with alignsTo, primary or also. */
+  laddersUp?: string;
   confidence?: "low" | "medium" | "high";
   dependencies?: string[];
   evidence?: string;
@@ -41,6 +43,10 @@ export function newBet(input: BetInput, root: string): string {
   const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "bet")[0] ?? krTargetProblems(root, [input.primary, ...(input.also ?? [])].filter((r): r is string => !!r))[0];
   if (problem) throw new Error(problem);
+  const ladders = input.laddersUp?.trim() || undefined;
+  const laddersProblemText = betFieldProblems({ ladders_up: ladders })[0];
+  if (laddersProblemText) throw new Error(laddersProblemText);
+  if (ladders && (aligns.length || input.primary || input.also?.length)) throw new Error("Give a link (--aligns-to or --kr) or the text (--ladders-up), not both");
   const meta = checked({
     id: input.id,
     owner: input.owner.trim(),
@@ -48,6 +54,7 @@ export function newBet(input: BetInput, root: string): string {
     hypothesis: input.hypothesis.trim(),
     krs: { ...(input.primary ? { primary: input.primary } : {}), also: input.also ?? [] },
     ...(aligns.length ? { aligns_to: alignsValue(aligns) } : {}),
+    ...(ladders ? { ladders_up: ladders } : {}),
     ...(input.starts ? { starts: input.starts } : {}),
     review_on: input.reviewOn,
     ...(input.deadline ? { deadline: input.deadline } : {}),
@@ -85,7 +92,7 @@ export function reviewBet(
   return writePlanning(root, join(paths(root).bets, `${id}.md`), betText(checked(meta), bet.body), { expect: r.expect ?? bet.hash });
 }
 
-const EDITABLE = ["owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies", "outcome"] as const;
+const EDITABLE = ["owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies", "outcome", "ladders_up"] as const;
 
 /** Change a bet's fields (not its reviews or id). `expect` is the hash of the version being edited. */
 export function editBet(root: string, id: string, fields: Record<string, unknown>, expect?: string): string {
@@ -95,8 +102,9 @@ export function editBet(root: string, id: string, fields: Record<string, unknown
   if (problem) throw new Error(problem);
   const bet = loadBet(root, id);
   const meta = structuredClone(bet.meta);
-  for (const [k, v] of Object.entries(fields)) {
+  for (const [k, raw] of Object.entries(fields)) {
     if (!(EDITABLE as readonly string[]).includes(k)) throw new Error(`'${k}' can't be edited here`);
+    const v = k === "ladders_up" && typeof raw === "string" ? raw.trim() : raw;
     if (v === "" || v === null) delete meta[k];
     else meta[k] = v;
   }

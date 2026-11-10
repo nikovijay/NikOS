@@ -17,7 +17,7 @@ export function acmePlan(listed?: string): string {
   addArea(repo, "team", "WEB", { name: "Checkout web", home: "payments" });
   const at = (ref: string) => findArea(repo, ref).dir;
   newKr({ id: "revenue", title: "Revenue", owner: "Mira", baseline: 0, target: 60000, by: "2027-12-31" }, at("company"));
-  newKr({ id: "close-days", title: "Close days", owner: "Mira", baseline: 11, target: 7, by: "2027-03-31", period: "2027-Q1" }, at("finance"));
+  newKr({ id: "close-days", title: "Close days", owner: "Mira", baseline: 11, target: 7, by: "2027-03-31", period: "2027-Q1", direction: "down" }, at("finance"));
   checkIn(at("finance"), "close-days", { value: 9, date: "2026-11-09" });
   newBet({ id: "one-inbox", owner: "Sam", hypothesis: "One inbox cuts close time.", reviewOn: "2027-02-14", primary: "revenue" }, at("company"));
   newBet({ id: "inbox-match", owner: "Sam", hypothesis: "Matching cuts close time.", reviewOn: "2027-02-14", primary: "close-days", alignsTo: ["one-inbox"] }, at("finance"));

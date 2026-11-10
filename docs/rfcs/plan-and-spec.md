@@ -1,6 +1,6 @@
 # RFC: nikOS Plan and nikOS Spec
 
-**Status:** approved. PRs 1 to 5 are built: see [docs/plan.md](../plan.md). PR 6 (`ladders_up`, key result direction and milestones) is in review, and `nikos plan owners` comes in a later PR.
+**Status:** approved. PRs 1 to 6 are built: see [docs/plan.md](../plan.md). `nikos plan owners` comes in a later PR.
 
 ## Summary
 

@@ -10,6 +10,7 @@ import { runOps } from "../src/planning/ops";
 import { realRun, type Runner } from "../src/lib/git";
 import { startPlanServe, type PlanServe } from "../src/plan/serve";
 import { findArea } from "../src/plan/repo";
+import { newKr } from "../src/planning/krs";
 import { acmePlan } from "./plan-serve-fixture";
 import { bareOrigin, commitAll, git } from "./planning-fixture";
 
@@ -22,8 +23,9 @@ afterEach(async () => {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** The company's plan in a git repo, its base branch main, pushed to a bare origin. */
-function gitPlan(): string {
+function gitPlan(prepare?: (repo: string) => void): string {
   const repo = acmePlan();
+  prepare?.(repo);
   git(repo, "init", "-q", "-b", "main");
   git(repo, "remote", "add", "origin", bareOrigin());
   commitAll(repo, "the company's plan");
@@ -96,6 +98,21 @@ describe("a save from the plan dashboard", () => {
     const r = await post(plan, "/api/op", { op: "checkin", target: { kr: "close-days" }, args: { value: 8, date: today() }, expect: "0000000000000000" });
     expect(r.status).toBe(409);
     expect(git(repo, "status", "--porcelain")).toBe("");
+  });
+
+  it("kr.step marks a step on the area's branch, and a stale version is a 409 that changes nothing", async () => {
+    const CLOSE_PROCESS = "planning/departments/finance/krs/close-process.yaml";
+    const repo = gitPlan((r) => newKr({ id: "close-process", title: "Close process", owner: "Mira", by: "2027-03-31", period: "2027-Q1", kind: "milestone", steps: ["Map steps", "Pilot"] }, findArea(r, "finance").dir));
+    const plan = await start(repo);
+    const stale = await post(plan, "/api/op", { op: "kr.step", target: { kr: "close-process" }, args: { name: "Map steps", date: "2026-11-10" }, expect: "0000000000000000" });
+    expect(stale.status).toBe(409);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+    expect(readFileSync(join(repo, CLOSE_PROCESS), "utf8")).not.toContain("done:");
+    const saved = await post(plan, "/api/op", { op: "kr.step", target: { kr: "close-process" }, args: { name: "Map steps", date: "2026-11-10" }, expect: versionOf(repo, CLOSE_PROCESS) });
+    expect(saved.status).toBe(200);
+    expect(saved.body.branch).toBe(`nikos/plan-departments-finance-${today()}`);
+    expect(saved.body.changed).toEqual([CLOSE_PROCESS]);
+    expect(readFileSync(join(repo, CLOSE_PROCESS), "utf8")).toContain("done: 2026-11-10");
   });
 
   it("a group's bet takes key results above it, and names the group's branch", async () => {

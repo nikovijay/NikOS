@@ -72,7 +72,7 @@ describe("a planning repo", () => {
     newKr(kr("revenue", { baseline: 0, target: 60000 }), at("company"));
     const company = loadKr(at("company"), "revenue").data;
     expect(company).toMatchObject({ period: "2027", by: "2027-12-31" });
-    newKr(kr("close-days", { period: "2027-Q1", alignsTo: ["revenue"] }), at("finance"));
+    newKr(kr("close-days", { period: "2027-Q1", alignsTo: ["revenue"], direction: "down" }), at("finance"));
     expect(loadKr(at("finance"), "close-days").data).toMatchObject({ period: "2027-Q1", by: "2027-03-31", aligns_to: "revenue" });
     expect(() => newKr(kr("no-quarter"), at("finance"))).toThrow("A department's key result needs a quarter: --period 2027-Q1");
     expect(() => newKr(kr("next-year", { period: "2028-Q2" }), at("finance"))).toThrow("2028-Q2 isn't in the company's year, 2027");
@@ -106,7 +106,7 @@ describe("a planning repo", () => {
   it("links by id inside the repo, only to things above", () => {
     const { repo, at } = acme();
     newKr(kr("revenue", { baseline: 0, target: 1 }), at("company"));
-    newKr(kr("close-days", { period: "2027-Q1" }), at("finance"));
+    newKr(kr("close-days", { period: "2027-Q1", direction: "down" }), at("finance"));
     newBet(bet("one-inbox", { primary: "revenue" }), at("company"));
     newBet(bet("inbox-match", { primary: "close-days", alignsTo: ["one-inbox"] }), at("finance"));
     newBet(bet("faster-checkout", { primary: "close-days", alignsTo: ["inbox-match"] }), at("payments"));
@@ -173,7 +173,7 @@ describe("nikos plan", () => {
     expect((await plan("add", "department", "finance", "--name", "Finance")).out).toBe("Added planning/departments/finance/plan.yaml");
     expect((await plan("add", "team", "WEB", "--name", "Web")).out).toContain("A team reports to a department or group: --home <id>");
     expect((await plan("add", "team", "WEB", "--name", "Web", "--home", "finance")).code).toBe(0);
-    const krNew = await plan("kr", "new", "close-days", "--in", "finance", "--title", "Median days to close", "--owner", "Mira", "--baseline", "11", "--target", "7", "--period", "2027-Q1");
+    const krNew = await plan("kr", "new", "close-days", "--in", "finance", "--title", "Median days to close", "--owner", "Mira", "--baseline", "11", "--target", "7", "--period", "2027-Q1", "--direction", "down");
     expect(krNew.out).toBe("Wrote planning/departments/finance/krs/close-days.yaml");
     expect((await plan("bet", "new", "nowhere", "--owner", "A", "--hypothesis", "H", "--review", "2027-02-01")).out).toContain("Say where the bet goes with --in");
     // In an area's folder, --in isn't needed.
@@ -184,7 +184,7 @@ describe("nikos plan", () => {
     expect((await plan("bet", "review", "auto-match", "continue", "--why", "On track")).out).toBe("Wrote planning/departments/finance/bets/auto-match.md");
     const status = (await plan("status")).out;
     expect(status).toContain("company — Acme (2027)");
-    expect(status).toContain("close-days — Median days to close: 10 on 2026-11-09 (baseline 11, target 7 by 2027-03-31) · 2027-Q1");
+    expect(status).toContain("close-days — Median days to close: 10 on 2026-11-09 (baseline 11, target 7 by 2027-03-31) · 2027-Q1 · should go down");
     expect(status).toContain("teams/WEB — Web · reports to departments/finance");
     expect((await plan("status", "--in", "WEB")).out).toBe("teams/WEB — Web · reports to departments/finance\n  Bets: none");
     expect((await plan("validate")).out).toBe("✓ The plan for 2027 is valid — 3 areas, 1 key result, 1 bet");
@@ -203,10 +203,10 @@ describe("nikos plan", () => {
     const { repo, at } = acme();
     newKr(kr("revenue", { baseline: 0, target: 1 }), at("company"));
     newKr(kr("margin", { baseline: 0, target: 1 }), at("company"));
-    newKr(kr("pay-1", { period: "2027-Q2", alignsTo: ["revenue", "margin"] }), at("finance"));
+    newKr(kr("pay-1", { period: "2027-Q2", alignsTo: ["revenue", "margin"], direction: "down" }), at("finance"));
     expect(loadKr(at("finance"), "pay-1").data.aligns_to).toEqual(["revenue", "margin"]);
     expect(readFileSync(join(at("finance"), "krs/pay-1.yaml"), "utf8")).toContain("aligns_to: [revenue, margin]");
-    newKr(kr("pay-2", { period: "2027-Q2", alignsTo: "revenue" }), at("finance"));
+    newKr(kr("pay-2", { period: "2027-Q2", alignsTo: "revenue", direction: "down" }), at("finance"));
     expect(loadKr(at("finance"), "pay-2").data.aligns_to).toBe("revenue");
     expect(planIssues(repo)).toEqual([]);
   });

@@ -213,7 +213,7 @@ export function areaAlignmentProblems(area: Area, refs: string[], kind: "kr" | "
   return out;
 }
 
-/** What's wrong with the key results a bet aims at: each must be a company or department key result, at or above the bet's own level. */
+/** What's wrong with the key results a bet aims at: each must be a company or department key result (rule 2: any bet may aim at either). */
 export function areaKrTargetProblems(area: Area, refs: string[]): string[] {
   const out: string[] = [];
   for (const ref of refs) {
@@ -224,7 +224,6 @@ export function areaKrTargetProblems(area: Area, refs: string[]): string[] {
     const hit = kindOf(area.repo, ref);
     if (!hit) out.push(`There's no key result called '${ref}' in this company's plan`);
     else if (hit.kind !== "key result") out.push(`${ref} is a bet: --kr names key results, and --aligns-to names bets`);
-    else if (RANK[hit.area.level] > RANK[area.level]) out.push(`${ref} is in ${hit.area.rel}, below ${area.rel}: a bet aims at key results at its own level or above`);
   }
   return out;
 }
