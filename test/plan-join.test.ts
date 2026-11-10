@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeJoin, joinPlan, joinPlanRepo, runJoin } from "../src/commands/join";
 import { fetchCopy } from "../src/lib/fetch-copy";
+import { hostNameOf } from "../src/lib/forge";
 import { initPlanRepo } from "../src/plan/repo";
 import { loadRepos } from "../src/plan/repos";
 import { bareOrigin, companyRepo } from "./planning-fixture";
@@ -76,17 +77,57 @@ describe("nikos join to a planning repo", () => {
     expect(git(checkout, "branch", "--list", "nikos/*").split("\n").filter(Boolean)).toHaveLength(1);
   });
 
-  it("a plan that can't be read writes nothing, and says why", () => {
+  it("a plan that can't be read is left to the old join, as it always was, and --push refuses it and writes nothing", () => {
     const code = codeRepo();
-    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: join(tmpdir(), "no-such-plan-nikos-join") })).toThrow(/^Couldn't read acme\/company-plan: .+ Nothing was written\.$/);
+    const bad = join(tmpdir(), "no-such-plan-nikos-join");
+    const before = tempJoins();
+    // The layout is unknown, so joinPlan decides: it lists the plan in planning/upstream.yaml for a later sync.
+    expect(joinPlanRepo(code, { plan: "acme/company-plan", url: bad })).toBeUndefined();
+    expect(tempJoins()).toEqual(before);
+    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: bad, push: true })).toThrow(/^Couldn't read acme\/company-plan: .+ Nothing was written\.$/);
+    expect(tempJoins()).toEqual(before);
     expect(existsSync(join(code, "planning"))).toBe(false);
     expect(git(code, "status", "--porcelain")).toBe("");
   });
 
-  it("a code repo with no origin can't be listed", () => {
+  it("a code repo with no origin can't be listed in a new-layout plan", () => {
     const code = mkdtempSync(join(tmpdir(), "nikos-noorigin-"));
     git(code, "init", "-q", "-b", "main");
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() })).toThrow("has no origin");
+  });
+
+  it("a code repo with no origin still joins an old-kind plan the old way", () => {
+    const code = codeRepo();
+    git(code, "remote", "remove", "origin");
+    expect(joinPlanRepo(code, { plan: "acme/company-plan", url: companyRepo() })).toBeUndefined();
+    const r = joinPlan(code, { repo: "acme/company-plan", url: companyRepo() });
+    expect(r.added).toBe(true);
+    expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+  });
+
+  it("a code repo whose origin is a local path can't be listed, and says why", () => {
+    const code = codeRepo();
+    git(code, "remote", "set-url", "origin", bareOrigin());
+    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() })).toThrow("origin is a local path");
+    expect(hostNameOf("file:///x/acme/web.git")).toBeUndefined();
+    expect(hostNameOf("git@gitlab.com:acme/checkout-api.git")).toBe("gitlab.com");
+  });
+
+  it("writes the origin's host, and a url only when origin isn't the plain https one", () => {
+    const code = codeRepo();
+    git(code, "remote", "set-url", "origin", "git@gitlab.com:acme/checkout-api.git");
+    const checkout = checkoutOf(planOnOrigin());
+    joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
+    expect(loadRepos(checkout).repos).toEqual([{ repo: "acme/checkout-api", host: "gitlab.com", url: "git@gitlab.com:acme/checkout-api.git" }]);
+  });
+
+  it("keeps a token out of the entry: an origin with credentials is listed by its host and path only", () => {
+    const code = codeRepo();
+    git(code, "remote", "set-url", "origin", "https://oauth2:s3cret-token@gitlab.com/acme/checkout-api.git");
+    const checkout = checkoutOf(planOnOrigin());
+    joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
+    expect(loadRepos(checkout).repos).toEqual([{ repo: "acme/checkout-api", host: "gitlab.com" }]);
+    expect(readFileSync(join(checkout, "planning/repos.yaml"), "utf8")).not.toContain("s3cret-token");
   });
 
   it("--plan-dir must be a git checkout, and a dirty planning/ is refused", () => {

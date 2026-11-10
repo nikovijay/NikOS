@@ -12,8 +12,9 @@ export function hostOf(url: string): Host | undefined {
   return undefined;
 }
 
-/** The host name in a remote url: https or ssh, or git@host:path. Undefined for a local path. */
+/** The host name in a remote url: https or ssh, or git@host:path. Undefined for a local path or a file:// url. */
 export function hostNameOf(url: string): string | undefined {
+  if (/^file:/i.test(url)) return undefined;
   const m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:]+)/i.exec(url) ?? /^(?:[^@\s/]+@)?([^:\s/]+):/.exec(url);
   return m?.[1]?.toLowerCase();
 }

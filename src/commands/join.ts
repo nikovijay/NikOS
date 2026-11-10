@@ -127,10 +127,6 @@ export interface RepoJoin {
  */
 export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin | undefined {
   if (!REPO_PATH.test(input.plan)) throw new Error(`'${input.plan}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
-  const code = ownRepo(codeRoot);
-  const origin = gitIn(codeRoot, ["remote", "get-url", "origin"]).stdout.trim();
-  if (!code || !origin) throw new Error("This repo has no origin, so there's no repo path to list it under. Set one with: git remote add origin <url>");
-
   const tmp = input.planDir ? undefined : mkdtempSync(join(tmpdir(), "nikos-join-"));
   const copy = tmp ? join(tmp, "plan") : resolve(input.planDir!);
   let keep = false;
@@ -138,7 +134,12 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin |
     if (tmp) {
       const url = input.url ?? `https://${input.host ?? "github.com"}/${input.plan}.git`;
       const got = fetchCopy(url, input.ref, copy, undefined, { keepGit: true });
-      if ("error" in got) throw new Error(`Couldn't read ${input.plan}: ${got.error}. Nothing was written.`);
+      // The plan's layout is unknown until it is read. Unreachable, it joins the old way, as it always has.
+      // A push was asked for, though, and that needs the branch, so it is refused.
+      if ("error" in got) {
+        if (input.push) throw new Error(`Couldn't read ${input.plan}: ${got.error}. Nothing was written.`);
+        return undefined;
+      }
     } else if (!isGit(copy)) throw new Error(`${copy} isn't a git repo: --plan-dir needs the checkout of the planning repo`);
 
     if (!isPlanRepo(copy)) {
@@ -147,6 +148,14 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin |
     }
     const dirty = statusOf(copy, ["planning"]);
     if (dirty.length) throw new Error(`${copy} has changes in planning/ that aren't committed. Commit or stash them, then join again.`);
+
+    // Only a new-layout plan needs this repo's path, so the origin is checked here, after the layout is known.
+    const origin0 = gitIn(codeRoot, ["remote", "get-url", "origin"]).stdout.trim();
+    if (!origin0) throw new Error("This repo has no origin, so there's no repo path to list it under. Set one with: git remote add origin <url>");
+    const code = ownRepo(codeRoot);
+    if (!code) throw new Error("This repo's origin is a local path, so there's no repo path to list it under. Set one with: git remote add origin <url>");
+    // A token in the origin's url stays out of the file that gets committed: only the host and the path are kept.
+    const origin = origin0.replace(/^(https?:\/\/)[^/@]+@/i, "$1");
 
     // The entry names this repo by its path. The url is written only when origin isn't the plain https one for it.
     const host = hostNameOf(origin);
@@ -160,10 +169,11 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin |
     const name = nextBranchName(copy, `nikos/join-${code.replace(/\//g, "-")}-${today()}`);
     const made = switchNewBranch(copy, name);
     if (!made.ok) throw new Error(`Couldn't create a branch in ${copy}: ${made.error}`);
+    // The branch exists now, so the clone stays for review, even if the commit below fails.
+    keep = true;
     writeRepos(copy, next.doc);
     const committed = commitPaths(copy, ["planning/repos.yaml"], `nikos: list ${code} in planning/repos.yaml`);
     if (!committed.ok) throw new Error(`${name} is in ${copy}, but the commit didn't finish: ${committed.error}`);
-    keep = true;
     if (input.push) {
       const pushed = pushBranch(copy, name);
       if (!pushed.ok) throw new Error(`${name} is committed in ${copy}, but the push didn't finish: ${pushed.error}`);

@@ -14,6 +14,7 @@ const NOW = new Date("2026-11-10T12:00:00.000Z");
 const TODAY = "2026-11-10T08:00:00.000Z";
 const THREE_DAYS_AGO = "2026-11-07T08:00:00.000Z";
 const SELF = "acme/company-plan";
+const NOW_ISO_NEWER = "2026-11-10T12:00:00.000Z";
 
 /** A storymap whose stories name bets: story id -> bet names. */
 const storymap = (links: Record<string, string[]>, extra: Record<string, unknown> = {}) => ({
@@ -102,6 +103,22 @@ describe("a bet's own delivery", () => {
     expect(out.warnings).toEqual([
       { repo: "acme/payments-web", map: "chk", message: "this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo" },
     ]);
+  });
+});
+
+describe("a map that names its bet as a whole", () => {
+  it("counts a map with no stories yet for its bet, so the bet has maps of its own", () => {
+    const sm = { format_version: 1, key: "CHK", bet: "faster-checkout", releases: [{ number: 1, title: "First", stories: [] }] };
+    const out = run([bet("faster-checkout")], [repo("acme/payments-web", [map("chk", sm, [])])]);
+    expect(out.bets.get("faster-checkout")).toMatchObject({ source: "own", delivery: { status: "Not started", total: 0, maps: [expect.objectContaining({ key: "chk" })] } });
+    expect(out.warnings).toEqual([]);
+  });
+
+  it("warns about a misspelt map-level bet, and counts nothing for it", () => {
+    const sm = { format_version: 1, key: "CHK", bet: "faster-chekout", releases: [{ number: 1, title: "First", stories: [] }] };
+    const out = run([bet("faster-checkout")], [repo("acme/payments-web", [map("chk", sm)])]);
+    expect(out.bets.get("faster-checkout")).toMatchObject({ source: "none" });
+    expect(out.warnings).toEqual([{ repo: "acme/payments-web", map: "chk", message: "faster-chekout: no bet called faster-chekout in this planning repo" }]);
   });
 });
 
@@ -240,5 +257,31 @@ describe("planDeliveries over a planning repo and its copies", () => {
     expect(out.bets.get("faster-checkout")!.delivery).toMatchObject({ status: "Building", total: 3, done: 1, approved: 1, inProgress: 1, noSummary: 1 });
     expect(out.bets.get("checkout-goal")).toMatchObject({ source: "via", via: [{ bet: "faster-checkout" }] });
     expect(out.warnings).toEqual([]);
+  });
+});
+
+describe("a copy written by a newer nikOS, read for real", () => {
+  it("refuses a newer delivery.yaml and a newer storymap.yaml, and still counts the maps that read", () => {
+    const code = groupRepo("PAY", mkdtempSync(join(tmpdir(), "nikos-delivery-newer-code-")));
+    // chk: a good storymap, but a delivery.yaml from a newer nikOS. ord: a storymap from a newer nikOS.
+    write(join(code, "maps/chk/storymap.yaml"), "format_version: 1\nkey: CHK\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-CHK-1]\nstory_bets:\n  PAY-CHK-1: [faster-checkout]\n");
+    write(join(code, "maps/chk/delivery.yaml"), `version: 2\nmap: chk\nread_at: "${TODAY}"\nstories: []\n`);
+    write(join(code, "maps/ord/storymap.yaml"), "format_version: 2\nkey: ORD\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-ORD-1]\nstory_bets:\n  PAY-ORD-1: [faster-checkout]\n");
+    commitAll(code, "maps");
+
+    const plan = mkdtempSync(join(tmpdir(), "nikos-delivery-newer-plan-"));
+    initPlanRepo(plan, { name: "Acme", year: "2027" });
+    write(join(plan, "planning/company/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
+    write(join(plan, "planning/repos.yaml"), `version: 1\nrepos:\n  - repo: acme/payments-web\n    host: github.com\n    url: "${code}"\n`);
+    refreshDelivery(plan, { now: new Date(NOW_ISO_NEWER) });
+
+    const out = planDeliveries(plan, new Date(NOW_ISO_NEWER));
+    expect(out.bets.get("faster-checkout")!.delivery).toMatchObject({ status: "Not started", total: 1, noSummary: 1, maps: [expect.objectContaining({ key: "chk" })] });
+    const messages = out.warnings.map((w) => `${w.map}: ${w.message}`);
+    expect(messages).toEqual(expect.arrayContaining([
+      "chk: this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo",
+      "ord: this storymap.yaml was written by a newer nikOS: upgrade nikos in the planning repo",
+    ]));
+    expect(out.warnings).toHaveLength(2);
   });
 });

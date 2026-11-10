@@ -157,6 +157,8 @@ const readOf = (r: CachedRepo, now: Date): RepoRead => ({
 interface Scope {
   ref: MapRef;
   repo: CachedRepo;
+  /** The bets the map names as a whole (its bet:), which count it even while it has no stories. */
+  named: Set<string>;
   stories: Map<string, string[]>;
   summary: Map<string, SummaryStory>;
 }
@@ -224,6 +226,12 @@ export function deliveriesFrom(input: PlanInput): PlanDeliveries {
     for (const m of repo.maps) {
       for (const message of m.problems) warn({ repo: repo.repo, map: m.key, message });
       if (!m.storymap) continue;
+      const named = new Set<string>();
+      if (typeof m.storymap.bet === "string") {
+        const link = classifyBet(m.storymap.bet, input.self, ids);
+        if (link.kind === "bet") named.add(link.bet);
+        else if (link.kind !== "none") warn({ repo: repo.repo, map: m.key, message: link.message });
+      }
       const stories = new Map<string, string[]>();
       for (const story of storyIds(m.storymap)) {
         for (const value of betsFor(m.storymap, story).bets) {
@@ -240,11 +248,11 @@ export function deliveriesFrom(input: PlanInput): PlanDeliveries {
       const key = `${ref.host}/${ref.repo}/${ref.key}`;
       if (scopes.has(key)) continue;
       const summary = new Map((m.summary?.stories ?? []).map((s) => [s.id, s]));
-      scopes.set(key, { ref, repo, stories, summary });
+      scopes.set(key, { ref, repo, named, stories, summary });
     }
   }
   const all = [...scopes.values()];
-  const scopesOf = (bet: string) => all.filter((s) => (s.stories.get(bet) ?? []).length > 0);
+  const scopesOf = (bet: string) => all.filter((s) => s.named.has(bet) || (s.stories.get(bet) ?? []).length > 0);
 
   // The bets below each bet: a bet that aligns to another is one of its children.
   const children = new Map<string, string[]>();
