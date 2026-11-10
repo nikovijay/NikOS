@@ -51,10 +51,14 @@ export const snapshotHash = (s: Pick<PlanLink, "company" | "owners">) => createH
 /** The link, if this repo has one. A file that doesn't read throws, naming the problem. */
 export function readLink(root: string): PlanLink | undefined {
   const path = join(root, LINK_FILE);
-  if (!store().exists(path)) return undefined;
+  return store().exists(path) ? parseLink(store().read(path)) : undefined;
+}
+
+/** A link's text, read and checked. A file that doesn't read throws, naming the problem. */
+export function parseLink(text: string): PlanLink {
   let data: unknown;
   try {
-    data = parse(store().read(path));
+    data = parse(text);
   } catch (err) {
     throw new Error(`${LINK_FILE} doesn't read as YAML: ${(err as Error).message.split("\n")[0]}`);
   }
@@ -124,6 +128,16 @@ export interface PullResult {
 }
 
 /**
+ * The link for a copy of the plan: its snapshot for the owners, read at a commit. Used by join (the first
+ * snapshot) and by pull (a refresh). Throws, naming the file, when a settings file doesn't read.
+ */
+export function linkFromCopy(copy: string, plan: PlanRef, read: PlanLink["read"], owners: string[]): PullResult {
+  const snap = snapshotOf(copy, owners);
+  const link: PlanLink = { format_version: 1, plan, read, company: snap.company, owners: snap.owners, sha256: "" };
+  return { link: { ...link, sha256: snapshotHash(link) }, warnings: snap.warnings };
+}
+
+/**
  * Refresh the snapshot in this code repo's nikos.plan.yaml from its planning repo. Only the plan's
  * planning/ folder and its root settings file are read (a sparse clone). Nothing is written unless every
  * settings file reads: a failure keeps the last snapshot and names what broke.
@@ -142,23 +156,15 @@ export function pullPlanSettings(root: string): PullResult {
     const old = oldLayoutProblem(copy);
     if (old) throw new Error(`${repo}: ${old} The last snapshot is kept.`);
     if (!isPlanRepo(copy)) throw new Error(`${repo} isn't a planning repo. The last snapshot is kept.`);
-    let snap: ReturnType<typeof snapshotOf>;
+    const ref = prior.read.ref;
+    let pulled: PullResult;
     try {
-      snap = snapshotOf(copy, mapOwners(root));
+      pulled = linkFromCopy(copy, prior.plan, { commit: got.commit, at: new Date().toISOString(), ...(ref ? { ref } : {}) }, mapOwners(root));
     } catch (err) {
       throw new Error(`${(err as Error).message}. Nothing was pulled, and the last snapshot is kept.`);
     }
-    const ref = prior.read.ref;
-    const link: PlanLink = {
-      format_version: 1,
-      plan: prior.plan,
-      read: { commit: got.commit, at: new Date().toISOString(), ...(ref ? { ref } : {}) },
-      company: snap.company,
-      owners: snap.owners,
-      sha256: "",
-    };
-    writeLink(root, link);
-    return { link: { ...link, sha256: snapshotHash(link) }, warnings: snap.warnings };
+    writeLink(root, pulled.link);
+    return pulled;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

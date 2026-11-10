@@ -80,7 +80,8 @@ Plans: objectives, key results and bets
                    and team. Run nikos plan help to see how (plan init, add, kr, bet, checkin)
   join <repo>      Link this repo to the company's planning repo (--host gitlab.com). Run it
                    from a code repo; it lists this repo in planning/repos.yaml on a nikos/join
-                   branch for review. Settings are not inherited: a code repo keeps its own
+                   branch for review, and commits nikos.plan.yaml (the settings its maps take
+                   from the plan) on a nikos/link branch here. --push sends both branches
   settings [set <key> <value>]  Show the settings that apply here and where each one comes
                    from, or change one this repo is allowed to change
 

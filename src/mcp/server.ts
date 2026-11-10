@@ -130,7 +130,7 @@ export function createServer(repo: string): McpServer {
     setSetting(root, a.key, a.value);
     return text(`${a.key}: ${JSON.stringify(resolveSettings(root)[a.key].value)} (this repo)`);
   });
-  tool("join", "Join a planning repo. It gets this repo listed in planning/repos.yaml on a nikos/join branch for review, and nothing in this repo moves: push sends that branch to the planning repo's origin (off by default), and plan_dir uses a checkout of the planning repo already on this computer. repo is the planning repo's path on the host (owner/repo, or group/subgroup/project on GitLab).", {
+  tool("join", "Join a planning repo. It gets this repo listed in planning/repos.yaml on a nikos/join branch for review, and commits nikos.plan.yaml (the settings its maps take from the plan) on a nikos/link branch here. This repo must have no uncommitted changes, and main is never touched. push sends both branches to their origins (off by default), and plan_dir uses a checkout of the planning repo already on this computer. A repo linked to another plan is refused. repo is the planning repo's path on the host (owner/repo, or group/subgroup/project on GitLab).", {
     repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
     push: z.boolean().optional(), plan_dir: z.string().optional(),
   }, (a) => {
