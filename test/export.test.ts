@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { cpSync } from "node:fs";
 import { join } from "node:path";
 import { exportMap } from "../src/commands/export";
 import { setState } from "../src/commands/state";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 describe("export", () => {
   it("writes a PRD with each release's goal, stories, facts and criteria", () => {
@@ -52,5 +53,13 @@ describe("export", () => {
   it("refuses an unknown format or release", () => {
     expect(() => exportMap(copyExample(), "csv" as any)).toThrow("'csv' is not a format (prd, linear, jira)");
     expect(() => exportMap(copyExample(), "prd", { release: 4 })).toThrow("There is no release 4");
+  });
+
+  it("needs --map when the repo has several story maps", () => {
+    const dir = copyExample();
+    const root = rootOf(dir);
+    cpSync(dir, join(root, "maps/zz"), { recursive: true });
+    expect(() => exportMap(root, "prd")).toThrow("several story maps");
+    expect(exportMap(root, "prd", { map: "ht" })).toContain("# hello-todo: product requirements");
   });
 });

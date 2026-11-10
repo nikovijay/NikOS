@@ -1,87 +1,49 @@
-import { describe, it, expect, vi } from "vitest";
-import { cpSync, readFileSync, rmSync } from "node:fs";
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { assign } from "../src/commands/assign";
-import { memberAdd, teamJoin } from "../src/commands/team";
 import { validate } from "../src/commands/validate";
-import { runTeamSync } from "../src/team/sync";
-import { groupRepo, teamRepo, write, commitAll } from "./team-fixture";
-import { teamSync } from "../src/team/sync";
+import { writeMapSummary } from "../src/lib/map-summary";
+import { specHash } from "../src/lib/project";
+import { commitAll, groupRepo, write } from "./repo-fixture";
 
-/** A team with the group's release 1 synced. */
+/** A group repo with its one map (PAY-CHK, three stories), committed. */
 function synced() {
-  const g = groupRepo("PAY");
-  assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-  commitAll(g, "assign");
-  const t = teamRepo();
-  teamJoin(t, "acme/payments/checkout-group", { url: g });
-  commitAll(t, "join");
-  return { g, t };
+  const t = groupRepo("PAY");
+  return { t };
 }
 
-describe("validate on a team repo", () => {
-  it("is clean once synced", () => {
+describe("validate on a repo's own map", () => {
+  it("is clean with its own map", () => {
     const { t } = synced();
-    const v = validate(t, undefined, { remote: false });
-    expect(v.errors).toEqual([]);
+    const v = validate(t);
+    expect(v.errors.map((e) => `${e.file}: ${e.message}`)).toEqual([]);
     expect(v.warnings).toEqual([]);
-    expect(v.stories).toBe(2);
+    expect(v.stories).toBe(3);
   });
 
-  it("warns about a group that isn't synced yet", () => {
-    const t = teamRepo();
-    write(join(t, "nikos.team.yaml"), "format_version: 1\nname: Checkout web\nrepo: acme/checkout-web\ngroups:\n  - repo: acme/payments/checkout-group\n    url: /nowhere/checkout-group\nmembers: []\n");
-    expect(validate(t, undefined, { remote: false }).warnings.map((w) => w.message)).toEqual(["group acme/payments/checkout-group: not synced yet"]);
-  });
-
-  it("reports a story that two synced copies both hold, when the team file lists both groups", () => {
+  it("warns about an approval whose feature changed", () => {
     const { t } = synced();
-    cpSync(join(t, ".nikos/assigned/acme/payments/checkout-group"), join(t, ".nikos/assigned/acme/payments-copy"), { recursive: true });
-    // teamJoin refuses a second group with the same key, so only a hand-edited team file gets here.
-    const team = readFileSync(join(t, "nikos.team.yaml"), "utf8");
-    write(join(t, "nikos.team.yaml"), team.replace("members: []", "  - repo: acme/payments-copy\n    url: /nowhere/copy\nmembers: []"));
-    const v = validate(t, undefined, { remote: false });
-    expect(v.errors.map((e) => e.message)).toContain("PAY-CHK-1 is in two synced copies");
+    write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, spec_hash: 0123456789ab, done_at: '2027-01-05T10:00:00Z' }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n  PAY-CHK-9: { status: in_progress }\n");
+    write(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), "by: Sam Lee\non: 2027-01-06\nspec_hash: 0123456789ab\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: abcdef1234567\n");
+    const v = validate(t);
+    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-1's approval no longer holds: its feature changed since");
   });
 
-  it("ignores a copy of a group the team no longer takes work from", () => {
+  it("warns about an approval for a commit other than the one the story was tested at", () => {
     const { t } = synced();
-    cpSync(join(t, ".nikos/assigned/acme/payments/checkout-group"), join(t, ".nikos/assigned/acme/payments-copy"), { recursive: true });
-    const v = validate(t, undefined, { remote: false });
+    const hash = specHash(readFileSync(join(t, "maps/chk/features/pay/pay-by-card.feature"), "utf8"));
+    write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, done_at: '2027-01-05T10:00:00Z', evidence: { run_at: '2027-01-05T10:00:00Z', runner: cucumber, commit: abcdef1234567, ok: true } }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n");
+    writeMapSummary(t, join(t, "maps/chk")); // the summary says what the state says, as nikos map status writes it
+    write(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), `by: Priya Shah\non: 2027-01-06\nspec_hash: ${hash}\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: 1111111aaaaaa\n`);
+    const v = validate(t);
+    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-1's approval no longer holds: it was tested at another commit");
     expect(v.errors).toEqual([]);
-    expect(v.stories).toBe(2);
   });
 
-  it("warns about a status for a story no synced copy has, and about an approver who isn't a member", () => {
+  it("refuses a delivery.yaml that no longer says what the map's files say", () => {
     const { t } = synced();
-    write(join(t, "status/PAY-CHK-9.yaml"), "status: in_progress\n");
-    write(join(t, "status/PAY-CHK-1.yaml"), "status: done\nspec_hash: 0123456789ab\nevidence:\n  run_at: '2027-01-05T10:00:00Z'\n  runner: cucumber\n  commit: abcdef1234567\n  ok: true\n");
-    write(join(t, "approvals/PAY-CHK-1.yaml"), "by: Sam Lee\non: 2027-01-06\nspec_hash: 0123456789ab\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: abcdef1234567\n");
-    const v = validate(t, undefined, { remote: false });
-    expect(v.warnings.map((w) => w.message)).toContain("PAY-CHK-9 has status but isn't in any synced copy");
-    expect(v.warnings.map((w) => w.message)).toContain("approved by Sam Lee, who isn't listed in nikos.team.yaml");
-    expect(v.errors.map((e) => e.message).some((m) => m.startsWith("approval is for spec 0123456789ab, the story is now "))).toBe(true);
-  });
-
-  it("refuses a delivery approval for a commit other than the one the story was tested at", () => {
-    const { t } = synced();
-    write(join(t, "status/PAY-CHK-1.yaml"), "status: done\nevidence:\n  run_at: '2027-01-05T10:00:00Z'\n  runner: cucumber\n  commit: abcdef1234567\n  ok: true\n");
-    write(join(t, "approvals/PAY-CHK-1.yaml"), "by: Priya Shah\non: 2027-01-06\nspec_hash: '000000000000'\ndone_at: '2027-01-05T10:00:00Z'\ntested_commit: 1111111aaaaaa\n");
-    memberAdd(t, "Priya Shah");
-    const messages = validate(t, undefined, { remote: false }).errors.map((e) => e.message);
-    expect(messages).toContain("approval is for commit 1111111, but the story was tested at abcdef1");
-  });
-
-  it("is refused by sync in a repo that isn't a team's, and by sync when it also has intent/", () => {
-    const g = groupRepo("PAY");
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(runTeamSync(["--dir", g])).toBe(1);
-    expect(err).toHaveBeenCalledWith("✗ nikos sync is for a team repo that takes work from a group: nikos team init, then nikos team join <group repo>; planning repos use nikos planning sync");
-    err.mockRestore();
-
-    const { t } = synced();
-    write(join(t, "intent/storymap.yaml"), "key: HT\n");
-    expect(() => teamSync(t)).toThrow("this repo has intent/ or maps/ and nikos.team.yaml: keep one");
-    rmSync(join(t, "intent"), { recursive: true, force: true });
+    const summary = readFileSync(join(t, "maps/chk/delivery.yaml"), "utf8");
+    write(join(t, "maps/chk/delivery.yaml"), summary.replace("status: todo", "status: done"));
+    expect(validate(t).errors.map((e) => e.message).join("\n")).toContain("delivery.yaml");
   });
 });

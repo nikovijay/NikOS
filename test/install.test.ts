@@ -60,7 +60,8 @@ describe("install manifests", () => {
   });
 
   it("ships the one skills folder, with no skill copied anywhere else outside a pack", () => {
-    expect(skillDirs).toContain("nikos-mode");
+    expect(skillDirs).toContain("nikos-spec");
+    expect(skillDirs).toContain("nikos-plan");
     const skillFiles = allSkillFiles(root)
       .map((p) => p.slice(root.length + 1))
       .filter((p) => !/^tools\/[^/]+\/skills\//.test(p));

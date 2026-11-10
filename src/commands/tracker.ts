@@ -1,10 +1,10 @@
-// `nikos tracker`: keep a story map and a team's tracker (Jira, Linear, GitHub or GitLab issues…)
+// `nikos tracker`: keep a story map and a repo's tracker (Jira, Linear, GitHub or GitLab issues…)
 // in step. nikOS never calls a tracker itself: the agent reads and writes tickets through the
 // tracker's own MCP, and hands what it read to these commands, which apply the rules:
 // - a ticket can approve a story (when tracker.approvals is on) or cancel it, never mark it
 //   done: done still means the story's scenarios pass;
 // - for everything else, nikOS says which tickets should move, and the agent moves them.
-import { authoringMap, homeOf, resolveStoryMap, storyMapFor, type StoryMapRef } from "../lib/maps.js";
+import { resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 import { STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
@@ -27,23 +27,22 @@ function trackerOf(root: string) {
   };
 }
 
-/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in state.yaml (or the team's status/). */
+/** Link a story to its ticket (e.g. PAY-123, ENG-42, #57), in the map's state.yaml. */
 export function linkTicket(input: { id: string; ticket: string; map?: string }, dir: string) {
   if (!STORY_ID.test(input.id)) throw new Error(`'${input.id}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const ticket = input.ticket.trim();
   if (!ticket) throw new Error("Give the ticket's key or number, e.g. PAY-123");
-  const ref = storyMapFor(dir, { story: input.id, map: input.map });
-  const home = homeOf(ref);
-  if (!storyState(home, input.id) && !ref.team) throw new Error(noEntry(home, input.id));
+  const ref = resolveStoryMap(dir, { story: input.id, map: input.map });
+  const home = ref.dir;
   updateStory(
     home,
     input.id,
     (doc, at) => {
-      // A team's first link creates its status file, which starts at todo.
+      // A first link creates the story's status file, which starts at todo.
       if (!doc.getIn([...at, "status"])) doc.setIn([...at, "status"], "todo");
       doc.setIn([...at, "ticket"], ticket);
     },
-    { create: !!ref.team },
+    { create: true },
   );
   return { id: input.id, ticket };
 }
@@ -64,7 +63,7 @@ export interface RecordResult {
  * compared, because nikOS's own status comes from the story's scenarios.
  */
 export function recordTicket(input: { id: string; status: string; by?: string; on?: string; map?: string }, dir: string): RecordResult {
-  const ref = storyMapFor(dir, { story: input.id, map: input.map });
+  const ref = resolveStoryMap(dir, { story: input.id, map: input.map });
   const root = ref.root;
   const t = trackerOf(root);
   if (t.system === "none") throw new Error("No tracker is set up here: set tracker.system first (nikos settings set tracker.system jira)");
@@ -99,7 +98,7 @@ export function recordTicket(input: { id: string; status: string; by?: string; o
 }
 
 function storyTicket(ref: StoryMapRef, id: string): string | undefined {
-  const v = storyState(homeOf(ref), id)?.ticket;
+  const v = storyState(ref.dir, id)?.ticket;
   return typeof v === "string" ? v : undefined;
 }
 
@@ -113,7 +112,7 @@ export interface TicketMove {
 
 /** For each linked story, the tracker status its ticket should be in. The agent moves the tickets. */
 export function ticketMoves(dir: string, mapId?: string): TicketMove[] {
-  const ref = resolveStoryMap(dir, mapId);
+  const ref = resolveStoryMap(dir, { map: mapId });
   const t = trackerOf(ref.root);
   const stories = storyMapOfRef(ref).releases.flatMap((r) => r.stories);
   const statusFor = (s: NikosStatus) => Object.entries(t.statuses).find(([, v]) => v === s)?.[0] ?? (s === "approved" ? Object.entries(t.statuses).find(([, v]) => v === "done")?.[0] : undefined);
@@ -140,8 +139,8 @@ export interface ImportedTicket {
  * linked are skipped. Stories start as todo: their scenarios still have to be written.
  */
 export function importTickets(tickets: ImportedTicket[], dir: string, opts: { release?: number; map?: string } = {}) {
-  // Tickets become stories, which are authored in the group repo: a team repo is refused before anything is read.
-  const ref = authoringMap(dir, opts.map);
+  // Tickets become stories, which are authored in the repo's own map.
+  const ref = resolveStoryMap(dir, { map: opts.map });
   const linked = new Set(storyMapOfRef(ref).releases.flatMap((r) => r.stories).map((s) => storyTicket(ref, s.id)).filter(Boolean));
   const added: { id: string; ticket: string }[] = [];
   const skipped: string[] = [];

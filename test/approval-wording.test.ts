@@ -25,9 +25,8 @@ describe("approval wording", () => {
   });
 
   it("the approval sites that print an approver say 'approved by', never a verified identity", () => {
-    const status = readFileSync(join(SRC, "team/status.ts"), "utf8");
-    expect(status).toContain("approved by ${f.approval.by}");
-    expect(status).toContain("approved by ${v.approvedBy}");
+    const status = readFileSync(join(SRC, "commands/map-status.ts"), "utf8");
+    expect(status).toContain("approved by ${s.approved_by}");
     expect(readFileSync(join(SRC, "lib/delivery-summary.ts"), "utf8")).toContain("not a verified identity");
   });
 });

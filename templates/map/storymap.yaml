@@ -1,0 +1,10 @@
+format_version: 1
+project: {{project_slug}}
+key: {{key}}
+activities:
+  - id: getting-started
+    title: Getting started
+releases:
+  - number: 1
+    title: MVP
+    stories: [{{first_id}}]

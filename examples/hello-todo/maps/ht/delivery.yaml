@@ -1,0 +1,18 @@
+# Written by nikos map status from the map's own files. Commit it: the plans above read it.
+version: 1
+map: ht
+stories:
+  - id: HT-1
+    status: done
+    approval: none
+    proof: unverified
+    read_at: 2026-11-10T07:25:03Z
+  - id: HT-2
+    status: in_progress
+    approval: none
+    read_at: 2026-11-10T07:25:03Z
+  - id: HT-3
+    status: todo
+    approval: none
+    read_at: 2026-11-10T07:25:03Z
+read_at: 2026-11-10T07:25:03Z

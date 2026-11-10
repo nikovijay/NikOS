@@ -1,10 +1,14 @@
 # Settings, and how a company shares them
 
-`nikos.settings.yaml`, at a repo's root, holds the choices that shape how
+`nikos.settings.yaml`, at a code repo's root, holds the choices that shape how
 nikOS works there: whether stories need approval, and which tracker the team
-uses. A company sets them once in its plan repo. Departments, groups and teams
-that plan against it inherit them, and can change anything the levels above
-haven't locked.
+uses. Each code repo keeps its own file. A code repo linked to the company's
+plan with `nikos join` does not inherit settings from it: it keeps its own.
+
+Inside the company's planning repo the areas do share settings. The company sets
+them once, in `nikos.settings.yaml` at the planning repo's root, and each department,
+group and team inherits them down the folders, and can change anything the levels
+above haven't locked.
 
 ```yaml
 format_version: 1
@@ -29,15 +33,17 @@ Every key is optional. See what applies, and where each value comes from:
 
 ```
 $ nikos settings
-approval.policy: "required-for-release"  (acme/company-plan; locked by acme/company-plan)
+approval.policy: "required-for-release"  (this repo)
 approval.routes: ["app","chat","terminal"]  (default)
-tracker.system: "jira"  (acme/company-plan)
-tracker.project: "PAY"  (acme/engineering/payments-plan)
+tracker.system: "jira"  (this repo)
+tracker.project: "PAY"  (this repo)
 …
 ```
 
 Change one for this repo with `nikos settings set tracker.project PAY-WEB`.
-It refuses if a level above locked it.
+In the planning repo, `nikos plan settings --in <area>` shows the same for an
+area, and `nikos plan settings set <key> <value> --in <area>` changes it. It
+refuses if a level above locked it.
 
 ## Approval policy
 
@@ -50,57 +56,35 @@ It refuses if a level above locked it.
 `approval.routes` says which ways of approving count: through the app (`nikos
 mcp` asks you directly), in chat (you answered your agent), or in a terminal.
 To make approvals need the right reviewer, protect the main branch and add a
-`CODEOWNERS` rule for `intent/approvals.yaml`. `nikos doctor` checks for it.
+`CODEOWNERS` rule for `maps/*/approvals/`. `nikos doctor` checks for it.
 
-## Starting a company plan
+## Settings in the company's plan
 
-`nikos company init --name "Acme" --period "Q1 2027" --departments "Payments, Growth"`
-writes a company plan repo: `planning/plan.yaml`, the `nikos.settings.yaml`
-every level inherits, `planning/downstream.yaml` listing the departments, and
-a README with the line each department or team runs to join. Ask your agent to
-"set nikOS up for our company" and the company playbook walks through it:
-settings, the tracker, this period's objectives, creating the repo (only on
-your yes), and the join line to share.
+In the planning repo, the company's settings live in `nikos.settings.yaml` at the
+root, and every area inherits them down the folders: `planning/departments/<id>/`,
+`planning/groups/<id>/` and `planning/teams/<KEY>/`. Each level resolves from
+the defaults, then the company, then each level down to the area itself. A
+locked value stays as the level that locked it set it. If two levels lock the
+same key, the one nearest the top applies.
 
-To see which departments and teams have joined, and how they're doing, run
-`nikos planning rollout` in the company repo ([planning.md](planning.md)).
-
-## Joining a company or department plan
+## Joining a company plan
 
 ```
 nikos join acme/company-plan                                  # on GitHub
 nikos join acme/engineering/payments-plan --host gitlab.com   # on GitLab
 ```
 
-`join` adds the repo to `planning/upstream.yaml`, fetches a read-only copy
-(`nikos planning sync`), and shows the settings this repo now inherits.
-Nothing in the repo moves, so a team that started on its own keeps everything
-it has.
-
-Sync follows the chain upwards. A team that joins its department also gets the
-department's company plan, so company settings reach every level. Each copy is
-read-only, in `.nikos/upstream/` (gitignored), and `planning/upstream.lock`
-records the commit each one was read at.
-
-A team repo (`nikos.team.yaml`, see [Teams](planning.md#teams)) takes its locks down
-its home's chain only: the plan named by `home:` in `nikos.team.yaml`, then the plan
-above that. Company and group locks reach it on `nikos sync`, with the same "locked by"
-message as anywhere else. A plan the team joined that isn't its home locks nothing for
-it. Unlocked values above a team don't apply to it: the team keeps its own values
-wherever nothing above locked them. A team with no home (and no key, home or maps) keeps
-the 0.3.0 behaviour: it takes its groups' chains. If two levels lock the same key to
-different values, the first one found applies and `nikos doctor` warns.
-
-Resolution goes from the top down: the defaults, then each level from the
-company down, then this repo. A locked value stays as the level that locked it
-set it.
+`join` runs in a code repo. It lists the repo in the planning repo's
+`planning/repos.yaml`, on a `nikos/join` branch for the plan's owner to review,
+so the plan can read its story maps' delivery. Nothing else in the code repo
+moves, and its settings stay as they are.
 
 ## Checking a repo
 
 `nikos doctor` checks the story map, the scenario runner, CI, approvals, the
-tracker and the upstream plans. For each one it says what it found, and the
+tracker and the plan this repo is linked to. For each one it says what it found, and the
 next thing to do when something's missing. Your agent runs it when something
-seems off. `--offline` skips asking upstream repos whether they've moved on.
+seems off. 
 
 ## Keeping a tracker in step
 

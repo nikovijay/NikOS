@@ -1,14 +1,25 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { runSuggest, suggest } from "../src/commands/suggest";
 import { setState } from "../src/commands/state";
 import { specHash } from "../src/lib/project";
-import { copyExample, edit } from "./helpers";
+import { writeMapSummary } from "../src/lib/map-summary";
+import { store } from "../src/lib/store";
+import { copyExample, edit, rootOf } from "./helpers";
 
-const labels = (dir: string) => suggest(dir).options.map((o) => o.label);
+/** The menu's labels. A map edited in place gets its delivery.yaml written first, as nikos map status would. */
+const labels = (root: string) => {
+  if (store().exists(join(root, "maps", "ht", "storymap.yaml"))) writeMapSummary(root, join(root, "maps", "ht"));
+  return suggest(root).options.map((o) => o.label);
+};
+/** An approval as nikos approve writes it: approvals/<ID>.yaml in the map's folder. */
+const approve = (mapDir: string, id: string, specHash: string) => {
+  mkdirSync(join(mapDir, "approvals"), { recursive: true });
+  writeFileSync(join(mapDir, "approvals", `${id}.yaml`), `by: Niko\non: 2026-11-06\nspec_hash: "${specHash}"\ndone_at: 2026-11-03\n`);
+};
 const capture = (args: string[]) => {
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
   runSuggest(args);
@@ -27,19 +38,19 @@ describe("suggest", () => {
 
   it("offers to set up nikOS where there's no story map", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-empty-"));
-    expect(labels(dir)).toEqual(["Set up nikOS here", "Map what this repo already does", "Join our company plan"]);
+    expect(labels(dir)).toEqual(["Set up nikOS here", "Map what this repo already does", "Link this repo to a company plan"]);
     expect(capture(["--brief", "--dir", dir])).toBe("");
   });
 
   it("puts unfinished work first, then approval, then the next story, at most four", () => {
     const intent = copyExample();
-    const s = suggest(intent);
+    const s = suggest(rootOf(intent));
     expect(s.summary).toBe("Release 1 · MVP: 1 of 2 done · HT-2 in progress · 1 waiting for approval");
     expect(s.options.map((o) => o.label)).toEqual(["Finish HT-2: See today's top three", "Approve HT-1: Add a task", "Build HT-3: Reorder tasks", "Add a story"]);
     expect(s.options[1]).toMatchObject({ stories: ["HT-1"] });
     expect(s.options[1].do).toContain('"Do you want to approve <id>: <title>?"');
     expect(s.options[1].do).toContain("Only on their Approve, run nikos approve <id> --via chat");
-    expect(capture(["--brief", "--dir", intent])).toBe(
+    expect(capture(["--brief", "--dir", rootOf(intent)])).toBe(
       "nikOS: Release 1 · MVP: 1 of 2 done · HT-2 in progress · 1 waiting for approval. Suggested next: Finish HT-2: See today's top three · Approve HT-1: Add a task · Build HT-3: Reorder tasks · Add a story.",
     );
   });
@@ -48,12 +59,10 @@ describe("suggest", () => {
     const intent = copyExample();
     edit(join(intent, "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     const hash = (f: string) => specHash(readFileSync(join(intent, "features/tasks", f), "utf8"));
-    writeFileSync(
-      join(intent, "approvals.yaml"),
-      `format_version: 1\napprovals:\n  HT-1: { by: Niko, on: 2026-11-06, spec_hash: "${hash("add-a-task.feature")}", done_at: 2026-11-03 }\n  HT-2: { by: Niko, on: 2026-11-06, spec_hash: "${hash("see-todays-top-three.feature")}", done_at: 2026-11-03 }\n`,
-    );
-    expect(labels(intent)).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Add a story", "Look at the story map"]);
-    expect(suggest(intent).summary).toBe("Release 2 · Enhancements: 0 of 1 done");
+    approve(intent, "HT-1", hash("add-a-task.feature"));
+    approve(intent, "HT-2", hash("see-todays-top-three.feature"));
+    expect(labels(rootOf(intent))).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Add a story", "Look at the story map"]);
+    expect(suggest(rootOf(intent)).summary).toBe("Release 2 · Enhancements: 0 of 1 done");
   });
 
   it("leads with problems and changed specs, and says what a waiting story waits on", () => {
@@ -61,34 +70,31 @@ describe("suggest", () => {
     edit(join(intent, "state.yaml"), (s) => s.replace("status: in_progress", "status: todo").replace("plan_version: 2", "plan_version: 2\n    spec_hash: abcdefabcdef"));
     edit(join(intent, "features/tasks/see-todays-top-three.feature"), (s) => s.replace("@HT-2", "@HT-2 @depends-HT-3"));
     edit(join(intent, "features/tasks/reorder-tasks.feature"), (s) => s.replace("@HT-3", "@HT-3 @depends-HT-9"));
-    expect(labels(intent)).toEqual(["Fix the 1 problem in intent/", "Review what changed in HT-1 since it was done", "Unblock HT-3 (HT-2 waits on it)", "Add a story"]);
+    expect(labels(rootOf(intent))).toEqual(["Fix the 1 problem in maps/ht/", "Review what changed in HT-1 since it was done", "Unblock HT-3 (HT-2 waits on it)", "Add a story"]);
   });
 
-  it("offers a bet review when one is due, and a check-in when a key result is stale", () => {
+  it("a code repo's menu has no bet reviews or check-ins: the plan's menu has those, in the planning repo", () => {
     const intent = copyExample();
     edit(join(intent, "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     const hash = (f: string) => specHash(readFileSync(join(intent, "features/tasks", f), "utf8"));
-    writeFileSync(
-      join(intent, "approvals.yaml"),
-      `format_version: 1\napprovals:\n  HT-1: { by: Niko, on: 2026-11-06, spec_hash: "${hash("add-a-task.feature")}", done_at: 2026-11-03 }\n  HT-2: { by: Niko, on: 2026-11-06, spec_hash: "${hash("see-todays-top-three.feature")}", done_at: 2026-11-03 }\n`,
-    );
-    vi.setSystemTime(new Date("2026-11-20T12:00:00Z"));
-    expect(labels(intent)).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", 'Check in on "Testers who missed an important task last week"', "Add a story"]);
+    approve(intent, "HT-1", hash("add-a-task.feature"));
+    approve(intent, "HT-2", hash("see-todays-top-three.feature"));
     vi.setSystemTime(new Date("2026-12-02T12:00:00Z"));
-    expect(labels(intent)).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Review the fewer-missed-tasks bet (due 2026-12-01)", 'Check in on "Testers who missed an important task last week"']);
-    expect(suggest(intent).options[2].do).toContain("review playbook");
+    const all = labels(rootOf(intent));
+    expect(all).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Add a story", "Look at the story map"]);
+    expect(JSON.stringify(suggest(rootOf(intent)))).not.toMatch(/nikos plan|bet review|Check in on/);
   });
 
   it("skips cancelled stories", () => {
     const intent = copyExample();
     setState("HT-3", "cancelled", { dir: intent, reason: "Not now" });
-    expect(labels(intent)).not.toContain("Build HT-3: Reorder tasks");
+    expect(labels(rootOf(intent))).not.toContain("Build HT-3: Reorder tasks");
   });
 });
 
 describe("conversation rules", () => {
-  const skill = readFileSync(join(__dirname, "../skills/nikos-mode/SKILL.md"), "utf8");
-  const build = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
+  const skill = readFileSync(join(__dirname, "../skills/nikos-spec/SKILL.md"), "utf8");
+  const build = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
 
   it("ends every request with nikos suggest as a short menu, and never hands over commands", () => {
     expect(skill).toContain("## 6. Ask what's next");
@@ -107,9 +113,27 @@ describe("conversation rules", () => {
   it("the Claude Code plugin tells the agent where things stand at session start", () => {
     const hooks = JSON.parse(readFileSync(join(__dirname, "../hooks/hooks.json"), "utf8"));
     const cmd = hooks.hooks.SessionStart[0].hooks[0].command as string;
-    expect(cmd).toContain("[ -f intent/storymap.yaml ]");
+    expect(cmd).toContain("ls maps/*/storymap.yaml");
+    expect(cmd).toContain("[ -d intent ]");
     expect(cmd).toContain("npx -y nikos@latest suggest --brief");
     expect(cmd).toMatch(/\|\| true$/);
+  });
+
+  it("the session hook runs suggest only in a repo with a story map (or intent/, for its migrate hint), and never elsewhere", () => {
+    const cmd = (JSON.parse(readFileSync(join(__dirname, "../hooks/hooks.json"), "utf8")).hooks.SessionStart[0].hooks[0].command) as string;
+    // A fake npx that says it ran, so the test shows whether the hook called nikos.
+    const bin = mkdtempSync(join(tmpdir(), "hook-bin-"));
+    writeFileSync(join(bin, "npx"), '#!/bin/sh\necho NIKOS_RAN\n', { mode: 0o755 });
+    const run = (dir: string) => spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+    const bare = mkdtempSync(join(tmpdir(), "hook-bare-"));
+    expect(run(bare)).toMatchObject({ status: 0, stdout: "" });
+    const withMap = mkdtempSync(join(tmpdir(), "hook-map-"));
+    mkdirSync(join(withMap, "maps/ab"), { recursive: true });
+    writeFileSync(join(withMap, "maps/ab/storymap.yaml"), "key: AB\n");
+    expect(run(withMap).stdout).toContain("NIKOS_RAN");
+    const old = mkdtempSync(join(tmpdir(), "hook-old-"));
+    mkdirSync(join(old, "intent"));
+    expect(run(old).stdout).toContain("NIKOS_RAN");
   });
 
   it("Codex uses the same hook file, and Cursor its own sessionStart hook", () => {
@@ -130,7 +154,7 @@ describe("conversation rules", () => {
     // A stand-in for nikos that echoes what it was asked, so only the hook itself is tested.
     const fake = join(mkdtempSync(join(tmpdir(), "nikos-fake-")), "cli.mjs");
     writeFileSync(fake, 'process.stdout.write("nikOS: " + process.argv.slice(2).join(" ") + "\\n");\n');
-    const repo = dirname(copyExample());
+    const repo = rootOf(copyExample());
     expect(run(JSON.stringify({ workspace_roots: [repo] }), { NIKOS_CLI: fake })).toEqual({ additional_context: `nikOS: suggest --brief --dir ${repo}` });
   });
 });

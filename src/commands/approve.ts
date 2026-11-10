@@ -1,5 +1,4 @@
-// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml
-// (or intent/approvals/<ID>.yaml). Two
+// `nikos approve`: a person's sign-off on a done story, written to maps/<key>/approvals/<ID>.yaml. Two
 // ways in, recorded as `via`:
 // - terminal: the person runs it and types the story id back. A coding agent runs commands
 //   without a terminal, so it can't take this route.
@@ -9,22 +8,23 @@
 //   saw the question or gave the answer.
 // - tracker: a person moved the story's ticket to a status mapped to approved (nikos tracker
 //   record), when tracker.approvals is on.
-// A repo can go further and protect approvals.yaml with CODEOWNERS, so every approval also
+// A repo can go further and protect a map's approvals/ with CODEOWNERS, so every approval also
 // needs a review on GitHub or GitLab.
 // The approval holds while the story stays done, since the same done, with the same feature.
 import { spawnSync } from "node:child_process";
+import { relative } from "node:path";
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
-import { approvalLapse, doneMark, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
-import { noEntry, storyState, writeApproval } from "../lib/state-files.js";
+import { approvalLapse, doneMark, loadApprovals } from "../lib/approvals.js";
+import { approvalFileOf, noEntry, storyState, writeApproval } from "../lib/state-files.js";
 import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
-import { homeOf, storyMapFor } from "../lib/maps.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { codeChangedSince, codeIsDirty, headOf } from "../lib/git.js";
-import { isTeamRepo } from "../lib/team.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
+import { writeMapSummary } from "../lib/map-summary.js";
 
 /** Who is approving: git's user.name, or the login name when git has none. */
 export function approver(dir: string): string {
@@ -43,8 +43,8 @@ export type Via = "terminal" | "chat" | "app" | "tracker";
 
 export function approve(story: string, opts: { dir?: string; map?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
-  const home = homeOf(ref);
+  const ref = resolveStoryMap(opts.dir ?? process.cwd(), { story, map: opts.map });
+  const home = ref.dir;
   const settings = resolveSettings(ref.root);
   const policy = settings["approval.policy"];
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
@@ -55,8 +55,8 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (via !== "tracker" && !(routes.value as ApprovalRoute[]).includes(via)) {
     throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
   }
-  // A team's story with no status file is todo, so it's refused below as not done.
-  const entry = storyState(home, story) ?? (ref.team ? { status: "todo" } : undefined);
+  // A map's story with no state entry is todo, so it's refused below as not done.
+  const entry = storyState(home, story) ?? { status: "todo" };
   if (!entry) throw new StateError(noEntry(home, story));
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
   const feature = featureFor(story, ref.root, ref.id);
@@ -65,19 +65,24 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (entry.spec_hash && entry.spec_hash !== hash) {
     throw new StateError(`${story}'s feature changed after it was done. Move it to needs_rework and through done again before approving`);
   }
-  // A team approves the code it tested: no code may have changed since the commit the proof ran at.
-  // A commit that only moves the team's own status or approvals doesn't count.
+  // A map's story is approved for the code it tested: no code may have changed since the commit the
+  // proof ran at. A commit that only moves nikOS's own state or approvals doesn't count. Without git
+  // or a commit there is no commit to test against, so these checks are skipped.
+  const head = headOf(ref.root);
   const tested = entry.evidence?.commit ?? entry.tested_commit;
   // Uncommitted code isn't any commit: the proof ran on it, so it can't be approved at a commit.
-  if (ref.team && codeIsDirty(ref.root)) {
+  if (head && codeIsDirty(ref.root)) {
     throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
-  if (ref.team && (!tested || codeChangedSince(ref.root, tested))) {
-    const head = headOf(ref.root);
-    throw new StateError(`${story} was tested at ${tested?.slice(0, 7) ?? "no commit"}, and the code has changed since (HEAD is ${head?.slice(0, 7) ?? "no commit"}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
+  // A story done before its folder had a commit (or migrated with no evidence) has no commit to test against.
+  if (head && !tested) {
+    throw new StateError(`${story} was done with no recorded test commit, so nikOS can't tell what its proof covers: run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
+  }
+  if (head && codeChangedSince(ref.root, tested!)) {
+    throw new StateError(`${story} was tested at ${tested!.slice(0, 7)}, and the code has changed since (HEAD is ${head.slice(0, 7)}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
   const existing = loadApprovals(home)[story];
-  if (existing && !(ref.team ? teamApprovalLapse(existing as DeliveryApproval, entry, hash) : approvalLapse(existing, entry, hash))) {
+  if (existing && !approvalLapse(existing, entry, hash)) {
     throw new StateError(`${story} is already approved (by ${existing.by} on ${existing.on})`);
   }
 
@@ -93,7 +98,9 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   }
 
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
-  writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(ref.team ? { tested_commit: tested } : {}) });
+  writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(head && tested ? { tested_commit: tested } : {}) });
+  // The map's delivery.yaml shows the approval, so it's written with it.
+  writeMapSummary(ref.root, ref.dir);
   return { story, by: opts.by, on };
 }
 
@@ -134,8 +141,9 @@ export async function runApprove(args: string[]): Promise<number> {
   for (const story of stories) {
     try {
       approve(story, { dir, map, by, via });
-      // A team's approval is per story, in approvals/; a repo's own sits in intent/approvals.yaml.
-      const where = isTeamRepo(dir) ? `approvals/${story}.yaml` : "intent/approvals.yaml";
+      // The file the approval went to, from the repo root: the map's approvals/<ID>.yaml.
+      const ref = resolveStoryMap(dir, { story, map });
+      const where = relative(ref.root, approvalFileOf(ref.dir, story));
       console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (${where})`);
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);

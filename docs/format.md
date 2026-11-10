@@ -1,28 +1,34 @@
-# The intent/ format
+# The story map format
 
 Format version: **1**
 
 nikOS keeps a project's intent — what it's for, what to build, how it's going —
-in an `intent/` folder at the root of the repo. Everything is plain text, so
+in plain files in the repo. Each story map lives in its own folder, `maps/<key>/`,
+and the vision and the decision log sit at the root. Everything is plain text, so
 agents, humans, git and code review all see the same thing.
 
 ```
-intent/
-  constitution.md        the project's vision
-  storymap.yaml          activities, releases and story order
-  features/
-    <activity>/
-      <story-slug>.feature   one story, its criteria as scenarios
-  plans/
-    <story-id>.v<N>.md   versioned implementation plans
-  decisions.md           append-only decision log
-  state.yaml             status, blockers and the run queue
-  state/<story-id>.yaml  optional: each story's state in its own file
-  approvals.yaml         optional: people's sign-offs on done stories
-  approvals/<story-id>.yaml  optional: each sign-off in its own file
-  outreach/              optional, drafts from the validate playbook
-    <date>-<channel>.md
+constitution.md          the project's vision (one per repo)
+decisions.md             append-only decision log (one per repo)
+maps/
+  <key>/                 one story map, named by its key (maps/ht/ for HT-1, HT-2 …)
+    storymap.yaml        activities, releases and story order
+    features/
+      <activity>/
+        <story-slug>.feature   one story, its criteria as scenarios
+    plans/
+      <story-id>.v<N>.md   versioned implementation plans
+    state.yaml           status, blockers and the run queue
+    approvals/
+      <story-id>.yaml    optional: each person's sign-off, one file per story
+    delivery.yaml        the map's status, as of its last write
+    outreach/            optional, drafts from the validate playbook
+      <date>-<channel>.md
 ```
+
+A repo with one story map has one folder under `maps/`. A repo can hold one map per
+bet, and a monorepo can hold several teams' maps. The repo's `planning/` folder, when
+it has one, is described in [plan.md](plan.md).
 
 Two rules hold across every file:
 
@@ -41,7 +47,8 @@ Every file below is listed with its **purpose**, **path** and **format**.
 **Purpose:** the project's vision, answered once and refined as you learn.
 Every story should trace back to it.
 
-**Path:** `intent/constitution.md`
+**Path:** `constitution.md` at the repo root. There is one per repo, checked once
+by `nikos validate`, whichever maps the repo holds.
 
 **Format:** Markdown with YAML front matter and exactly these five `##`
 sections, in this order:
@@ -71,7 +78,7 @@ How you'll know it's working.
 Further `##` sections may follow the five required ones. The
 idea-to-blueprint playbook writes `## Jobs to be done` and
 `## Founding hypothesis`; the validate playbook writes `## Validation`, one entry per round of
-outreach, and keeps its drafts in `intent/outreach/`. A draft is marked
+outreach, and keeps its drafts in `maps/<key>/outreach/`. A draft is marked
 `Status: draft, not sent` until the founder signs it off; the founder sends it.
 `nikos validate` checks the front matter has `name` and `idea`, and that the
 five vision sections come first, in order, and aren't empty.
@@ -84,14 +91,15 @@ five vision sections come first, in order, and aren't empty.
 releases (rows) and the order stories should be built in. It is an index; the stories
 themselves live in feature files.
 
-**Path:** `intent/storymap.yaml`
+**Path:** `maps/<key>/storymap.yaml`
 
 **Format:** YAML.
 
 ```yaml
 format_version: 1
 project: hello-todo
-key: HT                     # story id prefix: HT-1, HT-2 …
+key: HT                     # the map's folder is maps/ht/; its stories are HT-1, HT-2 …
+owner: WEB                  # optional: a team key, which then prefixes the ids: WEB-HT-1
 personas:                   # optional: who the product is for; a story tags them @persona-<id>
   - id: busy
     title: Busy person
@@ -125,6 +133,11 @@ Rules:
 - A story's `@release-N` tag should match the release that lists it;
   `nikos validate` warns when they differ.
 - Persona ids are unique, and a story's `@persona-<id>` must name one.
+- A story id is the map's `key` and a number, with a prefix first. The prefix is
+  the map's `owner` if it has one, else nothing: `WEB-HT-1` or `HT-1`. Every
+  story in one map uses the same prefix, and a map with no owner keeps the bare
+  `HT-1`. Adding an owner later doesn't rename existing ids: they keep their
+  prefix, and `nikos validate` accepts it.
 - A story's `@depends-<id>` must name another story, and dependencies can't
   form a loop. `nikos validate` warns when a story depends on one in a later
   release, or on a cancelled one. `nikos next` won't pick a story until
@@ -133,22 +146,21 @@ Rules:
 ### Bet links (optional)
 
 A release can name the bets it delivers, and a single story can override its
-release's list. The bets themselves live outside `intent/`, in `planning/`
-(the Planning pack, see [planning.md](planning.md)).
+release's list. The bets themselves live in the company's planning repo, under
+`planning/<area>/bets/` (see [plan.md](plan.md)).
 
 ```yaml
 releases:
   - number: 1
     title: MVP
-    bets: [fewer-missed-tasks]                 # a bet in planning/bets/
+    bets: [fewer-missed-tasks]                 # a bet id from the company's plan
     stories: [HT-1, HT-2]
 story_bets:
-  HT-2: [acme/company-plan#focus-mode]         # this story serves another repo's bet
+  HT-2: [focus-mode]                           # this story serves this bet
 ```
 
-- A bet id must have a `planning/bets/<id>.md` in the same repo.
-- `owner/repo#id` names another repo's bet. `nikos validate` checks its form
-  only and never fetches it.
+- A bet is named by its bare id, the same in every repo. `nikos validate` checks
+  its form only: `repo#bet` is refused, and nothing is fetched.
 - A story's `story_bets` entry replaces its release's `bets` for that story.
 
 Add a story with `nikos story add "<title>" --activity <id> [--step <id>]`.
@@ -173,7 +185,7 @@ keeps comments and leaves the rest of the file as it was:
 a PRD in Markdown, Linear issues (releases become milestones), or the body of
 Jira's bulk create (`POST /rest/api/2/issue/bulk`). `--release <n>` exports one
 release; `--project-key` sets Jira's project (default: the map's key). The
-exports are copies: keep editing `intent/`.
+exports are copies: keep editing the map's folder.
 
 ---
 
@@ -182,7 +194,7 @@ exports are copies: keep editing `intent/`.
 **Purpose:** one user story and its acceptance criteria, written so they
 run as tests.
 
-**Path:** `intent/features/<activity-id>/<story-slug>.feature`, where the
+**Path:** `maps/<key>/features/<activity-id>/<story-slug>.feature`, where the
 activity id matches `storymap.yaml` and the slug is the story title in
 kebab-case.
 
@@ -212,8 +224,8 @@ Feature: Add a task
 **Purpose:** how a story will be built. Plans are versioned: a new approach
 is a new file, so history is never lost.
 
-**Path:** `intent/plans/<story-id>.v<N>.md`, for example
-`intent/plans/HT-1.v2.md`. `N` starts at 1 and increases by one.
+**Path:** `maps/<key>/plans/<story-id>.v<N>.md`, for example
+`maps/ht/plans/HT-1.v2.md`. `N` starts at 1 and increases by one.
 
 **Format:** Markdown with front matter, then one `##` section per step:
 
@@ -229,7 +241,7 @@ summary: One to three plain sentences on the approach.
 ## 1. Store tasks locally
 **Why:** tasks survive a refresh.
 **Criteria:** AC1
-**Files:** src/store.ts
+**Files:** src/lib/store.ts
 
 Notes for the agent.
 ```
@@ -245,8 +257,9 @@ existing file.
 **Purpose:** why things are the way they are. Append-only; never rewrite an
 entry, add a new one that supersedes it.
 
-**Path:** `intent/decisions.md`, or `planning/decisions.md` in a company or
-department plan with no story map (see [planning.md](planning.md))
+**Path:** `decisions.md` at the repo root. In a planning repo, each area keeps its own at
+`planning/<area>/decisions.md`: the company's is `planning/company/decisions.md`, and
+`nikos decide --in <area>` picks another (see [plan.md](plan.md))
 
 **Format:** Markdown. One `##` entry per decision, newest last:
 
@@ -271,7 +284,8 @@ build-a-story playbook reads these before planning.
 **Purpose:** everything that changes as work happens: status, who's on it,
 blockers, and the run queue. Kept apart so specs stay clean.
 
-**Path:** `intent/state.yaml`
+**Path:** `maps/<key>/state.yaml`, one file per map. Every story in the map has
+its entry here, so two maps never share a state file.
 
 **Format:** YAML.
 
@@ -297,7 +311,7 @@ in_progress`. Only a passing verification can set `done` (see the
 build-a-story playbook).
 
 - **Approval** isn't a status. It's a person's sign-off, kept in
-  [approvals.yaml](#approvalsyaml) so a repo can protect it.
+  its own file in [approvals/](#approvalsstory-idyaml) so a repo can protect it.
 - **Cancelled** keeps a story you've decided not to build, with a reason:
   `nikos state set <id> cancelled --reason "<why>"` from todo, in_progress or
   needs_rework. It's saved as `cancelled_reason`. `cancelled → todo` brings it back.
@@ -308,47 +322,31 @@ build-a-story playbook).
   above `Feature:` aren't part of the fingerprint, so moving a story between
   releases doesn't count as a change.
 
-### One file per story
+Two people or agents moving different stories in one repo both touch `state.yaml`,
+so keep each branch's stories apart: the approvals are files of their own, and a
+merge conflict in `state.yaml` is a small, plain one. Commit a change to a map's
+story set on its own, from a branch nobody else is moving stories on.
 
-With several people or agents working in one repo, two branches that move
-different stories both edit `state.yaml`, and one of them has to resolve a
-merge conflict. `nikos migrate per-story` gives every story its own file:
+## approvals/<story-id>.yaml
 
-```
-intent/state.yaml          format_version and the run queue; stories: {}
-intent/state/HT-1.yaml     HT-1's entry, the same fields as under stories:
-intent/approvals/HT-1.yaml HT-1's sign-off, the same fields as under approvals:
-```
+**Purpose:** a person's sign-off on a done story. Each sign-off is its own file,
+apart from `state.yaml`, which agents write all the time, so a `CODEOWNERS` rule can
+protect the sign-offs.
 
-Once `intent/state/` exists, every command reads and writes there: a new
-story gets its own file, and an approval goes to `intent/approvals/<id>.yaml`.
-`nikos validate` checks each file, and reports a story kept in both places.
-The migration only runs on a repo that validates, and it carries a CODEOWNERS
-rule on `approvals.yaml` over to `approvals/`. `nikos migrate single-file`
-moves everything back. Commit a migration on its own, from a branch nobody else
-is moving stories on.
+**Path:** `maps/<key>/approvals/<story-id>.yaml`, one file per approved story. The
+first approval creates the folder.
 
-## approvals.yaml
-
-**Purpose:** people's sign-offs on done stories. It's kept apart from
-`state.yaml`, which agents write all the time, so it can be protected.
-
-**Path:** `intent/approvals.yaml` (optional; the first approval creates it)
-
-**Format:** YAML.
+**Format:** YAML, the same fields for every story:
 
 ```yaml
-format_version: 1
-approvals:
-  HT-1:
-    by: Niko Vijay              # git's user.name
-    on: 2026-11-06
-    via: chat                   # app, chat or terminal: how it was given
-    spec_hash: 3f9a1c2b7d4e     # the feature that was approved
-    done_at: 2026-11-03T14:02:11Z   # the done that was approved
+by: Niko Vijay              # git's user.name
+on: 2026-11-06
+via: chat                   # app, chat, terminal or tracker: how it was given
+spec_hash: 3f9a1c2b7d4e     # the feature that was approved
+done_at: 2026-11-03T14:02:11Z   # the done that was approved
 ```
 
-`nikos approve <id>` writes an entry, in one of three ways:
+`nikos approve <id>` writes one, in one of three ways:
 
 - **Through the app.** With `nikos mcp`, the approve tool asks the person
   directly through their app's own prompt. The model never sees the question
@@ -378,8 +376,7 @@ that holds shows as **approved**, and counts as done.
 approves the pull request (GitHub) or merge request (GitLab):
 
 ```
-/intent/approvals.yaml  @your-product-lead
-/intent/approvals/      @your-product-lead    # with one file per story
+/maps/*/approvals/      @your-product-lead
 ```
 
 On GitLab, requiring code-owner approval needs a paid tier.
@@ -391,7 +388,7 @@ On GitLab, requiring code-owner approval needs a paid tier.
 **Purpose:** outreach drafted to test the idea with real people, kept so the
 founder can review it and the results can be traced back to it.
 
-**Path:** `intent/outreach/<yyyy-mm-dd>-<channel>.md`
+**Path:** `maps/<key>/outreach/<yyyy-mm-dd>-<channel>.md`, one folder per map
 
 **Format:** Markdown. The first line is the status: `Status: draft, not sent`
 until the founder signs it off, then `Status: signed off <date>, for the
@@ -401,8 +398,38 @@ founder sends it, never the agent.
 
 ---
 
+## delivery.yaml
+
+**Purpose:** what each story's status and approval are, as of the last write, so the plans above a repo can read delivery without the story files.
+
+**Path:** `maps/<key>/delivery.yaml`, one per map.
+
+**Format:** YAML with `version`, `map`, an optional `owner` (the map's owner, when it has one), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade.
+
+---
+
+## planning/repos.yaml
+
+**Purpose:** the code repos a planning repo reads delivery from. `nikos plan refresh` reads each one, read-only.
+
+**Path:** `planning/repos.yaml` in the planning repo, optional.
+
+**Format:** YAML with `version: 1` and `repos`, a list of entries with `repo` (owner/repo, or group/project on GitLab), and optional `host`, `ref` (the default is the repo's default branch) and `url`. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade. `nikos join` writes it, and `nikos plan validate` checks it. Its copies are kept under `.nikos/delivery/`, which is never committed. See [docs/plan.md](plan.md).
+
+## Upgrading from intent/
+
+A repo from before 0.5 keeps its story map in `intent/`, and nikOS refuses it
+until it moves. Move it by hand, as the CHANGELOG's 0.5 notes say: `git mv intent
+maps/<key>`, with `constitution.md` and `decisions.md` at the repo root. Then run
+`nikos validate` and `nikos map status`, and commit the result.
+
 ## Versioning this format
 
-`format_version` in `storymap.yaml` and `state.yaml` is the version of this
-document. Breaking changes bump it; `nikos validate` reads it and explains
-any migration needed.
+`format_version` in `storymap.yaml` and `state.yaml`, and `version` in
+`delivery.yaml` and `planning/repos.yaml`, is the version of this document.
+Breaking changes bump it.
+A reader refuses a file whose version is newer than this nikOS reads, and
+says which repo to upgrade. Readers in a planning repo accept unknown fields
+in `storymap.yaml`, `delivery.yaml` and `planning/repos.yaml`; the writers in
+a story map repo stay strict, and `nikos validate` reads it and explains any
+migration needed.

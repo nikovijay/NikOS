@@ -1,8 +1,9 @@
-// Bet cards in planning/bets/<id>.md: what we believe, the key results it should move,
+// Bet cards in planning/<area>/bets/<id>.md: what we believe, the key results it should move,
 // when we review it, and every review decision since.
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
-import { betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
+import { areaOf, betText, checkBet, describeErrors, loadBet, paths, today, writePlanning } from "./model.js";
+import { takenProblem } from "../plan/repo.js";
 import { alignmentProblems, alignsValue, krTargetProblems } from "./levels.js";
 import { betFieldProblems, dateProblem } from "./rules.js";
 
@@ -28,12 +29,15 @@ function checked(meta: any): any {
   return meta;
 }
 
-/** Write planning/bets/<id>.md. Never overwrites an existing bet. */
+/** Write planning/<area>/bets/<id>.md. Never overwrites an existing bet. */
 export function newBet(input: BetInput, root: string): string {
   if (!BET_ID.test(input.id)) throw new Error(`'${input.id}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`);
   if (!input.owner?.trim()) throw new Error("A bet needs an owner (--owner)");
   if (!input.hypothesis?.trim()) throw new Error("A bet needs a hypothesis (--hypothesis)");
   if (dateProblem(input.reviewOn)) throw new Error("A bet needs a review date (--review YYYY-MM-DD)");
+  const area = areaOf(root);
+  const taken = area && takenProblem(area.repo, input.id);
+  if (taken) throw new Error(taken);
   const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "bet")[0] ?? krTargetProblems(root, [input.primary, ...(input.also ?? [])].filter((r): r is string => !!r))[0];
   if (problem) throw new Error(problem);

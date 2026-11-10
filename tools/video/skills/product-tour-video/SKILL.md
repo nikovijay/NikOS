@@ -56,7 +56,7 @@ Each step exists because skipping it cost a rebuild once.
 
 ## From a nikOS story map
 
-In a repo with an `intent/` folder, the video can come straight from the spec,
+In a repo with a `maps/` folder, the video can come straight from the spec,
 with no screens to rebuild. `npx -y nikos video --out marketing/<name>` writes:
 - `brief.md`: the product, users and problem from the constitution, and one beat per activity with done stories. Only stories marked done are in; the rest are listed as left out. Show the beats to the person and wait for their yes before rendering.
 - `storyboard.js`: the same beats as data, timed.

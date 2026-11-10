@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { lintFeature } from "../src/lint/gherkin";
 import { exampleDir } from "./helpers";
 
-const example = readFileSync(join(exampleDir, "intent/features/tasks/add-a-task.feature"), "utf8");
+const example = readFileSync(join(exampleDir, "maps/ht/features/tasks/add-a-task.feature"), "utf8");
 const errors = (text: string) => lintFeature(text).filter((i) => i.level === "error").map((i) => i.message);
 
 describe("gherkin lint", () => {
@@ -53,7 +53,7 @@ describe("gherkin lint", () => {
 });
 
 describe("gherkin lint story ids", () => {
-  const example = readFileSync(join(exampleDir, "intent/features/tasks/add-a-task.feature"), "utf8");
+  const example = readFileSync(join(exampleDir, "maps/ht/features/tasks/add-a-task.feature"), "utf8");
   const warnings = (text: string) => lintFeature(text).map((i) => i.message);
 
   it("accepts a group-map story id and its depends tag", () => {

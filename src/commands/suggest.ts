@@ -7,15 +7,14 @@ import { repoRootOf } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 import { resolveSettings } from "../lib/settings.js";
 import { join, resolve } from "node:path";
-import { findIntentDir, isDone } from "../lib/project.js";
+import { isDone } from "../lib/project.js";
 import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
-import { isTeamRepo } from "../lib/team.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate, validateGroup } from "./validate.js";
-import { isStale } from "../planning/krs.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { betIds, krIds, loadBet, loadKr, loadPlan, today } from "../planning/model.js";
+import { areaFor, findArea, findPlanRepo, oldLayoutProblem } from "../plan/repo.js";
+import { suggestPlan } from "../plan/suggest.js";
 import { basename } from "node:path";
 
 export interface Option {
@@ -38,47 +37,7 @@ const MAX = 4;
 const named = (s: MapStory) => `${s.id}: ${s.title}`;
 const list = (ids: string[]) => (ids.length <= 3 ? ids.join(", ") : `${ids.slice(0, 2).join(", ")} and ${ids.length - 2} more`);
 
-/** The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results. */
-function planningOptions(root: string): Option[] {
-  if (!store().isDir(join(root, "planning"))) return [];
-  const options: Option[] = [];
-  const due = betIds(root).flatMap((id) => {
-    try {
-      const m = loadBet(root, id).meta;
-      return m.outcome === "open" && m.review_on && String(m.review_on) <= today() ? [{ id, on: String(m.review_on) }] : [];
-    } catch {
-      return [];
-    }
-  });
-  if (due.length) options.push({ label: due.length === 1 ? `Review the ${due[0].id} bet (due ${due[0].on})` : `Review ${due.length} bets that are due`, do: "Run the nikos-planning review playbook: continue, change, stop or complete each bet, with the reason." });
-  const stale = krIds(root).flatMap((id) => {
-    try {
-      const k = loadKr(root, id).data;
-      return isStale(k) ? [String(k.title ?? id)] : [];
-    } catch {
-      return [];
-    }
-  });
-  if (stale.length) options.push({ label: stale.length === 1 ? `Check in on "${stale[0]}"` : `Check in on ${stale.length} key results`, do: "Run the nikos-planning checkin playbook: ask for each key result's latest value and record it." });
-  return options;
-}
-
-const ROLLOUT: Option = { label: "See how the plans below are doing", do: "Run nikos planning rollout and summarise it for the person: each plan below, its key results, bets and delivery." };
-
-/** A company or department plan, with no story map of its own: its rituals, the plans below, and the plan. */
-function planSuggestion(root: string): Suggestion {
-  const plan = loadPlan(root) ?? {};
-  const krs = krIds(root).length;
-  const bets = betIds(root).length;
-  const options = planningOptions(root);
-  if (store().exists(join(root, "planning", "downstream.yaml"))) options.push(ROLLOUT);
-  options.push({ label: "Look at the plan", do: "Run nikos planning status, or open the planning dashboard with nikos serve, and show the person." });
-  if (!krs) options.unshift({ label: "Add a key result", do: "Run the nikos-planning plan playbook: ask what the period should change, and add the key results." });
-  const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-  return { summary: `${plan.name ?? "This"} plan${plan.period ? ` (${plan.period})` : ""}: ${count(krs, "key result")}, ${count(bets, "bet")}`, options: options.slice(0, MAX) };
-}
-
-/** A group repo with several maps and none picked: each map's progress, and the group's rituals. */
+/** A code repo with several maps and none picked: each map's progress, and how to pick one. */
 function groupSuggestion(dir: string, maps: string[]): Suggestion {
   const ids = maps.map((d) => basename(d));
   const parts = ids.map((id) => {
@@ -89,30 +48,43 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
       return id;
     }
   });
-  const options = planningOptions(dir);
+  const options: Option[] = [];
   const problems = validateGroup(dir).errors.length;
   if (problems) options.unshift({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in maps/`, do: "Run nikos validate and fix each error it lists." });
-  options.push({ label: "See each team's status on the maps", do: "Run nikos map status for each map and summarise who has what, and what's done and approved." });
+  options.push({ label: "See each map's status", do: "Run nikos map status for each map and summarise what's done and approved, and what needs attention." });
   options.push({ label: `Pick a story map to work on (${list(ids)})`, do: "Ask which map, then run nikos suggest --map <id> for that map's options." });
   return { summary: `${ids.length} story maps: ${parts.join(" · ")}`, options: options.slice(0, MAX) };
 }
 
-export function suggest(dir: string, mapId?: string): Suggestion {
+/**
+ * What to do next here. In a code repo, its story maps. In a planning repo, the area in --area (or the
+ * folder you're in), else the company.
+ */
+export function suggest(dir: string, mapId?: string, opts: { area?: string } = {}): Suggestion {
+  const old = oldLayoutProblem(dir);
+  if (old) return { summary: old, options: [] };
   const maps = mapDirs(dir);
-  if (!mapId && maps.length > 1 && !isTeamRepo(dir)) return groupSuggestion(dir, maps);
-  const intentDir = resolveStoryMap(dir, mapId).dir;
-  if (!store().exists(join(intentDir, "storymap.yaml"))) {
-    if (store().exists(join(dir, "planning", "plan.yaml"))) return planSuggestion(dir);
+  if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
+  if (!maps.length && store().isDir(join(dir, "intent"))) {
+    return { summary: "this repo keeps its story map in intent/", options: [{ label: "Move the story map into maps/", do: "Move intent/ to maps/<key>/ by hand, as the release notes describe, then commit the result." }] };
+  }
+  if (!maps.length) {
+    const repo = findPlanRepo(dir);
+    if (repo) {
+      const area = areaFor(repo, opts.area, dir) ?? findArea(repo, "company");
+      return suggestPlan(repo, area);
+    }
     return {
       summary: "nikOS isn't set up in this repo yet.",
       options: [
-        { label: "Set up nikOS here", do: "Run the start playbook: nikos start, then the first story through to passing." },
+        { label: "Set up nikOS here", do: 'Run the start playbook: nikos start --map --name "<name>" --key <KEY>, with the name and key from the repo, then take the first story through to passing.' },
         { label: "Map what this repo already does", do: "Run the map-existing playbook: draft the story map from the existing code, then prove what's there with scenarios." },
-        { label: "Join our company plan", do: "Ask which repo holds the company or department plan, then nikos join <repo path> (add --host for GitLab). It links this repo and shows the settings it inherits." },
+        { label: "Link this repo to a company plan", do: "Ask which repo holds the company's plan, then run nikos join <repo path> (add --host for GitLab). It lists this repo in that plan, on a branch for review." },
       ],
     };
   }
 
+  const mapDir = resolveStoryMap(dir, { map: mapId }).dir;
   const map = storyMapOf(dir, mapId);
   const stories = [...map.releases.flatMap((r) => r.stories), ...map.unreleased];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -120,13 +92,13 @@ export function suggest(dir: string, mapId?: string): Suggestion {
   const add = (o: Option) => options.length < MAX && options.push(o);
 
   const problems = validate(dir, mapId).errors.length;
-  const where = mapId ? `maps/${mapId.toLowerCase()}/` : "intent/";
+  const where = `maps/${basename(mapDir)}/`;
   if (problems) add({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in ${where}`, do: `Run nikos validate${mapId ? ` --map ${mapId}` : ""} and fix each error it lists.` });
 
   const changed = stories.filter((s) => s.specChanged);
   if (changed.length) add({ label: `Review what changed in ${list(changed.map((s) => s.id))} since it was done`, do: "Show the feature's change since done, and ask whether to move it back to needs_rework.", stories: changed.map((s) => s.id) });
 
-  const n = next(intentDir);
+  const n = next(mapDir);
   for (const o of n.open) {
     const s = byId.get(o.id);
     add({ label: `${o.status === "needs_rework" ? "Rework" : "Finish"} ${s ? named(s) : o.id}`, do: "Run the build-a-story playbook for this story.", stories: [o.id] });
@@ -134,7 +106,7 @@ export function suggest(dir: string, mapId?: string): Suggestion {
 
   // Done stories nobody has signed off (the map shows a story with an approval that holds as
   // approved): the agent asks "Do you want to approve …?"
-  const approvalsOn = resolveSettings(repoRootOf(intentDir))["approval.policy"].value !== "off";
+  const approvalsOn = resolveSettings(repoRootOf(mapDir))["approval.policy"].value !== "off";
   const unapproved = approvalsOn ? stories.filter((s) => s.status === "done" && !s.specChanged) : [];
   if (unapproved.length) {
     add({
@@ -160,11 +132,8 @@ export function suggest(dir: string, mapId?: string): Suggestion {
   const ready = map.releases.filter(complete).at(-1);
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
 
-  // The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results.
-  planningOptions(repoRootOf(intentDir)).forEach(add);
-
   add({ label: "Add a story", do: "Ask what the person wants the product to do next, then add it with nikos story add and write its scenarios." });
-  add({ label: "Look at the story map", do: "Run nikos map, or open the planning dashboard's map if it's running, and show the person." });
+  add({ label: "Look at the story map", do: "Run nikos map to see it in the terminal, or nikos serve to open it in the browser, and show the person." });
 
   // The release being worked on: the first that isn't complete, or the last.
   const current = map.releases.find((r) => !complete(r)) ?? map.releases.at(-1);
@@ -182,11 +151,12 @@ export function runSuggest(args: string[]): number {
   const i = args.indexOf("--dir");
   const dir = resolve(i >= 0 ? args[i + 1] : process.cwd());
   const mapId = mapFlag(args);
+  const area = args.indexOf("--in") >= 0 ? args[args.indexOf("--in") + 1] : undefined;
   // --brief is for a session-start hook: one line, and nothing at all outside a nikOS repo.
   if (args.includes("--brief")) {
-    if (!mapDirs(dir).length && !store().exists(join(findIntentDir(dir), "storymap.yaml")) && !store().exists(join(dir, "planning", "plan.yaml"))) return 0;
+    if (!mapDirs(dir).length && !store().isDir(join(dir, "intent")) && !findPlanRepo(dir)) return 0;
     try {
-      const s = suggest(dir, mapId);
+      const s = suggest(dir, mapId, { area });
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);
       const stale = staleCliWarning();
       if (stale) console.log(`nikOS: ${stale}`);
@@ -196,7 +166,7 @@ export function runSuggest(args: string[]): number {
     return 0;
   }
   try {
-    const s = suggest(dir, mapId);
+    const s = suggest(dir, mapId, { area });
     if (args.includes("--json")) {
       console.log(JSON.stringify(s, null, 2));
       return 0;

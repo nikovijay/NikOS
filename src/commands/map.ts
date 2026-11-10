@@ -1,18 +1,19 @@
 // The story map: activities as columns, releases as numbered bands, stories as cards tinted
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
-// Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
+// Served live by nikos serve, it also gets a filter bar (see FILTER_JS).
 import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { approvalLapse, loadApprovals, teamApprovalLapse, type DeliveryApproval } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { oldLayoutProblem } from "../plan/repo.js";
+import { isPlanRepo } from "../planning/model.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
-import { NO_GROUP_KEY, NO_TEAM_KEY, groupKeyOf, homeOf, keyOfMap, mapDirs, ownMapsOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
-import { isTeamRepo, openTeam } from "../lib/team.js";
-import { upstreamEntries } from "../planning/upstream.js";
+import { OWNER, mapDirs, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { writeMapSummary } from "../lib/map-summary.js";
 import { KEY } from "../lib/keys.js";
 import { runMapStatus } from "./map-status.js";
 
@@ -107,22 +108,24 @@ function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
 
 /** The story map as data: activities, releases with their bets, and every story's status. */
 export function storyMapOf(dir: string, mapId?: string): StoryMap {
-  // Several maps and none picked: an empty map, so the dashboard and MCP still answer.
-  if (!mapId && mapDirs(dir).length > 1) return { project: "", key: "", personas: [], activities: [], releases: [], unreleased: [] };
-  return storyMapOfRef(resolveStoryMap(dir, mapId));
+  const none: StoryMap = { project: "", key: "", personas: [], activities: [], releases: [], unreleased: [] };
+  // Several maps and none picked, or no map at all: an empty map, so the dashboard and MCP still answer.
+  if (!mapId && mapDirs(dir).length > 1) return none;
+  if (!mapId && !mapDirs(dir).length && !store().exists(join(dir, "storymap.yaml"))) return none;
+  return storyMapOfRef(resolveStoryMap(dir, { map: mapId }));
 }
 
 /** The story map a resolved reference points at: its storymap, features and every story's status. */
 export function storyMapOfRef(ref: StoryMapRef): StoryMap {
-  const intent = ref.dir;
-  const map = yamlAt(join(intent, "storymap.yaml")) ?? {};
+  const mapDir = ref.dir;
+  const map = yamlAt(join(mapDir, "storymap.yaml")) ?? {};
   const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
-    loadStates(homeOf(ref));
-  const approvals = loadApprovals(homeOf(ref));
+    loadStates(ref.dir);
+  const approvals = loadApprovals(ref.dir);
   // Approved is shown as a status: done, plus an approval that still holds.
   const approvedBy = (id: string, hash?: string) => {
     const a = approvals[id];
-    return a && !(ref.team ? teamApprovalLapse(a as DeliveryApproval, states[id], hash) : approvalLapse(a, states[id], hash)) ? a.by : "";
+    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
   };
   const stateOf = (id: string, deps: string[], hash?: string) => {
     const st = states[id] ?? {};
@@ -138,7 +141,7 @@ export function storyMapOfRef(ref: StoryMapRef): StoryMap {
     };
   };
   const features = new Map<string, MapStory>();
-  for (const file of walk(join(intent, "features"), ".feature")) {
+  for (const file of walk(join(mapDir, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
     if (!id) continue;
@@ -153,7 +156,8 @@ export function storyMapOfRef(ref: StoryMapRef): StoryMap {
     number: Number(r.number),
     title: String(r.title ?? `Release ${r.number}`),
     goal: String(r.goal ?? ""),
-    bets: Array.isArray(r.bets) ? r.bets.map(String) : [],
+    // A map's one bet in bet: is delivered by each of its releases.
+    bets: typeof map.bet === "string" ? [map.bet] : Array.isArray(r.bets) ? r.bets.map(String) : [],
     stories: (Array.isArray(r.stories) ? r.stories : []).map((s: unknown) => story(String(s))),
   }));
   const placed = new Set(releases.flatMap((r) => r.stories.map((s) => s.id)));
@@ -188,7 +192,7 @@ const statusOf = (s: MapStory) =>
 const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The whole story map as one standalone HTML page. live adds the dashboard's filter bar and its script. */
+/** The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve. */
 export function renderMap(dir: string, opts: { live?: boolean; map?: string } = {}): string {
   const m = storyMapOf(dir, opts.map);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
@@ -285,7 +289,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string } = 
 <style>${CSS}</style>
 </head>
 <body>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.live ? `<a class="back" href="/">← Planning</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title"><h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
 ${filters}<main id="board" tabindex="-1">
 ${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
@@ -419,8 +423,6 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; backgrou
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .skip { position: absolute; left: 12px; top: -48px; z-index: 20; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; }
 .skip:focus { top: 12px; }
-.back { display: inline-flex; align-items: center; min-height: 28px; font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none; margin-right: 6px; }
-.back:hover { color: var(--ink); text-decoration: underline; }
 .title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .blank { margin: 32px 0; max-width: 560px; padding: 24px; border: 1px dashed var(--line-2); border-radius: 12px; background: var(--surface); font-size: 14px; }
 .blank h2 { margin: 0 0 6px; font-size: 16px; }
@@ -534,67 +536,39 @@ main { flex: 1; min-height: 0; overflow: auto; background-color: var(--paper); b
 const MAP_KEY = KEY;
 
 /**
- * A story map for one of a group's bets, as maps/<key lowercased>/, with the folders and files a
- * new intent/ has. Refuses with the same messages the command line gives.
+ * A story map, as maps/<key lowercased>/: its storymap, state, approvals and features. Its story ids
+ * take the owner (--owner, e.g. WEB), else just the key. A bet (--bet) is optional and must be a bet
+ * id: its card isn't looked up, since a code repo can't read a planning repo.
+ * Refuses with the same messages the command line gives.
  */
-export function newMap(input: { bet?: string; key?: string }, dir: string): { id: string; key: string; group: string; dir: string } {
-  if (isTeamRepo(dir)) return newTeamMap(input, dir);
+export function newMap(input: { bet?: string; key?: string; owner?: string }, dir: string): { id: string; key: string; ids: string; dir: string } {
+  if (isPlanRepo(dir)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos map new in one of those.");
+  const old = oldLayoutProblem(dir);
+  if (old) throw new Error(old);
   const bet = input.bet;
   const key = input.key;
-  if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
+  const owner = input.owner;
   if (!key) throw new Error("nikos map new needs --key <KEY>");
-  if (!BET_ID.test(bet)) {
-    if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
-    throw new Error(`'${bet}' is not a bet id`);
+  if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
+  if (bet !== undefined) {
+    if (!BET_ID.test(bet)) {
+      if (CROSS_REF.test(bet)) throw new Error("a map names one bet by its id, not another repo's bet");
+      throw new Error(`'${bet}' is not a bet id`);
+    }
   }
-  if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
   if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
-  const plan = store().exists(join(dir, "planning", "plan.yaml")) ? (parse(read(join(dir, "planning", "plan.yaml"))) as { level?: string }) : undefined;
-  if (plan?.level !== "group") throw new Error("planning/plan.yaml is not a group plan");
-  const group = groupKeyOf(dir);
-  if (!group) throw new Error(NO_GROUP_KEY);
+  if (owner !== undefined && !OWNER.test(owner)) throw new Error("owner must be uppercase letters and digits, up to 10 (e.g. WEB)");
   const taken = mapDirs(dir).find((d) => (parse(read(join(d, "storymap.yaml"))) as { key?: string })?.key === key);
   if (taken) throw new Error(`map key ${key} is already used by maps/${basename(taken)}`);
   const id = key.toLowerCase();
   const mapDir = join(dir, "maps", id);
   if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
-  const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
+  const storymap = stringify({ format_version: 1, project: id, key, ...(owner ? { owner } : {}), ...(bet ? { bet } : {}), activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
   store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
   store().write(join(mapDir, "state.yaml"), "format_version: 1\nstories: {}\n", { create: true });
   for (const sub of ["features", "plans", "approvals"]) store().write(join(mapDir, sub, ".gitkeep"), "", { create: true });
-  return { id, key, group, dir: mapDir };
-}
-
-/**
- * A story map a team owns, as maps/<key>/ in its own repo. Its bet is one of the team's own bets, or
- * a bet of a plan the team joins (<repo>#<id>). Its story ids take the team's key, e.g. WEB-INB-1.
- */
-function newTeamMap(input: { bet?: string; key?: string }, dir: string): { id: string; key: string; group: string; dir: string } {
-  const bet = input.bet;
-  const key = input.key;
-  if (!bet) throw new Error("nikos map new needs --bet <bet-id>");
-  if (!key) throw new Error("nikos map new needs --key <KEY>");
-  const team = openTeam(dir);
-  if (!team.key) throw new Error(NO_TEAM_KEY);
-  if (!team.home) throw new Error("nikos.team.yaml: a team that joins a plan or owns a map needs one home: nikos join <plan> --home");
-  if (CROSS_REF.test(bet)) {
-    const repo = bet.split("#")[0];
-    if (!upstreamEntries(dir).some((e) => e.repo === repo)) throw new Error(`${repo} isn't a plan this team joins: nikos join ${repo} first`);
-  } else if (!BET_ID.test(bet)) {
-    throw new Error(`'${bet}' is not a bet id`);
-  } else if (!store().exists(join(dir, "planning", "bets", `${bet}.md`))) {
-    throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new, or name a bet of a plan this team joins (<repo>#<id>)`);
-  }
-  if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
-  const taken = ownMapsOf(dir).find((r) => keyOfMap(r.dir) === key);
-  if (taken) throw new Error(`map key ${key} is already used by maps/${taken.id}`);
-  const id = key.toLowerCase();
-  const mapDir = join(dir, "maps", id);
-  if (store().exists(mapDir)) throw new Error(`maps/${id} already exists`);
-  const storymap = stringify({ format_version: 1, project: id, key, bet, activities: [{ id: "getting-started", title: "Getting started" }], releases: [{ number: 1, title: "Release 1", stories: [] }] });
-  store().write(join(mapDir, "storymap.yaml"), storymap, { create: true });
-  store().write(join(mapDir, "features", ".gitkeep"), "", { create: true });
-  return { id, key, group: team.key, dir: mapDir };
+  writeMapSummary(dir, mapDir);
+  return { id, key, ids: storyPrefix({ root: dir, dir: mapDir, id }, key), dir: mapDir };
 }
 
 /**
@@ -609,8 +583,8 @@ export function runMapNew(args: string[]): number {
   const bet = flag("--bet");
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
-    const r = newMap({ bet, key: flag("--key") }, dir);
-    console.log(`Created maps/${r.id} for bet ${bet}, story ids ${r.group}-${r.key}-n`);
+    const r = newMap({ bet, key: flag("--key"), owner: flag("--owner") }, dir);
+    console.log(`Created maps/${r.id}${bet ? ` for bet ${bet}` : ""}, story ids ${r.ids}-n`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
@@ -618,7 +592,7 @@ export function runMapNew(args: string[]): number {
   }
 }
 
-/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in a group repo. */
+/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in this repo. */
 export function runMap(args: string[]): number {
   if (args[0] === "new") return runMapNew(args.slice(1));
   if (args[0] === "status") return runMapStatus(args.slice(1));
@@ -629,7 +603,7 @@ export function runMap(args: string[]): number {
   const out = resolve(flag("--out") ?? "storymap.html");
   const dir = resolve(flag("--dir") ?? process.cwd());
   try {
-    const ref = resolveStoryMap(dir, flag("--map"));
+    const ref = resolveStoryMap(dir, { map: flag("--map") });
     if (!store().exists(join(ref.dir, "storymap.yaml"))) throw new Error(`No storymap.yaml in ${ref.dir}: run nikos init first`);
     writeFileSync(out, renderMap(dir, { map: flag("--map") }));
     const shown = relative(process.cwd(), out);

@@ -10,7 +10,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectStack, type Stack } from "../verify/detect.js";
-import { isTeamRepo } from "../lib/team.js";
 
 import { hostOf, type Host } from "../lib/forge.js";
 
@@ -34,13 +33,9 @@ const install = (stack: Stack, root: string): string[] =>
     ? [existsSync(join(root, "requirements.txt")) ? "pip install -r requirements.txt" : "", "pip install behave"].filter(Boolean)
     : [existsSync(join(root, "package-lock.json")) ? "npm ci" : "npm install"];
 
-/**
- * The shell steps that install the runner and run the checks, for a stack. A team repo fetches its
- * assigned stories first: they're gitignored, so a fresh checkout has none to verify.
- */
+/** The shell steps that install the runner and run the checks, for a stack. */
 function steps(stack: Stack, root: string, nikos: string): string[] {
-  const sync = isTeamRepo(root) ? [`npx -y ${nikos} sync`] : [];
-  return [...install(stack, root), ...sync, `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
+  return [...install(stack, root), `npx -y ${nikos} validate`, `npx -y ${nikos} verify`];
 }
 
 /** The release check, run by hand with the release number. RELEASE comes in as an env var, never pasted into the script. */
@@ -77,7 +72,7 @@ ${python}${releaseSteps(stack, root, nikos, "RELEASE").map((s) => `      - run: 
 export function githubWorkflow(stack: Stack, root: string): string {
   const nikos = `nikos@${version()}`;
   const python = stack === "python" ? `      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.12"\n` : "";
-  return `# Written by nikos ci setup: checks the specs in intent/ or maps/ and runs every story's scenarios.
+  return `# Written by nikos ci setup: checks the specs in maps/ and runs every story's scenarios.
 name: nikos
 on:
   pull_request:
@@ -100,7 +95,7 @@ export function gitlabJob(stack: Stack, root: string): string {
   // Python stories need node for nikos itself, so that image installs it.
   const image = stack === "python" ? "python:3.12" : "node:22";
   const setup = stack === "python" ? ["apt-get update -qq && apt-get install -y -qq nodejs npm"] : [];
-  return `# Written by nikos ci setup: checks the specs in intent/ or maps/ and runs every story's scenarios.
+  return `# Written by nikos ci setup: checks the specs in maps/ and runs every story's scenarios.
 nikos:
   image: ${image}
   rules:

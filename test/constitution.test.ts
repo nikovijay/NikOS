@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { lintConstitution } from "../src/lint/constitution";
 import { validate } from "../src/commands/validate";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
-const example = readFileSync(join(__dirname, "../examples/hello-todo/intent/constitution.md"), "utf8");
+const example = readFileSync(join(__dirname, "../examples/hello-todo/constitution.md"), "utf8");
 const errors = (text: string) => lintConstitution(text).filter((i) => i.level === "error").map((i) => i.message);
 
 describe("constitution lint", () => {
@@ -29,14 +29,14 @@ describe("constitution lint", () => {
 
   it("runs as part of validate", () => {
     const intent = copyExample();
-    edit(join(intent, "constitution.md"), (s) => s.replace(/## First\n.*\n/, ""));
+    edit(join(rootOf(intent), "constitution.md"), (s) => s.replace(/## First\n.*\n/, ""));
     expect(validate(intent).errors.map((e) => `${e.file}: ${e.message}`)).toContain("constitution.md: is missing ## First");
   });
 });
 
 describe("idea-to-blueprint playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/idea-to-blueprint.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/idea-to-blueprint.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
 
   it("goes from idea to a validated, CLEAR-checked spec and is routed first for new ideas", () => {
     const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
@@ -50,13 +50,13 @@ describe("idea-to-blueprint playbook", () => {
 });
 
 describe("validate playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/validate.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/validate.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
   const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
 
   it("drafts outreach and records results back into the constitution", () => {
     expect(steps).toHaveLength(9);
-    for (const part of ["intent/constitution.md", "signal that counts as proof", "intent/outreach/", "demo or reel script", "## Validation", "nikos decide", "nikos validate"]) {
+    for (const part of ["constitution.md", "signal that counts as proof", "maps/<key>/outreach/", "demo or reel script", "## Validation", "nikos decide", "nikos validate"]) {
       expect(steps.some((s) => s.includes(part)), part).toBe(true);
     }
     expect(index).toMatch(/^\| validate \| `validate\.md` \|.*outreach/m);

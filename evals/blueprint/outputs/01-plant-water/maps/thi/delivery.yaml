@@ -1,0 +1,17 @@
+# Written by nikos map status from the map's own files. Commit it: the plans above read it.
+version: 1
+map: thi
+stories:
+  - id: THI-1
+    status: todo
+    approval: none
+    read_at: 2026-11-10T07:27:13Z
+  - id: THI-2
+    status: todo
+    approval: none
+    read_at: 2026-11-10T07:27:13Z
+  - id: THI-3
+    status: todo
+    approval: none
+    read_at: 2026-11-10T07:27:13Z
+read_at: 2026-11-10T07:27:13Z

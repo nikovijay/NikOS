@@ -1,45 +1,56 @@
 import { describe, it, expect, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync } from "node:fs";
-import { assign } from "../src/commands/assign";
-import { teamJoin } from "../src/commands/team";
-import { printUndefined, setupVerify, undefinedSteps, verify } from "../src/commands/verify";
-import { groupRepo, teamRepo, write, commitAll } from "./team-fixture";
+import { behavePaths, printUndefined, setupVerify, undefinedSteps, verify } from "../src/commands/verify";
+import { groupRepo, write } from "./repo-fixture";
 
 const ROOT = join(__dirname, "..");
 const PYTHON = process.env.PYTHON ?? "python3";
 const hasBehave = spawnSync(PYTHON, ["-c", "import behave"], { encoding: "utf8" }).status === 0;
 
-/** Steps for the feature text in team-fixture: every line of the scenario has a definition. */
+/** Steps for the feature text in the group fixture: every line of the scenario has a definition. */
 const STEPS_JS = `import { Given, When, Then } from "@cucumber/cucumber";
 Given("a basket with one item", () => {});
 When("I pay for it", () => {});
 Then("I see a receipt", () => {});
 `;
 
-/** A team that takes release 1 of a group, its runner set up, with node_modules borrowed from this repo. */
+/** A group repo with its one map and its runner set up, with node_modules borrowed from this repo. */
 function teamWithRunner(steps = STEPS_JS): string {
-  const g = groupRepo("PAY");
-  assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-  commitAll(g, "assign");
-  const t = teamRepo();
-  teamJoin(t, "acme/payments/checkout-group", { url: g });
+  const t = groupRepo("PAY");
+  write(join(t, "package.json"), '{"name":"checkout-web","private":true}\n');
   setupVerify(t);
   symlinkSync(join(ROOT, "node_modules"), join(t, "node_modules"));
-  write(join(t, "test/steps/team.steps.mjs"), steps);
+  write(join(t, "test/steps/steps.steps.mjs"), steps);
   return t;
 }
 
 describe("runner templates and setup", () => {
-  it("js and ts runners also read the assigned copies, and python passes them to behave", () => {
+  it("js and ts runners read every map's features, and python's behave.ini names the map placeholder", () => {
     for (const stack of ["js", "ts"]) {
       const text = readFileSync(join(ROOT, "templates/verify", stack, "cucumber.mjs"), "utf8");
-      expect(text).toContain(".nikos/assigned/**/features/**/*.feature");
-      expect(text).toContain("intent/features/**/*.feature");
+      expect(text).toContain('paths: ["maps/*/features/**/*.feature"]');
+      expect(text).not.toContain("intent/");
     }
-    expect(readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8")).toContain("[behave]");
+    const ini = readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8");
+    expect(ini).toContain("[behave]");
+    expect(ini).toContain("paths = maps/<key>/features");
+    expect(ini).not.toContain("intent/");
+  });
+
+  it("behave.ini lists one indented folder per map that has features, and keeps the placeholder when none does", () => {
+    const t = groupRepo("PAY");
+    mkdirSync(join(t, "maps/ota/features"), { recursive: true });
+    write(join(t, "maps/ota/storymap.yaml"), "format_version: 1\nproject: ota\nkey: OTA\nactivities: []\nreleases: []\n");
+    const template = readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8");
+    const ini = behavePaths(t, template);
+    expect(ini).toContain("paths =\n    maps/chk/features\n    maps/ota/features\n");
+    expect(ini).not.toContain("maps/<key>");
+    const bare = groupRepo("PAY");
+    rmSync(join(bare, "maps/chk/features"), { recursive: true, force: true });
+    expect(behavePaths(bare, template)).toBe(template);
   });
 
   it("setup leaves an existing runner config alone", () => {
@@ -51,23 +62,19 @@ describe("runner templates and setup", () => {
   });
 });
 
-describe("running the assigned stories", () => {
-  it("cucumber finds a feature under .nikos/assigned and runs it", () => {
+describe("running the repo's stories", () => {
+  it("cucumber finds a feature in the repo's own map and runs it", () => {
     const t = teamWithRunner();
     const r = verify(t, "PAY-CHK-1");
     expect(r.status).toBe(0);
     expect(r.output).toMatch(/1 scenario \(1 passed\)/);
   });
 
-  it.skipIf(!hasBehave)("behave finds a feature under .nikos/assigned and runs it", () => {
-    const t = teamRepo();
-    rmSync(join(t, "package.json"));
+  it.skipIf(!hasBehave)("behave finds a feature in the repo's own map and runs it", () => {
+    const t = groupRepo("PAY");
+    rmSync(join(t, "package.json"), { force: true });
     write(join(t, "requirements.txt"), "behave\n");
     write(join(t, "steps/steps.py"), "from behave import given, when, then\n\n@given('a basket with one item')\ndef a(c): pass\n\n@when('I pay for it')\ndef b(c): pass\n\n@then('I see a receipt')\ndef d(c): pass\n");
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-    commitAll(g, "assign");
-    teamJoin(t, "acme/payments/checkout-group", { url: g });
     setupVerify(t);
     const r = verify(t, "PAY-CHK-1");
     expect(r.stack).toBe("python");
@@ -76,13 +83,28 @@ describe("running the assigned stories", () => {
   });
 });
 
+describe("behave.ini with several maps", () => {
+  it.skipIf(!hasBehave)("behave run with no folder reads every map's features from behave.ini", () => {
+    const t = groupRepo("PAY");
+    rmSync(join(t, "package.json"), { force: true });
+    write(join(t, "requirements.txt"), "behave\n");
+    write(join(t, "steps/steps.py"), "from behave import given, when, then\n\n@given('a basket with one item')\ndef a(c): pass\n\n@when('I pay for it')\ndef b(c): pass\n\n@then('I see a receipt')\ndef d(c): pass\n");
+    write(join(t, "maps/ota/storymap.yaml"), "format_version: 1\nproject: ota\nkey: OTA\nactivities: []\nreleases: []\n");
+    write(join(t, "maps/ota/features/second.feature"), "@OTA-1\nFeature: Second\n  Scenario: again\n    Given a basket with one item\n    When I pay for it\n    Then I see a receipt\n");
+    setupVerify(t);
+    const r = spawnSync(PYTHON, ["-m", "behave"], { cwd: t, encoding: "utf8" });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("maps/ota/features/second.feature");
+  });
+});
+
 describe("steps with no definition yet", () => {
-  it("lists them from a dry run, for each assigned story", () => {
+  it("lists them from a dry run, for each story of the repo's map", () => {
     const t = teamWithRunner(STEPS_JS.replace('Then("I see a receipt", () => {});\n', ""));
     const steps = undefinedSteps(t, "js");
     expect(steps).toBeDefined();
-    expect(steps!.map((s) => s.text)).toEqual(["I see a receipt", "I see a receipt"]);
-    expect(steps!.map((s) => s.story).sort()).toEqual(["PAY-CHK-1", "PAY-CHK-2"]);
+    expect(steps!.map((s) => s.text)).toEqual(["I see a receipt", "I see a receipt", "I see a receipt"]);
+    expect(steps!.map((s) => s.story).sort()).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
   });
 
   it("says the test run will report them when the runner's output can't be read", () => {

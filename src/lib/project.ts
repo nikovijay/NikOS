@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { store } from "./store.js";
 import { join, relative } from "node:path";
-import { mapDirs } from "./maps.js";
+import { isPlanRepo } from "../planning/model.js";
 
-/** A story id: <KEY>-<n>, or <GROUP>-<MAP>-<n> in a group repo, e.g. HT-1 or PAY-CHK-12. */
+/** A story id: <KEY>-<n>, or <PREFIX>-<KEY>-<n> with the map's owner, e.g. HT-1 or WEB-CHK-12. */
 export const STORY_ID_PATTERN = "^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$";
 export const STORY_ID = new RegExp(STORY_ID_PATTERN);
 
@@ -21,23 +21,14 @@ export function specHash(text: string): string {
   return createHash("sha256").update(spec).digest("hex").slice(0, 12);
 }
 
-/** Resolve the intent/ folder from a repo root or the folder itself. */
-export function findIntentDir(start: string): string {
-  if (store().exists(join(start, "storymap.yaml"))) return start;
-  return join(start, "intent");
-}
-
 /**
- * A company or department plan with no story map of its own: a planning/ folder and no
- * intent/storymap.yaml. Its decisions live in planning/decisions.md.
+ * Where a repo keeps its decisions: decisions.md at the root of a code repo. In a planning repo, each
+ * area keeps its own at planning/<area>/decisions.md (area is as people write it, e.g. departments/finance);
+ * the company's by default.
  */
-export function isPlanOnly(dir: string): boolean {
-  return !store().exists(join(findIntentDir(dir), "storymap.yaml")) && !mapDirs(dir).length && store().isDir(join(dir, "planning"));
-}
-
-/** Where a repo keeps its decisions: intent/decisions.md, or planning/decisions.md in a plan-only or group repo. */
-export function decisionsPath(dir: string): string {
-  return isPlanOnly(dir) || mapDirs(dir).length ? join(dir, "planning", "decisions.md") : join(findIntentDir(dir), "decisions.md");
+export function decisionsPath(dir: string, area = "company"): string {
+  if (isPlanRepo(dir)) return join(dir, "planning", area, "decisions.md");
+  return join(dir, "decisions.md");
 }
 
 export function walk(dir: string, ext?: string): string[] {

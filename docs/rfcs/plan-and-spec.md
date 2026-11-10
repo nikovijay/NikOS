@@ -1,6 +1,6 @@
 # RFC: nikOS Plan and nikOS Spec
 
-**Status:** draft, for review. Nothing here is built yet.
+**Status:** approved. PRs 1 to 5 are built: see [docs/plan.md](../plan.md). PR 6 (`ladders_up`, key result direction and milestones) is in review, and `nikos plan owners` comes in a later PR.
 
 ## Summary
 
@@ -170,12 +170,14 @@ The rules:
 
 ### Delivery from the code repos
 
-`planning/repos.yaml` lists the code repos:
+`planning/repos.yaml` lists the code repos, with its own `version`:
 
 ```yaml
-- repo: acme/checkout-web
-- repo: acme/checkout-api
-  host: gitlab.com
+version: 1
+repos:
+  - repo: acme/checkout-web
+  - repo: acme/checkout-api
+    host: gitlab.com
 ```
 
 `nikos plan refresh` reads each repo's default branch, read-only, with the
@@ -249,9 +251,10 @@ The rules:
    assignments of part of a map to another repo. That removes
    `assignments.yaml`, `nikos assign`, `nikos sync`, `.nikos/assigned` and
    `nikos team join`.
-3. **Story ids are unchanged:** the team key, the map key and a number
-   (`WEB-CHK-3`). They are checked unique when the repo joins the plan, using
-   the team keys in the planning repo.
+3. **Story ids are the owner, the map key and a number.** A map with an
+   `owner` gives `WEB-CHK-3`, and a map with no owner gives `CHK-3`. Ids are
+   checked unique when the repo joins the plan, using the team keys in the
+   planning repo.
 4. **`nikos map status` gets simpler.** It writes `delivery.yaml` from the
    repo's own state and approvals, with `proof:` as 0.4.2 added. It no longer
    fetches other repos. `nikos validate`, and so CI, flags a `delivery.yaml`

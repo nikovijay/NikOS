@@ -24,11 +24,11 @@ describe("cli", () => {
   });
 
   it("prints a command's help for --help and -h, and writes nothing", () => {
-    for (const args of [["team", "init", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["planning", "downstream", "add", "D", "--help"]]) {
+    for (const args of [["map", "new", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["plan", "kr", "--help"]]) {
       const dir = mkdtempSync(join(tmpdir(), "nikos-help-"));
       const r = cliIn(dir, ...args);
       expect(r.status).toBe(0);
-      expect(r.stdout).toContain(args[0] === "planning" ? "nikos planning" : `nikos ${args[0]}`);
+      expect(r.stdout).toContain(`nikos ${args[0]}`);
       expect(readdirSync(dir)).toEqual([]);
     }
   });
@@ -44,14 +44,14 @@ describe("cli", () => {
 });
 
 describe("closest", () => {
-  const names = ["serve", "start", "story", "state", "doctor", "planning", "help", "assign", "sync"];
+  const names = ["serve", "start", "story", "state", "doctor", "planning", "help", "approve", "validate"];
   it("finds a missing, extra, changed or swapped letter, and the start of a name", () => {
     expect(closest("serv", names)).toBe("serve");
     expect(closest("sevre", names)).toBe("serve");
     expect(closest("hlep", names)).toBe("help");
     expect(closest("doctr", names)).toBe("doctor");
     expect(closest("plan", names)).toBe("planning");
-    expect(closest("assing", names)).toBe("assign");
+    expect(closest("approev", names)).toBe("approve");
   });
   it("says nothing when no name is close", () => {
     expect(closest("xyz", names)).toBeUndefined();

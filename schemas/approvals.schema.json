@@ -19,7 +19,8 @@
           "on": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
           "via": { "enum": ["terminal", "chat", "app", "tracker"] },
           "spec_hash": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
-          "done_at": { "type": "string", "minLength": 1 }
+          "done_at": { "type": "string", "minLength": 1 },
+          "tested_commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" }
         }
       }
     }

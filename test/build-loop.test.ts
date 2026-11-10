@@ -8,7 +8,7 @@ import { next } from "../src/commands/next";
 import { setState, failingScenarios, type StateError } from "../src/commands/state";
 import { decide } from "../src/commands/decide";
 import { validate } from "../src/commands/validate";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 const repoModules = join(__dirname, "../node_modules");
 
@@ -29,7 +29,7 @@ function repo(stepsFile?: string): string {
   return root;
 }
 
-const status = (root: string, id: string) => readFileSync(join(root, "intent/state.yaml"), "utf8").match(new RegExp(`${id}:\\n\\s+status: (\\w+)`))?.[1];
+const status = (root: string, id: string) => readFileSync(join(root, "maps/fx/state.yaml"), "utf8").match(new RegExp(`${id}:\\n\\s+status: (\\w+)`))?.[1];
 
 describe("build loop", () => {
   it("picks the next todo story", () => {
@@ -51,8 +51,8 @@ describe("build loop", () => {
     expect(() => setState("FX-1", "done", { dir: root })).toThrow("FX-1 can't move from todo to done");
     expect(setState("FX-1", "in_progress", { dir: root, by: "claude-code", date: "2026-11-03" })).toMatchObject({ from: "todo", to: "in_progress" });
     expect(status(root, "FX-1")).toBe("in_progress");
-    expect(readFileSync(join(root, "intent/state.yaml"), "utf8")).toContain("claimed_by: claude-code");
-    expect(() => setState("FX-9", "in_progress", { dir: root })).toThrow("FX-9 has no entry in state.yaml");
+    expect(readFileSync(join(root, "maps/fx/state.yaml"), "utf8")).toContain("claimed_by: claude-code");
+    expect(() => setState("FX-9", "in_progress", { dir: root })).toThrow("no story map has FX-9");
     expect(validate(root).errors).toEqual([]);
   });
 
@@ -101,32 +101,32 @@ describe("build loop", () => {
     const after = readFileSync(join(intent, "state.yaml"), "utf8");
     expect(after.startsWith("# kept\n")).toBe(true);
     expect(after).toMatch(/HT-1:\n\s+status: done\n\s+plan_version: 2/);
-    expect(after).toMatch(/HT-3:\n\s+status: in_progress\n\s+updated: 2026-11-04/);
+    expect(after).toMatch(/HT-3:\n\s+status: in_progress\n\s+spec_hash: \w+\n\s+updated: 2026-11-04/);
     expect(after).toContain("queue: [HT-2, HT-3]");
   });
 
   it("appends each decision to decisions.md", () => {
     const intent = copyExample();
-    const before = readFileSync(join(intent, "decisions.md"), "utf8");
-    decide({ title: "Sort by due date", why: "People asked for it; manual order was rejected.", story: "HT-3", category: "product", date: "2026-11-04" }, intent);
-    decide({ title: "Use one store module", why: "One place to change storage later." }, intent);
-    const after = readFileSync(join(intent, "decisions.md"), "utf8");
+    const before = readFileSync(join(rootOf(intent), "decisions.md"), "utf8");
+    decide({ title: "Sort by due date", why: "People asked for it; manual order was rejected.", story: "HT-3", category: "product", date: "2026-11-04" }, rootOf(intent));
+    decide({ title: "Use one store module", why: "One place to change storage later." }, rootOf(intent));
+    const after = readFileSync(join(rootOf(intent), "decisions.md"), "utf8");
     expect(after.startsWith(before)).toBe(true);
     expect(after).toContain("## 2026-11-04 — Sort by due date (HT-3)\n**Category:** product\n**Supersedes:** none\n\nPeople asked for it; manual order was rejected.\n");
     expect(after).toMatch(/## \d{4}-\d{2}-\d{2} — Use one store module\n\*\*Category:\*\* architecture/);
-    expect(() => decide({ title: "No reason", why: " " }, intent)).toThrow(/Say why/);
+    expect(() => decide({ title: "No reason", why: " " }, rootOf(intent))).toThrow(/Say why/);
     expect(validate(intent).errors).toEqual([]);
   });
 
   it("reads failing scenarios from cucumber-js and behave output", () => {
-    expect(failingScenarios("Failures:\n\n1) Scenario: AC2 — Blank tasks are ignored # intent/features/tasks/add.feature:14\n")).toEqual(["AC2 — Blank tasks are ignored"]);
-    expect(failingScenarios("Failing scenarios:\n  intent/features/tasks/add.feature:8  AC1 — Adding a task shows it at the top\n\n0 features passed")).toEqual(["AC1 — Adding a task shows it at the top"]);
+    expect(failingScenarios("Failures:\n\n1) Scenario: AC2 — Blank tasks are ignored # maps/ht/features/tasks/add.feature:14\n")).toEqual(["AC2 — Blank tasks are ignored"]);
+    expect(failingScenarios("Failing scenarios:\n  maps/ht/features/tasks/add.feature:8  AC1 — Adding a task shows it at the top\n\n0 features passed")).toEqual(["AC1 — Adding a task shows it at the top"]);
   });
 });
 
 describe("build-a-story playbook", () => {
-  const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
-  const index = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/index.md"), "utf8");
+  const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
+  const index = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/index.md"), "utf8");
 
   it("plans, builds, verifies, records decisions and gates done", () => {
     const steps = [...playbook.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);

@@ -1,4 +1,4 @@
-# Step definitions for intent/features/getting-started/first-story.feature.
+# Step definitions for maps/<key>/features/getting-started/first-story.feature, the example story in each map.
 # Replace each NotImplementedError with a real check against your app. Never
 # edit the feature to make a step pass.
 from behave import given, when, then

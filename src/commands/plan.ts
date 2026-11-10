@@ -11,14 +11,14 @@ const templateDir = [join(here, "../../templates"), join(here, "../templates")].
 
 export interface NewPlanOptions {
   dir?: string;
-  /** The map, in a group repo with several. */
+  /** The map, when a code repo has several. */
   map?: string;
   summary?: string;
   date?: string;
 }
 
-export function planVersions(intentDir: string, story: string): number[] {
-  const plans = join(intentDir, "plans");
+export function planVersions(mapDir: string, story: string): number[] {
+  const plans = join(mapDir, "plans");
   if (!store().exists(plans)) return [];
   const re = new RegExp(`^${story}\\.v(\\d+)\\.md$`);
   return store().list(plans)
@@ -30,16 +30,16 @@ export function planVersions(intentDir: string, story: string): number[] {
 
 export function newPlan(story: string, opts: NewPlanOptions = {}): string {
   if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const intentDir = resolveStoryMap(opts.dir ?? process.cwd(), opts.map).dir;
-  const mapPath = join(intentDir, "storymap.yaml");
+  const mapDir = resolveStoryMap(opts.dir ?? process.cwd(), { story, map: opts.map }).dir;
+  const mapPath = join(mapDir, "storymap.yaml");
   if (store().exists(mapPath)) {
     const map = parse(read(mapPath));
     const known = (map?.releases ?? []).some((r: any) => (r?.stories ?? []).includes(story));
     if (!known) throw new Error(`${story} is not in storymap.yaml`);
   }
-  const versions = planVersions(intentDir, story);
+  const versions = planVersions(mapDir, story);
   const version = (versions.at(-1) ?? 0) + 1;
-  const path = join(intentDir, "plans", `${story}.v${version}.md`);
+  const path = join(mapDir, "plans", `${story}.v${version}.md`);
   // The template ships with nikOS, so it's always read from disk.
   const content = readFileSync(join(templateDir, "plan.md"), "utf8")
     .replace("{{story}}", story)

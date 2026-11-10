@@ -1,91 +1,79 @@
+// The delivery summary a map's owner commits: maps/<key>/delivery.yaml, written by nikos map status
+// (and state set, approve and map new) from the map's own files. A summary that doesn't read is none.
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { assign } from "../src/commands/assign";
-import { teamJoin } from "../src/commands/team";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
-import { readDeliverySummary, summaryAge } from "../src/lib/delivery-summary";
+import { readDeliverySummary, readDeliverySummaryResult, summaryAge, writeDeliverySummary } from "../src/lib/delivery-summary";
+import { NewerContractError } from "../src/lib/schema";
 import { setState } from "../src/commands/state";
-import { groupRepo, git, teamRepo, commitAll } from "./team-fixture";
-import { teamSync } from "../src/team/sync";
-
-/** A group with its map assigned to one team, given an origin so its repo path is known, and the team joined and synced. */
-function setup() {
-  const g = groupRepo("PAY");
-  git(g, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
-  assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-  commitAll(g, "assign");
-  const t = teamRepo();
-  teamJoin(t, "acme/pay/checkout-group", { url: g });
-  commitAll(t, "join");
-  return { g, t };
-}
+import { groupRepo, commitAll } from "./repo-fixture";
 
 const NOW = new Date("2026-11-08T09:12:00Z");
 
-describe("the delivery summary a group's owner commits", () => {
-  it("nikos map status writes maps/<key>/delivery.yaml in the group's repo, one story per line", () => {
-    const { g } = setup();
+describe("the delivery summary a map's owner commits", () => {
+  it("nikos map status writes maps/<key>/delivery.yaml in the group's repo, one story per line, with the owner from the storymap", () => {
+    const g = groupRepo("PAY");
     const written = writeSummaries(g, mapStatus(g), NOW);
-    expect(written.skipped).toBeUndefined();
-    expect(written.written).toEqual([join(g, "maps/chk/delivery.yaml")]);
+    expect(written).toEqual([join(g, "maps/chk/delivery.yaml")]);
     const text = readFileSync(join(g, "maps/chk/delivery.yaml"), "utf8");
     expect(text).toContain("Commit it");
     const data = parse(text);
-    expect(data).toMatchObject({ format_version: 1, map: "chk", owner: "acme/payments-group", read_at: "2026-11-08T09:12:00Z" });
+    expect(data).toMatchObject({ version: 1, map: "chk", owner: "PAY", read_at: "2026-11-08T09:12:00Z" });
     expect(data.stories.map((s: { id: string }) => s.id)).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
-    expect(data.stories[0]).toMatchObject({ id: "PAY-CHK-1", team: "acme/checkout-web", status: "todo", approval: "none", read_at: "2026-11-08T09:12:00Z" });
-    // Story 3 is in release 2, which this team wasn't assigned: nobody holds it.
-    expect(data.stories[2]).toMatchObject({ id: "PAY-CHK-3", team: "none" });
+    expect(data.stories[0]).toMatchObject({ id: "PAY-CHK-1", status: "todo", approval: "none", read_at: "2026-11-08T09:12:00Z" });
+    expect(data.stories[0]).not.toHaveProperty("team");
   });
 
   it("the reader reads what the writer wrote, and says how old it is", () => {
-    const { g } = setup();
+    const g = groupRepo("PAY");
     writeSummaries(g, mapStatus(g), NOW);
-    const summary = readDeliverySummary(join(g, "maps/chk"));
+    const summary = readDeliverySummary(join(g, "maps/chk"), "planning");
     expect(summary?.stories.length).toBe(3);
     expect(summaryAge(summary!, new Date("2026-11-11T09:12:00Z"))).toBe("read 3 days ago (2026-11-08)");
     expect(summaryAge(summary!, new Date("2026-11-09T09:12:00Z"))).toBe("read 1 day ago (2026-11-08)");
     expect(summaryAge(summary!, new Date("2026-11-08T18:00:00Z"))).toBe("read today (2026-11-08)");
   });
 
-  it("a summary that doesn't match its schema is read as none, so the rollout says no summary yet", () => {
-    const { g } = setup();
+  it("a summary that doesn't match its schema is read as none, with the reason kept for the result", () => {
+    const g = groupRepo("PAY");
     writeSummaries(g, mapStatus(g), NOW);
     const path = join(g, "maps/chk/delivery.yaml");
-    writeFileSync(path, readFileSync(path, "utf8").replace("format_version: 1", "format_version: 2"));
-    expect(readDeliverySummary(join(g, "maps/chk"))).toBeUndefined();
+    writeFileSync(path, readFileSync(path, "utf8").replace(/^read_at: .*\n/m, ""));
+    expect(readDeliverySummary(join(g, "maps/chk"), "planning")).toBeUndefined();
+    expect(readDeliverySummaryResult(join(g, "maps/chk"), "planning")).toMatchObject({ ok: false, reason: expect.stringMatching(/read_at/) });
   });
 
-  it("an offline read writes nothing, since its copies are old", () => {
-    const { g } = setup();
-    expect(writeSummaries(g, mapStatus(g, { offline: true }), NOW).written).toEqual([]);
-    expect(existsSync(join(g, "maps/chk/delivery.yaml"))).toBe(false);
-  });
-
-  it("a group with no origin says why the summary isn't written, and writes nothing", () => {
+  it("a summary from a newer nikOS throws NewerContractError, so it is never mistaken for no summary", () => {
     const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", releases: [1] });
-    commitAll(g, "assign");
-    const res = writeSummaries(g, mapStatus(g), NOW);
-    expect(res.written).toEqual([]);
-    expect(res.skipped).toMatch(/no origin remote/);
+    writeSummaries(g, mapStatus(g), NOW);
+    const path = join(g, "maps/chk/delivery.yaml");
+    writeFileSync(path, readFileSync(path, "utf8").replace("version: 1", "version: 2"));
+    expect(() => readDeliverySummary(join(g, "maps/chk"), "planning")).toThrow(NewerContractError);
+    expect(() => readDeliverySummary(join(g, "maps/chk"), "planning")).toThrow("this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo");
+    expect(readDeliverySummaryResult(join(g, "maps/chk"), "planning")).toEqual({
+      ok: false,
+      reason: "this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo",
+      newer: true,
+    });
   });
 
-  it("assigned copies are never written: the team's tree has no delivery.yaml", () => {
-    const { g, t } = setup();
-    // The group's owner has a summary on disk, so a copy that picked it up would show here.
+  it("a summary written after a state change says the new status, and the owner is the group's key when the map names none", () => {
+    const g = groupRepo("PAY");
+    setState("PAY-CHK-2", "in_progress", { dir: g });
     writeSummaries(g, mapStatus(g), NOW);
-    expect(allFiles(g).filter((p) => p.endsWith("delivery.yaml"))).toHaveLength(1);
-    setState("PAY-CHK-1", "in_progress", { dir: t, by: "Priya" });
-    commitAll(t, "start");
-    teamSync(t);
-    expect(allFiles(t).filter((p) => p.endsWith("delivery.yaml"))).toEqual([]);
-    // A writer run against the copy the team holds writes nothing: the copy has no origin, so there is nothing to name.
-    const copy = join(t, ".nikos", "assigned", "acme", "payments-group");
-    expect(writeSummaries(copy, [{ ...mapStatus(g)[0], assigned: true, offline: false }]).written).toEqual([]);
-    expect(allFiles(t).filter((p) => p.endsWith("delivery.yaml"))).toEqual([]);
+    const data = readDeliverySummary(join(g, "maps/chk"), "planning")!;
+    expect(data.owner).toBe("PAY");
+    expect(data.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
+  });
+
+  it("a map's summary is written by the map's own folder only: no other folder gets a delivery.yaml", () => {
+    const g = groupRepo("PAY");
+    writeSummaries(g, mapStatus(g), NOW);
+    commitAll(g, "summary");
+    expect(allFiles(g).filter((p) => p.endsWith("delivery.yaml"))).toEqual([join(g, "maps/chk/delivery.yaml")]);
   });
 });
 
@@ -97,3 +85,14 @@ function allFiles(dir: string): string[] {
     return statSync(p).isDirectory() ? allFiles(p) : [p];
   });
 }
+
+describe("a delivery summary is rewritten on each run", () => {
+  it("writes the same map's summary twice without an EEXIST, and the second read_at wins", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-sum-"));
+    mkdirSync(join(dir, "maps/am"), { recursive: true });
+    const base = { version: 1 as const, map: "am", owner: "PAY" };
+    writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-01T00:00:00Z", stories: [] });
+    expect(() => writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-02T00:00:00Z", stories: [] })).not.toThrow();
+    expect(readDeliverySummary(join(dir, "maps/am"), "code")?.read_at).toBe("2027-01-02T00:00:00Z");
+  });
+});

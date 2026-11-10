@@ -2,7 +2,7 @@ import { store } from "../lib/store.js";
 import { join } from "node:path";
 import { isMap, isSeq, parseDocument } from "yaml";
 import { read } from "../lib/project.js";
-import { authoringMap, mapFlag } from "../lib/maps.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { checkHash } from "../planning/model.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
@@ -13,8 +13,8 @@ const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 export function newStep(input: { title: string; activity: string; id?: string; map?: string }, dir: string): { id: string; validation: ValidationResult } {
   const title = input.title?.trim();
   if (!title) throw new Error("A step needs a title");
-  const intentDir = authoringMap(dir, input.map).dir;
-  const mapPath = join(intentDir, "storymap.yaml");
+  const mapDir = resolveStoryMap(dir, { map: input.map }).dir;
+  const mapPath = join(mapDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
   const activities = map.get("activities", true);
@@ -32,15 +32,15 @@ export function newStep(input: { title: string; activity: string; id?: string; m
   if (isSeq(steps)) steps.add(map.createNode({ id, title }));
   else activity.set("steps", map.createNode([{ id, title }]));
   store().write(mapPath, map.toString(yamlOpts));
-  return { id, validation: validate(intentDir) };
+  return { id, validation: validate(mapDir) };
 }
 
 /** Add an activity to the story map, e.g. an area of an existing product or an imported epic. Returns its id; an existing one is left as it is. */
 export function newActivity(input: { title: string; id?: string; map?: string }, dir: string): string {
   const title = input.title?.trim();
   if (!title) throw new Error("An activity needs a title");
-  const intentDir = authoringMap(dir, input.map).dir;
-  const mapPath = join(intentDir, "storymap.yaml");
+  const mapDir = resolveStoryMap(dir, { map: input.map }).dir;
+  const mapPath = join(mapDir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
   const id = input.id ?? slugify(title);
   const activities = map.get("activities", true);
@@ -61,7 +61,7 @@ export function runActivity(args: string[]): number {
   }
   try {
     const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined, map: mapFlag(rest) }, d >= 0 ? rest[d + 1] : process.cwd());
-    const where = mapFlag(rest) ? `maps/${mapFlag(rest)}` : "intent";
+    const where = mapFlag(rest) ? `maps/${mapFlag(rest)}` : "the story map";
     console.log(`Activity ${id}: its stories go in ${where}/features/${id}/`);
     return 0;
   } catch (err) {
@@ -95,14 +95,14 @@ export function runStep(args: string[]): number {
 export function renameActivity(dir: string, input: { map?: string; id: string; title: string }, expect?: string): { validation: ValidationResult } {
   const title = input.title?.trim();
   if (!title) throw new Error("An activity needs a title");
-  const ref = authoringMap(dir, input.map);
+  const ref = resolveStoryMap(dir, { map: input.map });
   const mapPath = join(ref.dir, "storymap.yaml");
   const text = read(mapPath);
   checkHash("storymap.yaml", text, expect);
   const map = parseDocument(text);
   const activities = map.get("activities", true);
   const found = isSeq(activities) ? activities.items.filter(isMap).find((a) => a.get("id") === input.id) : undefined;
-  if (!found) throw new Error(`${input.id} is not an activity in ${ref.id ? `maps/${ref.id}` : "intent"}`);
+  if (!found) throw new Error(`${input.id} is not an activity in maps/${ref.id}`);
   found.set("title", title);
   store().write(mapPath, map.toString(yamlOpts));
   return { validation: validate(ref.dir) };
@@ -112,7 +112,7 @@ export function renameActivity(dir: string, input: { map?: string; id: string; t
 export function renameStep(dir: string, input: { map?: string; id: string; title: string; activity?: string }, expect?: string): { validation: ValidationResult } {
   const title = input.title?.trim();
   if (!title) throw new Error("A step needs a title");
-  const ref = authoringMap(dir, input.map);
+  const ref = resolveStoryMap(dir, { map: input.map });
   const mapPath = join(ref.dir, "storymap.yaml");
   const text = read(mapPath);
   checkHash("storymap.yaml", text, expect);
@@ -125,7 +125,7 @@ export function renameStep(dir: string, input: { map?: string; id: string; title
       const s = a.get("steps", true);
       return isSeq(s) ? s.items.filter(isMap).filter((st) => st.get("id") === input.id) : [];
     });
-  if (!steps.length) throw new Error(`${input.id} is not a step in ${ref.id ? `maps/${ref.id}` : "intent"}`);
+  if (!steps.length) throw new Error(`${input.id} is not a step in maps/${ref.id}`);
   steps[0].set("title", title);
   store().write(mapPath, map.toString(yamlOpts));
   return { validation: validate(ref.dir) };

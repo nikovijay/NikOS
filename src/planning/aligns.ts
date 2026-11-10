@@ -1,15 +1,13 @@
 // Where a key result or bet points up: its aligns_to references, and a bet's krs. Each reference
 // is checked against the synced copies of the plan above, the same way newKr and newBet check it.
 import { join } from "node:path";
-import { CROSS_REF } from "../lib/bets.js";
 import { betText, checkBet, checkKr, describeErrors, krText, loadBet, loadKr, paths, writePlanning } from "./model.js";
-import { alignmentProblems, alignsValue, krTargetProblems, levelOf } from "./levels.js";
+import { alignmentProblems, alignsValue, krTargetProblems } from "./levels.js";
 
 /** Replace a key result's or bet's aligns_to with refs (none removes it). expect is the hash it was loaded at. */
 export function setAligns(root: string, kind: "kr" | "bet", id: string, refs: string[], expect?: string): string {
-  const level = levelOf(root);
   const list = [...new Set(refs.filter(Boolean))];
-  const problem = alignmentProblems(root, list, kind, level)[0];
+  const problem = alignmentProblems(root, list, kind)[0];
   if (problem) throw new Error(problem);
   if (kind === "kr") {
     const kr = loadKr(root, id);
@@ -35,9 +33,7 @@ export function setBetKrs(root: string, id: string, krs: { primary?: string; als
   const primary = krs.primary?.trim() || undefined;
   const also = [...new Set((krs.also ?? []).map((r) => r.trim()).filter(Boolean))];
   if (primary && also.includes(primary)) throw new Error(`${primary} is both primary and also`);
-  for (const ref of [primary, ...also].filter((r): r is string => !!r)) {
-    if (!CROSS_REF.test(ref)) loadKr(root, ref); // throws the same message as the other key result checks
-  }
+  // A key result may be in another area of the company: krTargetProblems checks it there.
   const problem = krTargetProblems(root, [primary, ...also].filter((r): r is string => !!r))[0];
   if (problem) throw new Error(problem);
   const bet = loadBet(root, id);

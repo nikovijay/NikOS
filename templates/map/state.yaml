@@ -1,0 +1,4 @@
+format_version: 1
+stories:
+  {{first_id}}:
+    status: todo

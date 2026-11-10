@@ -1,5 +1,7 @@
 # Router eval results
 
+> Note: this run predates the maps/ layout (PR 2b). Paths that say `intent/` are the 0.2 layout, which `nikos migrate maps` (removed in 0.5) moved to `maps/<key>/`. The run was not repeated.
+
 | Date | Harness | How it ran | 01 change | 02 answer | 03 skip | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-03 | Claude Code CLI | `run.sh` | not run | not run | not run | The headless `claude -p` couldn't log in (expired OAuth session on the build machine). |

@@ -15,7 +15,7 @@ const good = [
   list(),
   bash("npx nikos next"), list(),
   bash("npx nikos clear HT-2"), list(),
-  bash("npx nikos plan new HT-2"), edit("/repo/intent/plans/HT-2.v1.md"), list(),
+  bash("npx nikos plan new HT-2"), edit("/repo/maps/ht/plans/HT-2.v1.md"), list(),
   bash("npx nikos state set HT-2 in_progress"), list(),
   edit("/repo/src/tasks.js"), edit("/repo/test/steps/tasks.steps.mjs"), list(),
   bash("npx nikos verify HT-2"), edit("/repo/src/tasks.js"), bash("npx nikos verify HT-2 && npx nikos verify"), list(),
@@ -33,7 +33,7 @@ describe("build-loop eval", () => {
 
   it("fails a recorded build-a-story run with a step out of order or a stale task list", () => {
     // Marked in progress before the approach was written into the plan.
-    const early = [list(), bash("npx nikos next"), list(), bash("npx nikos clear HT-2"), list(), bash("npx nikos plan new HT-2; npx nikos state set HT-2 in_progress"), list(), edit("/repo/intent/plans/HT-2.v1.md"), list()];
+    const early = [list(), bash("npx nikos next"), list(), bash("npx nikos clear HT-2"), list(), bash("npx nikos plan new HT-2; npx nikos state set HT-2 in_progress"), list(), edit("/repo/maps/ht/plans/HT-2.v1.md"), list()];
     expect(run(early).problems).toContain("HT-2 step 3 ran after step 4: out of order");
 
     // The list was shown once, then never updated.

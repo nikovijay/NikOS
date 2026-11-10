@@ -1,5 +1,7 @@
 # RFC: defining a department's team structure
 
+> **Superseded** by [plan-and-spec.md](plan-and-spec.md). Kept for the record; do not build from it.
+
 **Status:** draft, for review. Design only: nothing here is built yet.
 
 ## Summary

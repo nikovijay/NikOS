@@ -3,8 +3,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
-import { assignedMaps, mapDirs, mapFlag, ownMapsOf } from "../lib/maps.js";
-import { isTeamRepo } from "../lib/team.js";
+import { mapDirs, mapFlag } from "../lib/maps.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
 
@@ -52,14 +51,14 @@ function stackOrThrow(root: string): Stack {
 
 /**
  * The behave.ini text for this repo. behave takes folders, not globs, and fails on one that doesn't
- * exist, so a group repo lists the folder of each map that has features. A 0.2.x repo keeps the template's line.
+ * exist, so it lists the folder of each map that has features, one indented line each. A repo with
+ * no such map keeps the template's placeholder line.
  */
 export function behavePaths(root: string, template: string): string {
-  if (existsSync(join(root, "intent"))) return template;
   const folders = mapDirs(root).filter((m) => existsSync(join(m, "features")));
   if (!folders.length) return template;
   const lines = folders.map((m) => `    maps/${basename(m)}/features`);
-  return template.replace(/^paths = intent\/features$/m, ["paths =", ...lines].join("\n"));
+  return template.replace(/^paths = maps\/<key>\/features$/m, ["paths =", ...lines].join("\n"));
 }
 
 /** Write the runner config and step stubs for the repo's stack. Never overwrites a file. */
@@ -70,8 +69,10 @@ export function setupVerify(root: string): SetupResult {
   const skipped: string[] = [];
   // Step stubs are for the example story `nikos init` creates; skip them once
   // it's gone or rewritten into a real story, whose steps they wouldn't match.
-  const example = join(root, "intent/features/getting-started/first-story.feature");
-  const hasExample = existsSync(example) && readFileSync(example, "utf8").includes(EXAMPLE_STEP);
+  const hasExample = mapDirs(root).some((m) => {
+    const example = join(m, "features/getting-started/first-story.feature");
+    return existsSync(example) && readFileSync(example, "utf8").includes(EXAMPLE_STEP);
+  });
   for (const file of walk(src)) {
     const rel = relative(src, file);
     if (!hasExample && /first[-_]story/.test(rel)) continue;
@@ -98,14 +99,12 @@ export interface VerifyResult {
 
 /**
  * The folders behave is given. A folder named on the command line replaces the paths in
- * behave.ini, so only a team repo passes one: its assigned copies. Every other repo keeps the
+ * behave.ini, so only a repo with maps/ passes one: its maps' features. Every other repo keeps the
  * paths its behave.ini names, as it always has.
  */
 const behaveDirs = (root: string) => {
-  if (!isTeamRepo(root)) return [];
-  // A team's own maps run in place (their features are its own); its copies run from .nikos/assigned.
-  const own = ownMapsOf(root).map((r) => join(relative(root, r.dir), "features")).filter((f) => existsSync(join(root, f)));
-  return [...own, ...(existsSync(join(root, ".nikos/assigned")) ? [".nikos/assigned"] : [])];
+  if (!mapDirs(root).length) return [];
+  return mapDirs(root).map((d) => join(relative(root, d), "features")).filter((f) => existsSync(join(root, f)));
 };
 
 /** The runner's environment: tsx lets Node versions without built-in type stripping load .ts steps. */
@@ -124,7 +123,7 @@ export interface UndefinedStep {
 const STORY_TAG = /^([A-Z][A-Z0-9]{0,9}(?:-[A-Z][A-Z0-9]{0,9})?-[0-9]+)$/;
 
 /**
- * The steps in a team's assigned stories that no step definition matches yet. Read from the
+ * The steps in the stories that no step definition matches yet. Read from the
  * runner's dry run, which matches steps without running them. undefined when the runner can't
  * be run or its JSON can't be read: the test run reports them then.
  */
@@ -200,14 +199,14 @@ export function verify(root: string, story?: string, opts: { inherit?: boolean; 
   return { stack, command: [cmd, ...args].join(" "), status: r.status ?? 1, output: `${output}${node ? `\n${node}\n` : ""}` };
 }
 
-/** Say which steps in the assigned stories have no definition yet, as a warning. */
+/** Say which steps in the stories have no definition yet, as a warning. */
 export function printUndefined(steps: UndefinedStep[] | undefined): void {
   if (steps === undefined) {
     console.log("! could not list undefined steps: the test run will report them");
     return;
   }
   if (!steps.length) return;
-  console.log(`! ${steps.length} ${steps.length === 1 ? "step" : "steps"} in assigned stories ${steps.length === 1 ? "has" : "have"} no step definition yet:`);
+  console.log(`! ${steps.length} ${steps.length === 1 ? "step" : "steps"} in the stories ${steps.length === 1 ? "has" : "have"} no step definition yet:`);
   for (const s of steps) console.log(`    "${s.text}"${s.story ? ` (${s.story})` : ""}`);
 }
 
@@ -225,10 +224,8 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    // A team's whole-suite run with nothing synced (and no map of its own) runs no stories: say so before it does.
-    if (isTeamRepo(root) && !positional[0] && !assignedMaps(root).length && !ownMapsOf(root).length) console.log("! no assigned stories are synced here: run nikos sync first");
     const r = verify(root, positional[0], { inherit: true, map: mapFlag(args) });
-    if (isTeamRepo(root)) printUndefined(undefinedSteps(root, r.stack, positional[0]));
+    if (mapDirs(root).length) printUndefined(undefinedSteps(root, r.stack, positional[0]));
     return r.status;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

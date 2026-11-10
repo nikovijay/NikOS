@@ -1,7 +1,6 @@
 // Git facts about a repo that nikOS needs: which repo path it is on its host, and its commit.
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { realpathSync } from "node:fs";
 
 /** This repo's path on its host, from the origin remote: owner/repo, or group/subgroup/project. */
 export function ownRepo(root: string): string | undefined {
@@ -17,20 +16,34 @@ export function headOf(root: string): string | undefined {
 }
 
 /**
- * Paths a team repo writes about itself: its status and approvals, its identity file, the copies it fetched,
- * and each map's shares and delivery summary (nikos assign, nikos map status). Changes there aren't code.
+ * Paths nikOS writes about a map's own status and sign-offs (its state, approvals and delivery summary),
+ * and the repo's decisions and constitution. They change with each move, sign-off and decision, not with
+ * the code, so they never lapse an approval.
  */
-const TEAM_OWN = [":!status", ":!approvals", ":!nikos.team.yaml", ":!.nikos", ":(exclude,glob)maps/*/assignments.yaml", ":(exclude,glob)maps/*/delivery.yaml"];
+const BOOKKEEPING = [
+  ":!.nikos",
+  ":(exclude,glob)maps/*/state.yaml",
+  ":(exclude,glob)maps/*/state/**",
+  ":(exclude,glob)maps/*/approvals.yaml",
+  ":(exclude,glob)maps/*/approvals/**",
+  ":(exclude,glob)maps/*/delivery.yaml",
+  ":(exclude)decisions.md",
+  ":(exclude)constitution.md",
+];
 
-/** Whether the code (everything but a team's own status, approvals, copies, shares and delivery summaries) changed since a commit. */
+/**
+ * Whether the code changed since a commit. A folder with no git, or a repo with no commit yet, has
+ * no code to compare, so nothing changed.
+ */
 export function codeChangedSince(root: string, commit: string): boolean {
-  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...TEAM_OWN], { cwd: root, encoding: "utf8" });
+  if (!headOf(root)) return false;
+  const r = spawnSync("git", ["diff", "--quiet", commit, "HEAD", "--", ".", ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status !== 0;
 }
 
-/** Whether the code has uncommitted changes (a team's own status and approvals don't count). */
+/** Whether the code has uncommitted changes (nikOS's own bookkeeping files don't count). */
 export function codeIsDirty(root: string): boolean {
-  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...TEAM_OWN], { cwd: root, encoding: "utf8" });
+  const r = spawnSync("git", ["status", "--porcelain", "--", ".", ...BOOKKEEPING], { cwd: root, encoding: "utf8" });
   return r.status === 0 && r.stdout.trim() !== "";
 }
 
@@ -97,10 +110,6 @@ export function remoteHas(root: string, name: string, run: Runner = realRun): bo
 }
 
 /** The planning folders a save writes, that exist in the repo. */
-export function nikosPaths(root: string): string[] {
-  return ["planning", "maps", "intent"].filter((p) => existsSync(join(root, p)));
-}
-
 /** git status lines for paths (or all of them, when paths is undefined), as git prints them. No paths is no lines. */
 export function statusOf(root: string, paths: string[] | undefined, run: Runner = realRun): string[] {
   if (paths && paths.length === 0) return [];
@@ -113,24 +122,52 @@ export function statusOf(root: string, paths: string[] | undefined, run: Runner 
 export const pathOf = (line: string) => (line.slice(3).split(" -> ").pop() ?? "").replace(/^"|"$/g, "");
 
 /**
- * Changed files outside the planning folders: a save leaves them alone, and the pending bar warns about them.
+ * Changed files outside the planning and map folders (and the repo's decisions and constitution): a save leaves
+ * them alone, and the pending bar warns about them.
  * git prints paths from the top of the repo, so a plan in a subfolder of a larger repo looks at its own prefix.
  */
 export function unrelatedDirty(root: string, run: Runner = realRun): string[] {
-  const own = ["planning/", "maps/", "intent/"];
+  const own = ["planning/", "maps/"];
+  // The repo's own decisions and constitution are nikOS's files too (see BOOKKEEPING).
+  const ownFiles = ["decisions.md", "constitution.md"];
+  const mine = (inside: string) => own.some((p) => inside.startsWith(p)) || ownFiles.includes(inside);
   const prefix = gitIn(root, ["rev-parse", "--show-prefix"], run).stdout.trim();
   return statusOf(root, undefined, run).filter((l) => {
     const path = pathOf(l);
-    if (!prefix) return !own.some((p) => path.startsWith(p));
+    if (!prefix) return !mine(path);
     if (!path.startsWith(prefix)) return true; // outside this folder
-    const inside = path.slice(prefix.length);
-    return !own.some((p) => inside.startsWith(p));
+    return !mine(path.slice(prefix.length));
   });
 }
 
 /** Whether a branch is the base one, or the repo has no base and the branch isn't a nikos one (a save must not go there). */
 export function onBaseBranch(branch: string, base: string | undefined): boolean {
   return branch === base || (!base && !branch.startsWith("nikos/"));
+}
+
+/**
+ * The base name if no branch has it, else base-2, base-3, and so on. A name is taken when a local branch has it or
+ * it's in `taken` (the branches origin has, from remoteBranches).
+ */
+export function nextBranchName(root: string, base: string, run: Runner = realRun, taken: string[] = []): string {
+  let name = base;
+  for (let n = 2; branchExists(root, name, run) || taken.includes(name); n++) name = `${base}-${n}`;
+  return name;
+}
+
+/**
+ * The branch names origin has, from ls-remote, or [] when the repo has no origin. Throws when origin can't be
+ * listed, so a caller never guesses that a name is free.
+ */
+export function remoteBranches(root: string, run: Runner = realRun): string[] {
+  if (gitIn(root, ["remote", "get-url", "origin"], run).status !== 0) return [];
+  const r = gitIn(root, ["ls-remote", "--heads", "origin"], run);
+  if (r.status !== 0) throw new Error(`Couldn't list the branches on origin: ${firstLine(r.stderr) || "git ls-remote failed"}`);
+  return r.stdout
+    .split("\n")
+    .map((line) => line.split("\t")[1] ?? "")
+    .filter(Boolean)
+    .map((ref) => ref.replace(/^refs\/heads\//, ""));
 }
 
 /** Create a branch from HEAD and switch to it. Uncommitted changes come along. */

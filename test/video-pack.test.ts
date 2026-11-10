@@ -58,11 +58,11 @@ describe("Video pack", () => {
   });
 
   it("the router sends a request for a video to the video playbook, which hands over to the pack", () => {
-    const index = readFileSync(join(root, "skills/nikos-mode/playbooks/index.md"), "utf8");
+    const index = readFileSync(join(root, "skills/nikos-spec/playbooks/index.md"), "utf8");
     const rows = [...index.matchAll(/^\| ([\w-]+) \| `([^`]+)` \| (.+) \|$/gm)].map(([, name, file, when]) => ({ name, file, when }));
     const first = rows.find((r) => /\bvideo\b/i.test(r.when));
     expect(first).toMatchObject({ name: "video", file: "video.md" });
-    const playbook = readFileSync(join(root, "skills/nikos-mode/playbooks", first!.file), "utf8");
+    const playbook = readFileSync(join(root, "skills/nikos-spec/playbooks", first!.file), "utf8");
     expect(playbook).toMatch(/^1\. Check the Video pack is installed/m);
     expect(playbook).toContain("`product-tour-video`");
     expect(playbook).toContain("/plugin install nikos-video@nikos");

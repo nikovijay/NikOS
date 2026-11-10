@@ -10,7 +10,7 @@ describe("validate", () => {
   it("passes the hello-todo example", () => {
     const r = validate(exampleDir);
     expect(r.errors).toEqual([]);
-    expect(formatResult(r)).toBe("✓ intent/ is valid — 3 stories, 2 releases");
+    expect(formatResult(r)).toBe("✓ maps/ht/ is valid — 3 stories, 2 releases");
   });
 
   it("fails on unknown status with a clear message", () => {

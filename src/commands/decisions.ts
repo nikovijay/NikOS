@@ -58,8 +58,8 @@ export function findDecisions(query: string, dir: string): DecisionEntry[] {
     .map((m) => m.e);
 }
 
-/** decisions.md as the repo names it: intent/decisions.md, or planning/decisions.md in a plan-only repo. */
-const fileName = (dir?: string) => (dir ? relative(dir, decisionsPath(dir)) : "intent/decisions.md");
+/** decisions.md as the repo names it: decisions.md at the root, or planning/<area>/decisions.md in a planning repo. */
+const fileName = (dir?: string) => (dir ? relative(dir, decisionsPath(dir)) : "decisions.md");
 
 export function formatDecisions(query: string, found: DecisionEntry[], dir?: string): string {
   if (!found.length) return `No decision in ${fileName(dir)} mentions "${query}".`;
