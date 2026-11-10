@@ -13,6 +13,7 @@ import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
+import { LINK_FILE, linkProblem } from "../plan/settings-link.js";
 import { approvalsDir, storyFiles } from "../lib/state-files.js";
 import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
@@ -98,7 +99,21 @@ export function validate(start: string, map?: string): ValidationResult {
   const ref = resolveStoryMap(start, { map });
   const r = validateMap(ref);
   lintRootConstitution(ref.root, r.errors, r.warnings);
+  checkPlanLink(ref.root, r.errors);
   return r;
+}
+
+/**
+ * A code repo's nikos.plan.yaml must still match the hash of its settings. A hand edit fails here, so CI
+ * catches it. Offline: validate never reads the plan, so a stale snapshot is doctor's to report.
+ */
+function checkPlanLink(root: string, errors: Issue[]): void {
+  try {
+    const problem = linkProblem(root);
+    if (problem) errors.push({ file: LINK_FILE, message: problem, hint: "commit the refreshed file" });
+  } catch (err) {
+    errors.push({ file: LINK_FILE, message: (err as Error).message });
+  }
 }
 
 /** The repo's constitution.md, at its root: linted once, whatever the number of maps. */
@@ -157,6 +172,7 @@ export function validateGroup(root: string): ValidationResult {
     }
   }
   lintRootConstitution(root, errors, warnings);
+  checkPlanLink(root, errors);
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
 }
 

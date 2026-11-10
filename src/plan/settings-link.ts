@@ -3,11 +3,12 @@
 // the plan, so the code repo reads its settings from a committed file with no network. The sha256 catches
 // a hand edit. It is a check, not security.
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { parse, stringify } from "yaml";
-import { fetchCopy } from "../lib/fetch-copy.js";
+import { errorLine, fetchCopy, urlProblem } from "../lib/fetch-copy.js";
 import { mapDirs, mapOwnerOf } from "../lib/maps.js";
 import { areaSettingsFile, checkSettingsText, SETTINGS_FILE } from "../lib/settings.js";
 import { contractVersion, NewerContractError, schemaProblems } from "../lib/schema.js";
@@ -69,11 +70,31 @@ export function parseLink(text: string): PlanLink {
   return data as PlanLink;
 }
 
+/** A snapshot older than this many days is stale: doctor warns, and the plan may have moved on. */
+export const SNAPSHOT_STALE_DAYS = 14;
+
 /** Why the link's settings can't be trusted (edited by hand), or undefined. Throws when the link doesn't read. */
 export function linkProblem(root: string): string | undefined {
   const link = readLink(root);
-  if (link && link.sha256 !== snapshotHash(link)) return `${LINK_FILE}'s settings were edited by hand: run nikos settings pull to refresh them from the plan`;
+  if (link && link.sha256 !== snapshotHash(link)) return "its settings were edited by hand: run nikos settings pull to refresh them from the plan";
   return undefined;
+}
+
+/**
+ * The commit the plan's branch is at now, from git ls-remote, or the line of git's error when the plan
+ * can't be reached. This is the one network read in the settings link, and only doctor makes it (not offline).
+ */
+export function planHead(link: PlanLink): { commit: string } | { error: string } {
+  const url = link.plan.url ?? `https://${link.plan.host ?? "github.com"}/${link.plan.repo}.git`;
+  const bad = urlProblem(url);
+  if (bad) return { error: bad };
+  const ref = link.read.ref ?? "HEAD";
+  // "--" ends the options, so a url can never be read as one.
+  const r = spawnSync("git", ["ls-remote", "--", url, ref], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+  if (r.status !== 0) return { error: errorLine(r.stderr || "") };
+  const rows = r.stdout.split("\n").filter((l) => l.trim()).map((l) => l.split("\t"));
+  const row = rows.find((c) => c[1] === `refs/heads/${ref}`) ?? rows[0];
+  return row ? { commit: row[0] } : { error: `${ref} isn't on ${link.plan.repo}` };
 }
 
 /** Write the link at the code repo's root, with its hash set from the settings in it. */
