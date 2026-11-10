@@ -405,7 +405,7 @@ founder sends it, never the agent.
 
 **Path:** `maps/<key>/delivery.yaml`, one per map.
 
-**Format:** YAML with `format_version`, `map`, an optional `owner` (the map's owner, else the repo's group key), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map.
+**Format:** YAML with `version`, `map`, an optional `owner` (the map's owner, else the repo's group key), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade.
 
 ## Upgrading from intent/
 
@@ -421,6 +421,9 @@ the state and approvals entries.
 
 ## Versioning this format
 
-`format_version` in `storymap.yaml` and `state.yaml` is the version of this
-document. Breaking changes bump it; `nikos validate` reads it and explains
-any migration needed.
+`format_version` in `storymap.yaml` and `state.yaml`, and `version` in
+`delivery.yaml`, is the version of this document. Breaking changes bump it.
+A reader refuses a file whose version is newer than this nikOS reads, and
+says which repo to upgrade. Readers in a planning repo accept unknown fields
+in `storymap.yaml` and `delivery.yaml`; the writers in a story map repo stay
+strict, and `nikos validate` reads it and explains any migration needed.

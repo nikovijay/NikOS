@@ -1,5 +1,5 @@
 # Written by nikos map status from the map's own files. Commit it: the plans above read it.
-format_version: 1
+version: 1
 map: nud
 stories:
   - id: NUD-1

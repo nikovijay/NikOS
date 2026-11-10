@@ -48,10 +48,16 @@ describe("a map's delivery.yaml is checked against its files", () => {
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
   });
 
+  it("a delivery.yaml from a newer nikOS fails by name, and says which repo to upgrade", () => {
+    const g = groupRepo("PAY");
+    writeFileSync(join(g, "maps/chk/delivery.yaml"), "version: 2\nmap: chk\nowner: PAY\nread_at: x\nstories: []\n");
+    expect(deliveryErrors(validate(g, "chk"))[0].message).toBe("this delivery.yaml was written by a newer nikOS: upgrade nikos in the code repo");
+  });
+
   it("a delivery.yaml that doesn't read against its schema fails with the schema's message", () => {
     const g = groupRepo("PAY");
-    writeFileSync(join(g, "maps/chk/delivery.yaml"), "format_version: 2\nmap: chk\nowner: PAY\nread_at: x\nstories: []\n");
-    expect(deliveryErrors(validate(g, "chk"))[0].message).toMatch(/format_version/);
+    writeFileSync(join(g, "maps/chk/delivery.yaml"), "map: chk\nowner: PAY\nread_at: x\nstories: []\n");
+    expect(deliveryErrors(validate(g, "chk"))[0].message).toMatch(/missing required field 'version'/);
   });
 
   it("state set rewrites it, so validate passes straight after a move", () => {

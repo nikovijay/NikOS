@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/contract/storymap.schema.json",
+  "title": "nikOS story map (contract reader)",
+  "description": "What a planning repo reads from a map's storymap.yaml: its key, bet and owner. Tolerant: unknown fields are allowed. The writer is storymap.schema.json.",
+  "type": "object",
+  "required": ["key"],
+  "properties": {
+    "format_version": { "type": "integer", "minimum": 1 },
+    "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
+    "owner": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
+    "bet": {
+      "type": "string",
+      "pattern": "^([a-z0-9]+(-[a-z0-9]+)*|[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+#[a-z0-9]+(-[a-z0-9]+)*)$"
+    }
+  }
+}

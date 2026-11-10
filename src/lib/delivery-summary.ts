@@ -4,7 +4,7 @@
 // An approval here is the name it was given, not a verified identity (the amendment, rule 11).
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
-import { schemaProblems } from "./schema.js";
+import { contractProblems, NewerContractError, schemaProblems } from "./schema.js";
 import { store } from "./store.js";
 
 export const DELIVERY_SUMMARY = "delivery.yaml";
@@ -20,7 +20,7 @@ export interface SummaryStory {
 }
 
 export interface DeliverySummary {
-  format_version: 1;
+  version: 1;
   map: string;
   /** The map's owner (its storymap owner, else the repo's group key). Absent when neither names one. */
   owner?: string;
@@ -38,16 +38,41 @@ export function writeDeliverySummary(mapDir: string, summary: DeliverySummary): 
   return path;
 }
 
-/** A map's summary, or undefined when there is none, or the file doesn't read against its schema. */
-export function readDeliverySummary(mapDir: string): DeliverySummary | undefined {
+export type SummaryRead = { ok: true; summary: DeliverySummary } | { ok: false; reason: string; newer?: true };
+
+/**
+ * A map's summary, or why there isn't one: a missing file, one that isn't YAML, one that doesn't read
+ * against the contract schema, or one written by a newer nikOS (newer: true). Never silently undefined.
+ */
+export function readDeliverySummaryResult(mapDir: string): SummaryRead {
   const path = join(mapDir, DELIVERY_SUMMARY);
-  if (!store().exists(path)) return undefined;
+  if (!store().exists(path)) return { ok: false, reason: "no delivery.yaml yet" };
+  let data: unknown;
   try {
-    const data = parse(store().read(path));
-    return schemaProblems("delivery-summary.schema.json", data).length ? undefined : (data as DeliverySummary);
-  } catch {
-    return undefined;
+    data = parse(store().read(path));
+  } catch (err) {
+    return { ok: false, reason: `is not valid YAML: ${(err as Error).message.split("\n")[0]}` };
   }
+  let problems: string[];
+  try {
+    problems = contractProblems(DELIVERY_SUMMARY, data, "version", "planning", "contract/delivery.schema.json");
+  } catch (err) {
+    if (err instanceof NewerContractError) return { ok: false, reason: err.message, newer: true };
+    throw err;
+  }
+  if (problems.length) return { ok: false, reason: problems[0] };
+  return { ok: true, summary: data as DeliverySummary };
+}
+
+/**
+ * A map's summary, or undefined when there is none or it doesn't read. A summary from a newer nikOS
+ * throws NewerContractError, so the caller can tell refusal from a bad file.
+ */
+export function readDeliverySummary(mapDir: string): DeliverySummary | undefined {
+  const read = readDeliverySummaryResult(mapDir);
+  if (read.ok) return read.summary;
+  if (read.newer) throw new NewerContractError(read.reason);
+  return undefined;
 }
 
 /** How old a summary is, as the rollouts say it: "read 3 days ago (2026-11-05)". */

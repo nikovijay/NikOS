@@ -11,6 +11,7 @@ import { ownRepo } from "../lib/git.js";
 import { isDone } from "../lib/project.js";
 import { storyMapsOf } from "../lib/maps.js";
 import { readDeliverySummary } from "../lib/delivery-summary.js";
+import { NewerContractError } from "../lib/schema.js";
 import { resolveSettings } from "../lib/settings.js";
 
 export interface Delivery {
@@ -30,8 +31,18 @@ export interface Delivery {
   summaryAsOf?: string;
 }
 
-/** A map's delivery summary, when its owner has committed one. */
-const summaryIn = (dir: string) => readDeliverySummary(dir);
+/**
+ * A map's delivery summary, when its owner has committed one. A summary from a newer nikOS counts as none
+ * here, so one repo can't break the page; validate names the refusal.
+ */
+const summaryIn = (dir: string) => {
+  try {
+    return readDeliverySummary(dir);
+  } catch (err) {
+    if (err instanceof NewerContractError) return undefined;
+    throw err;
+  }
+};
 
 const yamlAt = (p: string) => (store().exists(p) ? parse(store().read(p)) : undefined);
 

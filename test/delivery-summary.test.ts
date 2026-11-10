@@ -5,7 +5,8 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "
 import { join } from "node:path";
 import { parse } from "yaml";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
-import { readDeliverySummary, summaryAge } from "../src/lib/delivery-summary";
+import { readDeliverySummary, readDeliverySummaryResult, summaryAge } from "../src/lib/delivery-summary";
+import { NewerContractError } from "../src/lib/schema";
 import { setState } from "../src/commands/state";
 import { groupRepo, commitAll } from "./repo-fixture";
 
@@ -19,7 +20,7 @@ describe("the delivery summary a map's owner commits", () => {
     const text = readFileSync(join(g, "maps/chk/delivery.yaml"), "utf8");
     expect(text).toContain("Commit it");
     const data = parse(text);
-    expect(data).toMatchObject({ format_version: 1, map: "chk", owner: "PAY", read_at: "2026-11-08T09:12:00Z" });
+    expect(data).toMatchObject({ version: 1, map: "chk", owner: "PAY", read_at: "2026-11-08T09:12:00Z" });
     expect(data.stories.map((s: { id: string }) => s.id)).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
     expect(data.stories[0]).toMatchObject({ id: "PAY-CHK-1", status: "todo", approval: "none", read_at: "2026-11-08T09:12:00Z" });
     expect(data.stories[0]).not.toHaveProperty("team");
@@ -35,12 +36,27 @@ describe("the delivery summary a map's owner commits", () => {
     expect(summaryAge(summary!, new Date("2026-11-08T18:00:00Z"))).toBe("read today (2026-11-08)");
   });
 
-  it("a summary that doesn't match its schema is read as none, so the rollout says no summary yet", () => {
+  it("a summary that doesn't match its schema is read as none, with the reason kept for the result", () => {
     const g = groupRepo("PAY");
     writeSummaries(g, mapStatus(g), NOW);
     const path = join(g, "maps/chk/delivery.yaml");
-    writeFileSync(path, readFileSync(path, "utf8").replace("format_version: 1", "format_version: 2"));
+    writeFileSync(path, readFileSync(path, "utf8").replace(/^read_at: .*\n/m, ""));
     expect(readDeliverySummary(join(g, "maps/chk"))).toBeUndefined();
+    expect(readDeliverySummaryResult(join(g, "maps/chk"))).toMatchObject({ ok: false, reason: expect.stringMatching(/read_at/) });
+  });
+
+  it("a summary from a newer nikOS throws NewerContractError, so it is never mistaken for no summary", () => {
+    const g = groupRepo("PAY");
+    writeSummaries(g, mapStatus(g), NOW);
+    const path = join(g, "maps/chk/delivery.yaml");
+    writeFileSync(path, readFileSync(path, "utf8").replace("version: 1", "version: 2"));
+    expect(() => readDeliverySummary(join(g, "maps/chk"))).toThrow(NewerContractError);
+    expect(() => readDeliverySummary(join(g, "maps/chk"))).toThrow("this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo");
+    expect(readDeliverySummaryResult(join(g, "maps/chk"))).toEqual({
+      ok: false,
+      reason: "this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo",
+      newer: true,
+    });
   });
 
   it("a summary written after a state change says the new status, and the owner is the group's key when the map names none", () => {

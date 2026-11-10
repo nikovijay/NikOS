@@ -15,7 +15,7 @@ import { store } from "../lib/store.js";
 import { approvalsDir, storyFiles } from "../lib/state-files.js";
 import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
-import { schemaProblems } from "../lib/schema.js";
+import { contractVersion, schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
 import { upstreamEntries } from "../planning/upstream.js";
 
@@ -448,6 +448,12 @@ function checkDeliverySummary(ref: StoryMapRef, errors: Issue[]): void {
     onDisk = parse(read(join(ref.dir, file)));
   } catch (err) {
     errors.push({ file, message: `is not valid YAML: ${(err as Error).message.split("\n")[0]}`, hint });
+    return;
+  }
+  // A summary from a newer nikOS is refused by name, not reported as a bad field.
+  const newer = contractVersion(file, onDisk, "version", "code");
+  if (newer) {
+    errors.push({ file, message: newer, hint: "upgrade nikos, then run nikos validate again" });
     return;
   }
   const problems = schemaProblems("delivery-summary.schema.json", onDisk);
