@@ -1,6 +1,6 @@
 # RFC: nikOS Plan and nikOS Spec
 
-**Status:** approved. PR 1 (the planning repo) and PR 4 (the dashboard, `nikos plan serve`) are built: see [docs/plan.md](../plan.md). `nikos plan owners` comes in a later PR.
+**Status:** approved. PRs 1 to 5 are built: see [docs/plan.md](../plan.md). PR 6 (`ladders_up`, key result direction and milestones) is in review, and `nikos plan owners` comes in a later PR.
 
 ## Summary
 
@@ -252,10 +252,9 @@ The rules:
    `assignments.yaml`, `nikos assign`, `nikos sync`, `.nikos/assigned` and
    `nikos team join`.
 3. **Story ids are the owner, the map key and a number.** A map with an
-   `owner` gives `WEB-CHK-3`. A map with no owner gives its group key's
-   prefix when the repo joins a plan (`PAY-CHK-3`), and a solo map keeps its
-   bare key and a number (`HT-1`, `CHK-3`). Ids are checked unique when the
-   repo joins the plan, using the team keys in the planning repo.
+   `owner` gives `WEB-CHK-3`, and a map with no owner gives `CHK-3`. Ids are
+   checked unique when the repo joins the plan, using the team keys in the
+   planning repo.
 4. **`nikos map status` gets simpler.** It writes `delivery.yaml` from the
    repo's own state and approvals, with `proof:` as 0.4.2 added. It no longer
    fetches other repos. `nikos validate`, and so CI, flags a `delivery.yaml`
