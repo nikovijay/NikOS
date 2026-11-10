@@ -109,7 +109,7 @@ export function remoteHas(root: string, name: string, run: Runner = realRun): bo
 
 /** The planning folders a save writes, that exist in the repo. */
 export function nikosPaths(root: string): string[] {
-  return ["planning", "maps", "intent"].filter((p) => existsSync(join(root, p)));
+  return ["planning", "maps"].filter((p) => existsSync(join(root, p)));
 }
 
 /** git status lines for paths (or all of them, when paths is undefined), as git prints them. No paths is no lines. */
@@ -128,7 +128,7 @@ export const pathOf = (line: string) => (line.slice(3).split(" -> ").pop() ?? ""
  * git prints paths from the top of the repo, so a plan in a subfolder of a larger repo looks at its own prefix.
  */
 export function unrelatedDirty(root: string, run: Runner = realRun): string[] {
-  const own = ["planning/", "maps/", "intent/"];
+  const own = ["planning/", "maps/"];
   const prefix = gitIn(root, ["rev-parse", "--show-prefix"], run).stdout.trim();
   return statusOf(root, undefined, run).filter((l) => {
     const path = pathOf(l);

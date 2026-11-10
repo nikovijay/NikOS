@@ -2,12 +2,12 @@ import { join } from "node:path";
 import { parseDocument, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
 import { checkHash } from "../planning/model.js";
-import { authoringMap, homeOf, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { store } from "../lib/store.js";
-import { createStoryState, loadStates, perStory, statePath, storyStatePath, type StoryHome } from "../lib/state-files.js";
+import { createStoryState, loadStates, statePath, type StoryHome } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
-import { hasSummary, writeMapSummary } from "../lib/map-summary.js";
+import { writeMapSummary } from "../lib/map-summary.js";
 
 const PRIORITIES = ["must", "should", "could"] as const;
 
@@ -34,7 +34,7 @@ const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 
 /**
  * The number of the last story in a map, so the next id is one more. A map counts its releases,
- * its state and its feature tags, so a removed story's number isn't reused. intent/ counts its
+ * its state and its feature tags, so a removed story's number isn't reused. A map counts its
  * releases only, as it always has.
  */
 function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
@@ -43,7 +43,7 @@ function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
     return Math.max(0, ...releases.flatMap((r) => r?.stories ?? []).map((s: string) => Number(s.slice(key.length + 1)) || 0));
   }
   const ids = new Set<string>(releases.flatMap((r) => r?.stories ?? []));
-  for (const s of Object.keys(loadStates(homeOf(ref)))) ids.add(s);
+  for (const s of Object.keys(loadStates(ref.dir))) ids.add(s);
   for (const f of walk(join(ref.dir, "features"), ".feature")) for (const s of featureStoryIds(read(f))) ids.add(s);
   return Math.max(0, ...[...ids].filter((s) => s.startsWith(`${prefix}-`)).map((s) => Number(s.slice(prefix.length + 1)) || 0));
 }
@@ -56,9 +56,9 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const priority = input.priority ?? "must";
   if (!PRIORITIES.includes(priority)) throw new Error(`'${priority}' is not a priority (must, should, could)`);
 
-  const ref = authoringMap(dir, input.map);
-  const intentDir = ref.dir;
-  const mapPath = join(intentDir, "storymap.yaml");
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const mapDir = ref.dir;
+  const mapPath = join(mapDir, "storymap.yaml");
   // Documents keep comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
   const plain = map.toJS();
@@ -82,7 +82,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   const prefix = storyPrefix(ref, plain.key as string);
   const id = `${prefix}-${lastNumber(ref, prefix, releases) + 1}`;
 
-  const feature = join(intentDir, "features", input.activity, `${slugify(title)}.feature`);
+  const feature = join(mapDir, "features", input.activity, `${slugify(title)}.feature`);
   if (store().exists(feature)) throw new Error(`${feature} already exists; give the story a different title`);
 
   const stories = map.getIn(["releases", index, "stories"], true);
@@ -105,10 +105,10 @@ Feature: ${title}
 
   store().write(feature, text, { create: true });
   store().write(mapPath, map.toString(yamlOpts));
-  createStoryState(homeOf(ref), id, { status: "todo" });
+  createStoryState(ref.dir, id, { status: "todo" });
   // A new story changes the map's state and summary, so its delivery.yaml is written with it.
-  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
-  return { id, release, feature, validation: validate(intentDir) };
+  writeMapSummary(ref.root, ref.dir);
+  return { id, release, feature, validation: validate(mapDir) };
 }
 
 export function runStory(args: string[]): number {
@@ -136,8 +136,8 @@ export function runStory(args: string[]): number {
   }
 }
 
-/** The label a map is known by in messages: maps/<id>, or intent for a repo's own map. */
-export const mapLabel = (ref: StoryMapRef) => (ref.id ? `maps/${ref.id}` : "intent");
+/** The label a map is known by in messages: maps/<id>. */
+export const mapLabel = (ref: StoryMapRef) => `maps/${ref.id}`;
 
 /** The feature file of a story in a map, or undefined when no feature in it has that id. */
 export function featureOf(ref: StoryMapRef, id: string): string | undefined {
@@ -149,22 +149,20 @@ export function renameStory(dir: string, input: { map?: string; id: string; titl
   const title = input.title?.trim();
   if (!title) throw new Error("A story needs a title");
   if (/[\r\n]/.test(title)) throw new Error("A title is one line (no line breaks)");
-  const ref = authoringMap(dir, input.map);
+  const ref = resolveStoryMap(dir, { map: input.map });
   const file = featureOf(ref, input.id);
   if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
   const text = read(file);
   checkHash(input.id, text, expect);
   store().write(file, text.replace(/^(\s*Feature:)[^\n]*/m, (_all, head: string) => `${head} ${title}`));
   // The Feature line is in the spec hash, so the proof of a story that has one changes with it.
-  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
+  writeMapSummary(ref.root, ref.dir);
   return { file, validation: validate(ref.dir) };
 }
 
 /** Drop a story's state entry from its map: its own file, or its line in state.yaml. */
 function dropState(home: StoryHome, id: string): void {
-  const dir = home;
-  if (perStory(dir) && store().exists(storyStatePath(dir, id))) store().remove(storyStatePath(dir, id));
-  const path = statePath(dir);
+  const path = statePath(home);
   if (!store().exists(path)) return;
   const doc = parseDocument(read(path));
   if (!doc.hasIn(["stories", id])) return;
@@ -177,11 +175,11 @@ function dropState(home: StoryHome, id: string): void {
  * Refused when any work is recorded against it.
  */
 export function removeStory(dir: string, input: { map?: string; id: string }, expect?: string): { removed: string; validation: ValidationResult } {
-  const ref = authoringMap(dir, input.map);
+  const ref = resolveStoryMap(dir, { map: input.map });
   const file = featureOf(ref, input.id);
   if (!file) throw new Error(`${input.id} is not a story in ${mapLabel(ref)}`);
   checkHash(input.id, read(file), expect);
-  const status = loadStates(homeOf(ref))[input.id]?.status ?? "todo";
+  const status = loadStates(ref.dir)[input.id]?.status ?? "todo";
   if (status !== "todo") throw new Error(`${input.id} has work done: remove it from the CLI`);
   const mapPath = join(ref.dir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
@@ -194,7 +192,7 @@ export function removeStory(dir: string, input: { map?: string; id: string }, ex
   }
   store().write(mapPath, map.toString(yamlOpts));
   store().remove(file);
-  dropState(homeOf(ref), input.id);
-  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
+  dropState(ref.dir, input.id);
+  writeMapSummary(ref.root, ref.dir);
   return { removed: input.id, validation: validate(ref.dir) };
 }

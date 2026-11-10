@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { copyExample, edit } from "./helpers.js";
+import { copyExample, rootOf } from "./helpers.js";
 import { newBet } from "../src/planning/bets.js";
 import { checkIn, newKr } from "../src/planning/krs.js";
 import { hash, loadKr } from "../src/planning/model.js";
@@ -20,9 +20,8 @@ afterEach(async () => {
 
 /** A temp repo with the hello-todo story map, one KR with a check-in, and one bet on release 1. */
 function setup(): string {
-  const root = dirname(copyExample());
+  const root = rootOf(copyExample());
   rmSync(join(root, "planning"), { recursive: true, force: true });
-  edit(join(root, "intent", "storymap.yaml"), (s) => (s.includes("bets:") ? s : s.replace("stories: [HT-1, HT-2]", "bets: [fewer-missed-tasks]\n    stories: [HT-1, HT-2]")));
   newKr({ id: "missed-tasks", title: "Missed tasks", owner: "Ana", baseline: 12, target: 4, by: "2027-03-31", unit: "tasks" }, root);
   checkIn(root, "missed-tasks", { value: 9, date: "2026-11-01", note: "first week" });
   newBet(
@@ -128,7 +127,10 @@ describe("dashboard", () => {
   test("a bet links to its releases on the story map", async () => {
     const srv = await start(setup());
     const data = await getData(srv);
-    expect(data.bets[0].releases).toEqual([{ number: 1, title: "MVP", href: "/map#release-1" }]);
+    expect(data.bets[0].releases).toEqual([
+      { number: 1, title: "MVP", href: "/map#release-1" },
+      { number: 2, title: "Enhancements", href: "/map#release-2" },
+    ]);
     expect(await (await fetch(srv.url)).text()).toContain("/map#release-1");
     const map = await (await fetch(`${base(srv)}/map`)).text();
     expect(map).toContain('id="release-1"');

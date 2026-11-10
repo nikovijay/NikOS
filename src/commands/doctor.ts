@@ -4,10 +4,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { parse } from "yaml";
 import { keyFor } from "./init.js";
-import { count, decisionsPath, findIntentDir, isPlanOnly } from "../lib/project.js";
+import { count, decisionsPath, isPlanOnly, rel } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
-import { perStory } from "../lib/state-files.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
 import { betIds, krIds } from "../planning/model.js";
@@ -20,17 +19,6 @@ import { validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
 
 const TEAM_PLAN_NEXT = "Team plans are going away. Move each key result to the department's plan, or rewrite it as a bet aimed at a department key result (krs: <department repo>#<kr-id>). Nothing is deleted.";
-/** The migrate hint, with this repo's own ids: the map's key, and the group key migrate suggests (from the folder name). */
-const migrateNext = (root: string, intent: string) => {
-  let key = "HT";
-  try {
-    const k = parse(read(join(intent, "storymap.yaml")))?.key;
-    if (typeof k === "string" && k) key = k;
-  } catch {
-    // validate reports a storymap that doesn't parse; the hint keeps its example ids.
-  }
-  return `nikos migrate maps moves it under a group plan. Story ids without the group key stop it unless you pass --rename-ids (${key}-1 becomes ${keyFor(basename(resolve(root)))}-${key}-1). Nothing moves until you confirm.`;
-};
 /** The plan's level, or undefined when planning/plan.yaml doesn't parse: the file's own checks say so, and the rest of doctor still runs. */
 // The level in planning/plan.yaml only.
 const planLevel = (root: string) => {
@@ -59,17 +47,24 @@ const codeowners = (root: string) => ["CODEOWNERS", ".github/CODEOWNERS", ".gitl
 export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
-  const intent = findIntentDir(root);
   const planOnly = isPlanOnly(root);
   const maps = mapDirs(root).length;
-  if (planOnly) planChecks(root, add);
-  else if (maps) {
-    planChecks(root, add);
+  const oldLayout = store().isDir(join(root, "intent"));
+  // A repo with maps/ gets the plan checks only when it has a planning/ folder to check.
+  if (planOnly || (maps && store().isDir(join(root, "planning")))) planChecks(root, add);
+  if (oldLayout) {
+    // A repo that still keeps its story map in intent/ can't be checked until it moves.
+    add({ name: "story map", status: "fail", found: "this repo keeps its story map in intent/, the old layout", next: "Run nikos migrate maps to move it into maps/<key>/, then commit the result" });
+  } else if (maps) {
     const v = validateGroup(root);
     const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
-    if (runner && !runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." });
-    // A group keeps the runner and CI lines it had as an intent/ repo.
-    if (runner && runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "ok", found: runner });
+    add(
+      runner
+        ? runsFolder(root, runner, "maps/")
+          ? { name: "scenario runner", status: "ok", found: runner }
+          : { name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." }
+        : { name: "scenario runner", status: "fail", found: detectStack(root) ? "no Cucumber runner yet (it runs each story's scenarios)" : "no Cucumber runner yet, and nikOS can't tell which language this project uses", next: "Run nikos verify setup. Then a story's scenarios can prove it's done" },
+    );
     const ci = CI_FILES.find((f) => existsSync(join(root, f)));
     add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "validate and scenarios don't run on pull or merge requests", next: "Run nikos ci setup, so every pull or merge request runs the checks" });
     add(
@@ -77,48 +72,26 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
         ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in maps/`, next: "Run nikos validate and fix what it lists" }
         : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(maps, "map")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, ...(v.warnings.length ? { next: "Run nikos validate to see the warnings" } : {}) },
     );
-  } else if (!store().exists(join(intent, "storymap.yaml"))) {
-    add({ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does. For a company or department plan, nikos company init" });
+  } else if (!planOnly) {
+    add({ name: "story map", status: "fail", found: "no maps/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does" });
     return checks;
-  } else {
-    const v = validate(root);
-    const teamPlan = planLevel(root) === "team";
-    // A 0.2.x repo is fine as it is: the migration is a hint on its story map, never a failure.
-    // The hints go on the warn case too, so a repo with a warning still hears about the move.
-    const hints = [teamPlan ? TEAM_PLAN_NEXT : "", migrateNext(root, intent)].filter(Boolean).join(" ");
-    add(
-      v.errors.length
-        ? { name: "story map", status: "fail", found: `${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"} in intent/`, next: "Run nikos validate and fix what it lists" }
-        : { name: "story map", status: v.warnings.length ? "warn" : "ok", found: `${count(v.stories, "story", "stories")} in ${count(v.releases, "release")}${v.warnings.length ? `, ${count(v.warnings.length, "warning")}` : ""}`, next: [v.warnings.length ? "Run nikos validate to see the warnings" : "", hints].filter(Boolean).join(" ") },
-    );
-    // A team plan here is a hint on the story map, so the checks an intent/ repo already has keep their names.
-    const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
-    add(
-      runner
-        ? runsFolder(root, runner, "intent/features")
-          ? { name: "scenario runner", status: "ok", found: runner }
-          : { name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." }
-        : { name: "scenario runner", status: "fail", found: detectStack(root) ? "no Cucumber runner yet (it runs each story's scenarios)" : "no Cucumber runner yet, and nikOS can't tell which language this project uses", next: "Run nikos verify setup. Then a story's scenarios can prove it's done" },
-    );
-
-    const ci = CI_FILES.find((f) => existsSync(join(root, f)));
-    add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "scenarios don't run on pull or merge requests", next: "Run nikos ci setup, so every pull or merge request runs the checks" });
   }
 
   const settings = resolveSettings(root);
   const policy = settings["approval.policy"];
-  if (planOnly || maps) add(lockCheck(settings));
+  // A group keeps its approval policy in its plan, so its lock check replaces the approvals check.
+  if (planOnly || (maps && planLevel(root) === "group")) add(lockCheck(settings));
   else {
     const owners = codeowners(root);
-    const protectedApprovals = owners && /approvals(\.yaml|\/)/.test(readFileSync(owners, "utf8"));
+    const protectedApprovals = owners && /\/approvals\//.test(readFileSync(owners, "utf8"));
     if (policy.value === "off") add({ name: "approvals", status: "ok", found: `off (${policy.from})` });
-    else if (protectedApprovals) add({ name: "approvals", status: "ok", found: `${policy.value} (${policy.from}); intent/approvals${perStory(intent) ? "/" : ".yaml"} needs a CODEOWNERS review` });
+    else if (protectedApprovals) add({ name: "approvals", status: "ok", found: `${policy.value} (${policy.from}); maps/<key>/approvals/ needs a CODEOWNERS review` });
     else
       add({
         name: "approvals",
         status: policy.value === "required-for-release" ? "warn" : "ok",
         found: `${policy.value} (${policy.from}); anyone can add an approval`,
-        ...(policy.value === "required-for-release" ? { next: "Protect intent/approvals.yaml with a CODEOWNERS rule and branch protection, so an approval needs the right reviewer" } : {}),
+        ...(policy.value === "required-for-release" ? { next: "Protect maps/<key>/approvals/ with a CODEOWNERS rule and branch protection, so an approval needs the right reviewer" } : {}),
       });
   }
 
@@ -186,7 +159,14 @@ const runsFolder = (root: string, file: string, folder: string) => {
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
 function planChecks(root: string, add: (c: Check) => void) {
-  const found = planningIssues(root);
+  let found: ReturnType<typeof planningIssues>;
+  try {
+    found = planningIssues(root);
+  } catch (err) {
+    // A plan that doesn't parse fails its own check; the story map and the runner still print.
+    add({ name: "plan", status: "fail", found: `planning/ doesn't read: ${(err as Error).message.split("\n")[0]}`, next: "Run nikos planning validate and fix what it lists" });
+    return;
+  }
   // A group repo with maps/ is a group, not a plan-only repo: its story maps are the next check.
   const grouped = mapDirs(root).length > 0;
   const planShape = grouped ? "group" : "plan-only repo";
@@ -205,8 +185,8 @@ function planChecks(root: string, add: (c: Check) => void) {
   const n = decisionEntries(root).length;
   add(
     n
-      ? { name: "decisions", status: "ok", found: `${count(n, "decision")} in planning/decisions.md` }
-      : { name: "decisions", status: "ok", found: store().exists(decisionsPath(root)) ? "none recorded yet" : "no planning/decisions.md yet", next: 'Record one when you make it, for example: nikos decide "Use cards only at launch" --why "Most buyers pay by card"' },
+      ? { name: "decisions", status: "ok", found: `${count(n, "decision")} in ${rel(root, decisionsPath(root))}` }
+      : { name: "decisions", status: "ok", found: store().exists(decisionsPath(root)) ? "none recorded yet" : `no ${rel(root, decisionsPath(root))} yet`, next: 'Record one when you make it, for example: nikos decide "Use cards only at launch" --why "Most buyers pay by card"' },
   );
 }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { parse } from "yaml";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../src/commands/tracker";
 import { init } from "../src/commands/init";
@@ -9,7 +9,7 @@ import { setupVerify } from "../src/commands/verify";
 import { setState } from "../src/commands/state";
 import { validate } from "../src/commands/validate";
 import { storyMapOf } from "../src/commands/map";
-import { copyExample } from "./helpers";
+import { copyExample, rootOf } from "./helpers";
 
 const JIRA = `format_version: 1
 tracker:
@@ -26,7 +26,7 @@ tracker:
 const state = (intent: string) => parse(readFileSync(join(intent, "state.yaml"), "utf8")).stories;
 const jiraRepo = (settings = JIRA) => {
   const intent = copyExample();
-  writeFileSync(join(dirname(intent), "nikos.settings.yaml"), settings);
+  writeFileSync(join(rootOf(intent), "nikos.settings.yaml"), settings);
   return intent;
 };
 
@@ -37,11 +37,11 @@ describe("tracker", () => {
     linkTicket({ id: "HT-2", ticket: "PAY-2" }, intent);
     expect(state(intent)["HT-1"].ticket).toBe("PAY-1");
     expect(validate(intent).errors).toEqual([]);
-    expect(ticketMoves(intent)).toEqual([
+    expect(ticketMoves(rootOf(intent))).toEqual([
       { id: "HT-1", ticket: "PAY-1", nikos: "done", status: "Done" },
       { id: "HT-2", ticket: "PAY-2", nikos: "in_progress", status: "In Progress" },
     ]);
-    expect(() => linkTicket({ id: "HT-9", ticket: "PAY-9" }, intent)).toThrow("HT-9 has no entry in state.yaml");
+    expect(() => linkTicket({ id: "HT-9", ticket: "PAY-9" }, rootOf(intent))).toThrow("no story map has HT-9");
   });
 
   it("never copies done from a ticket, cancels on the tracker's word, and refuses an unmapped status", () => {
@@ -92,7 +92,7 @@ describe("tracker", () => {
     linkTicket({ id: "FX-1", ticket: "PAY-1" }, root);
     expect(() => recordTicket({ id: "FX-1", status: "Accepted" }, root)).toThrow("Say who moved the ticket");
     expect(recordTicket({ id: "FX-1", status: "Accepted", by: "Ana Lee", on: "2026-11-06" }, root)).toMatchObject({ outcome: "approved", message: "FX-1 approved by Ana Lee in jira (PAY-1)" });
-    expect(parse(readFileSync(join(root, "intent/approvals.yaml"), "utf8")).approvals["FX-1"]).toMatchObject({ by: "Ana Lee", on: "2026-11-06", via: "tracker" });
+    expect(parse(readFileSync(join(root, "maps/fx/approvals/FX-1.yaml"), "utf8"))).toMatchObject({ by: "Ana Lee", on: "2026-11-06", via: "tracker" });
     expect(recordTicket({ id: "FX-1", status: "Accepted", by: "Ana Lee" }, root).outcome).toBe("in step");
     expect(ticketMoves(root)).toEqual([{ id: "FX-1", ticket: "PAY-1", nikos: "approved", status: "Accepted" }]);
   }, 60_000);

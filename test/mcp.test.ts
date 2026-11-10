@@ -10,7 +10,7 @@ import { createServer, INSTRUCTIONS } from "../src/mcp/server";
 import { init } from "../src/commands/init";
 import { setupVerify } from "../src/commands/verify";
 import { setState } from "../src/commands/state";
-import { copyExample } from "./helpers";
+import { copyExample, rootOf } from "./helpers";
 
 /** A client connected to nikos mcp for a repo. answer: how the person answers an approval question, or no elicitation at all. */
 async function connect(root: string, answer?: "Approve" | "Not yet") {
@@ -34,7 +34,7 @@ async function connect(root: string, answer?: "Approve" | "Not yet") {
 
 describe("nikos mcp", () => {
   it("offers every command as a tool, the playbooks as prompts, and the rules as instructions", async () => {
-    const { client } = await connect(dirname(copyExample()));
+    const { client } = await connect(rootOf(copyExample()));
     const tools = (await client.listTools()).tools.map((t) => t.name);
     for (const t of ["status", "validate", "story_map", "show_story", "add_story", "set_status", "check_release", "approve", "export", "record_decision"]) expect(tools).toContain(t);
     const prompts = (await client.listPrompts()).prompts.map((p) => p.name);
@@ -46,19 +46,19 @@ describe("nikos mcp", () => {
   });
 
   it("reads and changes the repo through tools", async () => {
-    const root = dirname(copyExample());
+    const root = rootOf(copyExample());
     const { call } = await connect(root);
     const status = await call("status");
     expect(status.text.split("\n")[0]).toBe("Release 1 · MVP: 1 of 2 done · HT-2 in progress · 1 waiting for approval");
     expect(status.data.options[0].label).toBe("Finish HT-2: See today's top three");
     expect((await call("add_story", { title: "Share a list", activity: "tasks", release: 2 })).text).toBe(
-      `Added HT-4 to release 2: ${join(root, "intent/features/tasks/share-a-list.feature")}`,
+      `Added HT-4 to release 2: ${join(root, "maps/ht/features/tasks/share-a-list.feature")}`,
     );
     expect((await call("set_status", { id: "HT-3", status: "cancelled", reason: "Later" })).text).toBe("HT-3: todo → cancelled");
-    expect((await call("validate")).text).toContain("✓ intent/ is valid — 4 stories, 2 releases");
+    expect((await call("validate")).text).toContain("✓ maps/ht/ is valid — 4 stories, 2 releases");
     expect((await call("check_release", { number: 1 })).text).toBe("Release 1 · MVP: not ready — 1 of 2 done\n  ✗ HT-2 is in progress");
     const bad = await call("set_status", { id: "HT-9", status: "done" });
-    expect(bad).toMatchObject({ isError: true, text: "✗ HT-9 has no entry in state.yaml" });
+    expect(bad).toMatchObject({ isError: true, text: "✗ no story map has HT-9" });
   });
 
   it("approves only on the person's answer through their app, and records via app", async () => {
@@ -83,6 +83,6 @@ describe("nikos mcp", () => {
 
     const yes = await connect(root, "Approve");
     expect((await yes.call("approve", { ids: ["FX-1"] })).text).toMatch(/^FX-1: approved by /);
-    expect(parse(readFileSync(join(root, "intent/approvals.yaml"), "utf8")).approvals["FX-1"].via).toBe("app");
+    expect(parse(readFileSync(join(root, "maps/fx/approvals/FX-1.yaml"), "utf8")).via).toBe("app");
   }, 60_000);
 });

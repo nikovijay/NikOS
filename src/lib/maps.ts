@@ -1,21 +1,18 @@
-// Story maps. A repo with maps/ keeps one per bet, under maps/<key>/, and a group's or department's
-// plan names the key its story ids use. Every other repo keeps its one story map in intent/, as it
-// always has. Each map's delivery.yaml says how its stories are doing.
+// Story maps. Every map lives in the repo's maps/<key>/ folder: one per bet, or one for a repo that
+// has a single product. A plan's key (planning/plan.yaml) and the map's owner (its storymap.yaml)
+// can prefix its story ids. Each map's delivery.yaml says how its stories are doing.
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { store } from "./store.js";
-import { findIntentDir, read } from "./project.js";
-import type { StoryHome } from "./state-files.js";
+import { featureStoryIds, read, walk } from "./project.js";
 
 export interface StoryMapRef {
-  /** The repo root: the folder with planning/ and intent/ or maps/ in it. */
+  /** The repo root: the folder with maps/ (and planning/, if any) in it. */
   root: string;
-  /** The folder holding storymap.yaml: intent/, or maps/<id>. */
+  /** The map's folder, maps/<key>. */
   dir: string;
-  /** Set only for maps/<id>. */
-  id?: string;
-  /** A map in this code repo (maps/<id>): its state, approvals and git gates are the repo's own. intent/ is not. */
-  inRepo: boolean;
+  /** The map's folder name: the lowercased key, e.g. chk. */
+  id: string;
 }
 
 /** The sorted maps/<id> folders that hold a storymap.yaml; [] if there's no maps/. */
@@ -33,21 +30,22 @@ export function mapDirs(root: string): string[] {
 export function groupKeyOf(root: string): string | undefined {
   const path = join(root, "planning", "plan.yaml");
   if (!store().exists(path)) return undefined;
-  const key = (parse(store().read(path)) as { key?: unknown } | null)?.key;
-  return typeof key === "string" ? key : undefined;
+  try {
+    const key = (parse(store().read(path)) as { key?: unknown } | null)?.key;
+    return typeof key === "string" ? key : undefined;
+  } catch {
+    return undefined; // planning/plan.yaml that doesn't parse is reported by its own checks
+  }
 }
 
-/** The key that prefixes a repo's story ids when its maps have no owner: planning/plan.yaml's key. */
-export const keyOf = groupKeyOf;
-
-/** A map folder: maps/<id> in a group repo. intent/ is never one, even in a repo folder named maps/. */
+/** A map folder: maps/<id>. */
 function isMapFolder(dir: string): boolean {
-  return basename(dir) !== "intent" && basename(dirname(dir)) === "maps";
+  return basename(dirname(dir)) === "maps";
 }
 
-/** The repo root for a story map folder: intent/ or maps/<id>. */
+/** The repo root for a map folder, maps/<id>. */
 export function repoRootOf(dir: string): string {
-  return isMapFolder(dir) ? dirname(dirname(dir)) : dirname(dir);
+  return dirname(dirname(dir));
 }
 
 /** A story map's key from its storymap.yaml, e.g. CHK. */
@@ -60,75 +58,51 @@ export function keyOfMap(dir: string): string | undefined {
   }
 }
 
+/** The story ids a map holds: its releases' stories and the @ID tags on its features. */
+export function storyIdsOf(dir: string): string[] {
+  const ids = new Set<string>();
+  try {
+    const releases = (parse(read(join(dir, "storymap.yaml"))) as { releases?: { stories?: unknown }[] } | null)?.releases ?? [];
+    for (const r of releases) for (const s of Array.isArray(r.stories) ? r.stories : []) if (typeof s === "string") ids.add(s);
+  } catch {
+    // A storymap that doesn't read holds no ids here; validate reports it.
+  }
+  for (const f of walk(join(dir, "features"), ".feature")) for (const id of featureStoryIds(read(f))) ids.add(id);
+  return [...ids];
+}
+
 /**
- * The story map a command works on. A map folder passed directly is its own map. A repo with maps/
- * has one map per bet: --map picks one, and a single map needs no flag. Otherwise it's the repo's
- * intent/ map, which can't take --map.
+ * The story map a command works on, from a repo root (or a map folder). Order: a map folder is its
+ * own map; a repo with intent/ is refused; with no maps/, there's nothing to work on. --map picks
+ * a map by its folder name. A story id picks the one map that holds it. Otherwise a single map is used.
  */
-export function resolveStoryMap(start: string, map?: string): StoryMapRef {
-  if (store().exists(join(start, "storymap.yaml")) && isMapFolder(start)) {
-    const root = repoRootOf(start);
-    return { root, dir: start, id: basename(start), inRepo: true };
+export function resolveStoryMap(start: string, opts: { map?: string; story?: string } = {}): StoryMapRef {
+  if (isMapFolder(start) && store().exists(join(start, "storymap.yaml"))) {
+    return { root: repoRootOf(start), dir: start, id: basename(start) };
   }
-  const root = start;
-  const maps = mapDirs(root);
-  if (store().exists(join(root, "intent", "storymap.yaml")) && maps.length) {
-    throw new Error("this repo has both intent/ and maps/: keep one");
-  }
-  if (!maps.length) {
-    if (map) {
-      const hint = store().isDir(join(root, "intent")) ? "this repo has intent/" : "no maps/ folder here: nikos map new in a group repo, or nikos init for a solo repo";
-      throw new Error(`--map needs a group repo with maps/ (${hint})`);
-    }
-    const dir = findIntentDir(root);
-    return { root: repoRootOf(dir), dir, inRepo: false };
-  }
+  if (store().isDir(join(start, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  const maps = mapDirs(start);
+  if (!maps.length) throw new Error("no story map here: run nikos init, or nikos map new --key K");
   const ids = maps.map((d) => basename(d));
-  if (map) {
+  const ref = (dir: string): StoryMapRef => ({ root: start, dir, id: basename(dir) });
+  if (opts.map) {
     // Folders are the lowercased map key, so --map HR finds maps/hr.
-    const id = ids.find((i) => i === map.toLowerCase());
-    if (!id) throw new Error(`no story map "${map}" in maps/ (have: ${ids.join(", ")})`);
-    return { root, dir: join(root, "maps", id), id, inRepo: true };
+    const id = ids.find((i) => i === opts.map!.toLowerCase());
+    if (!id) throw new Error(`no story map "${opts.map}" in maps/ (have: ${ids.join(", ")})`);
+    const chosen = ref(join(start, "maps", id));
+    if (opts.story && !storyIdsOf(chosen.dir).includes(opts.story)) throw new Error(`${opts.story} is not in maps/${id}`);
+    return chosen;
   }
-  if (ids.length === 1) return { root, dir: maps[0], id: ids[0], inRepo: true };
-  throw new Error(`several story maps in maps/ (${ids.join(", ")}): pass --map <id>`);
+  if (opts.story) {
+    const holds = maps.filter((d) => storyIdsOf(d).includes(opts.story!));
+    if (holds.length === 1) return ref(holds[0]);
+    if (!holds.length) throw new Error(`no story map has ${opts.story}`);
+    throw new Error(`${opts.story} is in several story maps (${holds.map((d) => basename(d)).join(", ")}): pass --map`);
+  }
+  if (ids.length === 1) return ref(maps[0]);
+  throw new Error(`several story maps (${ids.join(", ")}): pass --map <id>`);
 }
 
-/** The map's label as its stories carry it: OWNER-MAP, e.g. WEB-CHK (the owner names the map, else the repo's key). */
-export function labelOf(ref: StoryMapRef): string {
-  const owner = ref.id ? mapOwnerOf(ref.dir) : undefined;
-  return `${owner ?? keyOf(ref.root) ?? "?"}-${keyOfMap(ref.dir) ?? ref.id}`;
-}
-
-/**
- * The story map a story-scoped command works on. A story id doesn't pick its map: --map does, and a
- * repo with one map needs no flag.
- */
-export function storyMapFor(start: string, opts: { story?: string; map?: string } = {}): StoryMapRef {
-  return resolveStoryMap(start, opts.map);
-}
-
-/**
- * The story map a command that writes stories works on: the same map resolveStoryMap picks, so a
- * repo's stories are authored in its own maps.
- */
-export function authoringMap(dir: string, map?: string): StoryMapRef {
-  return resolveStoryMap(dir, map);
-}
-
-/** Where a story's state and approvals live: the map's folder, or intent/. */
-export const homeOf = (ref: StoryMapRef): StoryHome => ref.dir;
-
-/** Every story map in a repo: each maps/<id>, plus the intent/ map if there is one. */
-export function storyMapsOf(root: string): StoryMapRef[] {
-  const maps: StoryMapRef[] = mapDirs(root).map((dir) => ({ root, dir, id: basename(dir), inRepo: true }));
-  const intent = findIntentDir(root);
-  if (store().exists(join(intent, "storymap.yaml"))) maps.push({ root, dir: intent, inRepo: false });
-  return maps;
-}
-
-export const NO_GROUP_KEY = "planning/plan.yaml has no key: add key: <KEY> to it, then retry";
-export const NO_OWNER = "this map has no owner: add owner: <KEY> to its storymap.yaml, or a key to planning/plan.yaml (the fallback)";
 /** An owner: uppercase letters and digits, up to 10, e.g. WEB. */
 export const OWNER = /^[A-Z][A-Z0-9]{0,9}$/;
 
@@ -143,17 +117,22 @@ export function mapOwnerOf(dir: string): string | undefined {
 }
 
 /**
- * The prefix on a story's id: the map's key for intent/, or <OWNER>-<MAP> for a map in a repo,
- * e.g. WEB-CHK, so the id is unique across the company. The map's owner comes first; a map with no
- * owner takes the key in its repo's planning/plan.yaml, e.g. PAY-CHK.
+ * The prefix on a map's story ids: the map's owner, else the repo's group key from planning/plan.yaml,
+ * else nothing. So a story id is WEB-CHK-1, PAY-CHK-1 or CHK-1.
  */
+export function prefixOf(ref: StoryMapRef): string | undefined {
+  return mapOwnerOf(ref.dir) ?? groupKeyOf(ref.root);
+}
+
+/** The prefix on a story's id, given the map's key: e.g. WEB-CHK, PAY-CHK, or CHK. */
 export function storyPrefix(ref: StoryMapRef, key: string): string {
-  if (!ref.id) return key;
-  const owner = mapOwnerOf(ref.dir);
-  if (owner) return `${owner}-${key}`;
-  const group = keyOf(ref.root);
-  if (!group) throw new Error(NO_OWNER);
-  return `${group}-${key}`;
+  const prefix = prefixOf(ref);
+  return prefix ? `${prefix}-${key}` : key;
+}
+
+/** The map's label as its stories carry it, e.g. WEB-CHK, PAY-CHK or CHK. */
+export function labelOf(ref: StoryMapRef): string {
+  return storyPrefix(ref, keyOfMap(ref.dir) ?? ref.id);
 }
 
 /** The value of --map in CLI args, e.g. chk for --map chk. */
@@ -161,3 +140,8 @@ export const mapFlag = (args: string[]): string | undefined => {
   const i = args.indexOf("--map");
   return i >= 0 ? args[i + 1] : undefined;
 };
+
+/** Every story map in a repo, each maps/<id>. */
+export function storyMapsOf(root: string): StoryMapRef[] {
+  return mapDirs(root).map((dir) => ({ root, dir, id: basename(dir) }));
+}

@@ -33,7 +33,7 @@ word isn't an answer.
 
 ## 3. When nothing is recorded
 
-Say: "No decision about <topic> is recorded in intent/decisions.md." You may
+Say: "No decision about <topic> is recorded in decisions.md." You may
 add what the git history of `intent/` shows (`git log -p -- intent/`), marked
 clearly as history, not a recorded decision. Then offer to log one:
 

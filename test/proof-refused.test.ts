@@ -45,7 +45,7 @@ describe("proof run: done refused", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-refused-"));
     writeFileSync(join(root, "package.json"), JSON.stringify({ name: "tip", type: "module" }));
     init(root, { name: "Tip Calculator", key: "TC" });
-    const featurePath = join(root, "intent/features/getting-started/first-story.feature");
+    const featurePath = join(root, "maps/tc/features/getting-started/first-story.feature");
     writeFileSync(featurePath, feature);
     setupVerify(root);
     symlinkSync(join(__dirname, "../node_modules"), join(root, "node_modules"));
@@ -61,7 +61,7 @@ describe("proof run: done refused", () => {
       refused = err as StateError;
     }
     expect(refused?.message).toBe("TC-1 stays in_progress: its scenarios don't all pass:\n  ✗ AC2 — The total rounds to the nearest cent");
-    expect(readFileSync(join(root, "intent/state.yaml"), "utf8")).toContain("status: in_progress");
+    expect(readFileSync(join(root, "maps/tc/state.yaml"), "utf8")).toContain("status: in_progress");
 
     writeFileSync(join(root, "tip.js"), tip("round"));
     expect(setState("TC-1", "done", { dir: root }).to).toBe("done");

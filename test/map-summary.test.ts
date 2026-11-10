@@ -6,7 +6,7 @@ import { parse } from "yaml";
 import { readFileSync } from "node:fs";
 import { setState } from "../src/commands/state";
 import { approve } from "../src/commands/approve";
-import { summaryBody, summaryDrift, summaryWith, hasSummary, type SummaryBody } from "../src/lib/map-summary";
+import { summaryBody, summaryDrift, summaryWith, type SummaryBody } from "../src/lib/map-summary";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
 import { mkdtempSync } from "node:fs";
@@ -128,11 +128,6 @@ describe("the summary a map's files say", () => {
     expect(summaryDrift(body, { format_version: 1, map: "chk", stories: body.stories })).toBeUndefined();
   });
 
-  it("a map gets a summary only in a repo's maps/ folder: intent/ gets none", () => {
-    expect(hasSummary({ root: "/r", dir: "/r/intent", inRepo: false })).toBe(false);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/chk", id: "chk", inRepo: true })).toBe(true);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/inb", id: "inb", inRepo: true })).toBe(true);
-  });
 });
 
 describe("the drift check against a committed delivery.yaml", () => {

@@ -3,7 +3,7 @@ import { loadStates } from "../lib/state-files.js";
 import { parse } from "yaml";
 import { store } from "../lib/store.js";
 import { featureStoryIds, featureTags, isDone, read, walk } from "../lib/project.js";
-import { homeOf, storyMapFor, mapFlag } from "../lib/maps.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 
 export interface NextResult {
   /** The story to build next, or undefined when nothing is left to do. */
@@ -15,9 +15,9 @@ export interface NextResult {
 }
 
 /** Each story's @depends-<id> tags, from its feature file. */
-export function dependencies(intentDir: string): Map<string, string[]> {
+export function dependencies(mapDir: string): Map<string, string[]> {
   const deps = new Map<string, string[]>();
-  for (const file of walk(join(intentDir, "features"), ".feature")) {
+  for (const file of walk(join(mapDir, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
     if (id) deps.set(id, featureTags(text, "depends"));
@@ -28,18 +28,18 @@ export function dependencies(intentDir: string): Map<string, string[]> {
 /** The first todo story in run.queue, then in story map order, whose dependencies are all done. */
 /** states: each story's status, in place of the map's own (a rollout passes the owner's delivery summary). */
 export function next(dir: string, mapId?: string, opts: { states?: Record<string, { status?: string }> } = {}): NextResult {
-  const ref = storyMapFor(dir, { map: mapId });
-  const intentDir = ref.dir;
-  const map = parse(read(join(intentDir, "storymap.yaml")));
-  const state = store().exists(join(intentDir, "state.yaml")) ? parse(read(join(intentDir, "state.yaml"))) : undefined;
-  const stories: Record<string, { status?: string }> = opts.states ?? loadStates(homeOf(ref));
+  const ref = resolveStoryMap(dir, { map: mapId });
+  const mapDir = ref.dir;
+  const map = parse(read(join(mapDir, "storymap.yaml")));
+  const state = store().exists(join(mapDir, "state.yaml")) ? parse(read(join(mapDir, "state.yaml"))) : undefined;
+  const stories: Record<string, { status?: string }> = opts.states ?? loadStates(ref.dir);
   const mapOrder: string[] = (map?.releases ?? [])
     .slice()
     .sort((a: any, b: any) => a.number - b.number)
     .flatMap((r: any) => r.stories ?? []);
   const order = [...new Set([...(state?.run?.queue ?? []), ...mapOrder])];
   const open = order.filter((id) => ["in_progress", "needs_rework"].includes(stories[id]?.status ?? "")).map((id) => ({ id, status: stories[id].status! }));
-  const deps = dependencies(intentDir);
+  const deps = dependencies(mapDir);
   const waiting: NextResult["waiting"] = [];
   for (const id of order) {
     if ((stories[id]?.status ?? "todo") !== "todo") continue;

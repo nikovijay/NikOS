@@ -1,4 +1,4 @@
-// Where nikOS reads and writes a repo's files: intent/, planning/ and approvals. The CLI uses
+// Where nikOS reads and writes a repo's files: maps/, planning/ and decisions. The CLI uses
 // the disk. Another tool can load a repo's files into a MemoryStore (from GitHub, GitLab or
 // anywhere), run nikOS's commands against it, and take the changed files back to commit.
 // Running scenarios, cloning upstream plans and package assets (schemas, templates) always use
@@ -42,7 +42,7 @@ export class MemoryStore implements Store {
   private changed = new Set<string>();
   private removed = new Set<string>();
 
-  /** files: paths relative to root (e.g. "intent/storymap.yaml") and their text. */
+  /** files: paths relative to root (e.g. "maps/ht/storymap.yaml") and their text. */
   constructor(files: Record<string, string> = {}, readonly root = resolve(sep, "repo")) {
     for (const [path, text] of Object.entries(files)) this.files.set(resolve(root, path), text);
   }

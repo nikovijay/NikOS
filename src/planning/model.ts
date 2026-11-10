@@ -23,7 +23,7 @@ export const checkPlan = schema("plan.schema.json");
 export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const today = () => new Date().toISOString().slice(0, 10);
 
-/** The repo root holding planning/ (and usually intent/): a repo root, or planning/ itself. */
+/** The repo root holding planning/ (and usually maps/): a repo root, or planning/ itself. */
 export function findRoot(start: string): string {
   const abs = resolve(start);
   return basename(abs) === "planning" && !store().exists(join(abs, "planning")) ? dirname(abs) : abs;
@@ -82,7 +82,6 @@ export const paths = (root: string) => {
     upstream: join(planning, "upstream.yaml"),
     lock: join(planning, "upstream.lock"),
     cache: join(base, ".nikos", "upstream"),
-    intent: join(base, "intent"),
   };
 };
 

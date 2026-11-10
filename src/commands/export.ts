@@ -1,6 +1,6 @@
 // `nikos export`: the story map in a shape another tool reads. A PRD in Markdown for people;
 // JSON for Linear (one issue per story, fields named as in Linear's IssueCreateInput) and Jira
-// (the body of POST /rest/api/2/issue/bulk). intent/ stays the source: these are copies.
+// (the body of POST /rest/api/2/issue/bulk). The story map stays the source: these are copies.
 import { writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { isDone } from "../lib/project.js";
@@ -42,7 +42,7 @@ function facts(m: StoryMap, s: MapStory): string[] {
 }
 
 export function toPrd(m: StoryMap): string {
-  const out = [`# ${m.project || "Product"}: product requirements`, "", "Exported from the nikOS story map (intent/storymap.yaml). Edit the story map, not this file.", ""];
+  const out = [`# ${m.project || "Product"}: product requirements`, "", "Exported from the nikOS story map (maps/<key>/storymap.yaml). Edit the story map, not this file.", ""];
   if (m.personas.length) {
     out.push("## Who it's for", "");
     for (const p of m.personas) out.push(`- **${p.title}**${p.description ? `: ${p.description}` : ""}`);

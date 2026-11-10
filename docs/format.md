@@ -245,7 +245,7 @@ existing file.
 **Purpose:** why things are the way they are. Append-only; never rewrite an
 entry, add a new one that supersedes it.
 
-**Path:** `intent/decisions.md`, or `planning/decisions.md` in a company or
+**Path:** `decisions.md` at the repo root, or `planning/decisions.md` in a company or
 department plan with no story map (see [planning.md](planning.md))
 
 **Format:** Markdown. One `##` entry per decision, newest last:
@@ -400,6 +400,14 @@ optionally, a demo or reel script. Written by the validate playbook; the
 founder sends it, never the agent.
 
 ---
+
+## delivery.yaml
+
+**Purpose:** what each story's status and approval are, as of the last write, so the plans above a repo can read delivery without the story files.
+
+**Path:** `maps/<key>/delivery.yaml`, one per map.
+
+**Format:** YAML with `format_version`, `map`, an optional `owner` (the map's owner, else the repo's group key), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map.
 
 ## Versioning this format
 

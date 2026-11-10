@@ -23,7 +23,7 @@ const write = (root: string, path: string) => {
 
 describe("quickstart walkthrough", () => {
   it("names the three files a reader saves", () => {
-    expect([...files.keys()]).toEqual(["intent/features/getting-started/first-story.feature", "tip.js", "test/steps/tip.steps.mjs"]);
+    expect([...files.keys()]).toEqual(["maps/tc/features/getting-started/first-story.feature", "tip.js", "test/steps/tip.steps.mjs"]);
   });
 
   it("only uses commands nikos has", () => {
@@ -47,7 +47,7 @@ describe("quickstart walkthrough", () => {
     expect(init(root, { name: "Tip Calculator", key: "TC" }).validation.errors).toEqual([]);
 
     // 3. the story, still valid, then started
-    write(root, "intent/features/getting-started/first-story.feature");
+    write(root, "maps/tc/features/getting-started/first-story.feature");
     expect(validate(root).errors).toEqual([]);
     setState("TC-1", "in_progress", { dir: root });
 

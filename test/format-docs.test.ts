@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 
 const root = join(__dirname, "..");
 const formatDoc = readFileSync(join(root, "docs/format.md"), "utf8");
-const example = join(root, "examples/hello-todo/intent");
+const example = join(root, "examples/hello-todo/maps/ht");
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -20,6 +20,7 @@ const documented: { heading: string; pattern: RegExp }[] = [
   { heading: "features/&lt;activity&gt;/&lt;story-slug&gt;.feature", pattern: /^features\/[a-z0-9-]+\/[a-z0-9-]+\.feature$/ },
   { heading: "plans/&lt;story-id&gt;.v&lt;N&gt;.md", pattern: /^plans\/[A-Z]+-\d+\.v\d+\.md$/ },
   { heading: "decisions.md", pattern: /^decisions\.md$/ },
+  { heading: "delivery.yaml", pattern: /^delivery\.yaml$/ },
   { heading: "state.yaml", pattern: /^state\.yaml$/ },
   { heading: "outreach/&lt;date&gt;-&lt;channel&gt;.md (optional)", pattern: /^outreach\/\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/ },
 ];

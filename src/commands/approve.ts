@@ -1,5 +1,4 @@
-// `nikos approve`: a person's sign-off on a done story, written to intent/approvals.yaml
-// (or intent/approvals/<ID>.yaml). Two
+// `nikos approve`: a person's sign-off on a done story, written to maps/<key>/approvals/<ID>.yaml. Two
 // ways in, recorded as `via`:
 // - terminal: the person runs it and types the story id back. A coding agent runs commands
 //   without a terminal, so it can't take this route.
@@ -20,12 +19,12 @@ import { approvalLapse, doneMark, loadApprovals } from "../lib/approvals.js";
 import { approvalFileOf, noEntry, storyState, writeApproval } from "../lib/state-files.js";
 import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
-import { homeOf, storyMapFor } from "../lib/maps.js";
+import { resolveStoryMap } from "../lib/maps.js";
 import { codeChangedSince, codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
-import { hasSummary, writeMapSummary } from "../lib/map-summary.js";
+import { writeMapSummary } from "../lib/map-summary.js";
 
 /** Who is approving: git's user.name, or the login name when git has none. */
 export function approver(dir: string): string {
@@ -44,8 +43,8 @@ export type Via = "terminal" | "chat" | "app" | "tracker";
 
 export function approve(story: string, opts: { dir?: string; map?: string; by: string; date?: string; via?: Via }): ApproveResult {
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
-  const home = homeOf(ref);
+  const ref = resolveStoryMap(opts.dir ?? process.cwd(), { story, map: opts.map });
+  const home = ref.dir;
   const settings = resolveSettings(ref.root);
   const policy = settings["approval.policy"];
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
@@ -57,7 +56,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
     throw new StateError(`Approvals ${via === "app" ? "through the app" : via === "chat" ? "in chat" : "in a terminal"} don't count here: approval.routes is ${(routes.value as string[]).join(", ")} (set by ${routes.from})`);
   }
   // A map's story with no state entry is todo, so it's refused below as not done.
-  const entry = storyState(home, story) ?? (ref.inRepo ? { status: "todo" } : undefined);
+  const entry = storyState(home, story) ?? { status: "todo" };
   if (!entry) throw new StateError(noEntry(home, story));
   if (entry.status !== "done") throw new StateError(`${story} is ${entry.status}: only a done story can be approved`);
   const feature = featureFor(story, ref.root, ref.id);
@@ -69,7 +68,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   // A map's story is approved for the code it tested: no code may have changed since the commit the
   // proof ran at. A commit that only moves nikOS's own state or approvals doesn't count. Without git
   // or a commit there is no commit to test against, so these checks are skipped.
-  const head = ref.inRepo ? headOf(ref.root) : undefined;
+  const head = headOf(ref.root);
   const tested = entry.evidence?.commit ?? entry.tested_commit;
   // Uncommitted code isn't any commit: the proof ran on it, so it can't be approved at a commit.
   if (head && codeIsDirty(ref.root)) {
@@ -101,7 +100,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
   writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(head && tested ? { tested_commit: tested } : {}) });
   // The map's delivery.yaml shows the approval, so it's written with it.
-  if (hasSummary(ref)) writeMapSummary(ref.root, ref.dir);
+  writeMapSummary(ref.root, ref.dir);
   return { story, by: opts.by, on };
 }
 
@@ -142,9 +141,9 @@ export async function runApprove(args: string[]): Promise<number> {
   for (const story of stories) {
     try {
       approve(story, { dir, map, by, via });
-      // The file the approval went to, from the repo root: a map's approvals/, or intent/approvals.yaml.
-      const ref = storyMapFor(dir, { story, map });
-      const where = relative(ref.root, approvalFileOf(homeOf(ref), story));
+      // The file the approval went to, from the repo root: the map's approvals/<ID>.yaml.
+      const ref = resolveStoryMap(dir, { story, map });
+      const where = relative(ref.root, approvalFileOf(ref.dir, story));
       console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (${where})`);
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);

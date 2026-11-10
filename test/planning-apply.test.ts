@@ -76,7 +76,7 @@ describe("applying a change file", () => {
     const file = changeFile(co, [{ op: "checkin", target: { kr: "kr-1" }, args: { value: 2 }, expect: kr(co, "kr-1") }]);
     const r = await apply(file, co, { commit: true });
     expect(r.code).toBe(0);
-    expect(r.text).toContain("! 1 changed file outside planning/, maps/ and intent/ are left alone.");
+    expect(r.text).toContain("! 1 changed file outside planning/ and maps/ are left alone.");
     expect(git(co, "show", "--name-only", "--format=", "HEAD").split("\n").filter(Boolean)).toEqual(["planning/krs/kr-1.yaml"]);
     expect(git(co, "status", "--porcelain")).toContain("?? notes.txt");
   });
@@ -134,7 +134,7 @@ describe("applying a change file", () => {
     const file = changeFile(co, [{ op: "checkin", target: { kr: "kr-1" }, args: { value: 9 }, expect: kr(co, "kr-1") }]);
     const r = await apply(file, co);
     expect(r.code).toBe(1);
-    expect(r.err.join("\n")).toContain("✗ Commit or stash changes in planning/, maps/ or intent/ first");
+    expect(r.err.join("\n")).toContain("✗ Commit or stash changes in planning/ or maps/ first");
   });
 
   it("says when the commit it was exported from isn't HEAD, and applies anyway", async () => {

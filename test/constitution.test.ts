@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { lintConstitution } from "../src/lint/constitution";
 import { validate } from "../src/commands/validate";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
-const example = readFileSync(join(__dirname, "../examples/hello-todo/intent/constitution.md"), "utf8");
+const example = readFileSync(join(__dirname, "../examples/hello-todo/constitution.md"), "utf8");
 const errors = (text: string) => lintConstitution(text).filter((i) => i.level === "error").map((i) => i.message);
 
 describe("constitution lint", () => {
@@ -29,7 +29,7 @@ describe("constitution lint", () => {
 
   it("runs as part of validate", () => {
     const intent = copyExample();
-    edit(join(intent, "constitution.md"), (s) => s.replace(/## First\n.*\n/, ""));
+    edit(join(rootOf(intent), "constitution.md"), (s) => s.replace(/## First\n.*\n/, ""));
     expect(validate(intent).errors.map((e) => `${e.file}: ${e.message}`)).toContain("constitution.md: is missing ## First");
   });
 });
@@ -56,7 +56,7 @@ describe("validate playbook", () => {
 
   it("drafts outreach and records results back into the constitution", () => {
     expect(steps).toHaveLength(9);
-    for (const part of ["intent/constitution.md", "signal that counts as proof", "intent/outreach/", "demo or reel script", "## Validation", "nikos decide", "nikos validate"]) {
+    for (const part of ["constitution.md", "signal that counts as proof", "maps/<key>/outreach/", "demo or reel script", "## Validation", "nikos decide", "nikos validate"]) {
       expect(steps.some((s) => s.includes(part)), part).toBe(true);
     }
     expect(index).toMatch(/^\| validate \| `validate\.md` \|.*outreach/m);

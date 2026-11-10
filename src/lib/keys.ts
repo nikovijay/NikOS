@@ -2,7 +2,7 @@
 // one chain can't share one. Joining refuses a clash it can see, and the rollout reports the ones
 // among the copies below it. A key is read from a copy's planning/plan.yaml.
 import { dirname, join, relative, sep } from "node:path";
-import { keyOf } from "./maps.js";
+import { groupKeyOf } from "./maps.js";
 import { walk } from "./project.js";
 
 /** A key for a group, plan or map (D6): capital letters and digits, starting with a letter, up to 10. */
@@ -20,7 +20,7 @@ export function copyKeys(cacheDir: string): CopyKey[] {
   const out: CopyKey[] = [];
   for (const dir of new Set(roots)) {
     if (dir.includes(`${sep}.fetch`)) continue;
-    const key = keyOf(dir);
+    const key = groupKeyOf(dir);
     if (key) out.push({ repo: relative(cacheDir, dir).split(sep).join("/"), key });
   }
   return out;
@@ -31,7 +31,7 @@ export function copyKeys(cacheDir: string): CopyKey[] {
  * and each copy in cacheDirs, other than the repo's own copy, must differ.
  */
 export function keyClash(self: string, repo: string, key: string, cacheDirs: string[]): string | undefined {
-  if (keyOf(self) === key) return `${repo} uses key ${key}, which this plan uses: give one of them another key`;
+  if (groupKeyOf(self) === key) return `${repo} uses key ${key}, which this plan uses: give one of them another key`;
   const other = cacheDirs.flatMap(copyKeys).find((c) => c.key === key && c.repo !== repo);
   if (other) return `${repo} uses key ${key}, which ${other.repo} already uses: give one of them another key`;
   return undefined;

@@ -1,55 +1,30 @@
-// nikos doctor's migration hints: a 0.2.x intent/ repo is never failed, a runner that doesn't run the
+// nikos doctor: a repo still on intent/ fails with the migrate hint, a runner that doesn't run the
 // story folder is warned, and a healthy group repo gets nothing new.
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doctor } from "../src/commands/doctor";
-import { copyExample } from "./helpers";
+import { copyExample, rootOf } from "./helpers";
 import { groupRepo, write } from "./repo-fixture";
 
-describe("doctor on a 0.2.x intent/ repo", () => {
-  it("a repo with a team plan that still has key results: the story map hints at both moves, and nothing fails", () => {
-    const root = join(copyExample(), "..");
-    const checks = doctor(root, { offline: true });
-    const story = checks.find((c) => c.name === "story map")!;
-    expect(story.status).toBe("ok");
-    expect(story.next).toContain("Team plans are going away");
-    expect(story.next).toContain("nikos migrate maps moves it under a group plan.");
-    // The example has no runner yet, which doctor has always failed; nothing else fails.
-    expect(checks.filter((c) => c.status === "fail").map((c) => c.name)).toEqual(["scenario runner"]);
-  });
-
-  it("a repo with no plan gets only the migrate hint, and no plan check", () => {
-    const root = join(copyExample(), "..");
-    rmSync(join(root, "planning", "plan.yaml"), { force: true });
-    const checks = doctor(root, { offline: true });
-    // The example ids are this repo's: its map key, and the group key migrate suggests from the folder name.
-    expect(checks.find((c) => c.name === "story map")!.next).toMatch(/^nikos migrate maps moves it under a group plan\. Story ids without the group key stop it unless you pass --rename-ids \(([A-Z][A-Z0-9]*)-1 becomes [A-Z][A-Z0-9]*-\1-1\)\. Nothing moves until you confirm\.$/);
-    expect(checks.some((c) => c.name === "plan")).toBe(false);
-  });
-
-  it("a 0.2.x repo with a warning still gets the team plan and migrate hints", () => {
-    const intent = copyExample();
-    const root = join(intent, "..");
-    // The feature is tagged release 2, but the story map puts HT-2 in release 1: a warning.
-    const feature = join(intent, "features/tasks/see-todays-top-three.feature");
-    writeFileSync(feature, readFileSync(feature, "utf8").replace("@release-1", "@release-2"));
+describe("doctor on a repo with intent/", () => {
+  it("fails the story map check and says to run nikos migrate maps", () => {
+    const root = rootOf(copyExample());
+    mkdirSync(join(root, "intent"));
     const story = doctor(root, { offline: true }).find((c) => c.name === "story map")!;
-    expect(story.status).toBe("warn");
-    expect(story.next).toContain("Run nikos validate to see the warnings");
-    expect(story.next).toContain("Team plans are going away");
-    expect(story.next).toContain("nikos migrate maps moves it under a group plan.");
+    expect(story).toMatchObject({ status: "fail", found: "this repo keeps its story map in intent/, the old layout" });
+    expect(story.next).toContain("nikos migrate maps");
   });
 
   it("a plan that doesn't parse doesn't stop the checks: the story map and the runner still print", () => {
-    const root = join(copyExample(), "..");
+    const root = rootOf(copyExample());
     writeFileSync(join(root, "planning", "plan.yaml"), "level: [company\n");
     const names = doctor(root, { offline: true }).map((c) => c.name);
     expect(names).toEqual(expect.arrayContaining(["story map", "scenario runner"]));
   });
 
   it("a runner that lists its paths without the story folder is warned, and a runner with no paths passes", () => {
-    const root = join(copyExample(), "..");
+    const root = rootOf(copyExample());
     writeFileSync(join(root, "cucumber.mjs"), 'export default {\n  paths: ["test/features/**/*.feature"],\n};\n');
     expect(doctor(root, { offline: true }).find((c) => c.name === "scenario runner")).toMatchObject({ status: "warn", found: "cucumber.mjs doesn't list the story's features folder" });
     writeFileSync(join(root, "cucumber.mjs"), "export default {};\n");

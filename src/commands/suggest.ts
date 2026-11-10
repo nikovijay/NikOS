@@ -7,7 +7,7 @@ import { repoRootOf } from "../lib/maps.js";
 import { store } from "../lib/store.js";
 import { resolveSettings } from "../lib/settings.js";
 import { join, resolve } from "node:path";
-import { findIntentDir, isDone } from "../lib/project.js";
+import { isDone } from "../lib/project.js";
 import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
@@ -99,8 +99,10 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
 export function suggest(dir: string, mapId?: string): Suggestion {
   const maps = mapDirs(dir);
   if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
-  const intentDir = resolveStoryMap(dir, mapId).dir;
-  if (!store().exists(join(intentDir, "storymap.yaml"))) {
+  if (!maps.length && store().isDir(join(dir, "intent"))) {
+    return { summary: "this repo keeps its story map in intent/", options: [{ label: "Move the story map into maps/", do: "Run nikos migrate maps, then commit the result." }] };
+  }
+  if (!maps.length) {
     if (store().exists(join(dir, "planning", "plan.yaml"))) return planSuggestion(dir);
     return {
       summary: "nikOS isn't set up in this repo yet.",
@@ -112,6 +114,7 @@ export function suggest(dir: string, mapId?: string): Suggestion {
     };
   }
 
+  const mapDir = resolveStoryMap(dir, { map: mapId }).dir;
   const map = storyMapOf(dir, mapId);
   const stories = [...map.releases.flatMap((r) => r.stories), ...map.unreleased];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -119,13 +122,13 @@ export function suggest(dir: string, mapId?: string): Suggestion {
   const add = (o: Option) => options.length < MAX && options.push(o);
 
   const problems = validate(dir, mapId).errors.length;
-  const where = mapId ? `maps/${mapId.toLowerCase()}/` : "intent/";
+  const where = `maps/${basename(mapDir)}/`;
   if (problems) add({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in ${where}`, do: `Run nikos validate${mapId ? ` --map ${mapId}` : ""} and fix each error it lists.` });
 
   const changed = stories.filter((s) => s.specChanged);
   if (changed.length) add({ label: `Review what changed in ${list(changed.map((s) => s.id))} since it was done`, do: "Show the feature's change since done, and ask whether to move it back to needs_rework.", stories: changed.map((s) => s.id) });
 
-  const n = next(intentDir);
+  const n = next(mapDir);
   for (const o of n.open) {
     const s = byId.get(o.id);
     add({ label: `${o.status === "needs_rework" ? "Rework" : "Finish"} ${s ? named(s) : o.id}`, do: "Run the build-a-story playbook for this story.", stories: [o.id] });
@@ -133,7 +136,7 @@ export function suggest(dir: string, mapId?: string): Suggestion {
 
   // Done stories nobody has signed off (the map shows a story with an approval that holds as
   // approved): the agent asks "Do you want to approve …?"
-  const approvalsOn = resolveSettings(repoRootOf(intentDir))["approval.policy"].value !== "off";
+  const approvalsOn = resolveSettings(repoRootOf(mapDir))["approval.policy"].value !== "off";
   const unapproved = approvalsOn ? stories.filter((s) => s.status === "done" && !s.specChanged) : [];
   if (unapproved.length) {
     add({
@@ -160,7 +163,7 @@ export function suggest(dir: string, mapId?: string): Suggestion {
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
 
   // The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results.
-  planningOptions(repoRootOf(intentDir)).forEach(add);
+  planningOptions(repoRootOf(mapDir)).forEach(add);
 
   add({ label: "Add a story", do: "Ask what the person wants the product to do next, then add it with nikos story add and write its scenarios." });
   add({ label: "Look at the story map", do: "Run nikos map, or open the planning dashboard's map if it's running, and show the person." });
@@ -183,7 +186,7 @@ export function runSuggest(args: string[]): number {
   const mapId = mapFlag(args);
   // --brief is for a session-start hook: one line, and nothing at all outside a nikOS repo.
   if (args.includes("--brief")) {
-    if (!mapDirs(dir).length && !store().exists(join(findIntentDir(dir), "storymap.yaml")) && !store().exists(join(dir, "planning", "plan.yaml"))) return 0;
+    if (!mapDirs(dir).length && !store().isDir(join(dir, "intent")) && !store().exists(join(dir, "planning", "plan.yaml"))) return 0;
     try {
       const s = suggest(dir, mapId);
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);

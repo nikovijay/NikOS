@@ -126,7 +126,7 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
   );
 
   // Never a home folder, and never on top of another project without a yes.
-  const busy = !atHome && readdirSync(cwd).some((f) => !f.startsWith(".")) && !existsSync(join(cwd, "intent")) && !existsSync(join(cwd, "planning"));
+  const busy = !atHome && readdirSync(cwd).some((f) => !f.startsWith(".")) && !existsSync(join(cwd, "intent")) && !existsSync(join(cwd, "maps")) && !existsSync(join(cwd, "planning"));
   let dir = resolve(cwd);
   if (atHome || (busy && !(await confirm(ask, `This folder already has other files in it:\n  ${resolve(cwd)}\nSet nikOS up in this folder anyway?`, "n")))) {
     const suggestion = slugify(name);

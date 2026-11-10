@@ -46,9 +46,9 @@ describe("the onboarding wizard", () => {
 
     const lines = setUp(a, home);
     expect(existsSync(join(a.dir, ".git"))).toBe(true);
-    expect(existsSync(join(a.dir, "intent/storymap.yaml"))).toBe(true);
+    expect(existsSync(join(a.dir, "maps/ar/storymap.yaml"))).toBe(true);
     expect(readFileSync(join(a.dir, "planning/plan.yaml"), "utf8")).toContain("level: company");
-    expect(readFileSync(join(a.dir, "intent/storymap.yaml"), "utf8")).toContain("AR");
+    expect(readFileSync(join(a.dir, "maps/ar/storymap.yaml"), "utf8")).toContain("AR");
     // With the version check off, no current nikos is known on PATH, so it names npx.
     expect(lines).toContain("  1. See it in your browser: cd acme-robotics && npx -y nikos@latest serve");
   });
@@ -72,7 +72,7 @@ describe("the onboarding wizard", () => {
     const { ask, asked } = scripted(["4", "Tip Calc", "", "", "maybe", "n"]);
     await expect(askOnboarding(dir, ask, "/nowhere")).rejects.toBeInstanceOf(Cancelled);
     expect(asked[5].q).toMatch(/^Please type y for yes or n for no\./);
-    expect(existsSync(join(dir, "intent"))).toBe(false);
+    expect(existsSync(join(dir, "maps", "ht"))).toBe(false);
   });
 
   it("asks again on an answer it can't use, and sets a company plan up in this folder", async () => {
@@ -83,7 +83,7 @@ describe("the onboarding wizard", () => {
     expect(a).toEqual({ kind: "company", dir, name: "Acme", period: "Q1 2027", departments: ["Payments", "Growth"], gitInit: false });
     expect(asked.at(-1)!.q).toContain(`In ${dir} (this folder)`);
     const lines = setUp(a, dir);
-    expect(existsSync(join(dir, "intent"))).toBe(false);
+    expect(existsSync(join(dir, "maps", "ht"))).toBe(false);
     expect(readFileSync(join(dir, "planning/downstream.yaml"), "utf8")).toContain("Payments");
     expect(lines).toContain("  1. See it in your browser: npx -y nikos@latest serve");
   });
@@ -110,7 +110,7 @@ describe("the onboarding wizard", () => {
     expect(plan).toMatchObject({ level: "group", key: "PAY", period: "Q1 2027" });
     expect(lines.join("\n")).toContain("map new --bet faster-checkout --key CHK");
     expect(lines.join("\n")).toContain("planning bet new faster-checkout");
-    expect(existsSync(join(dir, "intent"))).toBe(false);
+    expect(existsSync(join(dir, "maps", "ht"))).toBe(false);
   });
 
   it("a product keeps its own path: the same start, and a See it line", async () => {
@@ -118,7 +118,7 @@ describe("the onboarding wizard", () => {
     const { ask } = scripted(["4", "Tip Calc", "TC", "n", ""]);
     const a = await askOnboarding(dir, ask, "/nowhere");
     const lines = setUp(a, dir);
-    expect(existsSync(join(dir, "intent/storymap.yaml"))).toBe(true);
+    expect(existsSync(join(dir, "maps/tc/storymap.yaml"))).toBe(true);
     expect(lines.some((l) => l.includes("See it in your browser: "))).toBe(true);
     expect(lines.join("\n")).toContain("migrate maps moves it into a group.");
   });
@@ -126,7 +126,7 @@ describe("the onboarding wizard", () => {
   it("start refuses a repo that has maps/", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-start-maps-"));
     mkdirSync(join(dir, "maps"));
-    expect(() => start(dir)).toThrow("This repo has maps/ (group story maps). Add a product's story map with nikos map new, not start.");
+    expect(() => start(dir)).toThrow("This repo has maps/ (story maps). Add another story map with nikos map new, not start.");
   });
 
   it("is only for a person at a terminal: start with flags never asks", () => {

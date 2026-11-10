@@ -381,7 +381,7 @@ function guideView() {
       '<span class="muted">its own repo, planning/</span></div><div class="muted">' + l[2] + '</div></div>';
   }).join('') +
     '<div class="alt-arrow" aria-hidden="true">↑ specs a bet</div>' +
-    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">intent/ or maps/ in the repo that builds it</span></div><div class="muted">Specs a bet as stories, organised by activity and step. Story status comes from the work itself.</div></div>';
+    '<div class="alt delivery"><div class="row"><strong>Story map</strong><span class="muted">maps/<key>/ in the repo that builds it</span></div><div class="muted">Specs a bet as stories, organised by activity and step. Story status comes from the work itself.</div></div>';
   var steps = [
     ['Plan the period', 'Ask your agent to plan the quarter. It asks for the level, pillars, objectives and key results, and shows a draft. Nothing is written until you approve.'],
     ['Align upward', 'List the plans above you in planning/upstream.yaml. nikos planning sync keeps a read-only copy, so a key result can align to key results above, and a bet to bets above, by reference, without ever writing to that repo.'],

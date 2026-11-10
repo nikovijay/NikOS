@@ -3,8 +3,8 @@ import { loadStates, type StoryState } from "../lib/state-files.js";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
-import { STORY_ID, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
-import { homeOf, storyMapFor, mapFlag } from "../lib/maps.js";
+import { STORY_ID, decisionsPath, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
+import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
 import { codeChangedSince } from "../lib/git.js";
 import { featureFor } from "./clear.js";
@@ -15,24 +15,24 @@ import { decisionEntries } from "./decisions.js";
 
 const yamlFile = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
 
-/** Everything the intent/ folder says about one story, in plain text. */
+/** Everything the story map says about one story, in plain text. */
 export function show(story: string, dir: string, mapId?: string): string {
   if (!STORY_ID.test(story)) throw new Error(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
-  const ref = storyMapFor(dir, { story, map: mapId });
-  const intentDir = ref.dir;
-  const home = homeOf(ref);
+  const ref = resolveStoryMap(dir, { story, map: mapId });
+  const mapDir = ref.dir;
+  const home = ref.dir;
   const file = featureFor(story, ref.root, ref.id);
   if (!file) throw new Error(`No feature file is tagged @${story}`);
   const feature = parseFeature(read(file));
-  if (!feature) throw new Error(`${rel(intentDir, file)} has no Feature`);
+  if (!feature) throw new Error(`${rel(ref.root, file)} has no Feature`);
 
   const tags = feature.tags.map((t) => t.name.slice(1));
   const priority = tags.find((t) => ["must", "should", "could", "wont"].includes(t));
   const effort = tags.find((t) => t.startsWith("effort-"))?.slice(7);
-  const map = yamlFile(join(intentDir, "storymap.yaml"));
+  const map = yamlFile(join(mapDir, "storymap.yaml"));
   const release = (map?.releases ?? []).find((r: any) => (r?.stories ?? []).includes(story));
   const states = loadStates(home);
-  const entry: StoryState | undefined = states[story] ?? (ref.inRepo ? { status: "todo" } : undefined);
+  const entry: StoryState | undefined = states[story] ?? { status: "todo" };
   const text = read(file);
 
   const out = [`${story} — ${feature.name}`];
@@ -70,12 +70,12 @@ export function show(story: string, dir: string, mapId?: string): string {
   out.push("", "Scenarios:");
   for (const s of scenariosOf(feature)) out.push(`  ${s.name}`);
 
-  const versions = planVersions(intentDir, story);
+  const versions = planVersions(mapDir, story);
   out.push("");
   if (versions.length) {
     const v = versions.at(-1)!;
-    const plan = parseFrontMatter(read(join(intentDir, "plans", `${story}.v${v}.md`)));
-    out.push(`Plan: v${v} (intent/plans/${story}.v${v}.md)${plan?.meta?.summary ? ` — ${plan.meta.summary}` : ""}`);
+    const plan = parseFrontMatter(read(join(mapDir, "plans", `${story}.v${v}.md`)));
+    out.push(`Plan: v${v} (${rel(ref.root, join(mapDir, "plans", `${story}.v${v}.md`))})${plan?.meta?.summary ? ` — ${plan.meta.summary}` : ""}`);
   } else {
     out.push("Plan: none yet");
   }
@@ -87,7 +87,8 @@ export function show(story: string, dir: string, mapId?: string): string {
 
   const decisions = decisionEntries(dir).filter((e) => e.title.includes(`(${story})`));
   out.push(decisions.length ? "Decisions:" : "Decisions: none recorded for this story");
-  for (const d of decisions) out.push(`  intent/decisions.md:${d.start} ${d.title}`);
+  const decisionsFile = rel(ref.root, decisionsPath(ref.root));
+  for (const d of decisions) out.push(`  ${decisionsFile}:${d.start} ${d.title}`);
   return out.join("\n");
 }
 

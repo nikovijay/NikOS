@@ -7,38 +7,36 @@ import { init, keyFor, runInit } from "../src/commands/init";
 const tmp = () => mkdtempSync(join(tmpdir(), "nikos-init-"));
 
 describe("init", () => {
-  it("scaffolds a valid intent folder in an empty dir", () => {
+  it("scaffolds maps/<key>/ and the root files in an empty dir", () => {
     const root = tmp();
     const r = init(root, { name: "Hello Todo" });
     expect(r.skipped).toEqual([]);
     expect(r.created.sort()).toEqual(
-      ["constitution.md", "decisions.md", "features/getting-started/first-story.feature", "plans/.gitkeep", "state.yaml", "storymap.yaml"].sort(),
+      ["constitution.md", "decisions.md", "maps/ht/delivery.yaml", "maps/ht/features/getting-started/first-story.feature", "maps/ht/plans/.gitkeep", "maps/ht/state.yaml", "maps/ht/storymap.yaml"].sort(),
     );
     expect(r.validation.errors).toEqual([]);
     expect(r.validation.warnings).toEqual([]);
-    expect(readFileSync(join(root, "intent/storymap.yaml"), "utf8")).toContain("key: HT\n");
-    expect(readFileSync(join(root, "intent/constitution.md"), "utf8")).toContain("name: Hello Todo");
-    expect(readFileSync(join(root, "intent/features/getting-started/first-story.feature"), "utf8")).toMatch(/^@HT-1 /);
+    expect(readFileSync(join(root, "maps/ht/storymap.yaml"), "utf8")).toContain("key: HT\n");
+    expect(readFileSync(join(root, "constitution.md"), "utf8")).toContain("name: Hello Todo");
+    expect(readFileSync(join(root, "maps/ht/features/getting-started/first-story.feature"), "utf8")).toMatch(/^@HT-1 /);
   });
 
   it("does not overwrite existing files", () => {
     const root = tmp();
-    mkdirSync(join(root, "intent"));
-    writeFileSync(join(root, "intent/constitution.md"), "my own vision\n");
+    mkdirSync(join(root, "maps", "ht"), { recursive: true });
+    writeFileSync(join(root, "constitution.md"), "my own vision\n");
     const r = init(root, { name: "Hello Todo" });
     expect(r.skipped).toEqual(["constitution.md"]);
-    expect(r.created).toHaveLength(5);
-    expect(readFileSync(join(root, "intent/constitution.md"), "utf8")).toBe("my own vision\n");
+    expect(r.created).toHaveLength(6);
+    expect(readFileSync(join(root, "constitution.md"), "utf8")).toBe("my own vision\n");
   });
 
-  it("changes nothing when run twice", () => {
+  it("refuses to run again over its own map, and changes nothing", () => {
     const root = tmp();
     init(root, { name: "Hello Todo" });
-    const before = readFileSync(join(root, "intent/state.yaml"), "utf8");
-    const again = init(root, { name: "Something Else", key: "SE" });
-    expect(again.created).toEqual([]);
-    expect(again.skipped).toHaveLength(6);
-    expect(readFileSync(join(root, "intent/state.yaml"), "utf8")).toBe(before);
+    const before = readFileSync(join(root, "maps/ht/state.yaml"), "utf8");
+    expect(() => init(root, { name: "Hello Todo" })).toThrow("maps/ht/ already exists");
+    expect(readFileSync(join(root, "maps/ht/state.yaml"), "utf8")).toBe(before);
   });
 
   it("derives a project key from the name and accepts an override", () => {
@@ -47,7 +45,7 @@ describe("init", () => {
     expect(keyFor("my-cool app")).toBe("MCA");
     const root = tmp();
     init(root, { name: "Hello Todo", key: "todo" });
-    expect(readFileSync(join(root, "intent/state.yaml"), "utf8")).toContain("TODO-1:");
+    expect(readFileSync(join(root, "maps/todo/state.yaml"), "utf8")).toContain("TODO-1:");
     expect(() => init(tmp(), { key: "1x" })).toThrow("isn't a valid project key");
   });
 
@@ -56,7 +54,7 @@ describe("init", () => {
     for (const args of [["--dir", root, "--name"], ["--name", "--key", "HT", "--dir", root], ["--dir", root, "--key", ""]]) {
       expect(runInit(args)).toBe(1);
     }
-    expect(existsSync(join(root, "intent"))).toBe(false);
+    expect(existsSync(join(root, "maps", "ht"))).toBe(false);
     expect(runInit(["--dir", root, "--name", "Hello Todo"])).toBe(0);
   });
 });

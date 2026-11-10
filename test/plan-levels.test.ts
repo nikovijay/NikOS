@@ -40,7 +40,7 @@ describe("plan levels", () => {
     expect(runGroup(["init", "--name", "Checkout", "--dir", group])).toBe(0);
     expect(parse(readFileSync(join(group, "planning/plan.yaml"), "utf8")).level).toBe("group");
     expect(existsSync(join(group, "planning/krs"))).toBe(false);
-    expect(existsSync(join(group, "intent"))).toBe(false);
+    expect(existsSync(join(group, "maps", "ht"))).toBe(false);
     expect(readFileSync(join(group, "planning/plan.yaml"), "utf8")).toContain("OKRs stop at department level");
 
     expect(runCompany(["init", "--name", "X", "--level", "group", "--dir", mkdtempSync(join(tmpdir(), "nikos-x-"))])).toBe(1);
@@ -205,7 +205,7 @@ describe("group key", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     runGroup(["init", "--name", "Checkout", "--key", "CHK", "--dir", g]);
     expect(existsSync(join(g, "maps"))).toBe(false);
-    expect(existsSync(join(g, "intent"))).toBe(false);
+    expect(existsSync(join(g, "maps", "ht"))).toBe(false);
     expect(existsSync(join(g, "planning/bets"))).toBe(true);
     vi.restoreAllMocks();
   });

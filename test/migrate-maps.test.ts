@@ -75,7 +75,7 @@ function legacyRepo(o: Opts = {}): string {
   write(join(dir, "intent/approvals/HT-1.yaml"), `by: Ada Lovelace\non: 2026-10-02\nspec_hash: ${specHash(add1)}\ndone_at: 2026-10-02\n`);
   write(join(dir, "intent/plans/HT-12.v1.md"), "# HT-12 plan\n\nKeep a note, as HT-12 asks.\n");
   write(join(dir, "intent/decisions.md"), "# Decisions\n\n## 2026-10-01 — chose a list (HT-12)\n**Category:** architecture\n**Supersedes:** none\n\nWhy HT-12.\n");
-  write(join(dir, "intent/constitution.md"), readFileSync(join(__dirname, "../examples/hello-todo/intent/constitution.md"), "utf8"));
+  write(join(dir, "intent/constitution.md"), readFileSync(join(__dirname, "../examples/hello-todo/constitution.md"), "utf8"));
   if (o.plan !== null) write(join(dir, "planning/plan.yaml"), o.plan ?? KEYED_PLAN);
   for (const [id, text] of Object.entries(o.bets ?? { "checkout-speed": BET("checkout-speed") })) write(join(dir, `planning/bets/${id}.md`), text);
   write(join(dir, "CODEOWNERS"), "/intent/approvals/ @acme/pm\n/intent/features/ @acme/qa\n/src/ @acme/dev\n");

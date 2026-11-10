@@ -471,7 +471,7 @@ function mapErrors(root: string): string[] {
   for (const dir of mapDirs(root)) {
     const id = basename(dir);
     try {
-      for (const e of validateMap({ root, dir, id, inRepo: true }).errors) out.push(`maps/${id}/${e.file}: ${e.message}`);
+      for (const e of validateMap({ root, dir, id }).errors) out.push(`maps/${id}/${e.file}: ${e.message}`);
     } catch (err) {
       out.push(`maps/${id}: ${(err as Error).message}`);
     }

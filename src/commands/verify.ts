@@ -69,8 +69,10 @@ export function setupVerify(root: string): SetupResult {
   const skipped: string[] = [];
   // Step stubs are for the example story `nikos init` creates; skip them once
   // it's gone or rewritten into a real story, whose steps they wouldn't match.
-  const example = join(root, "intent/features/getting-started/first-story.feature");
-  const hasExample = existsSync(example) && readFileSync(example, "utf8").includes(EXAMPLE_STEP);
+  const hasExample = mapDirs(root).some((m) => {
+    const example = join(m, "features/getting-started/first-story.feature");
+    return existsSync(example) && readFileSync(example, "utf8").includes(EXAMPLE_STEP);
+  });
   for (const file of walk(src)) {
     const rel = relative(src, file);
     if (!hasExample && /first[-_]story/.test(rel)) continue;

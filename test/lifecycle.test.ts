@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -13,7 +13,7 @@ import { validate } from "../src/commands/validate";
 import { renderMap, storyMapOf } from "../src/commands/map";
 import { show } from "../src/commands/show";
 import { specHash } from "../src/lib/project";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 const stateOf = (intent: string, id: string) => parse(readFileSync(join(intent, "state.yaml"), "utf8")).stories[id];
 const feature = (intent: string, file: string) => join(intent, "features/tasks", file);
@@ -72,8 +72,8 @@ describe("approve", () => {
       join(root, "test/steps/first-story.steps.mjs"),
       `import { Given, When, Then } from "@cucumber/cucumber";\nGiven("I am a new user", () => {});\nWhen("I do the one thing this product is for", () => {});\nThen("I see the result I came for", () => {});\n`,
     );
-    const intent = join(root, "intent");
-    const approvals = () => parse(readFileSync(join(intent, "approvals.yaml"), "utf8"));
+    const intent = join(root, "maps", "fx");
+    const approvals = () => parse(readFileSync(join(intent, "approvals", "FX-1.yaml"), "utf8"));
     setState("FX-1", "in_progress", { dir: root });
     setState("FX-1", "done", { dir: root, now: "2026-11-06T10:00:00Z" });
     const file = join(intent, "features/getting-started/first-story.feature");
@@ -81,8 +81,7 @@ describe("approve", () => {
     expect(stateOf(intent, "FX-1")).toMatchObject({ status: "done", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
 
     expect(approve("FX-1", { dir: root, by: "Niko", date: "2026-11-06" })).toEqual({ story: "FX-1", by: "Niko", on: "2026-11-06" });
-    expect(approvals().approvals["FX-1"]).toEqual({ by: "Niko", on: "2026-11-06", via: "terminal", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
-    expect(readFileSync(join(intent, "approvals.yaml"), "utf8")).toContain("Protect this file with CODEOWNERS");
+    expect(approvals()).toEqual({ by: "Niko", on: "2026-11-06", via: "terminal", spec_hash: hash, done_at: "2026-11-06T10:00:00Z" });
     expect(stateOf(intent, "FX-1").status).toBe("done"); // state.yaml doesn't change
     expect(validate(root).errors).toEqual([]);
     expect(validate(root).warnings).toEqual([]);
@@ -111,14 +110,15 @@ describe("approve", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     expect(await runApprove(["FX-1", "--via", "chat", "--dir", root])).toBe(0);
     log.mockRestore();
-    expect(approvals().approvals["FX-1"]).toMatchObject({ via: "chat", done_at: "2026-11-07T09:00:00Z" });
+    expect(approvals()).toMatchObject({ via: "chat", done_at: "2026-11-07T09:00:00Z" });
     expect(validate(root).warnings).toEqual([]);
   }, 60_000);
 
-  it("validate checks approvals.yaml names real stories", () => {
+  it("validate checks approvals/ names real stories", () => {
     const intent = copyExample();
-    writeFileSync(join(intent, "approvals.yaml"), "format_version: 1\napprovals:\n  HT-9: { by: Niko, on: 2026-11-06, spec_hash: abcdefabcdef, done_at: x }\n");
-    expect(errors(intent)).toEqual(["approvals.HT-9 is an unknown story id"]);
+    mkdirSync(join(intent, "approvals"));
+    writeFileSync(join(intent, "approvals", "HT-9.yaml"), "by: Niko\non: 2026-11-06\nspec_hash: abcdefabcdef\ndone_at: x\n");
+    expect(errors(intent)).toEqual(["HT-9 is an unknown story id"]);
   });
 });
 
@@ -181,7 +181,8 @@ describe("personas and story types", () => {
 describe("release check and approvals", () => {
   const signed = (intent: string) => {
     const hash = specHash(readFileSync(feature(intent, "add-a-task.feature"), "utf8"));
-    writeFileSync(join(intent, "approvals.yaml"), `format_version: 1\napprovals:\n  HT-1: { by: Niko, on: 2026-11-06, via: chat, spec_hash: "${hash}", done_at: 2026-11-03 }\n`);
+    mkdirSync(join(intent, "approvals"), { recursive: true });
+    writeFileSync(join(intent, "approvals", "HT-1.yaml"), `by: Niko\non: 2026-11-06\nvia: chat\nspec_hash: "${hash}"\ndone_at: 2026-11-03\n`);
   };
 
   it("says when a changed feature means an approval no longer holds", () => {
@@ -196,12 +197,12 @@ describe("release check and approvals", () => {
   it("says why a story isn't approved when approvals are required and it went through done again", () => {
     const intent = copyExample();
     signed(intent);
-    writeFileSync(join(intent, "../nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\n");
+    writeFileSync(join(rootOf(intent), "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\n");
     expect(checkRelease({ number: 1 }, intent).gaps).not.toContain("HT-1 isn't approved");
     edit(join(intent, "state.yaml"), (s) => s.replace("plan_version: 2", "plan_version: 2\n    done_at: 2026-11-07T09:00:00Z"));
     expect(checkRelease({ number: 1 }, intent).gaps).toContain("HT-1 isn't approved: it went through done again since Niko approved it");
     // With approvals optional, a lapsed approval doesn't hold the release back.
-    writeFileSync(join(intent, "../nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: optional\n");
+    writeFileSync(join(rootOf(intent), "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: optional\n");
     expect(checkRelease({ number: 1 }, intent).gaps.filter((g) => g.startsWith("HT-1"))).toEqual([]);
   });
 });

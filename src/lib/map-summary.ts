@@ -6,7 +6,7 @@ import { basename } from "node:path";
 import { approvalLapse, loadApprovals } from "./approvals.js";
 import { loadMapData, mapStoryIds } from "./map-data.js";
 import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./delivery-summary.js";
-import { keyOf, mapOwnerOf, type StoryMapRef } from "./maps.js";
+import { groupKeyOf, mapOwnerOf } from "./maps.js";
 import { isDone, specHash } from "./project.js";
 import { loadStates } from "./state-files.js";
 
@@ -31,12 +31,9 @@ export interface SummaryBody {
   stories: SummaryBodyStory[];
 }
 
-/** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/). */
-export const hasSummary = (ref: StoryMapRef): boolean => ref.inRepo;
-
 /** The owner a map's summary carries: its storymap owner, else the repo's group key. Undefined when neither is set. */
 export function ownerFor(root: string, dir: string): string | undefined {
-  return mapOwnerOf(dir) ?? keyOf(root);
+  return mapOwnerOf(dir) ?? groupKeyOf(root);
 }
 
 /**

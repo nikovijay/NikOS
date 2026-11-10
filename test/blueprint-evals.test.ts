@@ -14,11 +14,12 @@ describe("blueprint evals", () => {
   });
 
   for (const run of runs) {
-    const intent = join(outputs, run, "intent");
+    const root = join(outputs, run);
+    const intent = join(root, "maps", readdirSync(join(root, "maps"))[0]);
 
     it(`${run}: constitution, story map and features pass validate and CLEAR`, () => {
       expect(validate(intent).errors).toEqual([]);
-      const constitution = readFileSync(join(intent, "constitution.md"), "utf8");
+      const constitution = readFileSync(join(root, "constitution.md"), "utf8");
       expect(constitution).toMatch(/^## Jobs to be done\n\s*\S/m);
       expect(constitution).toMatch(/^## Founding hypothesis\n\s*We believe/m);
 

@@ -134,7 +134,7 @@ function mapsData(root: string) {
     const id = basename(dir);
     const key = keyOfMap(dir) ?? id;
     try {
-      const ref = resolveStoryMap(root, id);
+      const ref = resolveStoryMap(root, { map: id });
       const sm = storyMapOfRef(ref);
       const info = new Map<string, { title: string; activity: string; release: number }>();
       for (const r of sm.releases) for (const s of r.stories) info.set(s.id, { title: s.title, activity: s.activity, release: r.number });
@@ -302,7 +302,6 @@ function hashesOf(root: string): Record<string, string> {
   for (const f of walk(paths(root).krs, ".yaml")) add(f);
   for (const f of walk(paths(root).bets, ".md")) add(f);
   for (const dir of mapDirs(root)) for (const f of walk(dir)) add(f);
-  if (store().isDir(join(root, "intent"))) for (const f of walk(join(root, "intent"))) add(f);
   return out;
 }
 
@@ -665,7 +664,7 @@ function pendingOf(ctx: Ctx) {
     /** The files a commit would take, by name, for the pending bar. */
     paths: statusOf(root, nikosPaths(root), run).map(pathOf),
     unrelated,
-    ...(unrelated.length && branch ? { warning: `Saving onto ${branch} with uncommitted changes outside planning/, maps/ and intent/. Commit or stash them before opening a pull request.` } : {}),
+    ...(unrelated.length && branch ? { warning: `Saving onto ${branch} with uncommitted changes outside planning/ and maps/. Commit or stash them before opening a pull request.` } : {}),
     ...(branch ? {} : { notice: "Saves aren't on a branch because HEAD is detached" }),
     forge: {
       host: kind ?? null,

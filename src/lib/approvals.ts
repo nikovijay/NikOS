@@ -1,8 +1,6 @@
-// Approvals live in intent/approvals.yaml, or maps/<key>/approvals/<ID>.yaml (one per story), apart
-// from story state, so a repo can protect them: a CODEOWNERS rule on them means an approval only
+// Approvals live in maps/<key>/approvals/<ID>.yaml (one per story), apart from story state, so a repo can protect them: a CODEOWNERS rule on them means an approval only
 // lands when the right person reviews the PR or merge request. Agents write state all the time;
 // approvals only change on sign-off.
-import { join } from "node:path";
 import { loadApprovalEntries, type StoryHome } from "./state-files.js";
 
 export interface Approval {
@@ -17,8 +15,6 @@ export interface Approval {
   /** The commit the story was tested at, for a story in a repo with git: a new commit's code lapses it. */
   tested_commit?: string;
 }
-
-export const approvalsPath = (intentDir: string) => join(intentDir, "approvals.yaml");
 
 export function loadApprovals(home: StoryHome): Record<string, Approval> {
   return loadApprovalEntries<Approval>(home);

@@ -1,6 +1,7 @@
 format_version: 1
 project: hello-todo
 key: HT
+bet: fewer-missed-tasks
 activities:
   - id: tasks
     title: Manage tasks
@@ -15,7 +16,6 @@ releases:
   - number: 1
     title: MVP
     goal: Capture tasks and see only today's top three.
-    bets: [fewer-missed-tasks]
     stories: [HT-1, HT-2]
   - number: 2
     title: Enhancements
