@@ -69,7 +69,7 @@ Get started
                    repo (--name, --year, --pillars); --map makes a story map for this code
                    (--name, --key, --join <planning repo>). In a terminal, with no flags, it asks
                    which one, then a few questions. An agent passes the flags
-  serve            Open the dashboard in your browser: the plan and the story map
+  serve            Open this repo's story map in your browser
                    (--port; --export <file> saves it as one page you can share)
   doctor           Check this repo is set up well, and say what to do next (--offline)
   suggest          Say where things stand and what to do next (--json, --brief, --map; in a

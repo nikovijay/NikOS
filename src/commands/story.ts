@@ -155,7 +155,7 @@ export function runStory(args: string[]): number {
 export const mapLabel = (ref: StoryMapRef) => `maps/${ref.id}`;
 
 /** The feature file of a story in a map, or undefined when no feature in it has that id. */
-export function featureOf(ref: StoryMapRef, id: string): string | undefined {
+function featureOf(ref: StoryMapRef, id: string): string | undefined {
   return walk(join(ref.dir, "features"), ".feature").find((f) => featureStoryIds(read(f))[0] === id);
 }
 

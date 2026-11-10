@@ -11,7 +11,6 @@ import { newStory } from "../src/commands/story";
 import { setState } from "../src/commands/state";
 import { validate, validateGroup } from "../src/commands/validate";
 import { doctor } from "../src/commands/doctor";
-import { delivery } from "../src/planning/delivery";
 import { decide } from "../src/commands/decide";
 import { betsFor } from "../src/lib/bets";
 
@@ -252,21 +251,6 @@ describe("group validation", () => {
   });
 });
 
-describe("delivery across maps", () => {
-  it("counts the stories of every map that specs the bet", () => {
-    const root = oneMap();
-    mapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "ACME", "--dir", root]);
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    newActivity({ title: "Pay", map: "pay" }, root);
-    vi.restoreAllMocks();
-    newStory({ title: "Add a task", activity: "tasks", map: "chk" }, root);
-    newStory({ title: "Pay now", activity: "pay", map: "pay" }, root);
-    const d = delivery(root, "faster-checkout");
-    expect(d).toMatchObject({ status: "Building", done: 0, total: 2 });
-    expect(d.maps).toEqual(["chk", "pay"]);
-  });
-});
-
 describe("nikos map in a group", () => {
   it("bare nikos map still writes the page", () => {
     const root = oneMap();
@@ -313,14 +297,6 @@ describe("review fixes for group maps", () => {
     }).not.toThrow();
     expect(errors.length).toBeGreaterThan(0);
     expect(doctor(root, { offline: true }).find((c) => c.name === "story map")?.status).toBe("fail");
-  });
-
-  it("leaves a cancelled story out of a bet's total", () => {
-    const root = oneMap();
-    newStory({ title: "Add a task", activity: "tasks" }, root);
-    newStory({ title: "Share a task", activity: "tasks" }, root);
-    setState("ACME-CHK-2", "cancelled", { dir: root, map: "chk", reason: "Not needed" });
-    expect(delivery(root, "faster-checkout").total).toBe(1);
   });
 
   it("moves a story to done through its own map when a group has several", () => {

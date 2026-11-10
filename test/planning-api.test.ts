@@ -1,17 +1,18 @@
-// The dashboard's write endpoints: /api/op through the one write path, the legacy saves kept as
-// they were, and the checks every POST passes before its body is read.
+// The plan dashboard's write endpoints: /api/op through the one write path, and the checks every POST
+// passes before its body is read.
 import { afterEach, describe, expect, it } from "vitest";
 import http from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initPlanRepo } from "../src/plan/repo";
+import { startPlanServe } from "../src/plan/serve";
 import { newBet } from "../src/planning/bets";
 import { newKr } from "../src/planning/krs";
-import { hash, loadBet, loadKr } from "../src/planning/model";
-import { startServer, type RunningServer } from "../src/planning/server";
+import { hash, loadKr } from "../src/planning/model";
+import type { RunningServer } from "../src/planning/server";
 import type { Runner } from "../src/lib/git";
-import { groupRepo, readText } from "./planning-fixture";
+import { readText } from "./planning-fixture";
 
 let running: RunningServer[] = [];
 afterEach(async () => {
@@ -19,18 +20,18 @@ afterEach(async () => {
   running = [];
 });
 
-/** The company's area of a planning repo that isn't a git repo, with one key result and one bet. */
+/** A planning repo that isn't a git repo, with the company's one key result (kr-1) and one bet. Returns its root. */
 function plainCompany(): string {
   const repo = mkdtempSync(join(tmpdir(), "nikos-plain-"));
   initPlanRepo(repo, { name: "Acme", year: "2027" });
   const area = join(repo, "planning", "company");
   newKr({ id: "kr-1", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-03-31" }, area);
   newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, area);
-  return area;
+  return repo;
 }
 
 async function start(root: string, run?: Runner): Promise<RunningServer> {
-  const srv = await startServer(root, run ? { run } : {});
+  const srv = (await startPlanServe(root, { run, offline: true })).srv;
   running.push(srv);
   return srv;
 }
@@ -67,44 +68,40 @@ function raw(srv: RunningServer, method: string, path: string, headers: Record<s
 const ok = (srv: RunningServer, path: string, body: unknown, extra: Record<string, string> = {}) =>
   raw(srv, "POST", path, { host: `127.0.0.1:${srv.port}`, "content-type": "application/json", "x-nikos-token": srv.token, ...extra }, body);
 
-const opBody = (op: string, target: Record<string, string>, args: Record<string, unknown>, expect = "") => ({ op, target, args, expect });
+/** A change to the company's area, named as the page names it. */
+const opBody = (op: string, target: Record<string, string>, args: Record<string, unknown>, expect = "") => ({ op, target, args, expect, area: "company" });
 
 describe("POST /api/op", () => {
   it("applies a change and reports what it wrote, under planning/ only", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const h = hash(readText(root, "krs/kr-1.yaml"));
+    const h = hash(readText(root, "planning/company/krs/kr-1.yaml"));
     const res = await ok(srv, "/api/op", opBody("checkin", { kr: "kr-1" }, { value: 1.5, note: "Week 1" }, h));
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, message: "Checked in kr-1: 1.5", changed: ["planning/company/krs/kr-1.yaml"], branch: null });
-    expect(loadKr(root, "kr-1").data.checkins.at(-1)).toMatchObject({ value: 1.5, note: "Week 1" });
+    expect(res.body).toMatchObject({ ok: true, message: "Checked in kr-1: 1.5", changed: ["planning/company/krs/kr-1.yaml"], branch: null, area: "company" });
+    expect(loadKr(join(root, "planning", "company"), "kr-1").data.checkins.at(-1)).toMatchObject({ value: 1.5, note: "Week 1" });
   });
 
   it("returns the command's refusal, verbatim, as a 400", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const res = await ok(srv, "/api/op", opBody("kr.edit", { kr: "kr-1" }, { title: "" }, hash(readText(root, "krs/kr-1.yaml"))));
+    const res = await ok(srv, "/api/op", opBody("kr.edit", { kr: "kr-1" }, { title: "" }, hash(readText(root, "planning/company/krs/kr-1.yaml"))));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("A key result needs a title (--title)");
   });
 
-  it("refuses an op at the wrong level with a 400", async () => {
+  it("refuses an op a planning area doesn't make, with a 400", async () => {
     const srv = await start(plainCompany());
     const res = await ok(srv, "/api/op", opBody("story.rename", { story: "HT-1" }, { title: "x" }, "0000000000000000"));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("story.rename isn't a change a planning area makes: story maps and settings stay in the code repos");
   });
 
-  it("refuses an id that is a path, and accepts a group's story id", async () => {
+  it("refuses an id that is a path", async () => {
     const srv = await start(plainCompany());
     const bad = await ok(srv, "/api/op", opBody("kr.edit", { kr: "../../etc" }, { title: "x" }, "0000000000000000"));
     expect(bad.status).toBe(400);
-    expect(bad.body.error).toBe("'../../etc' is not a key result id (lowercase words joined by hyphens)");
-
-    const g = groupRepo("PAY");
-    const gsrv = await start(g);
-    const story = await ok(gsrv, "/api/op", opBody("story.rename", { story: "PAY-CHK-1" }, { map: "chk", title: "Pay by debit card" }, hash(readText(g, "maps/chk/features/pay/pay-by-card.feature"))));
-    expect(story.status).toBe(200);
+    expect(bad.body.error).toBe("No key result called '../../etc' in this company's plan. See them all with: nikos plan status");
   });
 
   it("answers 409 when the file changed since the page loaded it", async () => {
@@ -118,7 +115,7 @@ describe("POST /api/op", () => {
   it("refuses outcome through /api/op: only a review sets it", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const h = hash(readText(root, "bets/faster.md"));
+    const h = hash(readText(root, "planning/company/bets/faster.md"));
     const res = await ok(srv, "/api/op", opBody("bet.edit", { bet: "faster" }, { outcome: "won" }, h));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("'outcome' can't be edited here");
@@ -186,28 +183,12 @@ describe("pending and the page", () => {
     expect(existsSync(join(root, ".git"))).toBe(false);
   });
 
-  it("the page drops the token from its address, and saves through /api/op", async () => {
+  it("the page saves through /api/op with the token, and shows the pending bar", async () => {
     const srv = await start(plainCompany());
     const html = (await raw(srv, "GET", "/", { host: `127.0.0.1:${srv.port}` })).body as string;
-    expect(html).toContain("history.replaceState");
     expect(html).toContain("/api/op");
     expect(html).toContain('id="pending"');
-    expect(html).not.toContain("<form");
-  });
-
-});
-
-describe("the snapshot of the same page", () => {
-  it("is not in the live page: no save code leaves the export", async () => {
-    const { exportSnapshot } = await import("../src/planning/server");
-    const dir = mkdtempSync(join(tmpdir(), "nikos-export-"));
-    const out = join(dir, "snap.html");
-    exportSnapshot(plainCompany(), out);
-    const html = readText(dir, "snap.html");
-    expect(html).not.toContain("fetch(");
-    expect(html).not.toContain("/api/op");
-    expect(html).not.toContain("X-Nikos-Token");
-    rmSync(dir, { recursive: true, force: true });
+    expect(html).toContain(srv.token);
   });
 });
 

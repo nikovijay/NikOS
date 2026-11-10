@@ -1,7 +1,7 @@
 // The story map: activities as columns, releases as numbered bands, stories as cards tinted
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
-// Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
+// Served live by nikos serve, it also gets a filter bar (see FILTER_JS).
 import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
@@ -191,7 +191,7 @@ const statusOf = (s: MapStory) =>
 const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The whole story map as one standalone HTML page. live adds the dashboard's filter bar and its script. */
+/** The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve. */
 export function renderMap(dir: string, opts: { live?: boolean; map?: string } = {}): string {
   const m = storyMapOf(dir, opts.map);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
@@ -288,7 +288,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string } = 
 <style>${CSS}</style>
 </head>
 <body>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.live ? `<a class="back" href="/">← Planning</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title"><h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
 ${filters}<main id="board" tabindex="-1">
 ${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
@@ -422,8 +422,6 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; backgrou
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .skip { position: absolute; left: 12px; top: -48px; z-index: 20; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; }
 .skip:focus { top: 12px; }
-.back { display: inline-flex; align-items: center; min-height: 28px; font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none; margin-right: 6px; }
-.back:hover { color: var(--ink); text-decoration: underline; }
 .title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .blank { margin: 32px 0; max-width: 560px; padding: 24px; border: 1px dashed var(--line-2); border-radius: 12px; background: var(--surface); font-size: 14px; }
 .blank h2 { margin: 0 0 6px; font-size: 16px; }

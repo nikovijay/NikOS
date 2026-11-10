@@ -1,13 +1,9 @@
-import { writeMapSummary } from "../src/lib/map-summary";
-import { featureFor } from "../src/commands/clear";
-import { specHash } from "../src/lib/project";
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { parse } from "yaml";
 import { newBet, reviewBet, type BetInput } from "../src/planning/bets";
 import { checkIn, isStale, newKr, reviseTarget } from "../src/planning/krs";
-import { delivery, describeDelivery } from "../src/planning/delivery";
 import { checkBet, checkKr, loadBet, loadKr, validatePlanning } from "../src/planning/model";
 import { mkdirSync } from "node:fs";
 import { copyExample, edit, rootOf } from "./helpers";
@@ -88,40 +84,6 @@ describe("bet cards", () => {
     const msgs = validatePlanning(root).map((i) => i.message);
     expect(msgs).toContain("unknown field 'stories'");
     expect(msgs.some((m) => m.startsWith("outcome must be one of"))).toBe(true);
-  });
-});
-
-describe("delivery", () => {
-  // A status change is written to the map's delivery summary too, as nikos state set does. A done
-  // story is recorded against its feature, so its proof is current.
-  const setStatus = (root: string, id: string, status: string) => {
-    const hash = specHash(readFileSync(featureFor(id, root, "ht")!, "utf8"));
-    edit(join(root, "maps/ht/state.yaml"), (s) => s.replace(new RegExp(`(${id}:\\n    status: )\\w+`), `$1${status}${status === "done" ? `\n    spec_hash: ${hash}` : ""}`));
-    writeMapSummary(root, join(root, "maps/ht"));
-  };
-
-  it("shipped when all stories are done", () => {
-    const root = repo();
-    // The map's bet is on every story in it, so all three must be done.
-    setStatus(root, "HT-1", "done");
-    setStatus(root, "HT-2", "done");
-    setStatus(root, "HT-3", "done");
-    const d = delivery(root, "fewer-missed-tasks");
-    expect(d).toMatchObject({ status: "Shipped", done: 3, total: 3, releases: [1, 2] });
-    expect(loadBet(root, "fewer-missed-tasks").meta.outcome).toBe("open"); // the outcome stays as recorded
-  });
-
-  it("building with a count", () => {
-    const d = delivery(repo(), "fewer-missed-tasks");
-    expect(d).toMatchObject({ status: "Building", done: 0, total: 3 });
-    // HT-1 is done in the example with no proof recorded against its feature, so it's counted as not current.
-    expect(describeDelivery(d)).toBe("Building, 0 of 3 done, 1 not current with its feature");
-  });
-
-  it("not started when nothing names it", () => {
-    const root = repo();
-    newBet(bet, root);
-    expect(delivery(root, "faster-checkout")).toMatchObject({ status: "Not started", total: 0 });
   });
 });
 

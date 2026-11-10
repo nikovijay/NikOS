@@ -7,7 +7,6 @@ import { parse, stringify } from "yaml";
 import { validate } from "../src/commands/validate";
 import { readDeliverySummaryResult, writeDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
 import { writeMapSummary } from "../src/lib/map-summary";
-import { planningData } from "../src/planning/server";
 import { contractProblems, contractVersion, NewerContractError, schemaProblems } from "../src/lib/schema";
 import { groupRepo, write } from "./repo-fixture";
 import { mapStatus, runMapStatus, writeSummaries } from "../src/commands/map-status";
@@ -103,17 +102,6 @@ describe("a newer delivery.yaml is never overwritten by a code repo's nikOS", ()
     write(join(g, "maps/chk/delivery.yaml"), "stories: [unclosed\n");
     writeMapSummary(g, join(g, "maps/chk"), NOW);
     expect(summaryOf(g).version).toBe(1);
-  });
-
-  it("the planning page keeps a map's stories when its summary is refused, and names the refusal as the map's problem", () => {
-    const g = groupRepo("PAY");
-    writeSummaries(g, mapStatus(g), NOW);
-    const data = summaryOf(g);
-    data.version = 2;
-    putSummary(g, data);
-    const map = planningData(g).maps.find((m) => m.id === "chk") as { stories: { id: string }[]; problem?: string };
-    expect(map.stories.length).toBeGreaterThan(0);
-    expect(map.problem).toBe("this delivery.yaml was written by a newer nikOS: upgrade nikos in the code repo");
   });
 });
 

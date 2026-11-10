@@ -69,8 +69,6 @@ export const paths = (root: string) => {
     planning,
     bets: join(planning, "bets"),
     krs: join(planning, "krs"),
-    plan: join(planning, "plan.yaml"),
-    views: join(planning, "views"),
   };
 };
 
