@@ -43,6 +43,11 @@ planning/
   `--by`. A department's key result needs a quarter inside that year
   (`--period 2027-Q1`) and is due at the quarter's end. Groups and teams have
   no period. Their bets have review dates.
+- **A key result can go down.** `--direction down` marks a figure that should
+  fall, such as days to close (11 toward 7). Progress is worked out the same
+  way both ways, so at 9 it is half way. Past the baseline the page says the
+  figure "moved the wrong way" rather than showing a minus sign. A direction
+  that points against the target's side is a validate warning, not an error.
 - **Ids are unique within the company.** No two areas, key results or bets
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.

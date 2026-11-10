@@ -7,7 +7,7 @@ import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
 import { parseArgs } from "../lib/args.js";
-import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
+import { checkIn, directionOf, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
@@ -31,7 +31,8 @@ Set it up
 
 Key results and bets
   plan kr new <id>     Add a key result (--in <area>, --title, --owner, --baseline, --target,
-                       --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to)
+                       --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to,
+                       --direction up|down for a figure that should go down, such as days to close)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
   plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date)
   plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
@@ -64,7 +65,7 @@ function krLine(area: Area, id: string): string {
   const aligns = alignsList(k.aligns_to);
   return `    ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${
     area.level === "department" && k.period ? ` · ${k.period}` : ""
-  }${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${isStale(k) ? " · stale" : ""}`;
+  }${directionOf(k) === "down" ? " · should go down" : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${isStale(k) ? " · stale" : ""}`;
 }
 
 function betLine(area: Area, id: string): string {
@@ -154,6 +155,7 @@ function keyResultJson(area: Area, id: string) {
     by: k.by,
     ...(k.unit ? { unit: k.unit } : {}),
     ...(k.period ? { period: k.period } : {}),
+    ...(k.direction ? { direction: k.direction } : {}),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(k),
     aligns_to: alignsList(k.aligns_to),
@@ -247,6 +249,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
               period: opt("period"),
               unit: opt("unit"),
               objective: opt("objective"),
+              direction: opt("direction") as "up" | "down" | undefined,
               alignsTo: all("aligns-to"),
               staleAfterDays: opt("stale-after") ? Number(opt("stale-after")) : undefined,
             },

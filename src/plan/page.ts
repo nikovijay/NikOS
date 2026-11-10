@@ -57,9 +57,10 @@ export function hrefOf(params: Record<string, string | undefined>): string {
   return `?${q.toString()}`;
 }
 
-const pct = (p: number) => (Number.isFinite(p) ? `${Math.round(p * 100)}%` : "no progress yet");
+/** Progress as a share. Below 0 the figure has moved the wrong way, so the words say so rather than a minus sign. */
+const pct = (p: number) => (!Number.isFinite(p) ? "no progress yet" : p < 0 ? "moved the wrong way" : `${Math.round(p * 100)}%`);
 const checkinOf = (k: KrRef) => (k.latest ? `last ${k.latest.value} on ${k.latest.date}` : "no check-ins");
-const krMeta = (k: DashKr) => `${pct(k.progress)} toward ${k.target}${k.unit ? ` ${k.unit}` : ""}, ${checkinOf(k)}${k.stale ? " · stale" : ""}`;
+const krMeta = (k: DashKr) => `${pct(k.progress)} toward ${k.target}${k.unit ? ` ${k.unit}` : ""}${k.direction === "down" ? " (should go down)" : ""}, ${checkinOf(k)}${k.stale ? " · stale" : ""}`;
 
 /** A bet's delivery in words, as plan status says it: its own figures, or each bet below that has maps. */
 export function deliveryText(d: BetDelivery | undefined): string {

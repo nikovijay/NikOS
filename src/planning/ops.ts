@@ -130,7 +130,7 @@ export const OP_LEVELS = levelsOf(AREA_GROUP, TEAM);
  */
 const ARGS: Partial<Record<OpName, string[]>> = {
   checkin: ["value", "note", "evidence", "date"],
-  "kr.new": ["title", "owner", "baseline", "target", "by", "unit", "objective", "aligns_to", "stale_after_days"],
+  "kr.new": ["title", "owner", "baseline", "target", "by", "unit", "objective", "direction", "aligns_to", "stale_after_days"],
   "kr.target": ["target"],
   "kr.align": ["aligns_to"],
   "bet.new": ["owner", "hypothesis", "review_on", "review", "team", "starts", "deadline", "primary", "also", "aligns_to", "confidence", "dependencies", "evidence"],
@@ -247,6 +247,7 @@ function apply(root: string, op: Op): string {
           by: String(a.by ?? ""),
           unit: typeof a.unit === "string" ? a.unit : undefined,
           objective: str(a.objective),
+          direction: str(a.direction) as "up" | "down" | undefined,
           alignsTo: refs(a.aligns_to),
           staleAfterDays: a.stale_after_days ? num(a.stale_after_days) : undefined,
         },

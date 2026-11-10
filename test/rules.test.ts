@@ -28,6 +28,9 @@ const table: [string, unknown[]][] = [
   ["krFieldProblems", [{ baseline: 1 }, "edit"]],
   ["krFieldProblems", [{ title: "", by: "soon" }, "edit"]],
   ["krFieldProblems", [{ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01" }, "new"]],
+  ["krFieldProblems", [{ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", direction: "sideways" }, "new"]],
+  ["krFieldProblems", [{ direction: "down" }, "edit"]],
+  ["krFieldProblems", [{ direction: "" }, "edit"]],
   ["betFieldProblems", [{ outcome: "won" }]],
   ["betFieldProblems", [{ owner: "", review_on: "2026-01-02", confidence: "huge" }]],
 ];
@@ -53,6 +56,8 @@ describe("shared rules", () => {
     expect(rules.decisionProblem("maybe")).toBe("A review decision is one of continue, change, stop, complete");
     expect(rules.reasonProblem("")).toBe("A review needs a reason (--why)");
     expect(rules.krFieldProblems({ baseline: 1 }, "edit")).toEqual(["'baseline' can't be edited here"]);
+    expect(rules.krFieldProblems({ direction: "sideways" }, "edit")).toEqual(["direction is up or down"]);
+    expect(rules.krFieldProblems({ direction: "down" }, "edit")).toEqual([]);
     expect(rules.betFieldProblems({ outcome: "won" })).toEqual(["'outcome' can't be edited here"]);
     expect(rules.dateProblem("2026-02-30")).toBeTruthy();
     expect(rules.dateProblem("2026-13-40")).toBeTruthy();

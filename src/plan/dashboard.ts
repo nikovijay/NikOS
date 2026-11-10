@@ -2,7 +2,7 @@
 // period, its key results and bets with their delivery, and the drill-downs from a key result or bet.
 // Everything here is read from the planning repo and its delivery copies. Nothing is written, and no
 // network is used. The server and the export both build their pages from these functions.
-import { latest, isStale, progress } from "../planning/krs.js";
+import { directionOf, latest, isStale, progress } from "../planning/krs.js";
 import { alignsList } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
@@ -44,8 +44,10 @@ export interface KrRef {
   unit: string;
   by: string;
   period?: string;
-  /** Progress from baseline toward target, 0..1 (can pass 1). */
+  /** Progress from baseline toward target: 0..1, past 1 on overshoot, below 0 when it moved the wrong way. */
   progress: number;
+  /** Which way the figure should move. Up unless the key result says down. */
+  direction: "up" | "down";
   latest: { value: number; date: string } | null;
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
@@ -310,6 +312,7 @@ function krRef(area: Area, id: string, on: string): KrRef {
     by: d.by ?? "",
     ...(d.period !== undefined ? { period: String(d.period) } : {}),
     progress: progress(d),
+    direction: directionOf(d),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(d, on),
     version: kr.hash,

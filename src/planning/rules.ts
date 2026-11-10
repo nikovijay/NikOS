@@ -61,7 +61,7 @@ export function titleProblem(label: string, v: unknown): string | undefined {
  */
 export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "edit"): string[] {
   const out: string[] = [];
-  const editable = ["title", "owner", "by", "unit", "objective", "stale_after_days"];
+  const editable = ["title", "owner", "by", "unit", "objective", "stale_after_days", "direction"];
   if (mode === "edit") {
     for (const k of Object.keys(fields)) if (editable.indexOf(k) < 0) out.push("'" + k + "' can't be edited here");
   }
@@ -81,6 +81,9 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
   if (has("by")) {
     if (dateProblem(fields.by)) out.push("A key result needs a date (--by YYYY-MM-DD)");
   }
+  // Blank deletes the direction (edit), and absent means up (new), so only a value given must be up or down.
+  const dir = fields.direction;
+  if (dir !== undefined && dir !== null && dir !== "" && dir !== "up" && dir !== "down") out.push("direction is up or down");
   return out;
 }
 

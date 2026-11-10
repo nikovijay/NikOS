@@ -18,6 +18,8 @@ export interface KrInput {
   period?: string;
   unit?: string;
   objective?: string;
+  /** Which way the figure should move: up unless down. Only down is written; up is the default. */
+  direction?: "up" | "down";
   /** The key results in the plan directly above that this one aligns to: one or several. */
   alignsTo?: string | string[];
   staleAfterDays?: number;
@@ -44,6 +46,8 @@ export function newKr(input: KrInput, root: string): string {
     if (!input.by && period) input = { ...input, by: periodEnd(period)! };
   }
   if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
+  const direction = krFieldProblems({ direction: input.direction }, "edit")[0];
+  if (direction) throw new Error(direction);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "kr")[0];
   if (problem) throw new Error(problem);
@@ -53,6 +57,7 @@ export function newKr(input: KrInput, root: string): string {
     ...(input.objective ? { objective: input.objective } : {}),
     owner: input.owner.trim(),
     ...(input.unit !== undefined ? { unit: input.unit } : {}),
+    ...(input.direction === "down" ? { direction: "down" } : {}),
     baseline: input.baseline,
     target: input.target,
     original_target: input.target,
@@ -116,8 +121,16 @@ export function isStale(kr: any, on = today()): boolean {
   return days(last.date, on) > (kr.stale_after_days ?? 14);
 }
 
-/** Progress from baseline toward target, 0..1 (can pass 1). Works for targets below the baseline too. */
+/** Which way a key result should move. Up unless its file says down. */
+export const directionOf = (kr: any): "up" | "down" => (kr.direction === "down" ? "down" : "up");
+
+/**
+ * Progress from baseline toward target: 0 at the baseline, 1 at the target, and past 1 when it
+ * overshoots. It works the same for a figure that should go down (11 toward 7, at 9 is 0.5). A value
+ * on the wrong side of the baseline gives a negative number: the figure moved the wrong way.
+ */
 export function progress(kr: any): number {
   const v = latest(kr)?.value ?? kr.baseline;
-  return kr.target === kr.baseline ? 1 : (v - kr.baseline) / (kr.target - kr.baseline);
+  // The + 0 turns a -0 (no movement, on a figure that goes down) into 0.
+  return kr.target === kr.baseline ? 1 : (v - kr.baseline) / (kr.target - kr.baseline) + 0;
 }
