@@ -6,7 +6,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { renderMap, storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { featureOf } from "../commands/story.js";
@@ -366,11 +366,28 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
+/** Where a change is saved: the folder it goes in, and the area it is (a plan dashboard's; none for the planning one). */
+export interface SaveTarget {
+  root: string;
+  area?: string;
+}
+
+/** Pages another dashboard (nikos plan serve) serves in place of the planning one: / and /api/data. */
+export interface PageSource {
+  /** The page for a query. The token is the server's, for the page's own saves. */
+  page(query: URLSearchParams, token: string): string;
+  data(query: URLSearchParams): unknown;
+  /** Where the change in body goes. Without it the pages take no change (the git buttons too). */
+  saveIn?(body: Record<string, any>): SaveTarget;
+}
+
 export interface StartOptions {
   port?: number;
   map?: string;
   /** Runs git and the forge tools. Tests pass a runner that records the calls. */
   run?: Runner;
+  /** Serves these pages instead of the planning dashboard's. Its saves are not open, so every POST is refused. */
+  pages?: PageSource;
 }
 
 interface Ctx {
@@ -381,13 +398,16 @@ interface Ctx {
   run: Runner;
   /** How many saves this server has made since it started. */
   session: { ops: number };
+  pages?: PageSource;
+  /** The areas saved to since the last commit, by rel. The git buttons commit these areas' files and no others. */
+  touched: Set<string>;
 }
 
 /** Start the dashboard on 127.0.0.1 with a fresh token. The url carries the token for the browser. */
 export async function startServer(root: string, opts: StartOptions = {}): Promise<RunningServer> {
   const token = randomBytes(24).toString("hex");
   let port = 0;
-  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 } };
+  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages, touched: opts.pages?.saveIn ? savedBefore(root) : new Set() };
   const server = createServer((req, res) => {
     ctx.port = port;
     route(ctx, req, res).catch((err) => send(res, 500, { error: (err as Error).message }));
@@ -474,19 +494,25 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
   }
   const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
   if (req.method === "GET") return serveGet(ctx, path, req, res);
+  // The plan dashboard saves through /api/op and its git buttons only. Its other saves are refused.
+  const planSave = !!ctx.pages?.saveIn && (path === "/api/op" || path.startsWith("/api/git/"));
+  if (ctx.pages && req.method === "POST" && !planSave) return send(res, 501, { error: "The plan dashboard saves through /api/op: this save isn't on there" });
   if (req.method === "POST" && POSTS.has(path)) return postRequest(ctx, path, req, res);
   return send(res, 404, { error: "Not found" });
 }
 
 function serveGet(ctx: Ctx, path: string, req: IncomingMessage, res: ServerResponse) {
-  const { root, token, mapId } = ctx;
-  if (path === "/") return send(res, 200, renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
-  if (path === "/api/data") return send(res, 200, planningData(root, mapId));
+  const { root, token, mapId, pages } = ctx;
+  const query = new URL(req.url ?? "/", "http://127.0.0.1").searchParams;
+  if (path === "/") return send(res, 200, pages ? pages.page(query, token) : renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
+  if (path === "/api/data") return send(res, 200, pages ? pages.data(query) : planningData(root, mapId));
   if (path === "/api/pending") {
     const given = req.headers["x-nikos-token"];
     if (typeof given !== "string" || !sameToken(given, token)) return send(res, 403, { error: TOKEN_ERROR });
     return send(res, 200, pendingOf(ctx));
   }
+  // The other pages are the planning dashboard's own: a plan repo has none of them.
+  if (pages) return send(res, 404, { error: "Not found" });
   if (path === "/map") return send(res, 200, renderMap(root, { live: true, map: mapId }), HTML);
   if (path === "/nikos-view.js") return send(res, 200, VIEW_SCRIPT, JS);
   const m = /^\/views\/([^/]+)$/.exec(path);
@@ -616,18 +642,24 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
   if (body.target !== undefined && (!body.target || typeof body.target !== "object" || Array.isArray(body.target))) return send(res, 400, { error: "target must be an object" });
   if (body.args !== undefined && (!body.args || typeof body.args !== "object" || Array.isArray(body.args))) return send(res, 400, { error: "args must be an object" });
   const op: Op = { op: body.op as Op["op"], ...(body.target ? { target: body.target } : {}), args: body.args ?? {}, expect: body.expect };
-  // The checks and the dry run come first: a refused change never switches the branch.
+  // The folder and the checks come first, and the dry run: a refused change never switches the branch.
+  let where: SaveTarget;
   try {
-    vetOp(ctx.root, op);
+    where = ctx.pages?.saveIn ? ctx.pages.saveIn(body) : { root: ctx.root };
+    vetOp(where.root, op);
   } catch (err) {
     return saveError(res, err);
   }
-  const prep = beginSave(ctx);
+  const prep = beginSave(ctx, where.area);
   if (!prep.ok) return send(res, 400, { error: prep.error });
   try {
-    const r = runOp(ctx.root, op, { strict: true });
+    const r = runOp(where.root, op, { strict: true });
     ctx.session.ops++;
-    return send(res, 200, { ok: true, message: r.message, changed: r.changed, branch: prep.branch ?? null, ...(prep.notice ? { notice: prep.notice } : {}) });
+    if (where.area) {
+      ctx.touched.add(where.area);
+      keepSaved(ctx.root, ctx.touched);
+    }
+    return send(res, 200, { ok: true, message: r.message, changed: r.changed, branch: prep.branch ?? null, ...(where.area ? { area: where.area } : {}), ...(prep.notice ? { notice: prep.notice } : {}) });
   } catch (err) {
     return saveError(res, err);
   }
@@ -635,21 +667,55 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
 
 /**
  * Before a save: on a git repo, a save made while the repo is on its base branch goes on a new
- * nikos branch first. A save on another branch writes onto it. Detached HEAD saves as plain files.
+ * nikos branch first, named for the area it saves (nikos/plan-departments-finance-<date>) or else the
+ * plan's level. A save on another branch writes onto it. Detached HEAD saves as plain files.
  */
-function beginSave(ctx: Ctx): { ok: true; branch?: string; notice?: string } | { ok: false; error: string } {
+function beginSave(ctx: Ctx, area?: string): { ok: true; branch?: string; notice?: string } | { ok: false; error: string } {
   const { root, run } = ctx;
   if (!isGit(root, run)) return { ok: true };
   const branch = currentBranch(root, run);
   if (!branch) return { ok: true, notice: "Saves aren't on a branch because HEAD is detached" };
   if (!onBaseBranch(branch, baseBranch(root, run))) return { ok: true, branch };
-  const level = loadPlan(root)?.level ?? "plan";
+  const label = area ? area.split("/").join("-") : (loadPlan(root)?.level ?? "plan");
   const stamp = today();
-  let name = `nikos/plan-${level}-${stamp}`;
-  for (let n = 2; branchExists(root, name, run); n++) name = `nikos/plan-${level}-${stamp}-${n}`;
+  let name = `nikos/plan-${label}-${stamp}`;
+  for (let n = 2; branchExists(root, name, run); n++) name = `nikos/plan-${label}-${stamp}-${n}`;
   const made = switchNewBranch(root, name, run);
   if (!made.ok) return { ok: false, error: `Couldn't create a branch: ${made.error}` };
   return { ok: true, branch: name };
+}
+
+/** Where a plan dashboard keeps the areas it has saved to and not committed. It's under .nikos/, which git ignores. */
+const savedFile = (root: string) => join(root, ".nikos", "saved-areas.json");
+
+/** The areas saved to before this start, from that file. None when it's missing or unreadable. */
+function savedBefore(root: string): Set<string> {
+  try {
+    const v = JSON.parse(readFileSync(savedFile(root), "utf8"));
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Keeps the list of areas saved to. A save is on disk already, so a list that can't be written costs only the restart. */
+function keepSaved(root: string, areas: Set<string>): void {
+  try {
+    mkdirSync(join(root, ".nikos"), { recursive: true });
+    writeFileSync(savedFile(root), `${JSON.stringify([...areas].sort())}\n`);
+  } catch {
+    // The save stands; only a restart would forget which areas it was in.
+  }
+}
+
+/** The areas a plan dashboard's git buttons commit: the ones saved to and not committed yet, and no other area's files. */
+function savedAreas(ctx: Ctx): string[] {
+  return [...ctx.touched].sort();
+}
+
+/** The paths the git buttons work on: the planning/ and maps/ folders, or in a plan dashboard the areas saved to. */
+function savePaths(ctx: Ctx): string[] {
+  return ctx.pages?.saveIn ? savedAreas(ctx).map((a) => `planning/${a}`) : nikosPaths(ctx.root);
 }
 
 /** What the pending bar shows: the saved files not yet committed, the branch, and the forge's commands. */
@@ -672,9 +738,9 @@ function pendingOf(ctx: Ctx) {
     hasOrigin: !!url,
     detached: !branch,
     ops: ctx.session.ops,
-    files: statusOf(root, nikosPaths(root), run),
+    files: statusOf(root, savePaths(ctx), run),
     /** The files a commit would take, by name, for the pending bar. */
-    paths: statusOf(root, nikosPaths(root), run).map(pathOf),
+    paths: statusOf(root, savePaths(ctx), run).map(pathOf),
     unrelated,
     ...(unrelated.length && branch ? { warning: `Saving onto ${branch} with uncommitted changes outside planning/ and maps/. Commit or stash them before opening a pull request.` } : {}),
     ...(branch ? {} : { notice: "Saves aren't on a branch because HEAD is detached" }),
@@ -699,14 +765,21 @@ function gitRequest(ctx: Ctx, path: string, body: Record<string, any>, res: Serv
   if (path === "/api/git/commit") {
     if (onBaseBranch(branch, base)) return send(res, 400, { error: `Saves are on ${branch}, the base branch. Make a save first, so it goes on a nikos branch` });
     // Exactly the files the pending bar lists: never a whole folder, so an untracked stray file is not taken.
-    const files = statusOf(root, nikosPaths(root), run).map(pathOf);
+    // In a plan dashboard that is the areas saved to, and no other area's files.
+    const files = statusOf(root, savePaths(ctx), run).map(pathOf);
     if (!files.length) return send(res, 400, { error: "Nothing to commit" });
     const secret = files.find(looksSecret);
     if (secret) return send(res, 400, { error: `Not committing ${secret}: it looks like a secret. Remove it from the repo, or commit it by hand` });
     const changed = files.length;
-    const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : `nikos: ${loadPlan(root)?.level ?? "plan"} changes (${changed})`;
+    const what = ctx.pages?.saveIn ? `plan changes to ${savedAreas(ctx).join(", ")}` : `${loadPlan(root)?.level ?? "plan"} changes`;
+    const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : `nikos: ${what} (${changed})`;
     const r = commitPaths(root, files, message, run);
     if (!r.ok) return send(res, 400, { error: r.error });
+    // Committed: no area is waiting now, so a restart has none to remember.
+    if (ctx.pages?.saveIn) {
+      ctx.touched.clear();
+      keepSaved(root, ctx.touched);
+    }
     return send(res, 200, { committed: r.sha, message, branch });
   }
   if (path === "/api/git/push") {

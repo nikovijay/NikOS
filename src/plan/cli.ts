@@ -10,10 +10,12 @@ import { parseArgs } from "../planning/cli.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
-import { planDeliveries, type BetDelivery, type Figures, type PlanDeliveries, type RepoRead } from "./delivery.js";
+import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
 import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, parentOf, repoIssues } from "./repo.js";
 import { loadRepos, reposIssues, type RepoEntry } from "./repos.js";
 import { hostOfEntry, refreshDelivery } from "./refresh.js";
+import { exportPlanPage, runPlanServe } from "./serve.js";
+import { figuresText, readsText, repoLabel } from "./words.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
@@ -42,6 +44,10 @@ See and check it
   plan validate    Check the whole plan. A map that names an unknown bet, or a repo never read,
                    is a warning: validate still passes
   plan refresh     Read each code repo in planning/repos.yaml, read-only, and keep its delivery copy
+  plan serve       Run the planning dashboard and print its link, to open in your browser. One area
+                   at a time (--in <area> to start on one, --port, --offline to skip the refresh).
+                   --export <file> writes one offline page: the --in area's, or every area's when
+                   there is no --in
   plan settings [set <key> <value>]   The settings for an area, and where each comes from (--in)
 
 --in takes company, departments/finance, groups/payments or teams/WEB, or just the id.
@@ -75,23 +81,6 @@ function listedRepos(repo: string): RepoEntry[] {
   } catch {
     return [];
   }
-}
-
-const repoLabel = (r: Pick<RepoRead, "host" | "repo">) => (r.host === "github.com" ? r.repo : `${r.host}/${r.repo}`);
-
-/** The figures in words: "Building, 2 of 5 done (1 approved), 1 in progress". */
-function figuresText(f: Figures): string {
-  if (f.total === 0) return `${f.status}, no stories in its maps yet`;
-  const parts = [`${f.done} of ${f.total} done${f.approved ? ` (${f.approved} approved)` : ""}`];
-  if (f.inProgress) parts.push(`${f.inProgress} in progress`);
-  if (f.notCurrent) parts.push(`${f.notCurrent} not current with its feature`);
-  if (f.noSummary) parts.push(`${f.noSummary} with no summary yet`);
-  return `${f.status}, ${parts.join(", ")}`;
-}
-
-/** The read ages behind some figures, one per repo: " · acme/payments-web: read today (2026-11-10)". */
-function readsText(reads: RepoRead[]): string {
-  return reads.length ? ` · ${reads.map((r) => `${repoLabel(r)}: ${r.age}`).join("; ")}` : "";
 }
 
 interface DeliveryCtx {
@@ -205,7 +194,7 @@ export function planIssues(repo: string): PlanningIssue[] {
 }
 
 export async function runPlanRepo(args: string[]): Promise<number> {
-  const { positional, all, opt } = parseArgs(args, ["json"]);
+  const { positional, all, opt, has } = parseArgs(args, ["json", "offline"]);
   const cwd = opt("dir") ?? process.cwd();
   const [cmd, sub, id, extra] = positional;
   const repoOrNone = findPlanRepo(cwd);
@@ -319,6 +308,24 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         }
         return 0;
       }
+      case "serve": {
+        // Checked here: parseArgs ignores a flag it doesn't know, and a typo should not start a server.
+        const flags = ["port", "offline", "export", "in", "at", "dir"];
+        const unknown = args.filter((a) => a.startsWith("--")).map((a) => a.slice(2)).filter((n) => !flags.includes(n));
+        if (unknown.length) throw new Error(`Unknown option --${unknown[0]} for plan serve. The options are ${flags.map((f) => `--${f}`).join(", ")}`);
+        const portText = opt("port");
+        const port = portText === undefined ? undefined : Number(portText);
+        if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error("--port takes a port number, for example --port 4777");
+        const repo = need();
+        const at = opt("in") ?? opt("at");
+        if (opt("export") !== undefined) {
+          const { wrote, notices } = await exportPlanPage(repo, opt("export")!, { offline: has("offline"), at });
+          for (const n of notices) console.log(`! ${n}`);
+          console.log(`Saved the plan page: ${wrote}`);
+          return 0;
+        }
+        return await runPlanServe(repo, { port, offline: has("offline"), at });
+      }
       case "validate": {
         const repo = need();
         const found = planIssues(repo);
@@ -353,7 +360,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         return 0;
       }
     }
-    const known = ["init", "add", "kr", "checkin", "bet", "status", "validate", "refresh", "settings", "help"];
+    const known = ["init", "add", "kr", "checkin", "bet", "status", "validate", "refresh", "serve", "settings", "help"];
     if (!known.includes(cmd)) {
       const near = closest(cmd, [...known, "new"]);
       console.error(`Unknown plan command '${cmd}'.${near ? ` Did you mean: nikos plan ${near}?` : ""}\nSee every plan command: nikos plan help`);

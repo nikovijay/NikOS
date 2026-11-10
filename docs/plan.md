@@ -3,9 +3,9 @@
 nikOS Plan keeps a whole company's plan in **one repo**. Each level has a
 folder under `planning/`. The design is in
 [docs/rfcs/plan-and-spec.md](rfcs/plan-and-spec.md). This page covers what
-is built so far: the repo, its areas, key results, bets, check-ins, reviews,
-status, validation, settings, and each bet's delivery from the code repos
-listed in `planning/repos.yaml`. The dashboard comes in a later release.
+is built: the repo, its areas, key results, bets, check-ins, reviews, status,
+validation, settings, each bet's delivery from the code repos listed in
+`planning/repos.yaml`, and the dashboard (`nikos plan serve`).
 
 ```
 nikos.settings.yaml               the company's settings and locks
@@ -130,3 +130,58 @@ A bet link to this plan can be written with the id alone, or in full as
 `<this plan's repo>#<id>`. The full form needs the planning repo to have an
 origin, so nikOS can tell whose bet it is.
 
+## The dashboard
+
+`nikos plan serve` runs the plan's dashboard on 127.0.0.1, one area at a time,
+and prints the link to open in your browser. It starts on the company. The link it prints has a private key in it, so
+keep the link to yourself.
+
+```bash
+nikos plan serve                          # the company, on a free port
+nikos plan serve --in departments/finance # start on one area
+nikos plan serve --port 4777 --offline    # a fixed port, and no refresh of the code repos
+nikos plan serve --export plan.html       # one offline page, for every area
+nikos plan serve --export finance.html --in departments/finance   # one offline page, for one area
+```
+
+- **Altitude, then area.** The switcher at the top chooses the level: Company,
+  Departments, Groups or Teams. The picker beside it chooses the area at that
+  level. The breadcrumb shows the way up, for example Company › Finance ›
+  Payments › WEB, and each part is a link.
+- **One page per area.** The views are Key results (the company and departments
+  only), OKRs and bets, Ladder, Bets and Timeline. Groups and teams have no key
+  results of their own: their OKRs and bets show the key results their bets aim at.
+- **The ladder.** Four columns: the key results above the area, the area's key
+  results grouped by objective, the area's bets, and the bets above them. Each
+  bet shows whether it is its own bet or delivered through the bets below it.
+  Long titles are cut short, and a column shows twelve cells, with "+N more"
+  for the rest. The ladder can widen to everything above or below the area.
+- **Drill down.** From a key result, the bets that aim at it, and the story maps
+  that deliver them, with how old each copy is. From a bet, the chain it aligns
+  to, the bets below it, and its maps.
+- **Dates.** The timeline lists each bet's start, review and deadline, and each
+  key result's due date.
+- **The place is in the link.** Every link carries the area, for example
+  `?at=departments/finance`, so a page can be bookmarked or shared.
+- **Saves are small and never pushed.** A key result has a check-in form, and the
+  Bets page has a form to add a bet. Each save goes in the area's own folder, on
+  a `nikos/plan-<area>-<date>` branch. A bar at the top lists the saved changes:
+  Commit commits only those areas' files, and Push is the only thing that sends
+  them. Other changes are made with the `nikos plan` commands above.
+
+A dashboard that can't refresh the code repos on start still opens, and says why
+at the top of every page. `--offline` skips the refresh.
+
+### The offline page
+
+`--export <file>` writes the dashboard as one HTML file that works with no
+server, and the file's own script moves between its pages. Its links keep the
+place in the address bar, in both `?at=` and `#at=`, so reloading it shows the
+same page.
+
+- **Without `--at`**, the file holds every area's pages.
+- **With `--at`**, it holds that area's pages only. A link to another area says
+  the page isn't in the file, and `--export` without `--at` includes every area.
+
+The file names the code repos it reads, so share it only with people who may
+see them.
