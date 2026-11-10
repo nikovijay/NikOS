@@ -3,9 +3,11 @@
 `nikos.settings.yaml`, at a code repo's root, holds the choices that shape how
 nikOS works there: whether stories need approval, and which tracker the team
 uses. Each code repo keeps its own file. A code repo linked to the company's
-plan with `nikos join` does not inherit settings from it: it keeps its own.
+plan with `nikos join` also takes settings from the plan: the company's, and
+those of its map owner's team. Its own file comes last, and it can change only
+what the plan leaves open.
 
-Inside the company's planning repo the areas do share settings. The company sets
+Inside the company's planning repo the areas share settings too. The company sets
 them once, in `nikos.settings.yaml` at the planning repo's root, and each department,
 group and team inherits them down the folders, and can change anything the levels
 above haven't locked.
@@ -33,14 +35,15 @@ Every key is optional. See what applies, and where each value comes from:
 
 ```
 $ nikos settings
-approval.policy: "required-for-release"  (this repo)
+approval.policy: "optional"  (acme/company-plan company; locked by acme/company-plan company)
 approval.routes: ["app","chat","terminal"]  (default)
-tracker.system: "jira"  (this repo)
-tracker.project: "PAY"  (this repo)
+tracker.system: "jira"  (acme/company-plan departments/finance)
+tracker.project: "PAY-WEB"  (this repo)
 …
 ```
 
 Change one for this repo with `nikos settings set tracker.project PAY-WEB`.
+A key a level above locked is refused, and the message says who locked it.
 In the planning repo, `nikos plan settings --in <area>` shows the same for an
 area, and `nikos plan settings set <key> <value> --in <area>` changes it. It
 refuses if a level above locked it.
@@ -67,6 +70,58 @@ the defaults, then the company, then each level down to the area itself. A
 locked value stays as the level that locked it set it. If two levels lock the
 same key, the one nearest the top applies.
 
+## Settings in a code repo linked to a plan
+
+A code repo linked to the plan (see [Joining a company plan](#joining-a-company-plan))
+has a committed file, `nikos.plan.yaml`, at its root. It holds a copy of the
+company's settings file and of each map owner's chain of team settings: the
+department and group above the team, and the team itself. Commands read that
+copy and never the network, so `nikos settings`, `nikos validate`,
+`nikos release check` and CI work offline.
+
+Each map's `owner` (in its `storymap.yaml`) picks the chain its stories take.
+Lowest first, each level changes only what the levels above haven't locked:
+
+1. the defaults
+2. the company's settings (the plan's root `nikos.settings.yaml`)
+3. the owner's department, group and team, top to bottom
+4. this repo's own `nikos.settings.yaml`
+
+A locked key stays as the level that locked it set it. So the repo's own file
+can set `tracker.project` (a value the team left open), but a value it sets on
+a key the company locked is ignored, and `nikos settings` and `nikos doctor` say so.
+
+Which chain `nikos settings` shows: the owner the repo's maps agree on. If the
+maps have different owners, it shows the company's settings only and says why.
+A command that works on one story (`nikos approve`, `nikos release check`) uses
+that story's map owner.
+
+- A map with no `owner`, or an owner with no team in the plan, takes the company's
+  settings only. `nikos doctor` warns about it.
+- A repo with no `nikos.plan.yaml` reads its own file only, as before.
+
+### Keeping the snapshot current
+
+`nikos.plan.yaml` is a snapshot. It doesn't change when the plan does, until you
+refresh it:
+
+```
+nikos settings pull        # reads the plan, using your own git access, and rewrites nikos.plan.yaml
+```
+
+`pull` uses the plan the link already names, and needs no `--url` or `--ref`.
+If a settings file in the plan doesn't read, `pull` stops, names the file, and
+keeps the last snapshot. Commit the refreshed file.
+
+`nikos.plan.yaml` is generated, so don't edit it by hand. Its `sha256` catches a
+hand edit: `nikos validate` fails on a mismatch, and says to run
+`nikos settings pull`. That check is there to catch careless edits, not to
+stop a determined one.
+
+`nikos doctor` warns when the snapshot is more than 14 days old. Online (the
+default), it also warns when the plan has a newer commit, whether or not that
+commit touches settings. `nikos doctor --offline` skips that check.
+
 ## Joining a company plan
 
 ```
@@ -74,17 +129,41 @@ nikos join acme/company-plan                                  # on GitHub
 nikos join acme/engineering/payments-plan --host gitlab.com   # on GitLab
 ```
 
-`join` runs in a code repo. It lists the repo in the planning repo's
-`planning/repos.yaml`, on a `nikos/join` branch for the plan's owner to review,
-so the plan can read its story maps' delivery. Nothing else in the code repo
-moves, and its settings stay as they are.
+`join` runs in a code repo, and makes two branches:
+
+- In the planning repo, it lists this repo in `planning/repos.yaml`, on a
+  `nikos/join-…` branch for the plan's owner to review. So the plan can read
+  the story maps' delivery.
+- In this repo, it commits `nikos.plan.yaml` (the settings its maps take from the
+  plan) on a `nikos/link` branch. The repo is left on that branch, and `join`
+  prints the `git switch` that goes back to the one you were on. `main` isn't touched.
+
+Nothing is pushed unless you add `--push`, which sends both branches to their
+origins.
+
+`join` refuses, and writes nothing, when:
+
+- this repo has uncommitted changes (untracked files count). Commit or stash them first.
+- this repo is already linked to a different plan. One code repo takes its
+  settings from one planning repo.
+
+Joining the same plan again writes nothing new. If the plan's settings have
+changed since the snapshot, it says to run `nikos settings pull`.
+
+A repo joined before this release has no `nikos.plan.yaml`. Run
+`nikos join <planning repo>` in it to write one.
 
 ## Checking a repo
 
 `nikos doctor` checks the story map, the scenario runner, CI, approvals, the
-tracker and the plan this repo is linked to. For each one it says what it found, and the
-next thing to do when something's missing. Your agent runs it when something
-seems off. 
+tracker and the plan this repo is linked to. For a linked repo that is: the
+snapshot (a hand edit fails, and one older than 14 days warns), whether the
+plan has moved on (online only; `--offline` skips it), each map owner's team in
+the plan, and any of this repo's own values that the plan locks. For each one it
+says what it found, and the next thing to do when something's missing. Your agent
+runs it when something seems off.
+
+`nikos validate` checks the snapshot's `sha256`, offline, so CI fails on a hand edit.
 
 ## Keeping a tracker in step
 

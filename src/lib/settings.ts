@@ -116,7 +116,7 @@ function ownerOf(root: string, map: string | undefined): { owner?: string; probl
   const owners = new Set(mapDirs(root).map(mapOwnerOf));
   if (owners.size <= 1) return { owner: [...owners][0] };
   const names = [...owners].map((o) => o ?? "no owner").sort().join(", ");
-  return { problem: `the maps have different owners (${names}), so this shows the company's settings only: pass --map` };
+  return { problem: `the maps have different owners (${names}), so this shows the company's settings only. A command that works on one story (approve, release check) uses that map's owner` };
 }
 
 /** resolveSettings, with the problems found in the levels (a settings file that doesn't read, or a value a level above locked). */

@@ -71,7 +71,8 @@ Get started
                    which one, then a few questions. An agent passes the flags
   serve            Open this repo's story map in your browser
                    (--port, --map; --export <file> saves it as one page you can share)
-  doctor           Check this repo is set up well, and say what to do next (--offline)
+  doctor           Check this repo is set up well, and say what to do next. A linked repo's plan
+                   snapshot is checked, and the plan itself too, unless --offline
   suggest          Say where things stand and what to do next (--json, --brief, --map; in a
                    planning repo, --in <area>)
 
@@ -82,8 +83,9 @@ Plans: objectives, key results and bets
                    from a code repo; it lists this repo in planning/repos.yaml on a nikos/join
                    branch for review, and commits nikos.plan.yaml (the settings its maps take
                    from the plan) on a nikos/link branch here. --push sends both branches
-  settings [set <key> <value>]  Show the settings that apply here and where each one comes
-                   from, or change one this repo is allowed to change
+  settings [set <key> <value> | pull]  Show the settings that apply here and where each one
+                   comes from, change one this repo is allowed to change, or (pull) refresh the
+                   plan's settings this repo is linked to from the plan
 
 Story maps and stories
   init             Make maps/<key>/ in this repo for its story map (--name, --key)

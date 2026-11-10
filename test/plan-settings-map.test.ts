@@ -80,7 +80,7 @@ describe("a code repo's settings per map", () => {
     writeLink(code, { ...snapshot(acmeOwners), sha256: "" });
     const split = resolveSettingsDetailed(code);
     expect(split.resolved["tracker.project"].value).toBe("");
-    expect(split.problems).toContain("the maps have different owners (PAY, WEB), so this shows the company's settings only: pass --map");
+    expect(split.problems).toContain("the maps have different owners (PAY, WEB), so this shows the company's settings only. A command that works on one story (approve, release check) uses that map's owner");
 
     const agree = twoMaps("WEB");
     writeLink(agree, { ...snapshot(acmeOwners), sha256: "" });

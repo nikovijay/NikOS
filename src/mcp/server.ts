@@ -118,11 +118,11 @@ export function createServer(repo: string): McpServer {
   }, true);
   tool("export", "The story map as a PRD in Markdown, or Linear or Jira import JSON.", { format: z.enum(FORMATS), release: z.number().int().optional(), map: z.string().optional() }, (a) => text(exportMap(root, a.format, { release: a.release, map: a.map })), true);
 
-  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals and tracker) and what to do next.", {}, () => {
+  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals, tracker and the plan it is linked to) and what to do next. It reads the linked plan over the network.", {}, () => {
     const checks = doctor(root);
     return text(checks.map((c) => `${{ ok: "✓", warn: "!", fail: "✗" }[c.status]} ${c.name}: ${c.found}${c.next ? ` → ${c.next}` : ""}`).join("\n"), { checks });
   }, true);
-  tool("settings", "The settings that apply here, where each comes from (this repo, or a company or department plan above it), and which are locked.", {}, () => {
+  tool("settings", "The settings that apply here and where each comes from: this repo's own file, and for a repo linked to a plan, the company's and its map owner's team settings from nikos.plan.yaml. Also says which are locked.", {}, () => {
     const s = resolveSettings(root);
     return text(formatSettings(s), s as unknown as Record<string, unknown>);
   }, true);
