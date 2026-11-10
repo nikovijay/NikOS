@@ -146,7 +146,11 @@ describe("a milestone's progress and staleness", () => {
     expect(isStale(kr([{ name: "a", done: "2026-10-01" }, { name: "b" }]), "2026-11-10")).toBe(true);
     expect(isStale(kr([{ name: "a", done: "2026-11-01" }, { name: "b" }]), "2026-11-10")).toBe(false);
     expect(isStale(kr([{ name: "a", done: "2026-10-01" }, { name: "b", done: "2026-11-05" }]), "2026-11-10")).toBe(false);
-    expect(isStale(kr([{ name: "a", done: "2026-11-01" }], { stale_after_days: 5 }), "2026-11-10")).toBe(true);
+    expect(isStale(kr([{ name: "a", done: "2026-11-01" }, { name: "b" }], { stale_after_days: 5 }), "2026-11-10")).toBe(true);
+  });
+
+  it("is never stale once every step is done", () => {
+    expect(isStale(kr([{ name: "a", done: "2026-01-01" }, { name: "b", done: "2026-02-01" }]), "2027-12-31")).toBe(false);
   });
 
   it("the status line says the steps done, the steps to do, and that it is stale when it is", async () => {

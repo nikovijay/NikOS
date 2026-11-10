@@ -161,7 +161,10 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
  */
 export function isStale(kr: any, on = today()): boolean {
   if (kindOf(kr) === "milestone") {
-    const newest = (kr.steps ?? []).map((s: any) => s.done).filter(Boolean).sort().pop();
+    const done = (kr.steps ?? []).map((s: any) => s.done).filter(Boolean);
+    // Every step done: nothing is waiting, so nothing is going stale.
+    if (done.length === (kr.steps ?? []).length) return false;
+    const newest = done.sort().pop();
     return !!newest && days(newest, on) > (kr.stale_after_days ?? 14);
   }
   const last = latest(kr);

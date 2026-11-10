@@ -56,8 +56,8 @@ planning/
   marks one step done, once: its date stays as first written, and a step name
   that doesn't exist is refused. The page shows "2 of 3 steps done", and the
   step form marks the next one. A milestone is stale only when a step was done
-  and none has been since `stale_after_days` (default 14). With no step done
-  it isn't stale.
+  and none has been since `stale_after_days` (default 14). With no step done,
+  or every step done, it isn't stale.
 - **Text can stand in for a link.** `--ladders-up "reconciliation revenue
   faster"` says what a key result or bet ladders up to, before anyone has
   named the item above it. It's refused on a company key result, which has
