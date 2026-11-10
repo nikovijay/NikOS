@@ -113,9 +113,9 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos init` | Create `intent/` in this repo |
 | `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |
-| `nikos validate` | Check `intent/` (or each `maps/<id>` in a group repo) is well formed |
+| `nikos validate` | Check `intent/` (or each `maps/<id>` in a group repo) is well formed, and each map's `delivery.yaml` is current |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature. In a group repo with several story maps, pass `--map <id>` |
-| `nikos map new --bet <bet-id> --key <KEY>` | In a group repo, make a story map for one of its bets, in `maps/<key>/`. Its stories get ids like `PAY-CHK-12` |
+| `nikos map new --bet <bet-id> --key <KEY> [--owner <KEY>]` | In a group repo, make a story map for one of its bets, in `maps/<key>/`. Its stories get ids like `PAY-CHK-12`, or `WEB-CHK-12` with `--owner WEB` |
 | `nikos step add "<title>"` | Add a step under an activity |
 | `nikos release add\|rename\|move\|reorder\|remove` | Define releases and move stories between them, keeping feature tags in step |
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |

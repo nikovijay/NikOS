@@ -114,7 +114,8 @@ Story maps and stories
                    --key <KEY>, --owner <KEY> for the story ids, e.g. WEB-CHK-1)
   map status       How each story in this repo's maps is doing, and save it to
                    maps/<key>/delivery.yaml to commit (--map, --json saves nothing)
-  validate [dir]   Check the intent/ folder is well formed
+  validate [dir]   Check the story map is well formed (intent/, or each map in maps/), and that
+                   each map's delivery.yaml is current
   show <id>        Sum up a story: its feature, status, plan, bets and decisions
   next             Show the next story to build
 

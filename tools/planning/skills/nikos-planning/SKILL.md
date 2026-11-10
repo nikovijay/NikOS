@@ -36,7 +36,7 @@ the dashboard, so the same checks always run.
 
 With no `planning/` folder yet, set one up before planning: for a company or
 department, `nikos company init` in a folder of its own (the nikOS skill's
-onboard playbook walks through it); for a team repo, `nikos team init` and `nikos team join` to its group, and `nikos join <plan> --home` to its home plan; a team has no key results, but it can own bets and story maps once it has a key and a home (see wizard.md). Never put company goals in `intent/constitution.md`: that's one
+onboard playbook walks through it); a group's bets aim at a department's key results, and each story map names its owner team in `storymap.yaml` (see wizard.md). Never put company goals in `intent/constitution.md`: that's one
 product's vision, not the company's plan.
 
 ## How to work

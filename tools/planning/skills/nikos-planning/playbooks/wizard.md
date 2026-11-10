@@ -3,7 +3,7 @@
 Plan a period with the person, at their level, and save it to `planning/`
 only once they're happy with it.
 
-1. Establish context. Ask for the planning period (e.g. Q1 2027), the level (company, department or group) and the strategic pillars for that period. Ask one question at a time. OKRs stop at department level: a group plans bets only, and a team has no key results. A team repo starts with nikos team init, takes work from its group with nikos team join, and joins its home plan with nikos join <plan> --home. Once it has a key and a home, a team can own story maps and bets; its bets aim at company or department key results.
+1. Establish context. Ask for the planning period (e.g. Q1 2027), the level (company, department or group) and the strategic pillars for that period. Ask one question at a time. OKRs stop at department level: a group plans bets only, and its bets aim at the department's key results. A team has no key results of its own: each story map that a team builds names it as `owner` in its storymap.yaml, and its story ids carry that key.
 2. If `planning/upstream.yaml` lists plans above this one, run `nikos planning sync` and read the key results it fetched. If there is none, or a repo is unresolved, say so and carry on: parent alignment is optional, never an entry requirement.
 3. Follow the path for the level:
    - Company: ask whether existing company OKRs should be updated. If there are none, start fresh: the objectives first, then the measurable key results for each (baseline, target, date, owner).
