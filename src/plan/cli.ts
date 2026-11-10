@@ -10,10 +10,11 @@ import { parseArgs } from "../planning/cli.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
-import { planDeliveries, type BetDelivery, type Figures, type PlanDeliveries, type RepoRead } from "./delivery.js";
+import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
 import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, parentOf, repoIssues } from "./repo.js";
 import { loadRepos, reposIssues, type RepoEntry } from "./repos.js";
 import { hostOfEntry, refreshDelivery } from "./refresh.js";
+import { figuresText, readsText, repoLabel } from "./words.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
@@ -75,23 +76,6 @@ function listedRepos(repo: string): RepoEntry[] {
   } catch {
     return [];
   }
-}
-
-const repoLabel = (r: Pick<RepoRead, "host" | "repo">) => (r.host === "github.com" ? r.repo : `${r.host}/${r.repo}`);
-
-/** The figures in words: "Building, 2 of 5 done (1 approved), 1 in progress". */
-function figuresText(f: Figures): string {
-  if (f.total === 0) return `${f.status}, no stories in its maps yet`;
-  const parts = [`${f.done} of ${f.total} done${f.approved ? ` (${f.approved} approved)` : ""}`];
-  if (f.inProgress) parts.push(`${f.inProgress} in progress`);
-  if (f.notCurrent) parts.push(`${f.notCurrent} not current with its feature`);
-  if (f.noSummary) parts.push(`${f.noSummary} with no summary yet`);
-  return `${f.status}, ${parts.join(", ")}`;
-}
-
-/** The read ages behind some figures, one per repo: " · acme/payments-web: read today (2026-11-10)". */
-function readsText(reads: RepoRead[]): string {
-  return reads.length ? ` · ${reads.map((r) => `${repoLabel(r)}: ${r.age}`).join("; ")}` : "";
 }
 
 interface DeliveryCtx {

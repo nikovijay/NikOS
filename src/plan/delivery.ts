@@ -85,10 +85,23 @@ export interface DeliveryWarning {
   message: string;
 }
 
+/** One story a bet's maps name: its status from the map's summary, and the map it comes from. */
+export interface StoryRow {
+  id: string;
+  map: MapRef;
+  /** The status the map's summary says. Null when no summary lists the story yet. */
+  status: string | null;
+  approval: "none" | "approved";
+  /** Set when the proof isn't for the current feature: the story doesn't count as done. */
+  proof?: string;
+}
+
 export interface PlanDeliveries {
   /** False when nothing has been read yet: there is no .nikos/delivery/index.json. */
   cached: boolean;
   bets: Map<string, BetDelivery>;
+  /** Each bet's stories, from every map that names it. Not in plan status --json: the dashboard reads it. */
+  stories: Map<string, StoryRow[]>;
   repos: RepoRead[];
   warnings: DeliveryWarning[];
 }
@@ -191,7 +204,7 @@ function figuresOf(bet: string, scopes: Scope[]): Figures {
 }
 
 /** The bets below a bet through aligns_to, nearest first. Each is visited once, so a cycle ends. */
-function below(bet: string, children: Map<string, string[]>): string[] {
+export function below(bet: string, children: Map<string, string[]>): string[] {
   const seen = new Set([bet]);
   const order: string[] = [];
   const queue = [...(children.get(bet) ?? [])];
@@ -266,11 +279,20 @@ export function deliveriesFrom(input: PlanInput): PlanDeliveries {
   const readFor = new Map<CachedRepo, RepoRead>(input.repos.map((r) => [r, readOf(r, input.now)]));
   const readsOf = (list: Scope[]): RepoRead[] => [...new Set(list.map((s) => s.repo))].map((r) => readFor.get(r)!);
 
+  const storiesOf = (bet: string): StoryRow[] =>
+    scopesOf(bet).flatMap((s) =>
+      (s.stories.get(bet) ?? []).map((id) => {
+        const row = s.summary.get(id);
+        return { id, map: s.ref, status: row?.status ?? null, approval: row?.approval === "approved" ? "approved" : "none", ...(row?.proof ? { proof: row.proof } : {}) };
+      }),
+    );
+  const stories = new Map<string, StoryRow[]>();
   const bets = new Map<string, BetDelivery>();
   for (const b of input.bets) {
     const own = scopesOf(b.id);
     if (own.length) {
       bets.set(b.id, { bet: b.id, source: "own", delivery: figuresOf(b.id, own), via: [], reads: readsOf(own) });
+      stories.set(b.id, storiesOf(b.id));
       continue;
     }
     const via = below(b.id, children)
@@ -279,9 +301,10 @@ export function deliveriesFrom(input: PlanInput): PlanDeliveries {
       .map((v) => ({ bet: v.bet, delivery: figuresOf(v.bet, v.scopes) }));
     const reads = readsOf(below(b.id, children).flatMap((d) => scopesOf(d)));
     bets.set(b.id, { bet: b.id, source: via.length ? "via" : "none", via, reads });
+    stories.set(b.id, below(b.id, children).flatMap((d) => storiesOf(d)));
   }
 
-  return { cached: input.cached, bets, repos: input.repos.map((r) => readFor.get(r)!), warnings };
+  return { cached: input.cached, bets, stories, repos: input.repos.map((r) => readFor.get(r)!), warnings };
 }
 
 /** The copy's repos, as refresh left them. A map whose storymap or summary can't be used says why. */

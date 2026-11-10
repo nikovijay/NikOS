@@ -285,3 +285,23 @@ describe("a copy written by a newer nikOS, read for real", () => {
     expect(out.warnings).toHaveLength(2);
   });
 });
+
+describe("the stories behind each bet", () => {
+  it("lists each story a bet's maps name, with its status, approval and proof, and none for a bet with no maps", () => {
+    const sm = storymap({ "PAY-CHK-1": ["faster-checkout"], "PAY-CHK-2": ["faster-checkout"], "PAY-CHK-3": ["faster-checkout"] });
+    const stories = [row("PAY-CHK-1", "done", { approval: "approved" }), row("PAY-CHK-2", "in_progress", { proof: "changed" })];
+    const out = run([bet("faster-checkout"), bet("unmapped")], [repo("acme/payments-web", [map("chk", sm, stories)])]);
+    expect(out.stories.get("faster-checkout")).toEqual([
+      { id: "PAY-CHK-1", map: { host: "github.com", repo: "acme/payments-web", key: "chk" }, status: "done", approval: "approved" },
+      { id: "PAY-CHK-2", map: { host: "github.com", repo: "acme/payments-web", key: "chk" }, status: "in_progress", approval: "none", proof: "changed" },
+      { id: "PAY-CHK-3", map: { host: "github.com", repo: "acme/payments-web", key: "chk" }, status: null, approval: "none" },
+    ]);
+    expect(out.stories.get("unmapped")).toEqual([]);
+  });
+
+  it("gives a bet with no maps of its own the stories of the bets below it", () => {
+    const sm = storymap({ "PAY-CHK-1": ["leaf-bet"] });
+    const out = run([bet("top-bet"), bet("leaf-bet", ["top-bet"])], [repo("acme/payments-web", [map("chk", sm, [row("PAY-CHK-1", "done")])])]);
+    expect(out.stories.get("top-bet")).toEqual([expect.objectContaining({ id: "PAY-CHK-1", status: "done" })]);
+  });
+});
