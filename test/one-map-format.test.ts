@@ -16,14 +16,14 @@ describe("intent/ is refused, with the migrate hint", () => {
   it("validate and doctor both say to run nikos migrate maps", () => {
     const root = rootOf(copyExample());
     mkdirSync(join(root, "intent"));
-    expect(() => validate(root)).toThrow("this repo has intent/: run nikos migrate maps");
-    expect(doctor(root, { offline: true }).find((c) => c.name === "story map")!.next).toContain("nikos migrate maps");
+    expect(() => validate(root)).toThrow("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
+    expect(doctor(root, { offline: true }).find((c) => c.name === "story map")!.next).toContain("by hand, as the release notes describe");
   });
 
   it("init refuses to set up a repo that still has intent/", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-intent-init-"));
     mkdirSync(join(root, "intent"));
-    expect(() => init(root, { name: "Hello Todo" })).toThrow("this repo has intent/: run nikos migrate maps");
+    expect(() => init(root, { name: "Hello Todo" })).toThrow("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   });
 });
 

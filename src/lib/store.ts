@@ -1,7 +1,7 @@
 // Where nikOS reads and writes a repo's files: maps/, planning/ and decisions. The CLI uses
 // the disk. Another tool can load a repo's files into a MemoryStore (from GitHub, GitLab or
 // anywhere), run nikOS's commands against it, and take the changed files back to commit.
-// Running scenarios, cloning upstream plans and package assets (schemas, templates) always use
+// Running scenarios, cloning code repos and package assets (schemas, templates) always use
 // the disk: they need real files.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";

@@ -68,7 +68,7 @@ export function resolveStoryMap(start: string, opts: { map?: string; story?: str
   if (isMapFolder(start) && store().exists(join(start, "storymap.yaml"))) {
     return { root: repoRootOf(start), dir: start, id: basename(start) };
   }
-  if (store().isDir(join(start, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (store().isDir(join(start, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const maps = mapDirs(start);
   if (!maps.length) throw new Error("no story map here: run nikos init, or nikos map new --key K");
   const ids = maps.map((d) => basename(d));

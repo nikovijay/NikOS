@@ -1,6 +1,6 @@
 import { relative } from "node:path";
 import { store } from "../lib/store.js";
-import { STORY_ID, decisionsPath, isPlanOnly, read } from "../lib/project.js";
+import { STORY_ID, decisionsPath, read } from "../lib/project.js";
 import { formatResult, validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
 import { isPlanRepo } from "../planning/model.js";
@@ -36,7 +36,7 @@ export function decide(input: DecisionInput, dir: string): string {
   if (input.area && !planRepo) throw new Error("--in names an area of a planning repo, and this isn't one");
   const path = decisionsPath(dir, planRepo ? findArea(dir, input.area ?? "company").rel : undefined);
   if (!store().exists(path)) {
-    if (!planRepo && !isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
+    if (!planRepo && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
     store().write(path, PLAN_DECISIONS, { create: true });
   }
 

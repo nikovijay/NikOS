@@ -13,7 +13,17 @@ import { hostNameOf } from "../src/lib/forge";
 import { initPlanRepo } from "../src/plan/repo";
 import { loadRepos } from "../src/plan/repos";
 import { bareOrigin, companyRepo } from "./planning-fixture";
-import { codeRepo, git, write } from "./repo-fixture";
+import { codeRepo, commitAll, git, write } from "./repo-fixture";
+
+/** A plan of the old kind on origin: planning/plan.yaml, and no planning/company/. */
+function oldPlan(): string {
+  const co = mkdtempSync(join(tmpdir(), "nikos-oldplan-"));
+  git(co, "init", "-q", "-b", "main");
+  git(co, "remote", "add", "origin", "https://github.com/acme/company-plan.git");
+  write(join(co, "planning/plan.yaml"), "name: Acme\nlevel: company\nperiod: Q1 2027\npillars: []\n");
+  commitAll(co, "old plan");
+  return co;
+}
 
 /** A new-layout planning repo (planning/company/) on a bare origin, with its main branch pushed. */
 function planOnOrigin(): string {
@@ -99,7 +109,7 @@ describe("nikos join to a planning repo", () => {
     const spy = vi.spyOn(console, "error").mockImplementation((...a) => void err.push(a.join(" ")));
     try {
       const code = codeRepo();
-      expect(runJoin(["--dir", code, "--url", companyRepo(), "acme/company-plan"])).toBe(1);
+      expect(runJoin(["--dir", code, "--url", oldPlan(), "acme/company-plan"])).toBe(1);
       expect(err.join("\n")).toContain("a plan of the old kind");
       expect(existsSync(join(code, "planning/upstream.yaml"))).toBe(false);
       expect(existsSync(join(code, "planning/repos.yaml"))).toBe(false);
@@ -180,7 +190,7 @@ describe("nikos join to a planning repo", () => {
   });
 
   it("a plan of the old kind is refused with the nikos plan init message: the temp clone goes, and nothing is listed", () => {
-    const co = companyRepo();
+    const co = oldPlan();
     const code = codeRepo();
     const before = tempJoins();
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co })).toThrow("a plan of the old kind");

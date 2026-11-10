@@ -53,7 +53,7 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   if (isPlanRepo(root)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos init there.");
   const old = oldLayoutProblem(root);
   if (old) throw new Error(old);
-  if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const mapDir = join(root, "maps", key.toLowerCase());
   // The starter story's id carries the same label map new gives a story: the map's owner, if it has one.
   const first_id = `${storyPrefix({ root, dir: mapDir, id: key.toLowerCase() }, key)}-1`;

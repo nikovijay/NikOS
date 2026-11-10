@@ -13,7 +13,7 @@ import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate, validateGroup } from "./validate.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { areaFor, findArea, findPlanRepo } from "../plan/repo.js";
+import { areaFor, findArea, findPlanRepo, oldLayoutProblem } from "../plan/repo.js";
 import { suggestPlan } from "../plan/suggest.js";
 import { basename } from "node:path";
 
@@ -61,10 +61,12 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
  * folder you're in), else the company.
  */
 export function suggest(dir: string, mapId?: string, opts: { area?: string } = {}): Suggestion {
+  const old = oldLayoutProblem(dir);
+  if (old) return { summary: old, options: [] };
   const maps = mapDirs(dir);
   if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
   if (!maps.length && store().isDir(join(dir, "intent"))) {
-    return { summary: "this repo keeps its story map in intent/", options: [{ label: "Move the story map into maps/", do: "Run nikos migrate maps, then commit the result." }] };
+    return { summary: "this repo keeps its story map in intent/", options: [{ label: "Move the story map into maps/", do: "Move intent/ to maps/<key>/ by hand, as the release notes describe, then commit the result." }] };
   }
   if (!maps.length) {
     const repo = findPlanRepo(dir);

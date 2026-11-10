@@ -21,19 +21,18 @@ import { addRelease, checkRelease, moveStory, removeRelease, renameRelease, reor
 import { show } from "../commands/show.js";
 import { setState, type Status } from "../commands/state.js";
 import { newActivity, newStep } from "../commands/step.js";
-import { companyInit, start as startRepo } from "../commands/start.js";
+import { start as startRepo } from "../commands/start.js";
 import { initPlanRepo } from "../plan/repo.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate, validateGroup } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
-import { count, read } from "../lib/project.js";
+import { read } from "../lib/project.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { describeRepoJoin, joinPlanRepo } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
-import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -115,7 +114,7 @@ export function createServer(repo: string): McpServer {
   }, true);
   tool("export", "The story map as a PRD in Markdown, or Linear or Jira import JSON.", { format: z.enum(FORMATS), release: z.number().int().optional(), map: z.string().optional() }, (a) => text(exportMap(root, a.format, { release: a.release, map: a.map })), true);
 
-  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals, tracker, upstream plans) and what to do next.", {}, () => {
+  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals and tracker) and what to do next.", {}, () => {
     const checks = doctor(root);
     return text(checks.map((c) => `${{ ok: "✓", warn: "!", fail: "✗" }[c.status]} ${c.name}: ${c.found}${c.next ? ` → ${c.next}` : ""}`).join("\n"), { checks });
   }, true);
@@ -169,27 +168,11 @@ export function createServer(repo: string): McpServer {
     return text(`Made the company's planning repo: ${files.map((f) => f.slice(root.length + 1)).join(", ")}`);
   });
   tool("add_activity", "Add an activity to the story map.", { title: z.string(), id: z.string().optional(), map: z.string().optional() }, (a) => text(`Activity ${newActivity(a, root)}`));
-  tool("company_init", "Write a company or department plan repo in this folder: plan.yaml, settings every level inherits, departments or groups, and a README on joining. A group's own repo, with its story maps in maps/, is set up with nikos group init in the terminal.", {
-    name: z.string(), period: z.string().optional(), departments: z.array(z.string()).optional(), repo: z.string().optional(), host: z.string().optional(),
-  }, (a) => {
-    const r = companyInit(root, a);
-    return text(`Created ${r.created.join(", ") || "nothing new"}.\nEach department or team joins with: ${r.join}`);
-  });
-  tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. Delivery is read from each map's committed delivery.yaml, with its age. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
-    const r = rollout(root, { offline: a.offline });
-    return text(formatRollout(r), { ...r });
-  }, true);
   tool("map_status", "How each story in this repo's maps is doing, local and read from the maps' own files: its status, whether that status was proved against the current feature, and its approval.", { map: z.string().optional() }, (a) => {
     const r = mapStatus(root, { map: a.map });
     return text(r.map(formatMapStatus).join("\n\n"), { ...statusJson(r) });
   }, true);
-  tool("add_downstream", "List a department or team below this plan in planning/downstream.yaml, or give one already listed its repo, so rollout can follow it.", {
-    name: z.string(), repo: z.string().optional(), host: z.string().optional(), url: z.string().optional(), home: z.string().optional(),
-  }, (a) => {
-    const r = addDownstream(root, a);
-    return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
-  });
-  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/. A repo with intent/ is refused: it moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/. A repo with intent/ is refused: move intent/ to maps/<key>/ by hand, as the release notes describe.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
     return text(`Created ${r.created.length} files for maps/${basename(r.mapDir)}/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
   });

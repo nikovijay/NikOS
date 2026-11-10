@@ -1,11 +1,12 @@
 // The delivery summary a map's owner commits: maps/<key>/delivery.yaml, written by nikos map status
 // (and state set, approve and map new) from the map's own files. A summary that doesn't read is none.
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
-import { readDeliverySummary, readDeliverySummaryResult, summaryAge } from "../src/lib/delivery-summary";
+import { readDeliverySummary, readDeliverySummaryResult, summaryAge, writeDeliverySummary } from "../src/lib/delivery-summary";
 import { NewerContractError } from "../src/lib/schema";
 import { setState } from "../src/commands/state";
 import { groupRepo, commitAll } from "./repo-fixture";
@@ -84,3 +85,14 @@ function allFiles(dir: string): string[] {
     return statSync(p).isDirectory() ? allFiles(p) : [p];
   });
 }
+
+describe("a delivery summary is rewritten on each run", () => {
+  it("writes the same map's summary twice without an EEXIST, and the second read_at wins", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nikos-sum-"));
+    mkdirSync(join(dir, "maps/am"), { recursive: true });
+    const base = { version: 1 as const, map: "am", owner: "PAY" };
+    writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-01T00:00:00Z", stories: [] });
+    expect(() => writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-02T00:00:00Z", stories: [] })).not.toThrow();
+    expect(readDeliverySummary(join(dir, "maps/am"), "code")?.read_at).toBe("2027-01-02T00:00:00Z");
+  });
+});

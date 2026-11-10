@@ -5,7 +5,7 @@ import { BET_ID } from "../lib/bets.js";
 import { areaOf, checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
 import { companyYear, krAreaProblem, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
 import { dateProblem, krFieldProblems } from "./rules.js";
-import { alignmentProblems, alignsValue, krLevelProblem, levelOf } from "./levels.js";
+import { alignmentProblems, alignsValue } from "./levels.js";
 
 export interface KrInput {
   id: string;
@@ -44,11 +44,8 @@ export function newKr(input: KrInput, root: string): string {
     if (!input.by && period) input = { ...input, by: periodEnd(period)! };
   }
   if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
-  const level = levelOf(root);
-  const refused = area ? undefined : krLevelProblem(level);
-  if (refused) throw new Error(refused);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
-  const problem = alignmentProblems(root, aligns, "kr", level)[0];
+  const problem = alignmentProblems(root, aligns, "kr")[0];
   if (problem) throw new Error(problem);
   const data = checked({
     id: input.id,

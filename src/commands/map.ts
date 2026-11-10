@@ -8,6 +8,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { oldLayoutProblem } from "../plan/repo.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { OWNER, mapDirs, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
@@ -542,11 +543,13 @@ const MAP_KEY = KEY;
  * Refuses with the same messages the command line gives.
  */
 export function newMap(input: { bet?: string; key?: string; owner?: string }, dir: string): { id: string; key: string; ids: string; dir: string } {
+  const old = oldLayoutProblem(dir);
+  if (old) throw new Error(old);
   const bet = input.bet;
   const key = input.key;
   const owner = input.owner;
   if (!key) throw new Error("nikos map new needs --key <KEY>");
-  if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   if (bet !== undefined) {
     if (!BET_ID.test(bet)) {
       if (CROSS_REF.test(bet)) throw new Error("a map names one bet by its id, not another repo's bet");

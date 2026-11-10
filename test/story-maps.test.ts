@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { copyExample, edit as editFile, exampleDir, rootOf } from "./helpers";
 import { mapDirs, repoRootOf, resolveStoryMap, storyMapsOf, storyPrefix } from "../src/lib/maps";
-import { isPlanOnly } from "../src/lib/project";
 import { runMapNew, runMap } from "../src/commands/map";
 import { parse } from "yaml";
 import { newActivity } from "../src/commands/step";
@@ -33,7 +32,7 @@ describe("story map resolver", () => {
     const mapDir = copyExample();
     const root = join(mapDir, "../..");
     mkdirSync(join(root, "intent"));
-    expect(() => resolveStoryMap(root)).toThrow("this repo has intent/: run nikos migrate maps");
+    expect(() => resolveStoryMap(root)).toThrow("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   });
 
   it("a repo with no maps/ says to init or map new", () => {
@@ -76,11 +75,10 @@ describe("story map resolver", () => {
     expect(repoRootOf(ref.dir)).toBe(two);
   });
 
-  it("lists maps, and tells a plan-only group from one with maps", () => {
+  it("lists the maps in a repo", () => {
     const root = groupRepo(["pay", "chk"]);
     expect(mapDirs(root).map((d) => d.split("/").pop())).toEqual(["chk", "pay"]);
     expect(storyMapsOf(root).map((r) => r.id)).toEqual(["chk", "pay"]);
-    expect(isPlanOnly(root)).toBe(false);
   });
 });
 
@@ -132,7 +130,6 @@ describe("nikos map new", () => {
 
   it("needs no group plan: a repo with no key still gets a map, with ids of its own", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-nokey-"));
-    write(join(root, "planning/plan.yaml"), "name: Acme\nlevel: company\nperiod: Q1\npillars: []\n");
     expect(mapNew(["--key", "CHK", "--dir", root]).code).toBe(0);
     expect(parse(readFileSync(join(root, "maps/chk/storymap.yaml"), "utf8"))).not.toHaveProperty("owner");
     expect(storyPrefix({ root, dir: join(root, "maps/chk"), id: "chk" }, "CHK")).toBe("CHK");
@@ -188,7 +185,7 @@ describe("story ids in a group map", () => {
   it("refuses a repo still on intent/", () => {
     const root = rootOf(copyExample());
     mkdirSync(join(root, "intent"));
-    expect(() => newStory({ title: "Anything", activity: "getting-started", map: "chk" }, root)).toThrow("this repo has intent/: run nikos migrate maps");
+    expect(() => newStory({ title: "Anything", activity: "getting-started", map: "chk" }, root)).toThrow("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   });
 
   it("refuses a story whose id uses the wrong prefix", () => {

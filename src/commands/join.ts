@@ -8,7 +8,6 @@ import { fetchCopy } from "../lib/fetch-copy.js";
 import { asLine, hostNameOf, hostOf, requestArgv } from "../lib/forge.js";
 import { baseBranch, commitPaths, gitIn, isGit, nextBranchName, ownRepo, pushBranch, remoteBranches, statusOf, switchNewBranch } from "../lib/git.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
-import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
 import { addRepo, loadRepos, writeRepos, type RepoEntry } from "../plan/repos.js";
 import { isPlanRepo, today } from "../planning/model.js";

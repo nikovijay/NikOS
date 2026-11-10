@@ -96,6 +96,6 @@ describe("set-up in a 0.2.x repo", () => {
   it("refuses an intent/ repo before asking anything", async () => {
     const root = fresh();
     mkdirSync(join(root, "intent"));
-    await expect(askOnboarding(root, (async () => "") as any, fresh())).rejects.toThrow(/migrate maps/);
+    await expect(askOnboarding(root, (async () => "") as any, fresh())).rejects.toThrow(/by hand/);
   });
 });

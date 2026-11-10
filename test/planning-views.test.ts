@@ -8,69 +8,25 @@ import { newKr } from "../src/planning/krs";
 import { planningData } from "../src/planning/server";
 import { betsAndStoryMaps, NOTE, okrLadder, okrsAndBets } from "../src/planning/views";
 import { renderDashboard } from "../src/planning/ui";
-import { commitAll, companyRepo, departmentRepo, groupRepo } from "./planning-fixture";
+import { commitAll, companyRepo, groupRepo } from "./planning-fixture";
 
 describe("OKRs and bets", () => {
   it("a company with nothing above it says so", () => {
     const co = companyRepo();
-    newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01", primary: "kr-1" }, co);
-    const v = okrsAndBets(planningData(co));
+    const area = join(co, "planning", "company");
+    newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01", primary: "kr-1" }, area);
+    const v = okrsAndBets(planningData(area));
     expect(v.noneAbove).toBe("Nothing above this plan is aligned to yet.");
     expect(v.above).toEqual([]);
     expect(v.byObjective).toEqual([{ objective: NOTE.noObjective, krs: [{ id: "kr-1", title: "Grow revenue", aligned: [], progress: 0 }] }]);
     expect(v.bets).toEqual([expect.objectContaining({ id: "faster", tag: "own", krs: ["kr-1"] })]);
-    const page = renderDashboard({ data: planningData(co), readOnly: true });
+    const page = renderDashboard({ data: planningData(area), readOnly: true });
     // The page draws the tree in the browser: the company has no columns above it.
     expect(page).toContain("Links, not totals. Each figure comes from its own plan.");
     expect(v).toMatchObject({ name: "Acme", aboveName: "" });
     expect(v.bets[0]).toMatchObject({ title: "Faster" });
   });
 
-  it("a department shows the key result it aligns to above, with its repo", () => {
-    const co = companyRepo();
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31", alignsTo: "acme/company-plan#kr-1" }, dept);
-    newBet({ id: "one-tap", owner: "Payments", hypothesis: "One tap lifts conversion", reviewOn: "2027-02-14", primary: "pay-1" }, dept);
-    const v = okrsAndBets(planningData(dept));
-    expect(v.above).toEqual([expect.objectContaining({ ref: "acme/company-plan#kr-1", repo: "acme/company-plan", title: "Grow revenue", found: true, from: ["pay-1"] })]);
-    expect(v.noneAbove).toBe("");
-    expect(v.bets[0]).toMatchObject({ id: "one-tap", tag: "own" });
-    // The tree's labels: the plan above by name, with the share of the way to target from its copy.
-    expect(v).toMatchObject({ name: "Payments", aboveName: "Acme" });
-    expect(v.above[0]).toMatchObject({ plan: "Acme", progress: 0 });
-    expect(v.byObjective[0].krs[0]).toMatchObject({ id: "pay-1", progress: 0 });
-  });
-
-  it("the OKR ladder marks the chain from this plan's key result up to the company", () => {
-    const co = companyRepo();
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31", alignsTo: "acme/company-plan#kr-1" }, dept);
-    const ladder = okrLadder(planningData(dept));
-    expect(ladder.above).toEqual([expect.objectContaining({ ref: "acme/company-plan#kr-1", onChain: true, note: NOTE.onChain })]);
-    expect(ladder.own).toEqual([expect.objectContaining({ id: "pay-1", onChain: true, aligned: ["acme/company-plan#kr-1"] })]);
-    const page = renderDashboard({ data: planningData(dept), readOnly: true });
-    expect(page).toContain("On this plan's chain");
-    expect(page).toContain("Highlighted: the path from this plan's key results up to the company.");
-  });
-
-  it("the ladder's upper column lists every key result above, and marks the ones on this plan's chain", () => {
-    const data = {
-      plan: { level: "department" },
-      krs: [{ id: "pay-1", title: "Pay", objective: "", aligned: [{ ref: "acme/company-plan#kr-1", found: true, kr: { title: "Grow" } }] }],
-      upstream: [{ repo: "acme/company-plan", krs: [{ id: "kr-1", title: "Grow" }, { id: "kr-2", title: "Cut churn" }] }],
-    };
-    const ladder = okrLadder(data);
-    expect(ladder.above.map((a: any) => a.ref)).toEqual(["acme/company-plan#kr-1", "acme/company-plan#kr-2"]);
-    expect(ladder.above.map((a: any) => a.onChain)).toEqual([true, false]);
-  });
-
-  it("the ladder's empty column says what to run", () => {
-    const co = companyRepo();
-    // A company plan is the top: nothing sits above it, so the sync hint doesn't apply.
-    expect(okrLadder(planningData(co)).emptyAbove).toBe("This is the top plan: nothing sits above it.");
-    const dept = departmentRepo();
-    expect(okrLadder(planningData(dept)).emptyAbove).toBe("No company key results loaded. Run nikos planning sync to refresh the copies.");
-  });
 });
 
 describe("bets and story maps", () => {

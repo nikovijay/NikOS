@@ -13,9 +13,8 @@ import { runSuggest } from "./commands/suggest.js";
 import { runMcp } from "./mcp/server.js";
 import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
-import { runMigrate } from "./commands/migrate.js";
 import { runTracker } from "./commands/tracker.js";
-import { runCompany, runGroup, runStart } from "./commands/start.js";
+import { runStart } from "./commands/start.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
 import { runDecisions } from "./commands/decisions.js";
@@ -25,10 +24,8 @@ import { runRelease } from "./commands/release.js";
 import { runVideo } from "./commands/video.js";
 import { runMap } from "./commands/map.js";
 import { runExport } from "./commands/export.js";
-import { help as planningHelp, runPlanning } from "./planning/cli.js";
 import { help as planRepoHelp, runPlanRepo } from "./plan/cli.js";
 import { runServeCommand } from "./commands/serve.js";
-import { runApply } from "./planning/apply.js";
 import { closest } from "./lib/closest.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
@@ -47,11 +44,8 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   join: runJoin,
   settings: runSettings,
   doctor: runDoctor,
-  migrate: runMigrate,
   tracker: runTracker,
   start: runStart,
-  company: runCompany,
-  group: runGroup,
   decide: runDecide,
   show: runShow,
   decisions: runDecisions,
@@ -62,9 +56,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   video: runVideo,
   map: runMap,
   export: runExport,
-  planning: runPlanning,
   serve: runServeCommand,
-  apply: runApply,
 };
 
 const help = `nikos: plan the work, write it as stories, and check each story is really done
@@ -78,8 +70,7 @@ Get started
                    (--name, --key, --join <planning repo>). In a terminal, with no flags, it asks
                    which one, then a few questions. An agent passes the flags
   serve            Open the dashboard in your browser: the plan and the story map
-                   (--port; --export <file> saves it as one page you can share, add --editable
-                   so people can suggest changes in it, and --with-linked to include linked plans)
+                   (--port; --export <file> saves it as one page you can share)
   doctor           Check this repo is set up well, and say what to do next (--offline)
   suggest          Say where things stand and what to do next (--json, --brief, --map; in a
                    planning repo, --in <area>)
@@ -87,17 +78,9 @@ Get started
 Plans: objectives, key results and bets
   plan <cmd>       The company's plan in one repo, with a folder for each department, group
                    and team. Run nikos plan help to see how (plan init, add, kr, bet, checkin)
-  company init     Make a company plan that departments plan under. Add --level department
-                   for a department's plan (--name, --period, --departments, --repo, --host)
-  group init       Make a group plan: bets aimed at a department's key results. A group has
-                   no key results of its own (--name, --key, --period, --repo, --host)
-  join <repo>      Link this repo to the plan above it. A planning repo (planning/repos.yaml)
-                   gets this repo listed on a nikos/join branch for review. An older plan's
-                   settings are inherited (--push sends the branch, --plan-dir <checkout> uses
-                   a checkout you have, --host gitlab.com, --url, --ref)
-  planning <cmd>   Add key results, bets and check-ins. Run nikos planning help to see how
-  apply <file>     Apply a changes file someone downloaded from an editable dashboard page.
-                   It goes on a new branch and nothing is pushed (--dir, --commit, --pr)
+  join <repo>      Link this repo to the company's planning repo (--host gitlab.com). Run it
+                   from a code repo; it lists this repo in planning/repos.yaml on a nikos/join
+                   branch for review. Settings are not inherited: a code repo keeps its own
   settings [set <key> <value>]  Show the settings that apply here and where each one comes
                    from, or change one this repo is allowed to change
 
@@ -147,9 +130,6 @@ Decisions, exports and tools
   mcp              Let Claude Desktop, Cursor, Codex and other apps use nikOS (--dir <repo>)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
-  migrate maps     Move an intent/ story map from nikOS 0.2 into maps/<key>/, converting its
-                   files to the current format. Shows the plan first: --dry-run, --yes and
-                   --help for every option
 
   --version        Show which version of nikOS this is
   help             Show this list
@@ -188,9 +168,8 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
   // `<command> --help` prints help and runs nothing: some commands write files whatever their arguments.
-  // `migrate maps` has its own, longer help.
-  if ((rest.includes("--help") || rest.includes("-h")) && !(cmd === "migrate" && rest[0] === "maps")) {
-    console.log(cmd === "planning" ? planningHelp : cmd === "plan" && rest[0] !== "new" ? planRepoHelp : commandHelp(cmd));
+  if (rest.includes("--help") || rest.includes("-h")) {
+    console.log(cmd === "plan" && rest[0] !== "new" ? planRepoHelp : commandHelp(cmd));
     return 0;
   }
   if (rest.indexOf("--dir") >= 0 && !rest[rest.indexOf("--dir") + 1]) {

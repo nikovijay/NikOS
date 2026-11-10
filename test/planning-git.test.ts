@@ -5,7 +5,8 @@ import http from "node:http";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hash } from "../src/planning/model";
-import { startServer, type RunningServer } from "../src/planning/server";
+import { startPlanServe } from "../src/plan/serve";
+import type { RunningServer } from "../src/planning/server";
 import { realRun, type Runner } from "../src/lib/git";
 import { bareOrigin, commitAll, companyRepo, git, readText, todayIso } from "./planning-fixture";
 
@@ -16,7 +17,7 @@ afterEach(async () => {
 });
 
 async function start(root: string, run?: Runner): Promise<RunningServer> {
-  const srv = await startServer(root, run ? { run } : {});
+  const srv = (await startPlanServe(root, { run, offline: true })).srv;
   running.push(srv);
   return srv;
 }
@@ -64,7 +65,7 @@ function tools(present: Record<string, { status: number; stdout?: string }>): { 
 }
 
 /** The checkin a test saves: the value on kr-1, with the hash of the file as it is now. */
-const op = (co: string, value: number) => ({ op: "checkin", target: { kr: "kr-1" }, args: { value }, expect: hash(readText(co, "planning/krs/kr-1.yaml")) });
+const op = (co: string, value: number) => ({ op: "checkin", target: { kr: "kr-1" }, args: { value }, expect: hash(readText(co, "planning/company/krs/kr-1.yaml")) });
 
 describe("the nikos branch", () => {
   it("the first save on main creates a branch named for the level and the date", async () => {
@@ -144,11 +145,11 @@ describe("the nikos branch", () => {
     const co = companyRepo();
     const srv = await start(co);
     await post(srv, "/api/op", op(co, 1.5));
-    writeFileSync(join(co, "planning", ".env"), "TOKEN=x\n");
+    writeFileSync(join(co, "planning", "company", ".env"), "TOKEN=x\n");
     const refused = await post(srv, "/api/git/commit", {});
     expect(refused.status).toBe(400);
     expect(refused.body.error).toContain("looks like a secret");
-    rmSync(join(co, "planning", ".env"));
+    rmSync(join(co, "planning", "company", ".env"));
     const ok = await post(srv, "/api/git/commit", {});
     expect(ok.status).toBe(200);
   });
@@ -229,6 +230,6 @@ describe("push and the request: only on a click", () => {
     const onMain = await post(srv, "/api/git/push", {});
     expect(onMain.status).toBe(400);
     expect(onMain.body.error).toBe("Push a nikos branch, not main");
-    expect(readText(co, "planning/krs/kr-1.yaml")).toContain("checkins");
+    expect(readText(co, "planning/company/krs/kr-1.yaml")).toContain("checkins");
   });
 });

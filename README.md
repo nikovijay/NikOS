@@ -108,10 +108,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | Command | What it does |
 | --- | --- |
 | `nikos start` | Set this repo up in one go: `maps/<key>/`, a scenario runner for its stack and CI for its host. In a terminal without `--name`, it asks what you're setting up first |
-| `nikos serve` | Open the dashboard: the plan's key results, bets, OKR ladder and story maps. `--export <file> --editable` writes an offline page that queues changes |
-| `nikos apply <file>` | Apply a changes file from an editable dashboard page. It goes on a new branch, and nothing is pushed (`--commit`, `--pr`) |
+| `nikos serve` | Open the dashboard of this repo's story maps. `--export <file>` writes it as one offline page |
 | `nikos init` | Create `maps/<key>/`, with `constitution.md` and `decisions.md` at the root, in this repo |
-| `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |
 | `nikos validate` | Check each story map in `maps/` and the root `constitution.md` are well formed, and each map's `delivery.yaml` is current |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature. With several story maps, pass `--map <key>` |
@@ -131,9 +129,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`) |
 | `nikos next` | Print the next story to build |
-| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`, converting it to the current format. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
-| `nikos join <repo>` | Join a plan in another repo. A planning repo gets this repo listed on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). An older plan's settings are inherited ([docs/settings.md](docs/settings.md)) |
+| `nikos join <repo>` | Join a plan in another repo. A planning repo gets this repo listed on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). A code repo keeps its own settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |

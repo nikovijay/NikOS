@@ -5,7 +5,7 @@ import http from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { companyInit } from "../src/commands/start";
+import { initPlanRepo } from "../src/plan/repo";
 import { newBet } from "../src/planning/bets";
 import { newKr } from "../src/planning/krs";
 import { hash, loadBet, loadKr } from "../src/planning/model";
@@ -19,13 +19,14 @@ afterEach(async () => {
   running = [];
 });
 
-/** A company plan that isn't a git repo, with one key result and one bet. */
+/** The company's area of a planning repo that isn't a git repo, with one key result and one bet. */
 function plainCompany(): string {
-  const dir = mkdtempSync(join(tmpdir(), "nikos-plain-"));
-  companyInit(dir, { name: "Acme", period: "Q1 2027", repo: "acme/company-plan" });
-  newKr({ id: "kr-1", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-03-31" }, dir);
-  newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, dir);
-  return dir;
+  const repo = mkdtempSync(join(tmpdir(), "nikos-plain-"));
+  initPlanRepo(repo, { name: "Acme", year: "2027" });
+  const area = join(repo, "planning", "company");
+  newKr({ id: "kr-1", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-03-31" }, area);
+  newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, area);
+  return area;
 }
 
 async function start(root: string, run?: Runner): Promise<RunningServer> {
@@ -72,17 +73,17 @@ describe("POST /api/op", () => {
   it("applies a change and reports what it wrote, under planning/ only", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const h = hash(readText(root, "planning/krs/kr-1.yaml"));
+    const h = hash(readText(root, "krs/kr-1.yaml"));
     const res = await ok(srv, "/api/op", opBody("checkin", { kr: "kr-1" }, { value: 1.5, note: "Week 1" }, h));
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, message: "Checked in kr-1: 1.5", changed: ["planning/krs/kr-1.yaml"], branch: null });
+    expect(res.body).toMatchObject({ ok: true, message: "Checked in kr-1: 1.5", changed: ["planning/company/krs/kr-1.yaml"], branch: null });
     expect(loadKr(root, "kr-1").data.checkins.at(-1)).toMatchObject({ value: 1.5, note: "Week 1" });
   });
 
   it("returns the command's refusal, verbatim, as a 400", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const res = await ok(srv, "/api/op", opBody("kr.edit", { kr: "kr-1" }, { title: "" }, hash(readText(root, "planning/krs/kr-1.yaml"))));
+    const res = await ok(srv, "/api/op", opBody("kr.edit", { kr: "kr-1" }, { title: "" }, hash(readText(root, "krs/kr-1.yaml"))));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("A key result needs a title (--title)");
   });
@@ -91,7 +92,7 @@ describe("POST /api/op", () => {
     const srv = await start(plainCompany());
     const res = await ok(srv, "/api/op", opBody("story.rename", { story: "HT-1" }, { title: "x" }, "0000000000000000"));
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("story.rename isn't a change the company plan makes here");
+    expect(res.body.error).toBe("story.rename isn't a change a planning area makes: story maps and settings stay in the code repos");
   });
 
   it("refuses an id that is a path, and accepts a group's story id", async () => {
@@ -117,19 +118,10 @@ describe("POST /api/op", () => {
   it("refuses outcome through /api/op: only a review sets it", async () => {
     const root = plainCompany();
     const srv = await start(root);
-    const h = hash(readText(root, "planning/bets/faster.md"));
+    const h = hash(readText(root, "bets/faster.md"));
     const res = await ok(srv, "/api/op", opBody("bet.edit", { bet: "faster" }, { outcome: "won" }, h));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("'outcome' can't be edited here");
-  });
-
-  it("keeps the legacy /api/bet accepting outcome", async () => {
-    const root = plainCompany();
-    const srv = await start(root);
-    const h = hash(readText(root, "planning/bets/faster.md"));
-    const res = await ok(srv, "/api/bet", { id: "faster", expect: h, fields: { outcome: "lost" } });
-    expect(res.status).toBe(200);
-    expect(loadBet(root, "faster").meta.outcome).toBe("lost");
   });
 
   it("refuses a body that is too large with a 413", async () => {
@@ -203,13 +195,6 @@ describe("pending and the page", () => {
     expect(html).not.toContain("<form");
   });
 
-  it("shows the planning levels' own navigation: OKRs and bets for a company", async () => {
-    const srv = await start(plainCompany());
-    const html = (await raw(srv, "GET", "/", { host: `127.0.0.1:${srv.port}` })).body as string;
-    expect(html).toContain('data-nav="okrs" href="#/okrs">OKRs and bets');
-    expect(html).toContain('data-nav="ladder" href="#/ladder">OKR ladder');
-    expect(html).not.toContain("Rollout");
-  });
 });
 
 describe("the snapshot of the same page", () => {

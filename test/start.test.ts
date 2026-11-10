@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { companyInit, runStart, start } from "../src/commands/start";
+import { runStart, start } from "../src/commands/start";
 import { init } from "../src/commands/init";
 import { newActivity } from "../src/commands/step";
 import { validatePlanning } from "../src/planning/model";
@@ -44,24 +44,6 @@ describe("activity add", () => {
     expect(newActivity({ title: "Share lists" }, intent)).toBe("share-lists");
     expect(newActivity({ title: "Share lists" }, intent)).toBe("share-lists");
     expect(parse(readFileSync(join(intent, "storymap.yaml"), "utf8")).activities.map((a: any) => a.id)).toEqual(["tasks", "share-lists"]);
-  });
-});
-
-describe("company init", () => {
-  it("writes a company plan repo, with the join line a team runs", () => {
-    const company = repo();
-    const r = companyInit(company, { name: "Acme", period: "Q1 2027", departments: ["Payments", " Growth "], repo: "acme/product/company-plan", host: "gitlab.com" });
-    expect(r.created).toEqual(["planning/plan.yaml", "nikos.settings.yaml", "planning/downstream.yaml", "README.md"]);
-    expect(r.join).toBe("npx -y nikos@latest join acme/product/company-plan --host gitlab.com");
-    expect(parse(readFileSync(join(company, "planning/plan.yaml"), "utf8"))).toEqual({ name: "Acme", period: "Q1 2027", level: "company", pillars: [] });
-    expect(parse(readFileSync(join(company, "planning/downstream.yaml"), "utf8"))).toEqual([{ name: "Payments" }, { name: "Growth" }]);
-    expect(readFileSync(join(company, "README.md"), "utf8")).toContain(r.join);
-    expect(existsSync(join(company, "planning/krs/.gitkeep"))).toBe(true);
-    expect(validatePlanning(company)).toEqual([]);
-    expect(companyInit(company, { name: "Acme" }).created).toEqual([]);
-
-    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "add", "."], { cwd: company });
-    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "plan"], { cwd: company });
   });
 });
 

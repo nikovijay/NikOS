@@ -7,13 +7,14 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID } from "../lib/bets.js";
-import { mapDirs, mapOwnerOf, resolveStoryMap, storyIdsOf, type StoryMapRef } from "../lib/maps.js";
+import { mapDirs, mapOwnerOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 import { summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { oldLayoutProblem } from "../plan/repo.js";
 import { approvalsDir, storyFiles } from "../lib/state-files.js";
-import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
+import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
 import { contractVersion, schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
@@ -92,6 +93,8 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
  * Check one story map: maps/<key>, chosen with --map, or the repo's only map.
  */
 export function validate(start: string, map?: string): ValidationResult {
+  const old = oldLayoutProblem(start);
+  if (old) throw new Error(old);
   const ref = resolveStoryMap(start, { map });
   const r = validateMap(ref);
   lintRootConstitution(ref.root, r.errors, r.warnings);
@@ -115,7 +118,7 @@ export function validateGroup(root: string): ValidationResult {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   if (store().isDir(join(root, "intent"))) {
-    errors.push({ file: "intent/", message: "this repo has intent/: run nikos migrate maps", hint: "run nikos migrate maps, then commit the result" });
+    errors.push({ file: "intent/", message: "this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe", hint: "move intent/ to maps/<key>/ by hand, then commit the result" });
   }
   const owner = new Map<string, string>();
   const featureOwner = new Map<string, string>();

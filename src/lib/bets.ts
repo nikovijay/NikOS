@@ -3,7 +3,7 @@
 
 /** A bet in this repo: lowercase words joined by hyphens. */
 export const BET_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-/** One part of a repo path; "." and ".." are never allowed, so a path can't leave .nikos/upstream/. */
+/** One part of a repo path; "." and ".." are never allowed, so a path can't leave .nikos/. */
 const SEGMENT = String.raw`(?!\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+`;
 /**
  * Another repo, as its path on the host: owner/repo on GitHub, or group/subgroup/project on

@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { store } from "./store.js";
 import { join, relative } from "node:path";
 import { isPlanRepo } from "../planning/model.js";
-import { mapDirs } from "./maps.js";
 
 /** A story id: <KEY>-<n>, or <PREFIX>-<KEY>-<n> with the map's owner, e.g. HT-1 or WEB-CHK-12. */
 export const STORY_ID_PATTERN = "^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$";
@@ -23,21 +22,13 @@ export function specHash(text: string): string {
 }
 
 /**
- * An old-kind plan (planning/ and no maps/), from before the planning repo. Its decisions stay in
- * planning/decisions.md until the old layout is removed.
- */
-export function isPlanOnly(dir: string): boolean {
-  return !mapDirs(dir).length && store().isDir(join(dir, "planning"));
-}
-
-/**
  * Where a repo keeps its decisions: decisions.md at the root of a code repo. In a planning repo, each
  * area keeps its own at planning/<area>/decisions.md (area is as people write it, e.g. departments/finance);
  * the company's by default.
  */
 export function decisionsPath(dir: string, area = "company"): string {
   if (isPlanRepo(dir)) return join(dir, "planning", area, "decisions.md");
-  return isPlanOnly(dir) ? join(dir, "planning", "decisions.md") : join(dir, "decisions.md");
+  return join(dir, "decisions.md");
 }
 
 export function walk(dir: string, ext?: string): string[] {

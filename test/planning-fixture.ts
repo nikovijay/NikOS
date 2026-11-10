@@ -1,38 +1,25 @@
-// Fixtures for the planning dashboard tests: a company plan, a department that synced it, and a
-// bare origin for the git flow. Real git repos, so ls-remote, branches and commits run for real.
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+// Fixtures for the planning tests: a company's planning repo on origin, and a bare origin for the git flow.
+// Real git repos, so ls-remote, branches and commits run for real.
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { companyInit } from "../src/commands/start";
+import { initPlanRepo } from "../src/plan/repo";
 import { newKr } from "../src/planning/krs";
-import { sync } from "../src/planning/upstream";
-import { commitAll, git, write } from "./repo-fixture";
+import { commitAll, git } from "./repo-fixture";
 
 export { git, write, commitAll, groupRepo, codeRepo } from "./repo-fixture";
 
 // The git identity the dashboard and nikos apply commit with is set in repo-fixture.
 
-/** A company plan on origin acme/company-plan, with one key result: kr-1. */
+/** A company's planning repo on origin acme/company-plan, with one key result: kr-1. */
 export function companyRepo(): string {
   const co = mkdtempSync(join(tmpdir(), "nikos-co-"));
   git(co, "init", "-q", "-b", "main");
   git(co, "remote", "add", "origin", "https://github.com/acme/company-plan.git");
-  companyInit(co, { name: "Acme", period: "Q1 2027", repo: "acme/company-plan" });
-  newKr({ id: "kr-1", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-03-31" }, co);
+  initPlanRepo(co, { name: "Acme", year: "2027" });
+  newKr({ id: "kr-1", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-03-31" }, join(co, "planning", "company"));
   commitAll(co, "company");
   return co;
-}
-
-/** A department plan on origin acme/payments-plan that joined `co` and synced its copy. */
-export function departmentRepo(co: string): string {
-  const dept = mkdtempSync(join(tmpdir(), "nikos-dept-"));
-  git(dept, "init", "-q", "-b", "main");
-  git(dept, "remote", "add", "origin", "https://github.com/acme/payments-plan.git");
-  companyInit(dept, { name: "Payments", period: "Q1 2027", repo: "acme/payments-plan", level: "department" });
-  write(join(dept, "planning/upstream.yaml"), `- repo: acme/company-plan\n  url: ${co}\n`);
-  sync(dept);
-  commitAll(dept, "department");
-  return dept;
 }
 
 /** A bare repo to push to, as origin. */

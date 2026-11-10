@@ -93,7 +93,7 @@ describe("dashboard", () => {
     const srv = await start(root);
     const file = join(root, "planning", "krs", "missed-tasks.yaml");
     const before = readFileSync(file, "utf8");
-    const res = await post(srv, "/api/checkin", { id: "missed-tasks", expect: hash(before), value: 3 }, null);
+    const res = await post(srv, "/api/op", { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 3 }, expect: hash(before) }, null);
     expect(res.status).toBe(403);
     expect(readFileSync(file, "utf8")).toBe(before);
   });
@@ -105,7 +105,7 @@ describe("dashboard", () => {
     const kr = data.krs[0];
     // Someone else checks in on disk after the page loaded.
     checkIn(root, "missed-tasks", { value: 8, date: "2026-11-02" });
-    const res = await post(srv, "/api/checkin", { id: "missed-tasks", expect: kr.hash, value: 7 });
+    const res = await post(srv, "/api/op", { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 7 }, expect: kr.hash });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/changed on disk/);
     expect(loadKr(root, "missed-tasks").data.checkins.map((c: any) => c.value)).toEqual([9, 8]);
@@ -116,9 +116,9 @@ describe("dashboard", () => {
     const srv = await start(root);
     const before = snapshot(root);
     const data = await getData(srv);
-    const res = await post(srv, "/api/checkin", { id: "missed-tasks", expect: data.krs[0].hash, value: 7, note: "reminders on" });
+    const res = await post(srv, "/api/op", { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 7, note: "reminders on" }, expect: data.krs[0].hash });
     expect(res.status).toBe(200);
-    expect(res.body.wrote.startsWith("planning/krs/")).toBe(true);
+    expect(res.body.changed[0].startsWith("planning/krs/")).toBe(true);
     expect(loadKr(root, "missed-tasks").data.checkins.at(-1)).toMatchObject({ value: 7, note: "reminders on" });
     expect(snapshot(root)).toEqual(before);
     expect(existsSync(join(root, ".git"))).toBe(false);
@@ -142,13 +142,13 @@ describe("dashboard", () => {
     const srv = await start(root);
     const data = await getData(srv);
     const bet = data.bets[0];
-    const edited = await post(srv, "/api/bet", { id: bet.id, expect: bet.hash, fields: { confidence: "high" } });
+    const edited = await post(srv, "/api/op", { op: "bet.edit", target: { bet: bet.id }, args: { confidence: "high" }, expect: bet.hash });
     expect(edited.status).toBe(200);
     const after = await getData(srv);
-    const reviewed = await post(srv, "/api/review", { id: bet.id, expect: after.bets[0].hash, decision: "continue", reason: "On track" });
+    const reviewed = await post(srv, "/api/op", { op: "bet.review", target: { bet: bet.id }, args: { decision: "continue", reason: "On track" }, expect: after.bets[0].hash });
     expect(reviewed.status).toBe(200);
-    expect((await post(srv, "/api/review", { id: bet.id, expect: bet.hash, decision: "continue", reason: "x" })).status).toBe(409);
-    expect((await post(srv, "/api/checkin", { id: "../../etc", expect: "x", value: 1 })).status).toBe(400);
+    expect((await post(srv, "/api/op", { op: "bet.review", target: { bet: bet.id }, args: { decision: "continue", reason: "x" }, expect: bet.hash })).status).toBe(409);
+    expect((await post(srv, "/api/op", { op: "checkin", target: { kr: "../../etc" }, args: { value: 1 }, expect: "x" })).status).toBe(400);
   });
 });
 
@@ -203,10 +203,10 @@ describe("custom views", () => {
     const srv = await start(root);
     const js = await (await fetch(`${base(srv)}/nikos-view.js`)).text();
     expect(js).toContain("X-Nikos-Token");
-    for (const endpoint of ["/api/checkin", "/api/bet", "/api/review"]) expect(js).toContain(endpoint);
-    expect((await post(srv, "/api/checkin", { id: "missed-tasks", expect: "x", value: 1 }, null)).status).toBe(403);
+    expect(js).toContain("/api/op");
+    expect((await post(srv, "/api/op", { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 1 }, expect: "x" }, null)).status).toBe(403);
     const data = await getData(srv);
-    const ok = await post(srv, "/api/checkin", { id: "missed-tasks", expect: data.krs[0].hash, value: 6 }, srv.token);
+    const ok = await post(srv, "/api/op", { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 6 }, expect: data.krs[0].hash }, srv.token);
     expect(ok.status).toBe(200);
   });
 });
@@ -217,7 +217,7 @@ describe("export", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-export-"));
     const out = join(dir, "dashboard.html");
     const res = exportSnapshot(root, out);
-    expect(res).toEqual({ wrote: out, warned: false });
+    expect(res).toEqual({ wrote: out });
     expect(readdirSync(dir)).toEqual(["dashboard.html"]);
     const html = readFileSync(out, "utf8");
     expect(html).toContain("Missed tasks");
@@ -229,29 +229,4 @@ describe("export", () => {
     expect(html).not.toContain("<script src");
   });
 
-  test("warns when upstream content is included", async () => {
-    const root = setup();
-    const upstream = join(root, ".nikos", "upstream", "acme", "company-plan");
-    newKr({ id: "kr-2", title: "Grow revenue", owner: "Board", baseline: 1, target: 2, by: "2027-06-30" }, upstream);
-    newKr({ id: "aligned", title: "Aligned KR", owner: "Ana", baseline: 0, target: 1, by: "2027-06-30", alignsTo: "acme/company-plan#kr-2" }, root);
-
-    const aligned = planningData(root).krs.find((k) => k.id === "aligned");
-    expect(aligned?.upstream).toMatchObject({ repo: "acme/company-plan", found: true, readOnly: true });
-
-    const dir = mkdtempSync(join(tmpdir(), "nikos-export-"));
-    const out = join(dir, "dashboard.html");
-    const writes: string[] = [];
-    const existedAtWarning: boolean[] = [];
-    vi.spyOn(process.stderr, "write").mockImplementation((chunk: any) => {
-      const text = String(chunk);
-      writes.push(text);
-      if (text.includes("This snapshot includes plans from other repos")) existedAtWarning.push(existsSync(out));
-      return true;
-    });
-    const res = exportSnapshot(root, out);
-    expect(res.warned).toBe(true);
-    expect(writes.join("")).toContain("acme/company-plan");
-    expect(existedAtWarning).toEqual([false]);
-    expect(existsSync(out)).toBe(true);
-  });
 });

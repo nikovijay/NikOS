@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
 import { doctor } from "../src/commands/doctor";
-import { companyInit } from "../src/commands/start";
+import { initPlanRepo } from "../src/plan/repo";
 import { decide } from "../src/commands/decide";
 import { findDecisions, formatDecisions } from "../src/commands/decisions";
 import { checkRelease } from "../src/commands/release";
@@ -85,8 +85,8 @@ describe("doctor", () => {
   it("says what's set up and what to do next", () => {
     const root = rootOf(copyExample());
     const names = (cs: ReturnType<typeof doctor>) => cs.map((c) => `${c.status} ${c.name}`);
-    // The example has a planning/ folder, so its plan checks come first; then the runner, CI and the story map.
-    expect(names(doctor(root, { offline: true }))).toEqual(["warn plan", "ok decisions", "fail scenario runner", "warn CI", "ok story map", "ok approvals"]);
+    // A code repo's checks: the scenario runner, CI, the story map and the approvals.
+    expect(names(doctor(root, { offline: true }))).toEqual(["fail scenario runner", "warn CI", "ok story map", "ok approvals"]);
     expect(doctor(root, { offline: true }).find((c) => c.name === "story map")!.found).toBe("3 stories in 1 map");
     const one = mkdtempSync(join(tmpdir(), "nikos-one-"));
     init(one, { name: "One", key: "ON" });
@@ -97,46 +97,37 @@ describe("doctor", () => {
     writeFileSync(join(root, ".github/workflows/nikos.yml"), "name: nikos\n");
     writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\ntracker:\n  system: linear\n");
     const checks = doctor(root, { offline: true });
-    expect(names(checks)).toEqual(["warn plan", "ok decisions", "ok scenario runner", "ok CI", "ok story map", "warn approvals", "warn tracker"]);
-    expect(checks[5].next).toContain("CODEOWNERS");
+    expect(names(checks)).toEqual(["ok scenario runner", "ok CI", "ok story map", "warn approvals", "warn tracker"]);
+    expect(checks[3].next).toContain("CODEOWNERS");
     writeFileSync(join(root, "CODEOWNERS"), "/maps/*/approvals/ @acme/product\n");
-    expect(doctor(root, { offline: true })[5]).toMatchObject({ status: "ok", found: "required-for-release (this repo); maps/<key>/approvals/ needs a CODEOWNERS review" });
+    expect(doctor(root, { offline: true })[3]).toMatchObject({ status: "ok", found: "required-for-release (this repo); maps/<key>/approvals/ needs a CODEOWNERS review" });
     expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no maps/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does" }]);
     expect(existsSync(join(root, "maps", "ht"))).toBe(true);
   });
 });
 
-describe("a plan-only repo", () => {
-  it("records decisions in planning/decisions.md", () => {
+describe("a planning repo", () => {
+  it("records decisions in the company's planning/company/decisions.md", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-co-"));
-    companyInit(root, { name: "Acme" });
+    initPlanRepo(root, { name: "Acme", year: "2027" });
     decide({ title: "Revenue is the one company key result", why: "One number everyone can see.", date: "2027-01-05" }, root);
-    const text = readFileSync(join(root, "planning/decisions.md"), "utf8");
-    expect(text).toMatch(/^# Decisions\n/);
+    const text = readFileSync(join(root, "planning/company/decisions.md"), "utf8");
+    expect(text).toMatch(/^# Acme: decisions\n/);
     expect(text).toContain("## 2027-01-05 — Revenue is the one company key result");
     expect(existsSync(join(root, "maps", "ht"))).toBe(false);
-    expect(formatDecisions("revenue", findDecisions("revenue", root), root)).toMatch(/^planning\/decisions\.md:\d+-\d+\n## 2027-01-05/);
+    expect(formatDecisions("revenue", findDecisions("revenue", root), root)).toMatch(/^planning\/company\/decisions\.md:\d+-\d+\n## 2027-01-05/);
     // A repo with neither a story map nor a plan still needs nikos init.
     expect(() => decide({ title: "x", why: "y" }, mkdtempSync(join(tmpdir(), "nikos-none-")))).toThrow(/Run `nikos init` first/);
   });
 
-  it("passes doctor without a story map, and says when the routes aren't locked", () => {
+  it("is checked as a plan, with its code repos and decisions", () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-co-"));
-    companyInit(root, { name: "Acme", departments: ["Payments", "Growth"] });
+    initPlanRepo(root, { name: "Acme", year: "2027" });
     const names = (cs: ReturnType<typeof doctor>) => cs.map((c) => `${c.status} ${c.name}`);
     const checks = doctor(root, { offline: true });
-    expect(names(checks)).toEqual(["ok plan", "ok decisions", "ok approvals", "ok plans below"]);
-    expect(checks[0].found).toBe("plan-only repo: 0 key results, 0 bets; no story map needed");
-    expect(checks[3].found).toBe("2 plans in planning/downstream.yaml, 2 with no repo yet");
+    expect(names(checks)).toEqual(["ok plan", "ok code repos", "ok decisions"]);
+    expect(checks[2].found).toBe("none recorded yet");
     decide({ title: "Revenue first", why: "One number." }, root);
-    expect(doctor(root, { offline: true })[1].found).toBe("1 decision in planning/decisions.md");
-
-    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\n");
-    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "ok", found: "required-for-release (this repo), not locked: the plans below can change it" });
-    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy]\n");
-    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "warn", next: "Add approval.routes to locked: in nikos.settings.yaml" });
-    writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy, approval.routes]\n");
-    expect(doctor(root, { offline: true })[2]).toMatchObject({ status: "ok", found: "required-for-release (this repo), locked with its routes (app, chat, terminal)" });
-    expect(doctor(root, { offline: true }).some((c) => c.status === "fail")).toBe(false);
+    expect(doctor(root, { offline: true })[2].found).toBe("1 decision in planning/company/decisions.md");
   });
 });

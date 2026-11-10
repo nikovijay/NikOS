@@ -8,7 +8,7 @@ import { parse } from "yaml";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
-import { mapDeliveryIn } from "../src/planning/delivery";
+import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { git, write, commitAll } from "./repo-fixture";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,23 +39,20 @@ describe("a repo's own map", () => {
     expect(parse(readFileSync(join(t, "maps/inb/delivery.yaml"), "utf8")).stories[0]).toMatchObject({ id: "PAY-INB-1", status: "done" });
   });
 
-  it("is counted from its summary, not from the map folder, so the rollout shows it done", () => {
+  it("is read from its summary, not from the map folder, so a plan above shows it done", () => {
     const t = ownMapRepo();
     write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: done }\n");
     writeSummaries(t, mapStatus(t), new Date("2026-11-08T09:00:00Z"));
     // The state moves on after the summary was written: the rollout still reads the summary.
     write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: todo }\n");
-    const d = mapDeliveryIn(t);
-    expect(d.stories).toEqual([expect.objectContaining({ id: "PAY-INB-1", status: "done" })]);
-    expect(d.noSummary).toEqual([]);
+    const summary = readDeliverySummary(join(t, "maps/inb"), "code");
+    expect(summary?.stories).toEqual([expect.objectContaining({ id: "PAY-INB-1", status: "done" })]);
   });
 
-  it("with no summary yet counts its stories as no summary yet, not as todo", () => {
+  it("with no summary yet has nothing to read, so its stories aren't counted as todo", () => {
     const t = ownMapRepo();
     write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: done }\n");
     rmSync(join(t, "maps/inb/delivery.yaml")); // newMap writes one; this case has none
-    const d = mapDeliveryIn(t);
-    expect(d.stories).toEqual([]);
-    expect(d.noSummary).toEqual(["PAY-INB-1"]);
+    expect(readDeliverySummary(join(t, "maps/inb"), "code")).toBeUndefined();
   });
 });

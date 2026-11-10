@@ -1,5 +1,5 @@
 // Fetch one branch of a repo into a folder as a plain copy: no history, nothing to push back.
-// Planning sync and rollout both read other repos this way, read-only. With paths, only those
+// The plan's refresh reads code repos this way, read-only. With paths, only those
 // paths are checked out (a sparse clone, which needs git's partial clone support); any failure of
 // that falls back to the full shallow clone.
 import { spawnSync } from "node:child_process";

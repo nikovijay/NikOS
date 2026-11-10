@@ -18,16 +18,9 @@ const ajv = new Ajv2020({ allErrors: true, strict: false });
 const schema = (name: string) => ajv.compile(JSON.parse(readFileSync(join(schemaDir, name), "utf8")));
 export const checkBet = schema("bet.schema.json");
 export const checkKr = schema("kr.schema.json");
-export const checkPlan = schema("plan.schema.json");
 
 export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const today = () => new Date().toISOString().slice(0, 10);
-
-/** The repo root holding planning/ (and usually maps/): a repo root, or planning/ itself. */
-export function findRoot(start: string): string {
-  const abs = resolve(start);
-  return basename(abs) === "planning" && !store().exists(join(abs, "planning")) ? dirname(abs) : abs;
-}
 
 /** The levels of a planning repo, by the folder under planning/ that holds them. */
 export const AREA_FOLDERS = { departments: "department", groups: "group", teams: "team" } as const;
@@ -65,23 +58,19 @@ export function areaOf(dir: string): Area | undefined {
 /** Where file names are shown from: the planning repo's root for an area, else the repo itself. */
 export const labelRoot = (root: string) => areaOf(root)?.repo ?? root;
 
-/** The command that lists what's here: nikos plan status in a planning repo, nikos planning status elsewhere. */
-export const statusCommand = (root: string) => (areaOf(root) ? "nikos plan status" : "nikos planning status");
+/** The command that lists what's here. */
+const STATUS_COMMAND = "nikos plan status";
 
 // An area of a planning repo is laid out like a repo's planning/ folder: plan.yaml, krs/, bets/.
 export const paths = (root: string) => {
   const area = areaOf(root);
   const planning = area ? area.dir : join(root, "planning");
-  const base = area ? area.repo : root;
   return {
     planning,
     bets: join(planning, "bets"),
     krs: join(planning, "krs"),
     plan: join(planning, "plan.yaml"),
     views: join(planning, "views"),
-    upstream: join(planning, "upstream.yaml"),
-    lock: join(planning, "upstream.lock"),
-    cache: join(base, ".nikos", "upstream"),
   };
 };
 
@@ -162,7 +151,7 @@ const label = (root: string, path: string) => relative(labelRoot(root), path).sp
 
 export function loadBet(root: string, id: string): Bet {
   const path = join(paths(root).bets, `${id}.md`);
-  if (!store().exists(path)) throw new Error(`No bet called '${id}' (${label(root, path)}). See every bet with: ${statusCommand(root)}`);
+  if (!store().exists(path)) throw new Error(`No bet called '${id}' (${label(root, path)}). See every bet with: ${STATUS_COMMAND}`);
   const text = store().read(path);
   const fm = parseFrontMatter(text);
   if (!fm) throw new Error(`${label(root, path)} is missing its details block: the lines between --- at the top of the file`);
@@ -171,18 +160,13 @@ export function loadBet(root: string, id: string): Bet {
 
 export function loadKr(root: string, id: string): Kr {
   const path = join(paths(root).krs, `${id}.yaml`);
-  if (!store().exists(path)) throw new Error(`No key result called '${id}' (${label(root, path)}). See every key result with: ${statusCommand(root)}`);
+  if (!store().exists(path)) throw new Error(`No key result called '${id}' (${label(root, path)}). See every key result with: ${STATUS_COMMAND}`);
   const text = store().read(path);
   return { data: parse(text), file: label(root, path), hash: hash(text) };
 }
 
 export const betIds = (root: string) => walk(paths(root).bets, ".md").map((p) => basename(p, ".md")).sort();
 export const krIds = (root: string) => walk(paths(root).krs, ".yaml").map((p) => basename(p, ".yaml")).sort();
-
-export function loadPlan(root: string): any | undefined {
-  const p = paths(root).plan;
-  return store().exists(p) ? parse(store().read(p)) : undefined;
-}
 
 export interface PlanningIssue {
   file: string;
@@ -194,12 +178,8 @@ export interface PlanningIssue {
 /** Check every planning file against its schema and the links between them. */
 export function validatePlanning(root: string): PlanningIssue[] {
   const issues: PlanningIssue[] = [];
-  const krs = new Set(krIds(root));
   // An area's plan.yaml is checked with the rest of its planning repo (src/plan/repo.ts), and its bets'
-  // key results may be in any area above it.
-  const area = areaOf(root);
-  const plan = area ? undefined : loadPlan(root);
-  if (plan !== undefined && !checkPlan(plan)) for (const m of describeErrors(checkPlan.errors)) issues.push({ file: "planning/plan.yaml", message: m });
+  // key results may be in any area of the company, so links are checked there, not here.
   for (const id of krIds(root)) {
     let kr: Kr;
     try {
@@ -224,9 +204,6 @@ export function validatePlanning(root: string): PlanningIssue[] {
       continue;
     }
     if (bet.meta.id !== id) issues.push({ file: bet.file, message: `id '${bet.meta.id}' doesn't match the file name` });
-    for (const ref of [bet.meta.krs.primary, ...(bet.meta.krs.also ?? [])].filter(Boolean)) {
-      if (!area && !ref.includes("#") && !krs.has(ref)) issues.push({ file: bet.file, message: `links key result '${ref}', which has no planning/krs/${ref}.yaml` });
-    }
   }
   return issues;
 }

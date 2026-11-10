@@ -95,6 +95,6 @@ describe("nikos mcp init", () => {
     expect(existsSync(join(root, "maps/new/storymap.yaml"))).toBe(true);
     const old = mkdtempSync(join(tmpdir(), "nikos-mcp-old-"));
     mkdirSync(join(old, "intent"));
-    expect(await connect(old).then((c) => c.call("init"))).toMatchObject({ isError: true, text: expect.stringContaining("this repo has intent/: run nikos migrate maps") });
+    expect(await connect(old).then((c) => c.call("init"))).toMatchObject({ isError: true, text: expect.stringContaining("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe") });
   });
 });

@@ -7,24 +7,20 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { renderMap, storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { featureOf } from "../commands/story.js";
-import { BET_ID } from "../lib/bets.js";
 import { keyOfMap, mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { loadMapData, mapStoryIds } from "../lib/map-data.js";
 import { readDeliverySummary } from "../lib/delivery-summary.js";
 import { NewerContractError } from "../lib/schema.js";
-import { read, walk } from "../lib/project.js";
+import { read } from "../lib/project.js";
 import { store } from "../lib/store.js";
-import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, onBaseBranch, ownRepo, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
+import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, isGit, nikosPaths, onBaseBranch, ownRepo, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
 import { asLine, hostOf, requestArgv, runForge, toolFor } from "../lib/forge.js";
-import { editBet, reviewBet } from "./bets.js";
-import { delivery } from "./delivery.js";
-import { checkIn, isStale, latest, progress } from "./krs.js";
-import { betIds, hash, isPlanRepo, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
-import { betDeliveryText, rollout } from "./rollout.js";
-import { loadUpstream, upstreamEntries } from "./upstream.js";
+import { delivery, describeDelivery } from "./delivery.js";
+import { isStale, latest, progress } from "./krs.js";
+import { betIds, hash, isPlanRepo, krIds, loadBet, loadKr, paths, StaleError, today } from "./model.js";
 import { alignsList } from "./levels.js";
 import { renderDashboard } from "./ui.js";
 import { runOp, vetOp, type Op } from "./ops.js";
@@ -33,19 +29,14 @@ import { betsAndStoryMaps, okrLadder, okrsAndBets } from "./views.js";
 
 const MAX_BODY = 100_000;
 
-/** What planningData includes. An editable snapshot is own-only unless it's --with-linked. */
-export interface DataOptions {
-  ownOnly?: boolean;
-  linked?: boolean;
-}
 const VIEW_NAME = /^[a-z0-9-]+$/;
 const VIEW_FILE = /^[a-z0-9-]+\.html$/;
 const HTML = "text/html; charset=utf-8";
 const JS = "application/javascript; charset=utf-8";
 const NOT_THIS_SITE = "A page on another site can't change this plan";
-const TOKEN_ERROR = "Missing or wrong token. Open the dashboard from the link nikos planning serve printed.";
+const TOKEN_ERROR = "Missing or wrong token. Open the dashboard from the link nikos plan serve printed.";
 /** The POST routes. Every one passes the same checks, in the same order, before its body is read. */
-const POSTS = new Set(["/api/checkin", "/api/bet", "/api/review", "/api/op", "/api/git/commit", "/api/git/push", "/api/git/pr"]);
+const POSTS = new Set(["/api/op", "/api/git/commit", "/api/git/push", "/api/git/pr"]);
 
 /** What a custom view can rely on. Keep this in step with VIEW_SCRIPT and the save kinds below. */
 export const VIEW_CONTRACT = `# Custom planning views
@@ -53,17 +44,17 @@ export const VIEW_CONTRACT = `# Custom planning views
 A custom view is a page at planning/views/<name>.html (lowercase letters, digits and hyphens). It is served at /views/<name>, and the server adds /nikos-view.js and the dashboard token to it.
 
 window.nikos.data(): Promise<object>
-  The dashboard data: { project, today, plan, krs, bets, story, upstream, views, problems, maps, pages }.
+  The dashboard data: { project, today, plan, krs, bets, story, views, problems, maps, pages }.
   krs[]: id, title, owner, unit, baseline, target, by, latest, latestValue, progress, stale, hash, checkins,
-    aligns_to (a list), upstream (the first key result it aligns to) and aligned (every one).
+    aligns_to (a list).
   bets[] also carry aligns_to: the bets in the plan above they align to, as a list.
   bets[]: id, owner, team, hypothesis, krs, starts, review_on, deadline, confidence, outcome, reviews, body, hash, delivery, releases.
-  upstream[] is read-only: plans synced from other repos. Never save to it.
 
-window.nikos.save(kind, payload): Promise<{ wrote: string }>
+window.nikos.save(kind, payload): Promise<{ ok, message, changed }>
   "checkin": { id, expect, value, note?, evidence? }
-  "bet": { id, expect, fields: { owner?, team?, hypothesis?, starts?, review_on?, deadline?, confidence?, dependencies?, outcome? } }
+  "bet": { id, expect, fields: { owner?, team?, hypothesis?, starts?, review_on?, deadline?, confidence?, dependencies? } }
   "review": { id, expect, decision: "continue" | "change" | "stop" | "complete", reason, outcome?: "won" | "lost" }
+  Each is sent to /api/op as its op: checkin, bet.edit and bet.review.
 
 window.nikos.op(op, target, args, expect): Promise<{ ok, message, changed, branch }>
   The same change the dashboard makes: POST /api/op, with { op, target, args, expect }. The op names and their
@@ -72,12 +63,11 @@ window.nikos.op(op, target, args, expect): Promise<{ ok, message, changed, branc
 expect is the hash of the item as data() returned it. A save rejected with status 409 means the file changed on disk: call data() again and apply the change to the new version. Other rejections carry the reason. Saves write only the planning/ and maps/ paths of this repo.
 `;
 
-/** The script every custom view gets. It saves through the same endpoints, with the same token and hash checks. */
+/** The script every custom view gets. Its saves go through /api/op, with the same token and hash checks. */
 const VIEW_SCRIPT = `(function () {
   var meta = document.querySelector('meta[name="nikos-token"]');
   var token = meta ? meta.getAttribute('content') : (new URLSearchParams(location.search).get('token') || '');
   if (location.search.indexOf('token=') >= 0 && window.history && history.replaceState) history.replaceState(null, '', location.pathname);
-  var paths = { checkin: '/api/checkin', bet: '/api/bet', review: '/api/review' };
   function post(path, body) {
     return fetch(path, {
       method: 'POST',
@@ -102,9 +92,14 @@ const VIEW_SCRIPT = `(function () {
       });
     },
     save: function (kind, payload) {
-      var path = paths[kind];
-      if (!path) return Promise.reject(new Error('Unknown save kind "' + kind + '": use checkin, bet or review'));
-      return post(path, payload);
+      var p = payload || {};
+      var saves = {
+        checkin: function () { return post('/api/op', { op: 'checkin', target: { kr: p.id }, args: { value: p.value, note: p.note, evidence: p.evidence }, expect: p.expect }); },
+        bet: function () { return post('/api/op', { op: 'bet.edit', target: { bet: p.id }, args: p.fields || {}, expect: p.expect }); },
+        review: function () { return post('/api/op', { op: 'bet.review', target: { bet: p.id }, args: { decision: p.decision, reason: p.reason, outcome: p.outcome }, expect: p.expect }); }
+      };
+      if (!saves[kind]) return Promise.reject(new Error('Unknown save kind "' + kind + '": use checkin, bet or review'));
+      return saves[kind]();
     },
     op: function (op, target, args, expect) {
       return post('/api/op', { op: op, target: target || {}, args: args || {}, expect: expect });
@@ -112,17 +107,6 @@ const VIEW_SCRIPT = `(function () {
   };
 })();
 `;
-
-type Upstream = ReturnType<typeof loadUpstream>;
-
-/** The upstream KR a KR aligns to, found in the read-only copies. */
-function upstreamRef(upstream: Upstream, ref: string | undefined) {
-  if (!ref) return null;
-  const [repo, id] = ref.split("#");
-  const plan = upstream.find((u) => u.repo === repo);
-  const kr = plan?.krs?.find((k: any) => k.id === id) ?? null;
-  return { ref, repo, commit: plan?.commit ?? null, found: kr !== null, kr, readOnly: true };
-}
 
 /**
  * The story maps of this repo, each with every story's status from the map's delivery summary
@@ -184,12 +168,10 @@ function mapsData(root: string) {
 }
 
 /** Everything the views need, as JSON. Files that fail to load are listed in `problems`, not thrown. */
-export function planningData(root: string, mapId?: string, opts: DataOptions = {}) {
-  const plan = loadPlan(root) ?? null;
+export function planningData(root: string, mapId?: string) {
+  const planFile = paths(root).plan;
+  const plan = store().exists(planFile) ? parse(store().read(planFile)) : null;
   const story = storyMapOf(root, mapId);
-  // An editable snapshot embeds the other plans only with --with-linked.
-  const copies = !opts.ownOnly || !!opts.linked;
-  const upstream = copies ? loadUpstream(root) : [];
   const problems: string[] = [];
   const krs = krIds(root).flatMap((id) => {
     try {
@@ -216,8 +198,6 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
           stale: isStale(d),
           hash: kr.hash,
           file: kr.file,
-          upstream: upstreamRef(upstream, alignsList(d.aligns_to)[0]),
-          aligned: alignsList(d.aligns_to).map((r) => upstreamRef(upstream, r)),
         },
       ];
     } catch (err) {
@@ -248,7 +228,7 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
           body: bet.body.trim(),
           hash: bet.hash,
           file: bet.file,
-          delivery: { ...d, text: betDeliveryText(root, id, d) },
+          delivery: { ...d, text: describeDelivery(d) },
           releases: d.releases.map((n) => ({
             number: n,
             title: story.releases.find((r) => r.number === n)?.title ?? `Release ${n}`,
@@ -276,87 +256,18 @@ export function planningData(root: string, mapId?: string, opts: DataOptions = {
     krs,
     bets,
     story: { activities: story.activities, releases: story.releases, unreleased: story.unreleased },
-    upstream,
-    // The plans below this one, from the copies the last rollout fetched: loading never fetches.
-    downstream: copies && existsSync(join(root, "planning", "downstream.yaml")) ? rollout(root, { offline: true }) : null,
     maps: mapsData(root),
     views,
     problems,
   };
-  // Without copies, the snapshot has no upstream or downstream keys at all.
-  if (!copies) {
-    delete out.upstream;
-    delete out.downstream;
-  }
   return { ...out, pages: { okrsAndBets: okrsAndBets(out), okrLadder: okrLadder(out), betsAndStoryMaps: betsAndStoryMaps(out) } };
 }
 
-/** Write the whole dashboard as one offline HTML file. Warns first when other repos' plans are inside. */
-export function exportSnapshot(root: string, file: string): { wrote: string; warned: boolean } {
+/** Write the whole dashboard as one offline HTML file. */
+export function exportSnapshot(root: string, file: string): { wrote: string } {
   const out = resolve(file);
-  const data = planningData(root);
-  const names = [...loadUpstream(root).map((u) => u.repo), ...(data.downstream?.plans ?? []).filter((p: any) => p.repo && p.state !== "unreachable").map((p: any) => p.repo as string)];
-  const warned = names.length > 0;
-  if (warned) {
-    process.stderr.write(`! This snapshot includes plans from other repos (${names.join(", ")}); share it only with people allowed to see them.\n`);
-  }
-  writeFileSync(out, renderDashboard({ data, readOnly: true }));
-  return { wrote: out, warned };
-}
-
-/** Every planning and story map file the snapshot holds, with its hash: the expect values a change file carries. */
-function hashesOf(root: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const add = (abs: string) => {
-    out[relative(root, abs).split(sep).join("/")] = hash(read(abs));
-  };
-  if (store().exists(paths(root).plan)) add(paths(root).plan);
-  for (const f of walk(paths(root).krs, ".yaml")) add(f);
-  for (const f of walk(paths(root).bets, ".md")) add(f);
-  for (const dir of mapDirs(root)) for (const f of walk(dir)) add(f);
-  return out;
-}
-
-/** The commit a snapshot was made from, and whether the nikOS files had changes not in it. */
-function sourceOf(root: string): { commit: string | null; dirty: boolean; exported: string; warning?: string } {
-  const exported = new Date().toISOString();
-  if (!isGit(root)) return { commit: null, dirty: false, exported, warning: "Not a git repo: the snapshot records no commit." };
-  return { commit: headOf(root) ?? null, dirty: statusOf(root, nikosPaths(root)).length > 0, exported };
-}
-
-export interface EditableOptions {
-  /** Embed the copies of the plans above and below, read-only. */
-  withLinked?: boolean;
-  /** Told each line before the file is written: the warnings, and the count of other plans. */
-  notice?: (line: string) => void;
-}
-
-/**
- * Write the dashboard as one file that edits: changes are queued in the page and downloaded as a
- * change file for nikos apply. By default only this level's own files are in it. With withLinked,
- * the copies of the plans above and below are too, read-only. Team status is never in it.
- */
-export function exportEditable(root: string, file: string, opts: EditableOptions = {}): { wrote: string; withLinked: boolean; copies: number } {
-  const out = resolve(file);
-  const linked = !!opts.withLinked;
-  if (linked) {
-    for (const e of upstreamEntries(root)) {
-      if (!store().isDir(join(paths(root).cache, ...e.repo.split("/")))) {
-        throw new Error(`No synced copy of ${e.repo}: run nikos planning sync first, or leave out --with-linked`);
-      }
-    }
-  }
-  const data: any = planningData(root, undefined, { ownOnly: true, linked });
-  const source = sourceOf(root);
-  const copies = linked
-    ? [...new Set([...loadUpstream(root).map((u) => u.repo), ...(data.downstream?.plans ?? []).filter((p: any) => p.repo && p.state !== "unreachable").map((p: any) => p.repo as string)])]
-    : [];
-  const { warning, ...snapshotSource } = source;
-  if (warning) opts.notice?.(`! ${warning}`);
-  if (linked) opts.notice?.(`This file includes read-only copies of ${copies.length} other plans.`);
-  data.snapshot = { editable: true, withLinked: linked, source: snapshotSource, hashes: hashesOf(root) };
-  writeFileSync(out, renderDashboard({ data, readOnly: true, editable: true }));
-  return { wrote: out, withLinked: linked, copies: copies.length };
+  writeFileSync(out, renderDashboard({ data: planningData(root), readOnly: true }));
+  return { wrote: out };
 }
 
 export interface RunningServer {
@@ -430,28 +341,8 @@ export async function startServer(root: string, opts: StartOptions = {}): Promis
   };
 }
 
-/** `nikos planning serve`: run the dashboard until Ctrl+C, or export it to one file. */
-export async function runServe(root: string, opts: { port?: number; exportTo?: string; map?: string; editable?: boolean; withLinked?: boolean } = {}): Promise<number> {
-  if (opts.withLinked && !opts.editable) {
-    console.error("✗ --with-linked only works with --editable. Try: nikos serve --export plan.html --editable --with-linked");
-    return 1;
-  }
-  if (opts.editable) {
-    if (!opts.exportTo) {
-      console.error("✗ --editable needs a file to save to. Try: nikos serve --export plan.html --editable");
-      return 1;
-    }
-    try {
-      const { wrote } = exportEditable(root, opts.exportTo, { withLinked: opts.withLinked, notice: (line) => console.log(line) });
-      console.log(`Saved an editable copy of the dashboard: ${wrote}`);
-      console.log("Send it to the people you plan with. They open it in a browser, make changes and download a changes file.");
-      console.log("When they send that file back, apply it here with nikos apply and the file's name.");
-      return 0;
-    } catch (err) {
-      console.error(`✗ ${(err as Error).message}`);
-      return 1;
-    }
-  }
+/** `nikos serve`: run the dashboard until Ctrl+C, or export it to one file. */
+export async function runServe(root: string, opts: { port?: number; exportTo?: string; map?: string } = {}): Promise<number> {
   if (opts.exportTo) {
     const { wrote } = exportSnapshot(root, opts.exportTo);
     console.log(`Saved the dashboard as one page: ${wrote}`);
@@ -532,37 +423,6 @@ function withViewScript(html: string, token: string): string {
 /** Names that look like a secret: an .env file, or a key or certificate. Never committed by a click. */
 const looksSecret = (p: string) => /(^|\/)(\.env(\..*)?|[^/]*\.(pem|key|p12))$/i.test(p);
 
-const numberOf = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
-const textOf = (v: unknown) => (typeof v === "string" ? v : undefined);
-
-/**
- * The op each legacy save is, checked before anything else: the same checks as /api/op, so a team
- * repo, a wrong level or a stale expect refuse here too. outcome is left out of the check: the
- * legacy bet save still writes it, as it always has.
- */
-function legacyOp(path: string, b: Record<string, any>): Op {
-  if (path === "/api/checkin") return { op: "checkin", target: { kr: b.id }, args: { value: numberOf(b.value), note: textOf(b.note), evidence: textOf(b.evidence) }, expect: b.expect };
-  if (path === "/api/bet") {
-    if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) throw new Error("fields must be an object of bet fields to change");
-    const { outcome: _outcome, ...fields } = b.fields;
-    return { op: "bet.edit", target: { bet: b.id }, args: fields, expect: b.expect };
-  }
-  return { op: "bet.review", target: { bet: b.id }, args: { decision: b.decision, reason: textOf(b.reason) ?? "", outcome: b.outcome }, expect: b.expect };
-}
-
-/** The legacy saves. They call the commands directly, as before, after legacyOp has checked them. */
-const LEGACY = new Map<string, (root: string, b: Record<string, any>) => string>([
-  ["/api/checkin", (root, b) => checkIn(root, b.id, { value: numberOf(b.value), note: textOf(b.note), evidence: textOf(b.evidence), expect: b.expect })],
-  [
-    "/api/bet",
-    (root, b) => {
-      if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) throw new Error("fields must be an object of bet fields to change");
-      return editBet(root, b.id, b.fields, b.expect);
-    },
-  ],
-  ["/api/review", (root, b) => reviewBet(root, b.id, { decision: b.decision, reason: textOf(b.reason) ?? "", outcome: b.outcome, expect: b.expect })],
-]);
-
 class TooLarge extends Error {}
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -610,24 +470,7 @@ async function postRequest(ctx: Ctx, path: string, req: IncomingMessage, res: Se
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) return send(res, 400, { error: "The request body must be a JSON object" });
   if (path.startsWith("/api/git/")) return gitRequest(ctx, path, body, res);
-  if (path === "/api/op") return opRequest(ctx, body, res);
-  if (typeof body.id !== "string" || !BET_ID.test(body.id)) return send(res, 400, { error: `'${String(body.id)}' is not an id` });
-  if (typeof body.expect !== "string") return send(res, 400, { error: "expect (the hash of the version you loaded) is required. Reload the dashboard." });
-  // Checked before any branch is made, so a refused save leaves the repo where it was.
-  try {
-    vetOp(ctx.root, legacyOp(path, body));
-  } catch (err) {
-    return saveError(res, err);
-  }
-  const prep = beginSave(ctx);
-  if (!prep.ok) return send(res, 400, { error: prep.error });
-  try {
-    const wrote = LEGACY.get(path)!(ctx.root, body);
-    ctx.session.ops++;
-    return send(res, 200, { wrote, ...(prep.branch ? { branch: prep.branch } : {}) });
-  } catch (err) {
-    return saveError(res, err);
-  }
+  return opRequest(ctx, body, res);
 }
 
 function saveError(res: ServerResponse, err: unknown) {
@@ -676,7 +519,7 @@ function beginSave(ctx: Ctx, area?: string): { ok: true; branch?: string; notice
   const branch = currentBranch(root, run);
   if (!branch) return { ok: true, notice: "Saves aren't on a branch because HEAD is detached" };
   if (!onBaseBranch(branch, baseBranch(root, run))) return { ok: true, branch };
-  const label = area ? area.split("/").join("-") : (loadPlan(root)?.level ?? "plan");
+  const label = area ? area.split("/").join("-") : "plan";
   const stamp = today();
   let name = `nikos/plan-${label}-${stamp}`;
   for (let n = 2; branchExists(root, name, run); n++) name = `nikos/plan-${label}-${stamp}-${n}`;
@@ -771,7 +614,7 @@ function gitRequest(ctx: Ctx, path: string, body: Record<string, any>, res: Serv
     const secret = files.find(looksSecret);
     if (secret) return send(res, 400, { error: `Not committing ${secret}: it looks like a secret. Remove it from the repo, or commit it by hand` });
     const changed = files.length;
-    const what = ctx.pages?.saveIn ? `plan changes to ${savedAreas(ctx).join(", ")}` : `${loadPlan(root)?.level ?? "plan"} changes`;
+    const what = ctx.pages?.saveIn ? `plan changes to ${savedAreas(ctx).join(", ")}` : "plan changes";
     const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : `nikos: ${what} (${changed})`;
     const r = commitPaths(root, files, message, run);
     if (!r.ok) return send(res, 400, { error: r.error });

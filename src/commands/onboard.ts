@@ -104,7 +104,7 @@ const WHAT: Record<Kind, string> = {
 
 export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Promise<OnboardAnswers> {
   // A repo with intent/ is migrated, not set up again: say so before asking anything.
-  if (existsSync(join(cwd, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (existsSync(join(cwd, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const kind = KINDS[(await askUntil(ask, MENU, "2", (a) => (KINDS[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type 1 or 2.`))).toLowerCase()];
   const atHome = resolve(cwd) === resolve(home);
   const name = await askUntil(ask, kind === "plan" ? "What's the company called?" : "What's the product called?", atHome ? undefined : basename(resolve(cwd)), (a) =>
