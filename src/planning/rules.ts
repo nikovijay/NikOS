@@ -16,7 +16,7 @@ export function idProblem(kind: "kr" | "bet" | "story" | "activity" | "step" | "
   if (kind === "story") return /^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$/.test(id) ? undefined : "'" + id + "' is not a story id (e.g. HT-1, or PAY-CHK-12 in a group)";
   if (kind === "team") {
     const path = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/.test(id) && !/(^|\/)\.{1,2}(\/|$)/.test(id);
-    return id === "." || path ? undefined : "'" + id + "' is not a team repo path (owner/repo, or . when the group repo is its own team)";
+    return id === "." || path ? undefined : "'" + id + "' is not a team repo path (owner/repo)";
   }
   return "'" + id + "' is not a kind of id nikOS knows";
 }

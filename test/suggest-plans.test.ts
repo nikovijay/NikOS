@@ -9,7 +9,7 @@ import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
 import { addDownstream } from "../src/planning/rollout";
 import { companyRepo } from "./planning-fixture";
-import { commitAll, groupRepo } from "./team-fixture";
+import { commitAll, groupRepo } from "./repo-fixture";
 
 const brief = (dir: string) => {
   const log = vi.spyOn(console, "log").mockImplementation(() => {});

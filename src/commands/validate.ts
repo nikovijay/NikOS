@@ -7,15 +7,14 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { groupKeyOf, keyOfMap, mapDirs, mapOwnerOf, NO_OWNER, ownMapsOf, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { groupKeyOf, mapDirs, mapOwnerOf, NO_OWNER, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { hasSummary, summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
-import { approvalLapse, loadApprovals, type Approval } from "../lib/approvals.js";
+import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { approvalsDir, stateDir, storyFiles } from "../lib/state-files.js";
 import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
-import { TEAM_FILE, clashingGroups, isTeamRepo, openTeam, storyMapClash, type TeamFile } from "../lib/team.js";
 import { schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
 import { upstreamEntries } from "../planning/upstream.js";
@@ -91,17 +90,15 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
 }
 
 /**
- * Check one story map: intent/, or maps/<id> with --map (or the group's only map). A team repo is
- * checked as a team: its own maps, its status and its delivery approvals.
+ * Check one story map: intent/, or maps/<id> with --map (or the repo's only map).
  */
 export function validate(start: string, map?: string): ValidationResult {
-  if (isTeamRepo(start)) return validateTeam(start);
   return validateMap(resolveStoryMap(start, map));
 }
 
 /**
- * A group repo with maps/: each map is checked on its own, then the rules only the group can
- * see: one key per map, and each map's folder named for its key.
+ * A repo with maps/: each map is checked on its own, then the rules only the repo can see: one key
+ * per map, each map's folder named for its key, and each story id in one map only.
  */
 export function validateGroup(root: string): ValidationResult {
   const errors: Issue[] = [];
@@ -112,6 +109,7 @@ export function validateGroup(root: string): ValidationResult {
   // The group key only names the ids of a map with no owner of its own.
   if (!groupKeyOf(root) && mapDirs(root).some((d) => !mapOwnerOf(d))) errors.push({ file: "planning/plan.yaml", message: "has no key", hint: "add key: <KEY> to it, then retry" });
   const owner = new Map<string, string>();
+  const featureOwner = new Map<string, string>();
   let stories = 0;
   let releases = 0;
   for (const dir of mapDirs(root)) {
@@ -132,13 +130,24 @@ export function validateGroup(root: string): ValidationResult {
     warnings.push(...r.warnings);
     stories += r.stories;
     releases += r.releases;
+    // A map that doesn't read is reported by validateMap; its stories can't be checked for clashes.
+    let features: { id: string }[] = [];
+    try {
+      features = loadMapData(dir).features;
+    } catch {
+      features = [];
+    }
+    for (const f of features) {
+      if (featureOwner.has(f.id)) errors.push({ file: `maps/${id}/features`, message: `${f.id} is in two maps (${featureOwner.get(f.id)} and maps/${id})`, hint: "keep each story in one map" });
+      else featureOwner.set(f.id, `maps/${id}`);
+    }
   }
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
 }
 
 /**
- * A team's own map names a bet in a plan above it: that plan must be one the team joins, and its
- * bet must be in the synced copy (a warning when the copy isn't synced yet).
+ * A map names a bet in a plan above it: that plan must be one this repo joins, and its bet must be in
+ * the synced copy (a warning when the copy isn't synced yet).
  */
 function crossBet(root: string, id: string | undefined, bet: string, errors: Issue[], warnings: Issue[]): void {
   const [repo, betId] = bet.split("#");
@@ -150,7 +159,7 @@ function crossBet(root: string, id: string | undefined, bet: string, errors: Iss
     joined = []; // planning/upstream.yaml that doesn't read is reported by doctor
   }
   if (!joined.includes(repo)) {
-    errors.push({ file, message: `maps/${id} names bet ${bet}, but this team doesn't join ${repo}`, hint: `join it first (nikos join ${repo} --home <repo>), or name one of this team's own bets` });
+    errors.push({ file, message: `maps/${id} names bet ${bet}, but this repo doesn't join ${repo}`, hint: `join it first (nikos join ${repo}), or name one of this repo's own bets` });
     return;
   }
   const copy = join(root, ".nikos", "upstream", ...repo.split("/"));
@@ -410,8 +419,8 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       // The bet is optional (RFC rule 5): a map with none is valid, and counts toward no bet.
       if (typeof storymap.bet !== "string") {
         // nothing to check: the bet is optional
-      } else if (isTeamRepo(ref.root) && CROSS_REF.test(storymap.bet)) {
-        // A team's map names a bet in a plan above it: it's checked against the plan the team joins.
+      } else if (CROSS_REF.test(storymap.bet)) {
+        // A map can name a bet in a plan above it: it's checked against the plan this repo joins.
         crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
       } else if (!BET_ID.test(storymap.bet) || !store().exists(join(betsDir, `${storymap.bet}.md`))) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
     } else {
@@ -466,61 +475,6 @@ function checkDeliverySummary(ref: StoryMapRef, errors: Issue[]): void {
   if (drift) errors.push({ file, message: drift.message, hint });
 }
 
-/**
- * A team repo: its nikos.team.yaml, and its own maps, each checked as a map (state, approvals and
- * delivery summary included).
- */
-export function validateTeam(root: string): ValidationResult {
-  const errors: Issue[] = [];
-  const warnings: Issue[] = [];
-  let team: TeamFile | undefined;
-  try {
-    team = openTeam(root);
-  } catch (err) {
-    errors.push({ file: TEAM_FILE, message: (err as Error).message.replace(`${TEAM_FILE}: `, "") });
-  }
-  const clash = storyMapClash(root);
-  if (clash) errors.push({ file: "intent/", message: clash, hint: "a team's own maps go in maps/<key>/: nikos migrate maps moves intent/ there (with a team key and a home)" });
-  const nested = clashingGroups(team?.groups.map((g) => g.repo) ?? []);
-  if (nested) errors.push({ file: TEAM_FILE, message: `${nested[0]} and ${nested[1]} can't both be groups: one path sits inside the other` });
-
-  // A team's own maps: each is checked as a map (its state, approvals and delivery summary included),
-  // its folder is named for its key, and each key and story id is used once here.
-  const owner = new Map<string, string>();
-  let releases = 0;
-  const ownKeys = new Map<string, string>();
-  const own = ownMapsOf(root);
-  if (own.length && !team?.key && own.some((r) => !mapOwnerOf(r.dir))) errors.push({ file: TEAM_FILE, message: "a team that owns a map needs a key (nikos team init --key WEB)" });
-  let joined: string[] = [];
-  try {
-    joined = upstreamEntries(root).map((e) => e.repo);
-  } catch {
-    joined = [];
-  }
-  if ((own.length || joined.length) && team && !team.home) errors.push({ file: TEAM_FILE, message: "a team that joins a plan or owns a map needs one home (nikos join <plan repo> --home)" });
-  const members = new Set((team?.members ?? []).map((m) => m.name));
-  for (const ref of own) {
-    const prefix = `maps/${ref.id}`;
-    const r = validateMap(ref);
-    for (const e of r.errors) errors.push({ ...e, file: `${prefix}/${e.file}` });
-    for (const w of r.warnings) warnings.push({ ...w, file: `${prefix}/${w.file}` });
-    releases += r.releases;
-    const key = keyOfMap(ref.dir);
-    if (key && key.toLowerCase() !== ref.id) errors.push({ file: `${prefix}/storymap.yaml`, message: `${prefix} has key '${key}', so its folder should be maps/${key.toLowerCase()}` });
-    if (key && ownKeys.has(key)) errors.push({ file: `${prefix}/storymap.yaml`, message: `${ownKeys.get(key)} and ${prefix} both use key '${key}'`, hint: "give each map a key of its own" });
-    else if (key) ownKeys.set(key, prefix);
-    for (const f of loadMapData(ref.dir).features) {
-      if (owner.has(f.id)) errors.push({ file: `${prefix}/features`, message: `${f.id} is in two places in this team`, hint: "keep each story in one map" });
-      owner.set(f.id, prefix);
-    }
-    for (const [id, a] of Object.entries(loadApprovals(ref.dir))) {
-      if (!members.has(a.by)) warnings.push({ file: `${prefix}/approvals/${id}.yaml`, message: `approved by ${a.by}, who isn't listed in nikos.team.yaml`, hint: "add them with nikos team member add, or check who approved it" });
-    }
-  }
-
-  return { dir: root, errors, warnings, stories: owner.size, releases, label: TEAM_FILE };
-}
-
 /** Each dependency loop once, starting from its first story in file order. */
 function dependencyLoops(deps: Map<string, string[]>): string[][] {
   const loops: string[][] = [];
@@ -557,12 +511,8 @@ export function runValidate(args: string[]): number {
   const i = args.indexOf("--map");
   const start = args[0] && !args[0].startsWith("--") ? args[0] : process.cwd();
   try {
-    // A team checks its maps and status; a group with maps/ and no --map checks every map and the group's own rules.
-    const r = isTeamRepo(start)
-      ? validateTeam(start)
-      : !(i >= 0) && mapDirs(start).length
-        ? validateGroup(start)
-        : validate(start, i >= 0 ? args[i + 1] : undefined);
+    // A repo with maps/ and no --map checks every map and the repo's own rules.
+    const r = !(i >= 0) && mapDirs(start).length ? validateGroup(start) : validate(start, i >= 0 ? args[i + 1] : undefined);
     console.log(formatResult(r));
     return r.errors.length ? 1 : 0;
   } catch (err) {

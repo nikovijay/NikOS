@@ -7,7 +7,7 @@ import { newBet, reviewBet } from "../src/planning/bets";
 import { formatRollout, rollout } from "../src/planning/rollout";
 import { loadBet } from "../src/planning/model";
 import { planningData } from "../src/planning/server";
-import { git, write, groupRepo, commitAll } from "./team-fixture";
+import { git, write, groupRepo, commitAll } from "./repo-fixture";
 
 /** A company plan, a department plan with a bet, and a group that joined the department and aims a bet at it. */
 function chain(stop: boolean) {

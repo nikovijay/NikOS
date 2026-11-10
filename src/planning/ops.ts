@@ -9,7 +9,6 @@ import { newStory, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
 import { resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
-import { isTeamRepo } from "../lib/team.js";
 import { addDownstream } from "./rollout.js";
 import { setSetting } from "../lib/settings.js";
 import { checkIn, editKr, newKr, reviseTarget } from "./krs.js";
@@ -169,7 +168,6 @@ export const EDITS = new Set<OpName>([
 ]);
 
 
-const TEAM_OPS = "this is a team repo: changes are made in the group repo";
 const TARGET_KINDS: Record<string, "kr" | "bet" | "story" | "activity" | "step" | "release" | "map" | "team"> = {
   kr: "kr",
   bet: "bet",
@@ -186,10 +184,9 @@ const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" &
 const refs = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === "string" && v ? [v] : []);
 /** A selector list. Empty means no selector at all, the whole part (the form's blank field, and the CLI's no-flag case). */
 
-/** Refuse an op before anything is read or written: unknown name, team repo, level, and ids. */
+/** Refuse an op before anything is read or written: unknown name, level, and ids. */
 function precheck(root: string, op: Op): void {
   if (!Object.prototype.hasOwnProperty.call(OP_LEVELS, op.op)) throw new Error(`'${String(op.op)}' isn't a change nikOS knows`);
-  if (isTeamRepo(root)) throw new Error(TEAM_OPS);
   const level = levelOf(root);
   if (level === "group" && (op.op.startsWith("kr.") || op.op === "checkin")) throw new Error(krLevelProblem(level)!);
   if (level && !OP_LEVELS[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
@@ -358,7 +355,7 @@ function apply(root: string, op: Op): string {
 }
 
 /** The text of the files a dry run needs: planning, the story maps, settings, and the copies of other plans. */
-const SNAPSHOT = ["planning", "maps", "intent", "nikos.settings.yaml", "nikos.team.yaml", ".nikos/upstream"];
+const SNAPSHOT = ["planning", "maps", "intent", "nikos.settings.yaml", ".nikos/upstream"];
 
 function snapshotFiles(root: string): Record<string, string> {
   const out: Record<string, string> = {};

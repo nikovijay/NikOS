@@ -26,7 +26,6 @@ import { ignoreCache, readLock, repoEntry, upstreamEntries, type UpstreamEntry }
 import { alignsList } from "./levels.js";
 import { stopDate, stoppedTarget } from "./stops.js";
 import { ownRepo } from "../lib/git.js";
-import { isTeamRepo } from "../lib/team.js";
 
 export interface DownstreamPlan {
   name: string;
@@ -198,12 +197,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         m.bets.filter((b) => CROSS_REF.test(b) && !b.startsWith(`${repo}#`)).map((bet) => ({ map: m.map, bet, ...mapCounts(m) })),
       );
       const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
-      // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
-      // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
+      // The next story of the first map with a queue: next can't pick among several maps without one.
       for (const ref of refs) {
-        if (isTeamRepo(ref.root)) continue;
         try {
-          // A map with a summary: each story's status is the summary's, not the group's state (a team holds it). A proof that
+          // A map with a summary: each story's status is the summary's, which says what its proof shows. A proof that
           // isn't current is work to redo, so it isn't next.
           const summary = readDeliverySummary(ref.dir);
           const states = summary && Object.fromEntries(summary.stories.map((s) => [s.id, { status: s.proof && isDone(s.status) ? "needs_rework" : s.status }]));
@@ -215,14 +212,14 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
           // no state.yaml or queue in this map: delivery and blockers still show
         }
       }
-      // Blockers are read from a group's own map state only: a team's blockers live in its own live state, which a rollout never reads.
-      for (const ref of storyMapsOf(dir).filter((r) => !isTeamRepo(r.root))) {
+      // Blockers are read from each map's state in the copy.
+      for (const ref of storyMapsOf(dir)) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
         }
       }
     } catch {
-      // A story map that doesn't read is the team's to fix; the rest of the rollout still shows.
+      // A story map that doesn't read is the repo's to fix; the rest of the rollout still shows.
     }
   }
   const krs = krIds(dir).flatMap((id) => {

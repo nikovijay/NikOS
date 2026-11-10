@@ -4,7 +4,7 @@ import { parse } from "yaml";
 import { readFileSync } from "node:fs";
 import { runState } from "../src/commands/state";
 import { verify } from "../src/commands/verify";
-import { groupRepo, write, feature } from "./team-fixture";
+import { groupRepo, write, feature } from "./repo-fixture";
 
 // The runner is a stand-in: each test says whether the scenarios pass.
 vi.mock("../src/commands/verify", async (importOriginal) => {

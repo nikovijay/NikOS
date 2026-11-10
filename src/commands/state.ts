@@ -29,7 +29,7 @@ export interface StateResult {
   failing: string[];
   /** The runner's output when it gated the move. */
   output?: string;
-  /** A team repo with changes not yet committed: the proof is for the commit, not these changes. */
+  /** A repo with changes not yet committed: the proof is for the commit, not these changes. */
   dirty?: boolean;
 }
 
@@ -86,7 +86,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
   if (to === "cancelled" && !opts.reason?.trim()) throw new StateError(`Say why ${story} is cancelled: --reason "<why>"`);
   const ref = storyMapFor(opts.dir ?? process.cwd(), { story, map: opts.map });
   const home = homeOf(ref);
-  // In a team repo a story with no status file is todo: its first move creates the file.
+  // A story with no status file is todo: its first move creates the file.
   const from = (storyState(home, story)?.status ?? (ref.inRepo ? "todo" : undefined)) as Status | undefined;
   if (!from) throw new StateError(noEntry(home, story));
   if (!MOVES[from]?.includes(to)) {

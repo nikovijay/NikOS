@@ -117,15 +117,6 @@ describe("applying a change file", () => {
     expect(git(co, "branch", "--show-current")).toBe(before);
   });
 
-  it("refuses a team repo with the team-repo message", async () => {
-    const co = twoKrs();
-    writeFileSync(join(co, "nikos.team.yaml"), "name: Core\n");
-    const file = changeFile(co, [{ op: "checkin", target: { kr: "kr-1" }, args: { value: 9 }, expect: kr(co, "kr-1") }]);
-    const r = await apply(file, co);
-    expect(r.code).toBe(1);
-    expect(r.err.join("\n")).toContain("this is a team repo: changes are made in the group repo");
-  });
-
   it("refuses a folder that isn't a git repo", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-plain-"));
     companyInit(dir, { name: "Acme", period: "Q1 2027", repo: "acme/company-plan" });

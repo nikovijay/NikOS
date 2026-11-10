@@ -10,7 +10,7 @@ import { newKr, checkIn } from "../src/planning/krs";
 import { hash, loadBet, loadKr } from "../src/planning/model";
 import { sync } from "../src/planning/upstream";
 import { specHash } from "../src/lib/project";
-import { commitAll, companyRepo, departmentRepo, git, groupRepo, readText, teamRepo, write } from "./planning-fixture";
+import { commitAll, companyRepo, departmentRepo, git, groupRepo, readText, write } from "./planning-fixture";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -42,10 +42,6 @@ describe("runOp: names, levels and ids", () => {
     expect(() => runOp(g, { op: "story.rename", target: { story: "pay-chk-1" }, args: { title: "x", map: "chk" } })).toThrow("'pay-chk-1' is not a story id");
   });
 
-  it("refuses every op in a team repo with the group-repo message", () => {
-    const t = teamRepo();
-    expect(() => runOp(t, { op: "checkin", target: { kr: "kr-1" }, args: { value: 1 } })).toThrow("this is a team repo: changes are made in the group repo");
-  });
 });
 
 describe("kr ops", () => {

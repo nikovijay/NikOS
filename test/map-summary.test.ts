@@ -9,10 +9,9 @@ import { approve } from "../src/commands/approve";
 import { summaryBody, summaryDrift, summaryWith, hasSummary, type SummaryBody } from "../src/lib/map-summary";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
-import { teamInit } from "../src/commands/team";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { groupRepo, git, write, commitAll, feature } from "./team-fixture";
+import { groupRepo, git, write, commitAll, feature } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/commands/verify")>();
@@ -21,16 +20,14 @@ vi.mock("../src/commands/verify", async (importOriginal) => {
 
 const byId = (b: SummaryBody, id: string) => b.stories.find((s) => s.id === id)!;
 
-/** A team repo with its own map INB (WEB-INB-1 and -2), as nikos map new makes it. */
-function teamMap(): string {
-  const dir = mkdtempSync(join(tmpdir(), "nikos-summary-team-"));
+/** A group repo with its own map INB (PAY-INB-1 and -2), as nikos map new makes it. */
+function ownMap(): string {
+  const dir = mkdtempSync(join(tmpdir(), "nikos-summary-own-"));
   write(join(dir, "package.json"), '{"name":"web","private":true}\n');
   git(dir, "init", "-q", "-b", "main");
-  git(dir, "remote", "add", "origin", "https://github.com/acme/web-team.git");
-  teamInit(dir, { repo: "acme/web-team", name: "Web team", key: "WEB" });
-  write(join(dir, "nikos.team.yaml"), "format_version: 2\nname: Web team\nrepo: acme/web-team\nkey: WEB\nhome: acme/payments-group\ngroups: []\nmembers: []\n");
+  write(join(dir, "planning/plan.yaml"), "name: Checkout\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
   write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
-  commitAll(dir, "team");
+  commitAll(dir, "group");
   newMap({ bet: "faster-checkout", key: "INB" }, dir);
   newStory({ title: "Pay by card", activity: "getting-started" }, dir);
   newStory({ title: "Pay by wallet", activity: "getting-started" }, dir);
@@ -69,40 +66,40 @@ describe("the summary a map's files say", () => {
     approve("PAY-CHK-1", { dir: g, by: "Priya Shah", date: "2027-01-06" });
     const card = join(g, "maps/chk/features/pay/pay-by-card.feature");
     write(card, `${readFileSync(card, "utf8")}\n# reworded\n`);
-    expect(byId(summaryBody(g, join(g, "maps/chk")), "PAY-CHK-1")).toEqual({ id: "PAY-CHK-1", status: "done", approval: "none" });
+    expect(byId(summaryBody(g, join(g, "maps/chk")), "PAY-CHK-1")).toEqual({ id: "PAY-CHK-1", status: "done", approval: "none", proof: "changed" });
   });
 
-  it("a group's map doesn't judge proof: its own state says done, as it always did", () => {
+  it("a group's map judges proof the same way: a done story proved against an older feature is changed", () => {
     const g = groupRepo("PAY");
     setState("PAY-CHK-1", "in_progress", { dir: g });
     setState("PAY-CHK-1", "done", { dir: g });
     const card = join(g, "maps/chk/features/pay/pay-by-card.feature");
     write(card, `${readFileSync(card, "utf8")}\n# reworded\n`);
-    expect(byId(summaryBody(g, join(g, "maps/chk")), "PAY-CHK-1")).toEqual({ id: "PAY-CHK-1", status: "done", approval: "none" });
+    expect(byId(summaryBody(g, join(g, "maps/chk")), "PAY-CHK-1")).toEqual({ id: "PAY-CHK-1", status: "done", approval: "none", proof: "changed" });
   });
 
-  it("a team's own map: a done status with no spec hash is unverified, and one proved against an older feature is changed", () => {
-    const t = teamMap();
-    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  WEB-INB-1: { status: done }\n  WEB-INB-2: { status: todo }\n");
-    expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-1")).toMatchObject({ status: "done", proof: "unverified" });
-    setState("WEB-INB-2", "in_progress", { dir: t });
+  it("a map of its own: a done status with no spec hash is unverified, and one proved against an older feature is changed", () => {
+    const t = ownMap();
+    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: done }\n  PAY-INB-2: { status: todo }\n");
+    expect(byId(summaryBody(t, join(t, "maps/inb")), "PAY-INB-1")).toMatchObject({ status: "done", proof: "unverified" });
+    setState("PAY-INB-2", "in_progress", { dir: t });
     commitAll(t, "start");
-    setState("WEB-INB-2", "done", { dir: t });
+    setState("PAY-INB-2", "done", { dir: t });
     commitAll(t, "done");
-    expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-2")).toMatchObject({ status: "done" });
-    expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-2")).not.toHaveProperty("proof");
+    expect(byId(summaryBody(t, join(t, "maps/inb")), "PAY-INB-2")).toMatchObject({ status: "done" });
+    expect(byId(summaryBody(t, join(t, "maps/inb")), "PAY-INB-2")).not.toHaveProperty("proof");
     const card = join(t, "maps/inb/features/getting-started/pay-by-wallet.feature");
     write(card, `${readFileSync(card, "utf8")}\n# reworded\n`);
-    expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-2")).toMatchObject({ status: "done", proof: "changed" });
+    expect(byId(summaryBody(t, join(t, "maps/inb")), "PAY-INB-2")).toMatchObject({ status: "done", proof: "changed" });
   });
 
-  it("a team's own map: an in-progress status written against an older feature is behind", () => {
-    const t = teamMap();
-    setState("WEB-INB-1", "in_progress", { dir: t });
+  it("a map of its own: an in-progress status written against an older feature is behind", () => {
+    const t = ownMap();
+    setState("PAY-INB-1", "in_progress", { dir: t });
     commitAll(t, "start");
     const card = join(t, "maps/inb/features/getting-started/pay-by-card.feature");
     write(card, `${readFileSync(card, "utf8")}\n# reworded\n`);
-    expect(byId(summaryBody(t, join(t, "maps/inb")), "WEB-INB-1")).toMatchObject({ status: "in_progress", proof: "behind" });
+    expect(byId(summaryBody(t, join(t, "maps/inb")), "PAY-INB-1")).toMatchObject({ status: "in_progress", proof: "behind" });
   });
 
   it("stories in releases come in release order, and stories no release names come after them, sorted by id", () => {

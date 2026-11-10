@@ -9,7 +9,6 @@ import { hostOf, asLine, requestArgv, runForge, toolFor } from "../lib/forge.js"
 import { branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, pushBranch, realRun, baseBranch, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
 import { schemaProblems } from "../lib/schema.js";
 import { store } from "../lib/store.js";
-import { isTeamRepo } from "../lib/team.js";
 import { levelOf } from "./levels.js";
 import { today } from "./model.js";
 import { runOps, type Op } from "./ops.js";
@@ -83,7 +82,6 @@ export async function applyChanges(file: string, opts: ApplyOptions = {}): Promi
   }
   const problems = schemaProblems("planning/changes.schema.json", doc);
   if (problems.length) return refuse(`${file} isn't a nikOS change file:`, ...problems.map((p) => `  ${p}`));
-  if (isTeamRepo(root)) return refuse("this is a team repo: changes are made in the group repo");
   const level = levelOf(root);
   if (doc.plan.level !== level) return refuse(`This file is for a ${doc.plan.level} plan; this repo is ${level ? `a ${level} plan` : "not a plan (no planning/plan.yaml)"}`);
   if (!isGit(root, run)) return refuse("nikos apply needs a git repo: the changes go on a branch");

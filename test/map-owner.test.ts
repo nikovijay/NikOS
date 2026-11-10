@@ -8,7 +8,7 @@ import { schemaProblems } from "../src/lib/schema";
 import { NO_OWNER, storyPrefix, type StoryMapRef } from "../src/lib/maps";
 import { newMap } from "../src/commands/map";
 import { validate } from "../src/commands/validate";
-import { groupRepo, write, commitAll } from "./team-fixture";
+import { groupRepo, write, commitAll } from "./repo-fixture";
 
 const chk = (root: string): StoryMapRef => ({ root, dir: join(root, "maps/chk"), id: "chk" });
 

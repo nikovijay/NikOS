@@ -1,6 +1,5 @@
 // The review fixes to the amendment build: a stopped bet in the root plan flags what aims at it, the
-// dashboard views flag a bet aimed at a stopped one, a team's home and key are checked when it joins,
-// a team's settings come down its home's chain, and a 0.3.0 team repo still refuses what it refused.
+// dashboard views flag a bet aimed at a stopped one, and a delivery summary is rewritten on each run.
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
@@ -8,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { companyInit } from "../src/commands/start";
 import { joinPlan } from "../src/commands/join";
-import { teamInit } from "../src/commands/team";
 import { doctor } from "../src/commands/doctor";
 import { newBet, reviewBet } from "../src/planning/bets";
 import { formatRollout, rollout } from "../src/planning/rollout";
@@ -17,8 +15,7 @@ import { planningData } from "../src/planning/server";
 import { okrsAndBets } from "../src/planning/views";
 import { writeDeliverySummary, readDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
 import { resolveSettings } from "../src/lib/settings";
-import { parseTeam } from "../src/lib/team";
-import { git, write, commitAll } from "./team-fixture";
+import { git, write, commitAll } from "./repo-fixture";
 
 const root = join(__dirname, "..");
 const cli = (...args: string[]) => spawnSync(process.execPath, ["--import", "tsx", join(root, "src/cli.ts"), ...args], { encoding: "utf8" });
@@ -113,74 +110,5 @@ describe("a delivery summary is rewritten on each run", () => {
     writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-01T00:00:00Z", stories: [] });
     expect(() => writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-02T00:00:00Z", stories: [] })).not.toThrow();
     expect(readDeliverySummary(join(dir, "maps/am"))?.read_at).toBe("2027-01-02T00:00:00Z");
-  });
-});
-
-describe("a team's home and key when it joins a plan", () => {
-  it("a team with a key takes its first plan as its home, and records it at format 2", () => {
-    const co = companyRepo();
-    const team = tmp("team");
-    teamInit(team, { repo: "acme/web-team", name: "Web", key: "WEB" });
-    joinPlan(team, { repo: "acme/company-plan", url: co, home: true });
-    const text = readFileSync(join(team, "nikos.team.yaml"), "utf8");
-    expect(parseTeam(text)).toMatchObject({ format_version: 2, home: "acme/company-plan", key: "WEB" });
-  });
-
-  it("refuses a second home, and a team with no key or no home", () => {
-    const co = companyRepo();
-    const dept = deptRepo();
-    const team = tmp("team");
-    teamInit(team, { repo: "acme/web-team", name: "Web", key: "WEB" });
-    expect(() => joinPlan(team, { repo: "acme/payments-plan", url: dept })).toThrow("this team has no home yet");
-    joinPlan(team, { repo: "acme/company-plan", url: co, home: true });
-    expect(() => joinPlan(team, { repo: "acme/payments-plan", url: dept, home: true })).toThrow("is already this team's home");
-    const keyless = tmp("keyless");
-    teamInit(keyless, { repo: "acme/x-team", name: "X" });
-    expect(() => joinPlan(keyless, { repo: "acme/company-plan", url: co, home: true })).toThrow("has no key");
-  });
-
-  it("refuses a format 1 team file that names a home", () => {
-    const team = tmp("f1");
-    teamInit(team, { repo: "acme/web-team", name: "Web" });
-    write(join(team, "nikos.team.yaml"), "format_version: 1\nname: Web\nrepo: acme/web-team\nhome: acme/company-plan\ngroups: []\nmembers: []\n");
-    expect(() => parseTeam(readFileSync(join(team, "nikos.team.yaml"), "utf8"))).toThrow("home needs format_version 2");
-  });
-});
-
-describe("a team's settings come down its home's chain only", () => {
-  it("takes the locks of its home, and nothing from a plan it joined that isn't its home", () => {
-    const co = companyRepo();
-    write(join(co, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked:\n  - approval.policy\n");
-    commitAll(co, "settings");
-    const dept = deptRepo();
-    write(join(dept, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: off\nlocked:\n  - approval.policy\n");
-    commitAll(dept, "dept settings");
-    const team = tmp("team");
-    teamInit(team, { repo: "acme/web-team", name: "Web", key: "WEB" });
-    joinPlan(team, { repo: "acme/company-plan", url: co, home: true });
-    joinPlan(team, { repo: "acme/payments-plan", url: dept });
-    const policy = resolveSettings(team)["approval.policy"];
-    expect(policy.value).toBe("required-for-release");
-    expect(policy.lockedBy).toBe("acme/company-plan");
-  });
-});
-
-describe("a 0.3.0 team repo with no key, home or maps behaves as before", () => {
-  it("refuses planning status, and join without a home, with the 0.3.0 wording", () => {
-    const team = tmp("bare");
-    teamInit(team, { repo: "acme/web-team", name: "Web" });
-    const status = cli("planning", "status", "--dir", team);
-    expect(status.status).toBe(1);
-    expect(status.stderr).toContain("this is a team repo: nikos planning runs in a group or plan repo");
-    const join = cli("join", "acme/company-plan", "--dir", team);
-    expect(join.status).toBe(1);
-    expect(join.stderr).toContain("this is a team repo: take work from a group with nikos team join <group repo>");
-  });
-
-  it("doctor warns of no team plan in a team repo that has no plan.yaml", () => {
-    const team = tmp("doc");
-    teamInit(team, { repo: "acme/web-team", name: "Web" });
-    const checks = doctor(team, { offline: true });
-    expect(checks.some((c) => /Team plans/.test(c.found ?? ""))).toBe(false);
   });
 });

@@ -34,17 +34,17 @@ function level(settings: string, upstream?: { repo: string; url: string }): stri
   git(dir, "commit", "-q", "-m", "settings");
   return dir;
 }
-const team = () => {
+const plainRepo = () => {
   const root = dirname(copyExample());
   git(root, "init", "-q", "-b", "main");
   return root;
 };
 
 describe("settings", () => {
-  it("a team inherits through its department from the company, and can't change what's locked", () => {
+  it("a repo inherits through its department from the company, and can't change what's locked", () => {
     const company = level("approval:\n  policy: required-for-release\ntracker:\n  system: jira\n  site: acme.atlassian.net\nlocked: [approval.policy, tracker.system]\n");
     const dept = level("approval:\n  policy: optional\ntracker:\n  project: PAY\n  site: payments.atlassian.net\n", { repo: "acme/company-plan", url: company });
-    const root = team();
+    const root = plainRepo();
     const r = joinPlan(root, { repo: "acme/engineering/payments-plan", url: dept });
     expect(r.added).toBe(true);
     expect(r.sync.synced.map((s) => [s.repo, s.via])).toEqual([["acme/engineering/payments-plan", undefined], ["acme/company-plan", "acme/engineering/payments-plan"]]);
@@ -68,7 +68,7 @@ describe("settings", () => {
   });
 
   it("join refuses a bad path and leaves upstream.yaml as it was", () => {
-    const root = team();
+    const root = plainRepo();
     expect(() => joinPlan(root, { repo: "../evil" })).toThrow("is not a repo path");
     expect(() => joinPlan(root, { repo: "acme/plan", host: "https://gitlab.com/" })).toThrow("is not a host name");
     expect(readFileSync(join(root, "planning/upstream.yaml"), "utf8")).toBe("[]\n");

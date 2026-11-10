@@ -6,7 +6,7 @@ import { companyInit } from "../src/commands/start";
 import { newBet } from "../src/planning/bets";
 import { newKr } from "../src/planning/krs";
 import { planningIssues } from "../src/planning/levels";
-import { teamRepo, write, commitAll } from "./team-fixture";
+import { codeRepo, write, commitAll } from "./repo-fixture";
 
 const kr = (id: string, extra: Record<string, unknown> = {}) => ({ id, title: id, owner: "Board", baseline: 1, target: 2, by: "2027-03-31", ...extra });
 const bet = (id: string, extra: Record<string, unknown> = {}) => ({ id, owner: "Board", hypothesis: "We believe it.", reviewOn: "2027-02-14", ...extra });
@@ -21,35 +21,30 @@ function copyOf(root: string, repo: string, level: "company" | "department" | "g
   return dir;
 }
 
-/** A team repo that joins the given plans (planning/upstream.yaml) and has synced copies of them. */
+/** A repo that joins the given plans (planning/upstream.yaml) and has synced copies of them. */
 function team(joins: string[]) {
-  const t = teamRepo("acme/web-team", "Web");
-  write(join(t, "nikos.team.yaml"), `format_version: 1\nname: Web\nrepo: acme/web-team\ngroups: []\nmembers: []\n`);
+  const t = codeRepo("acme/web-team");
+  write(join(t, "planning/plan.yaml"), "name: Web\nkey: WEB\nperiod: Q1 2027\nlevel: group\npillars: []\n");
   write(join(t, "planning/upstream.yaml"), joins.map((r) => `- repo: ${r}\n`).join(""));
-  commitAll(t, "team");
+  commitAll(t, "joins");
   return t;
 }
 
-describe("a team's bets align to the plans it joins", () => {
-  it("allows a team's bet to align to a group's bet, and refuses a plan it doesn't join", () => {
-    const t = team(["acme/payments-group"]);
-    copyOf(t, "acme/payments-group", "group", { bets: ["checkout-speed"] });
-    newBet(bet("web-speed", { alignsTo: ["acme/payments-group#checkout-speed"] }), t);
+describe("a repo's bets align to the plans it joins", () => {
+  it("allows a bet to align to a department's bet, and refuses a plan it doesn't join", () => {
+    const t = team(["acme/payments-dept"]);
+    copyOf(t, "acme/payments-dept", "department", { bets: ["checkout-speed"] });
+    newBet(bet("web-speed", { alignsTo: ["acme/payments-dept#checkout-speed"] }), t);
     expect(planningIssues(t)).toEqual([]);
     expect(() => newBet(bet("x", { alignsTo: ["acme/other-group#checkout-speed"] }), t)).toThrow(
-      "acme/other-group#checkout-speed: acme/other-group isn't a plan this team joins (planning/upstream.yaml lists acme/payments-group)",
+      "acme/other-group#checkout-speed: acme/other-group isn't a plan this group joins (planning/upstream.yaml lists acme/payments-dept)",
     );
   });
 
-  it("refuses a team's bet aimed at a key result of a group, since a group has none", () => {
+  it("refuses a bet aimed at a key result of a group, since a group's bets aim only above it", () => {
     const t = team(["acme/payments-group"]);
     copyOf(t, "acme/payments-group", "group", { krs: ["g-kr"] });
-    expect(() => newBet(bet("x", { primary: "acme/payments-group#g-kr" }), t)).toThrow(/^Key results stop at department level, so a group plan has none/);
-  });
-
-  it("refuses planning kr new in a team repo, with the group's key-result wording", () => {
-    const t = team(["acme/payments-plan"]);
-    expect(() => newKr(kr("web-kr"), t)).toThrow(/^Key results stop at department level, so a team plan has none/);
+    expect(() => newBet(bet("x", { primary: "acme/payments-group#g-kr" }), t)).toThrow(/is a group plan, and a group bet can only aim at key results above group/);
   });
 });
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { companyInit } from "../src/commands/start";
 import { formatRollout, rollout } from "../src/planning/rollout";
 import { writeDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
-import { groupRepo, git, write, commitAll } from "./team-fixture";
+import { groupRepo, git, write, commitAll } from "./repo-fixture";
 
 const NOW = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
@@ -64,21 +64,4 @@ describe("a rollout's delivery from the owner's summaries", () => {
     expect(bet.delivery).toMatch(/Building, 2 of 4 done, read today \(\d{4}-\d{2}-\d{2}\); 1 with no summary yet: run nikos map status in acme\/payments-group/);
   });
 
-  it("a rollout never reads a team's live status/: a team's own map shows no next story and no blocker from it", () => {
-    const { co, grp } = setup([story("PAY-CHK-1", "done", "approved")]);
-    // A team that owns a map (WEB-INB) with its own status at its root: in progress, and blocked.
-    const team = mkdtempSync(join(tmpdir(), "nikos-team-live-"));
-    git(team, "init", "-q", "-b", "main");
-    write(join(team, "nikos.team.yaml"), "format_version: 2\nname: Web team\nrepo: acme/web-team\nkey: WEB\nhome: acme/payments-group\ngroups: []\nmembers: []\n");
-    write(join(team, "maps/inb/storymap.yaml"), "format_version: 1\nproject: inb\nkey: INB\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [WEB-INB-1, WEB-INB-2]\n");
-    write(join(team, "status/WEB-INB-1.yaml"), "status: in_progress\nblockers: [waiting on design]\n");
-    write(join(team, "status/WEB-INB-2.yaml"), "status: todo\n");
-    commitAll(team, "team");
-    write(join(co, "planning/downstream.yaml"), `- name: Payments\n  repo: acme/payments-group\n  url: ${grp}\n- name: Web team\n  repo: acme/web-team\n  url: ${team}\n`);
-    commitAll(co, "downstream with team");
-    const teamPlan = rollout(co).plans.find((p) => p.repo === "acme/web-team")!;
-    expect(teamPlan.next).toBeUndefined();
-    expect(teamPlan.blockers).toEqual([]);
-    expect(formatRollout(rollout(co))).not.toMatch(/waiting on design|next: WEB-INB/);
-  });
 });

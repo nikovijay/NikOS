@@ -3,8 +3,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
-import { mapDirs, mapFlag, ownMapsOf } from "../lib/maps.js";
-import { isTeamRepo } from "../lib/team.js";
+import { mapDirs, mapFlag } from "../lib/maps.js";
 import { detectStack, type Stack } from "../verify/detect.js";
 import { featureFor } from "./clear.js";
 
@@ -98,12 +97,12 @@ export interface VerifyResult {
 
 /**
  * The folders behave is given. A folder named on the command line replaces the paths in
- * behave.ini, so only a team repo passes one: its own maps' features. Every other repo keeps the
+ * behave.ini, so only a repo with maps/ passes one: its maps' features. Every other repo keeps the
  * paths its behave.ini names, as it always has.
  */
 const behaveDirs = (root: string) => {
-  if (!isTeamRepo(root)) return [];
-  return ownMapsOf(root).map((r) => join(relative(root, r.dir), "features")).filter((f) => existsSync(join(root, f)));
+  if (!mapDirs(root).length) return [];
+  return mapDirs(root).map((d) => join(relative(root, d), "features")).filter((f) => existsSync(join(root, f)));
 };
 
 /** The runner's environment: tsx lets Node versions without built-in type stripping load .ts steps. */
@@ -122,7 +121,7 @@ export interface UndefinedStep {
 const STORY_TAG = /^([A-Z][A-Z0-9]{0,9}(?:-[A-Z][A-Z0-9]{0,9})?-[0-9]+)$/;
 
 /**
- * The steps in a team's stories that no step definition matches yet. Read from the
+ * The steps in the stories that no step definition matches yet. Read from the
  * runner's dry run, which matches steps without running them. undefined when the runner can't
  * be run or its JSON can't be read: the test run reports them then.
  */
@@ -198,14 +197,14 @@ export function verify(root: string, story?: string, opts: { inherit?: boolean; 
   return { stack, command: [cmd, ...args].join(" "), status: r.status ?? 1, output: `${output}${node ? `\n${node}\n` : ""}` };
 }
 
-/** Say which steps in the team's stories have no definition yet, as a warning. */
+/** Say which steps in the stories have no definition yet, as a warning. */
 export function printUndefined(steps: UndefinedStep[] | undefined): void {
   if (steps === undefined) {
     console.log("! could not list undefined steps: the test run will report them");
     return;
   }
   if (!steps.length) return;
-  console.log(`! ${steps.length} ${steps.length === 1 ? "step" : "steps"} in the team's stories ${steps.length === 1 ? "has" : "have"} no step definition yet:`);
+  console.log(`! ${steps.length} ${steps.length === 1 ? "step" : "steps"} in the stories ${steps.length === 1 ? "has" : "have"} no step definition yet:`);
   for (const s of steps) console.log(`    "${s.text}"${s.story ? ` (${s.story})` : ""}`);
 }
 
@@ -223,10 +222,8 @@ export function runVerify(args: string[]): number {
       console.log(`\nNext: ${r.install}\nThen: nikos verify <story-id>`);
       return 0;
     }
-    // A team's whole-suite run with no map of its own runs no stories: say so before it does.
-    if (isTeamRepo(root) && !positional[0] && !ownMapsOf(root).length) console.log("! this team has no story map yet: nikos map new, then its stories run here");
     const r = verify(root, positional[0], { inherit: true, map: mapFlag(args) });
-    if (isTeamRepo(root)) printUndefined(undefinedSteps(root, r.stack, positional[0]));
+    if (mapDirs(root).length) printUndefined(undefinedSteps(root, r.stack, positional[0]));
     return r.status;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

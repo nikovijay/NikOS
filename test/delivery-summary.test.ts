@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { mapStatus, writeSummaries } from "../src/commands/map-status";
 import { readDeliverySummary, summaryAge } from "../src/lib/delivery-summary";
 import { setState } from "../src/commands/state";
-import { groupRepo, commitAll } from "./team-fixture";
+import { groupRepo, commitAll } from "./repo-fixture";
 
 const NOW = new Date("2026-11-08T09:12:00Z");
 

@@ -24,7 +24,7 @@ describe("cli", () => {
   });
 
   it("prints a command's help for --help and -h, and writes nothing", () => {
-    for (const args of [["team", "init", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["planning", "downstream", "add", "D", "--help"]]) {
+    for (const args of [["map", "new", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["planning", "downstream", "add", "D", "--help"]]) {
       const dir = mkdtempSync(join(tmpdir(), "nikos-help-"));
       const r = cliIn(dir, ...args);
       expect(r.status).toBe(0);

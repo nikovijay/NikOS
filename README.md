@@ -121,7 +121,6 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
-| `nikos team init\|join\|member\|show` | Make a code repo a team repo, take work from a group, manage its members ([docs/planning.md](docs/planning.md#teams)) |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
@@ -130,7 +129,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
 | `nikos next` | Print the next story to build |
 | `nikos migrate per-story` | Give each story its own state and approval file, so parallel branches never conflict |
-| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`: of a group repo (which is its own team), or of a team repo (`--team-key`, `--home`). Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
+| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/` in a group repo. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
 | `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |

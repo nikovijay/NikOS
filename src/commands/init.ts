@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
 import { diskStore, store, withStore } from "../lib/store.js";
 import { validate, formatResult, type ValidationResult } from "./validate.js";
-import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templateDir = [join(here, "../../templates/intent"), join(here, "../templates/intent")].find((d) => existsSync(d))!;
@@ -34,7 +33,6 @@ export function keyFor(name: string): string {
 }
 
 export function init(root: string, opts: InitOptions = {}): InitResult {
-  if (isTeamRepo(root)) throw new Error(TEAM_REPO_STORIES);
   const name = opts.name ?? basename(resolve(root));
   const key = (opts.key ?? keyFor(name)).toUpperCase();
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(key)) throw new Error(`'${key}' isn't a valid project key (letters and digits, starting with a letter)`);

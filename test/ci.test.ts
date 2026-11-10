@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { detectHost, githubWorkflow, setupCi } from "../src/commands/ci";
-import { teamRepo } from "./team-fixture";
+import { codeRepo } from "./repo-fixture";
 
 const { version } = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8"));
 const repo = (files: Record<string, string>, origin?: string) => {
@@ -81,9 +81,9 @@ describe("ci setup", () => {
   });
 });
 
-describe("ci in a team repo", () => {
+describe("ci in a repo with its own maps", () => {
   it("validates and verifies its own maps, with no sync step", () => {
-    const workflow = githubWorkflow("js", teamRepo());
+    const workflow = githubWorkflow("js", codeRepo());
     expect(workflow).not.toMatch(/nikos@[^\s]+ sync/);
     expect(workflow.search(/nikos@[^\s]+ validate/)).toBeGreaterThan(-1);
     expect(workflow.search(/nikos@[^\s]+ verify/)).toBeGreaterThan(-1);

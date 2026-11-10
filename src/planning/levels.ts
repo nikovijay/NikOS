@@ -1,13 +1,11 @@
 // The levels a plan can be at, and what each may hold. OKRs stop at department level: company
 // and department plans set objectives and key results, and group plans only make bets. A key
-// result or bet aligns to a plan above it that the owner joins (a group or team may join several),
-// and can name several things there. A team repo has no plan.yaml: it's level team, and its bets
-// and maps align to bets in the plans it joins. Team plans (a plan.yaml with level team) are going
-// away, so one still loads, with a warning.
+// result or bet aligns to a plan above it that the owner joins (a group may join several), and can
+// name several things there. Team plans (a plan.yaml with level team) are going away, so one still
+// loads, with a warning.
 import { join } from "node:path";
 import { CROSS_REF } from "../lib/bets.js";
 import { store } from "../lib/store.js";
-import { isTeamRepo } from "../lib/team.js";
 import { areaOf, betIds, krIds, loadBet, loadKr, loadPlan, paths, validatePlanning, type PlanningIssue } from "./model.js";
 import { areaAlignmentProblems, areaKrTargetProblems } from "../plan/repo.js";
 import { upstreamEntries } from "./upstream.js";
@@ -21,22 +19,20 @@ export const alignsList = (v: unknown): string[] => (Array.isArray(v) ? v.filter
 /** One reference, or a list for several, as the files hold them. */
 export const alignsValue = (refs: string[]) => (refs.length === 1 ? refs[0] : refs);
 
-/** The plan's level, or team for a team repo that has no plan.yaml. */
+/** The plan's level from planning/plan.yaml, or undefined for a repo with none. */
 export const levelOf = (root: string): string | undefined => {
   // In a planning repo, the folder is the level.
   const area = areaOf(root);
   if (area) return area.level;
   const level = loadPlan(root)?.level;
-  if (typeof level === "string") return level;
-  return isTeamRepo(root) ? "team" : undefined;
+  return typeof level === "string" ? level : undefined;
 };
 
 const NO_OKRS = "Key results stop at department level, so a group plan has none. Move it to the department's plan, or make it a bet aimed at a department key result (krs: <department repo>#<kr-id>).";
 
-/** Why a key result can't be written at this level, or nothing. A team repo has no key results; a legacy team plan keeps its old behaviour. */
-export function krLevelProblem(level: string | undefined, teamRepo = false): string | undefined {
-  const at = level === "team" && !teamRepo ? undefined : level;
-  return at === "group" || at === "team" ? NO_OKRS.replace("a group plan", `a ${at} plan`) : undefined;
+/** Why a key result can't be written at this level, or nothing. A group has none; a legacy team plan keeps its old behaviour. */
+export function krLevelProblem(level: string | undefined): string | undefined {
+  return level === "group" ? NO_OKRS : undefined;
 }
 
 /** A 0.3.0 team plan (a plan.yaml that says level team): its links are left as they were, until it's migrated. */

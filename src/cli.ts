@@ -29,10 +29,6 @@ import { help as planningHelp, runPlanning } from "./planning/cli.js";
 import { help as planRepoHelp, runPlanRepo } from "./plan/cli.js";
 import { runServeCommand } from "./commands/serve.js";
 import { runApply } from "./planning/apply.js";
-import { runTeam } from "./commands/team.js";
-import { isTeamRepo, openTeam, TEAM_REPO_STORIES, teamOptedIn } from "./lib/team.js";
-import { store } from "./lib/store.js";
-import { join } from "node:path";
 import { closest } from "./lib/closest.js";
 
 const commands: Record<string, (args: string[]) => number | Promise<number>> = {
@@ -69,32 +65,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   planning: runPlanning,
   serve: runServeCommand,
   apply: runApply,
-  team: runTeam,
 };
-
-/** Why a team repo refuses a command that writes a group's stories or plan: each names where the work is done. */
-function teamRefusal(cmd: string): string {
-  if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release" || cmd === "map") return TEAM_REPO_STORIES;
-  if (cmd === "apply") return "this is a team repo: changes are made in the group repo";
-  if (cmd === "join") return "this is a team repo: take work from a group with nikos team join <group repo>";
-  return `this is a team repo: nikos ${cmd} runs in a group or plan repo`;
-}
-
-/** What a team repo may run from the group-only commands: its own planning, bets, joins and maps (see the amendment, rule 2). */
-const TEAM_PLANNING = new Set(["sync", "status", "validate", "rollout"]);
-function teamMayRun(cmd: string, rest: string[], dir: string): boolean {
-  // A team's first join names its home with --home; after that a team that has opted in may join more.
-  if (cmd === "join") return rest.includes("--home") || teamOptedIn(dir);
-  if (!teamOptedIn(dir)) return false;
-  if (cmd === "planning") return TEAM_PLANNING.has(rest[0]) || (["bet", "kr"].includes(rest[0]) && rest[1] === "new");
-  // A team writes stories and maps of its own; a copy of a group's or another team's map is refused where it's reached (authoringMap).
-  if (cmd === "story" || cmd === "step" || cmd === "activity" || cmd === "release") return true;
-  if (cmd === "map") return rest[0] === "new";
-  return false;
-}
-
-/** Commands that write a group's stories or plan. A team repo takes its stories from the group, so these are refused there. */
-const GROUP_ONLY = new Set(["story", "step", "activity", "release", "map", "migrate", "planning", "join", "start", "init", "company", "group", "decide", "rollout", "apply"]);
 
 const help = `nikos: plan the work, write it as stories, and check each story is really done
 
@@ -139,9 +110,8 @@ Story maps and stories
   release check <n>    Check whether a release is ready to ship (--run runs its scenarios again)
   map              Save the story map as a page you can open offline
                    (--out, default storymap.html; --map)
-  map new          Make a story map for one bet, in maps/<key>/. In a group repo, or a team
-                   repo with a key and a home (--bet <bet-id or repo#bet-id>, --key <KEY>,
-                   --owner <KEY> for the story ids, e.g. WEB-CHK-1)
+  map new          Make a story map for one bet, in maps/<key>/ (--bet <bet-id or repo#bet-id>,
+                   --key <KEY>, --owner <KEY> for the story ids, e.g. WEB-CHK-1)
   map status       How each story in this repo's maps is doing, and save it to
                    maps/<key>/delivery.yaml to commit (--map, --json saves nothing)
   validate [dir]   Check the intent/ folder is well formed
@@ -159,11 +129,6 @@ Building and checking stories
                    you answer an agent's "Do you want to approve …?"
   ci setup         Run the checks and every story's scenarios on each pull or merge request
                    (GitHub Actions or GitLab CI; --github, --gitlab)
-
-Teams
-  team init|join|member|show  Set up a team repo and the repos it takes work from.
-                   For example: team init --repo owner/repo --key WEB, team join <group repo>,
-                   team member add "<name>". Set its home with nikos join <plan> --home
 
 Decisions, exports and tools
   decide "<title>" Record a decision in decisions.md (--why, --story, --category, --supersedes)
@@ -222,17 +187,8 @@ async function main(argv: string[]): Promise<number> {
     console.log(cmd === "planning" ? planningHelp : cmd === "plan" && rest[0] !== "new" ? planRepoHelp : commandHelp(cmd));
     return 0;
   }
-  // `nikos map` alone writes the page, which a team can have; `map new` writes a map.
-  // `migrate maps` is refused with its own message in a team repo, so it skips the generic one.
-  const authoring = GROUP_ONLY.has(cmd) && !(cmd === "map" && rest[0] !== "new") && !(cmd === "migrate" && rest[0] === "maps");
-  const at = rest.indexOf("--dir");
-  if (at >= 0 && !rest[at + 1]) {
+  if (rest.indexOf("--dir") >= 0 && !rest[rest.indexOf("--dir") + 1]) {
     console.error("✗ --dir needs a folder: --dir <path>");
-    return 1;
-  }
-  const teamDir = at >= 0 ? rest[at + 1] : process.cwd();
-  if (authoring && isTeamRepo(teamDir) && !teamMayRun(cmd, rest, teamDir)) {
-    console.error(`✗ ${teamRefusal(cmd)}`);
     return 1;
   }
   return run(rest);

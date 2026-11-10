@@ -1,7 +1,7 @@
-// `nikos start` and `nikos company init`: the first run, for a team and for a company.
+// `nikos start` and `nikos company init`: the first run, for a repo and for a company.
 // start sets a repo up with sensible defaults: intent/ (name and key from the folder), a
 // Cucumber runner for its stack, and CI for its host, each only when it's missing.
-// company init writes a company plan repo that departments and teams join.
+// company init writes a company plan repo that departments and groups join.
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
@@ -14,7 +14,6 @@ import { setupVerify } from "./verify.js";
 import { createInterface } from "node:readline/promises";
 import { askOnboarding, Cancelled, setUp } from "./onboard.js";
 import { cliCommand } from "../lib/cli-version.js";
-import { isTeamRepo, TEAM_REPO_STORIES } from "../lib/team.js";
 import { KEY } from "../lib/keys.js";
 import { BELOW, planYaml, type PlanLevel } from "../lib/group-plan.js";
 import { ownRepo } from "../lib/git.js";
@@ -30,7 +29,6 @@ export interface StartResult {
 }
 
 export function start(root: string, opts: { name?: string; key?: string } = {}): StartResult {
-  if (isTeamRepo(root)) throw new Error(TEAM_REPO_STORIES);
   if (store().isDir(join(root, "maps"))) throw new Error("This repo has maps/ (group story maps). Add a product's story map with nikos map new, not start.");
   const done: string[] = [];
   const ask: string[] = [];
@@ -61,7 +59,7 @@ export interface CompanyResult {
   skipped: string[];
   /** A group's key. */
   key?: string;
-  /** The line each department or team runs (or asks their agent to) to join. Undefined until the repo's path is known. */
+  /** The line each department or group runs (or asks their agent to) to join. Undefined until the repo's path is known. */
   join?: string;
 }
 

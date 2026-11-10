@@ -1,4 +1,4 @@
-// `nikos tracker`: keep a story map and a team's tracker (Jira, Linear, GitHub or GitLab issues…)
+// `nikos tracker`: keep a story map and a repo's tracker (Jira, Linear, GitHub or GitLab issues…)
 // in step. nikOS never calls a tracker itself: the agent reads and writes tickets through the
 // tracker's own MCP, and hands what it read to these commands, which apply the rules:
 // - a ticket can approve a story (when tracker.approvals is on) or cancel it, never mark it
@@ -39,7 +39,7 @@ export function linkTicket(input: { id: string; ticket: string; map?: string }, 
     home,
     input.id,
     (doc, at) => {
-      // A team's first link creates its status file, which starts at todo.
+      // A first link creates the story's status file, which starts at todo.
       if (!doc.getIn([...at, "status"])) doc.setIn([...at, "status"], "todo");
       doc.setIn([...at, "ticket"], ticket);
     },
@@ -140,7 +140,7 @@ export interface ImportedTicket {
  * linked are skipped. Stories start as todo: their scenarios still have to be written.
  */
 export function importTickets(tickets: ImportedTicket[], dir: string, opts: { release?: number; map?: string } = {}) {
-  // Tickets become stories, which are authored in the group repo: a team repo is refused before anything is read.
+  // Tickets become stories, which are authored in the repo's own map.
   const ref = authoringMap(dir, opts.map);
   const linked = new Set(storyMapOfRef(ref).releases.flatMap((r) => r.stories).map((s) => storyTicket(ref, s.id)).filter(Boolean));
   const added: { id: string; ticket: string }[] = [];

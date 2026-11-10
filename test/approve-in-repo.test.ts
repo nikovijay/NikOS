@@ -11,7 +11,7 @@ import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
 import { verify } from "../src/commands/verify";
 import { codeChangedSince, headOf } from "../src/lib/git";
-import { git, write, commitAll, groupRepo } from "./team-fixture";
+import { git, write, commitAll, groupRepo } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/commands/verify")>();

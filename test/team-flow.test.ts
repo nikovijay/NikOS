@@ -13,7 +13,7 @@ import { addRelease } from "../src/commands/release";
 import { validate } from "../src/commands/validate";
 import { verify } from "../src/commands/verify";
 import { specHash } from "../src/lib/project";
-import { git, groupRepo, teamOwnsGroupMap, teamRepo, write, commitAll, feature } from "./team-fixture";
+import { git, groupRepo, write, commitAll, feature } from "./repo-fixture";
 
 // The runner is a stand-in here: each test says whether the scenarios pass.
 vi.mock("../src/commands/verify", async (importOriginal) => {
@@ -26,15 +26,13 @@ beforeEach(() => runner.mockClear());
 /** A story's state in its map, maps/chk/state.yaml: a team's state lives in its own map. */
 const status = (t: string, id: string) => parse(readFileSync(join(t, "maps/chk/state.yaml"), "utf8")).stories[id];
 
-/** A group's map, owned by one team (its own copy, with the group\'s ids), committed. */
+/** A group repo with its one map, committed. The repo is both the group and the place its map is worked on. */
 function setup(key = "PAY") {
   const g = groupRepo(key);
-  const t = teamRepo();
-  teamOwnsGroupMap(t, g);
-  return { g, t };
+  return { g, t: g };
 }
 
-describe("a team's flow on its own map", () => {
+describe("a repo's flow on its own map", () => {
   it("next lists only the team's stories, in release order", () => {
     const { t } = setup();
     expect(next(t).story).toBe("PAY-CHK-1");
@@ -105,20 +103,9 @@ describe("a team's flow on its own map", () => {
     const { t } = setup();
     expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("PAY-CHK-1 is todo: only a done story can be approved");
   });
-
-
-
-  it("a team repo with intent/ is refused by next, state and validate", () => {
-    const { t } = setup();
-    write(join(t, "intent/storymap.yaml"), "key: HT\nactivities: []\nreleases: []\n");
-    const message = "this repo has intent/ or maps/ and nikos.team.yaml: keep one";
-    expect(() => next(t)).toThrow(message);
-    expect(() => setState("PAY-CHK-1", "in_progress", { dir: t })).toThrow(message);
-    expect(validate(t).errors.map((e) => e.message)).toContain("this repo has intent/ or maps/ and nikos.team.yaml: keep one");
-  });
 });
 
-describe("a team's flow: the review's edge cases", () => {
+describe("a repo's flow: the review's edge cases", () => {
   it("a delivery approval that lapses while state set moves a story is a warning, and the move exits 0", () => {
     const { t } = setup();
     setState("PAY-CHK-1", "in_progress", { dir: t });
@@ -175,17 +162,7 @@ describe("a team's flow: the review's edge cases", () => {
 
 
 
-  it("stories, steps, activities and releases are refused in a team repo that has no map of its own", () => {
-    const t = teamRepo();
-    const refused = "this is a team repo: stories are added in the group repo";
-    expect(() => newStory({ title: "Refund", activity: "pay" }, t)).toThrow(refused);
-    expect(() => newActivity({ title: "Refunds" }, t)).toThrow(refused);
-    expect(() => newStep({ title: "Ask", activity: "pay" }, t)).toThrow(refused);
-    expect(() => addRelease({ title: "Three" }, t)).toThrow(refused);
-    expect(existsSync(join(t, "maps"))).toBe(false);
-  });
-
-  it("the tracker writes a team's ticket links and cancellations into its map's state", () => {
+  it("the tracker writes a map's ticket links and cancellations into its map's state", () => {
     const { t } = setup();
     write(join(t, "nikos.settings.yaml"), "format_version: 1\ntracker:\n  system: jira\n  site: acme.atlassian.net\n  project: PAY\n  statuses:\n    In Progress: in_progress\n    Won't Do: cancelled\n");
     linkTicket({ id: "PAY-CHK-1", ticket: "PAY-101" }, t);

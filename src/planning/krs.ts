@@ -6,7 +6,6 @@ import { areaOf, checkKr, describeErrors, krText, loadKr, paths, today, writePla
 import { companyYear, krAreaProblem, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
 import { dateProblem, krFieldProblems } from "./rules.js";
 import { alignmentProblems, alignsValue, krLevelProblem, levelOf } from "./levels.js";
-import { isTeamRepo } from "../lib/team.js";
 
 export interface KrInput {
   id: string;
@@ -46,7 +45,7 @@ export function newKr(input: KrInput, root: string): string {
   }
   if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
   const level = levelOf(root);
-  const refused = area ? undefined : krLevelProblem(level, isTeamRepo(root));
+  const refused = area ? undefined : krLevelProblem(level);
   if (refused) throw new Error(refused);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "kr", level)[0];

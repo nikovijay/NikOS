@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addDownstream, downstreamEntries, formatRollout, rollout } from "../src/planning/rollout";
 import { joinPlan } from "../src/commands/join";
-import { groupRepo, write, commitAll, git } from "./team-fixture";
+import { groupRepo, write, commitAll, git } from "./repo-fixture";
 
 /** A plan-only repo at a level and key, committed, so it can be joined or listed. */
 function plan(level: string, key: string, name = `${level} ${key}`): string {

@@ -9,7 +9,6 @@ import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./
 import { keyOf, mapOwnerOf, NO_OWNER, type StoryMapRef } from "./maps.js";
 import { isDone, specHash } from "./project.js";
 import { loadStates } from "./state-files.js";
-import { isTeamRepo } from "./team.js";
 
 export type Proof = "changed" | "behind" | "unverified";
 
@@ -19,7 +18,7 @@ export interface SummaryBodyStory {
   status: string;
   approval: "none" | "approved";
   approved_by?: string;
-  /** Set when the status wasn't proved against the current feature (a team's own map only). */
+  /** Set when the status wasn't proved against the current feature. */
   proof?: Proof;
 }
 
@@ -34,7 +33,7 @@ export interface SummaryBody {
 /** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/). */
 export const hasSummary = (ref: StoryMapRef): boolean => ref.inRepo;
 
-/** The owner a map's story ids and summary carry: its storymap owner, else the repo's group or team key. */
+/** The owner a map's story ids and summary carry: its storymap owner, else the repo's group key. */
 export function ownerFor(root: string, dir: string): string {
   const owner = mapOwnerOf(dir) ?? keyOf(root);
   if (!owner) throw new Error(NO_OWNER);
@@ -52,14 +51,12 @@ function orderedIds(data: ReturnType<typeof loadMapData>): string[] {
 }
 
 /**
- * The summary a map's files say now. A team's own map judges each story's proof against its feature (so a
- * proof for an older feature shows); a group's map is read as it stands.
+ * The summary a map's files say now. Each story's proof is judged against its feature, so a proof for an
+ * older feature shows.
  */
 export function summaryBody(root: string, dir: string): SummaryBody {
   const owner = ownerFor(root, dir);
   const data = loadMapData(dir);
-  // A team's proof is judged against each feature; a group's map is read as it stands.
-  const team = isTeamRepo(root);
   const states = loadStates(dir);
   const approvals = loadApprovals(dir);
   const stories = orderedIds(data).map((id): SummaryBodyStory => {
@@ -70,11 +67,9 @@ export function summaryBody(root: string, dir: string): SummaryBody {
     const a = approvals[id];
     const approved = isDone(status) && !!a && !approvalLapse(a, state, hash);
     let proof: Proof | undefined;
-    if (team) {
-      if (isDone(status) && !state?.spec_hash) proof = "unverified";
-      else if (isDone(status) && state?.spec_hash !== hash) proof = "changed";
-      else if (!isDone(status) && state?.spec_hash && state.spec_hash !== hash) proof = "behind";
-    }
+    if (isDone(status) && !state?.spec_hash) proof = "unverified";
+    else if (isDone(status) && state?.spec_hash !== hash) proof = "changed";
+    else if (!isDone(status) && state?.spec_hash && state.spec_hash !== hash) proof = "behind";
     return {
       id,
       status,

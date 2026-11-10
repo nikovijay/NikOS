@@ -10,7 +10,7 @@ import { approve } from "../src/commands/approve";
 import { newStory } from "../src/commands/story";
 import { validate } from "../src/commands/validate";
 import { readDeliverySummary } from "../src/lib/delivery-summary";
-import { groupRepo, write, commitAll } from "./team-fixture";
+import { groupRepo, write, commitAll } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/commands/verify")>();

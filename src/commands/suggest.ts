@@ -9,7 +9,6 @@ import { resolveSettings } from "../lib/settings.js";
 import { join, resolve } from "node:path";
 import { findIntentDir, isDone } from "../lib/project.js";
 import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
-import { isTeamRepo } from "../lib/team.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate, validateGroup } from "./validate.js";
@@ -99,7 +98,7 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
 
 export function suggest(dir: string, mapId?: string): Suggestion {
   const maps = mapDirs(dir);
-  if (!mapId && maps.length > 1 && !isTeamRepo(dir)) return groupSuggestion(dir, maps);
+  if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
   const intentDir = resolveStoryMap(dir, mapId).dir;
   if (!store().exists(join(intentDir, "storymap.yaml"))) {
     if (store().exists(join(dir, "planning", "plan.yaml"))) return planSuggestion(dir);

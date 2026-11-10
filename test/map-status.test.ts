@@ -1,4 +1,4 @@
-// `nikos map status`, read from each map's own files: a group's state and approvals, and a team's
+// `nikos map status`, read from each map's own files: a group's state and approvals, and a repo's
 // own map from its own state.yaml and approvals/. No git or network: the proof of a status is judged
 // against the feature it sits beside, and each map's delivery.yaml is written from what it reads.
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -11,11 +11,10 @@ import { approve } from "../src/commands/approve";
 import { formatMapStatus, mapStatus, runMapStatus, statusJson, writeSummaries } from "../src/commands/map-status";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
-import { teamInit } from "../src/commands/team";
 import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { verify } from "../src/commands/verify";
 import { fetchCopy } from "../src/lib/fetch-copy";
-import { groupRepo, git, write, commitAll } from "./team-fixture";
+import { groupRepo, git, write, commitAll } from "./repo-fixture";
 
 vi.mock("../src/commands/verify", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/commands/verify")>();
@@ -33,16 +32,14 @@ beforeEach(() => {
 const story = (rs: ReturnType<typeof mapStatus>, id: string) => rs[0].stories.find((s) => s.id === id)!;
 const NOW = new Date("2027-01-05T10:00:00Z");
 
-/** A team repo with a key, a home and a bet of its own, and one map (INB) with two stories: WEB-INB-1 and -2. */
-function teamWithOwnMap(): string {
+/** A group repo with a bet and one map of its own (INB) with two stories: PAY-INB-1 and -2. */
+function ownMapRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "nikos-own-status-"));
   write(join(dir, "package.json"), '{"name":"web","private":true}\n');
   git(dir, "init", "-q", "-b", "main");
-  git(dir, "remote", "add", "origin", "https://github.com/acme/web-team.git");
-  teamInit(dir, { repo: "acme/web-team", name: "Web team", key: "WEB" });
-  write(join(dir, "nikos.team.yaml"), "format_version: 2\nname: Web team\nrepo: acme/web-team\nkey: WEB\nhome: acme/payments-group\ngroups: []\nmembers: []\n");
+  write(join(dir, "planning/plan.yaml"), "name: Checkout\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
   write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
-  commitAll(dir, "team");
+  commitAll(dir, "group");
   newMap({ bet: "faster-checkout", key: "INB" }, dir);
   newStory({ title: "Pay by card", activity: "getting-started" }, dir);
   newStory({ title: "Pay by wallet", activity: "getting-started" }, dir);
@@ -139,23 +136,23 @@ describe("nikos map status: a group's map", () => {
   });
 });
 
-describe("nikos map status: a team's own map", () => {
-  it("reads the team's own state, judged against the feature it was written against", () => {
-    const t = teamWithOwnMap();
-    setState("WEB-INB-1", "in_progress", { dir: t });
+describe("nikos map status: a repo's own map", () => {
+  it("reads the map's own state, judged against the feature it was written against", () => {
+    const t = ownMapRepo();
+    setState("PAY-INB-1", "in_progress", { dir: t });
     commitAll(t, "start");
-    expect(story(mapStatus(t), "WEB-INB-1")).toMatchObject({ status: "in_progress" });
-    expect(story(mapStatus(t), "WEB-INB-1").reason).toBe("");
+    expect(story(mapStatus(t), "PAY-INB-1")).toMatchObject({ status: "in_progress" });
+    expect(story(mapStatus(t), "PAY-INB-1").reason).toBe("");
   });
 
   it("a done story proved against an older feature is changed, and needs attention", () => {
-    const t = teamWithOwnMap();
-    setState("WEB-INB-1", "in_progress", { dir: t });
+    const t = ownMapRepo();
+    setState("PAY-INB-1", "in_progress", { dir: t });
     commitAll(t, "start");
-    setState("WEB-INB-1", "done", { dir: t });
+    setState("PAY-INB-1", "done", { dir: t });
     commitAll(t, "done");
     reword(join(t, CARD));
-    const s = story(mapStatus(t), "WEB-INB-1");
+    const s = story(mapStatus(t), "PAY-INB-1");
     expect(s).toMatchObject({ status: "done", proof: "changed" });
     expect(s.reason).toMatch(/feature changed after it was proved/);
     expect(formatMapStatus(mapStatus(t)[0])).toContain("Needs attention");
@@ -163,39 +160,38 @@ describe("nikos map status: a team's own map", () => {
   });
 
   it("an in-progress story written against an older feature is behind", () => {
-    const t = teamWithOwnMap();
-    setState("WEB-INB-1", "in_progress", { dir: t });
+    const t = ownMapRepo();
+    setState("PAY-INB-1", "in_progress", { dir: t });
     commitAll(t, "start");
     reword(join(t, CARD));
-    expect(story(mapStatus(t), "WEB-INB-1")).toMatchObject({ status: "in_progress", proof: "behind" });
+    expect(story(mapStatus(t), "PAY-INB-1")).toMatchObject({ status: "in_progress", proof: "behind" });
   });
 
   it("a done status with no spec hash is unverified", () => {
-    const t = teamWithOwnMap();
-    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  WEB-INB-1: { status: in_progress }\n  WEB-INB-2: { status: done, updated: 2027-01-04 }\n");
+    const t = ownMapRepo();
+    write(join(t, "maps/inb/state.yaml"), "format_version: 1\nstories:\n  PAY-INB-1: { status: in_progress }\n  PAY-INB-2: { status: done, updated: 2027-01-04 }\n");
     commitAll(t, "status by hand");
-    expect(story(mapStatus(t), "WEB-INB-2")).toMatchObject({ status: "done", proof: "unverified" });
+    expect(story(mapStatus(t), "PAY-INB-2")).toMatchObject({ status: "done", proof: "unverified" });
   });
 
-  it("a team's own approval shows, and is written to its delivery.yaml", () => {
-    const t = teamWithOwnMap();
-    setState("WEB-INB-1", "in_progress", { dir: t, by: "Ada" });
+  it("a map's own approval shows, and is written to its delivery.yaml", () => {
+    const t = ownMapRepo();
+    setState("PAY-INB-1", "in_progress", { dir: t, by: "Ada" });
     commitAll(t, "start");
-    setState("WEB-INB-1", "done", { dir: t, by: "Ada" });
+    setState("PAY-INB-1", "done", { dir: t, by: "Ada" });
     commitAll(t, "done");
-    expect(story(mapStatus(t), "WEB-INB-1")).toMatchObject({ status: "done", approval: "none" });
-    approve("WEB-INB-1", { dir: t, by: "Ada Lovelace", date: "2027-01-06" });
+    expect(story(mapStatus(t), "PAY-INB-1")).toMatchObject({ status: "done", approval: "none" });
+    approve("PAY-INB-1", { dir: t, by: "Ada Lovelace", date: "2027-01-06" });
     commitAll(t, "approved");
-    expect(story(mapStatus(t), "WEB-INB-1")).toMatchObject({ approval: "approved", approved_by: "Ada Lovelace" });
+    expect(story(mapStatus(t), "PAY-INB-1")).toMatchObject({ approval: "approved", approved_by: "Ada Lovelace" });
     writeSummaries(t, mapStatus(t), NOW);
-    expect(readDeliverySummary(join(t, "maps/inb"))?.stories.find((s) => s.id === "WEB-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
+    expect(readDeliverySummary(join(t, "maps/inb"))?.stories.find((s) => s.id === "PAY-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
   });
 
-  it("a team with a map reads its own map's state: the map is the one read", () => {
-    const t = teamWithOwnMap();
+  it("a repo with a map reads its own map's state: the map is the one read", () => {
+    const t = ownMapRepo();
     expect(mapStatus(t).map((m) => m.map)).toEqual(["inb"]);
     expect(existsSync(join(t, "maps/inb/state.yaml"))).toBe(true);
     expect(existsSync(join(t, "status"))).toBe(false);
-    expect(parse(readFileSync(join(t, "nikos.team.yaml"), "utf8")).key).toBe("WEB");
   });
 });

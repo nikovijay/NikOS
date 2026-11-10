@@ -5,7 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { codeChangedSince, codeIsDirty, headOf } from "../src/lib/git";
-import { git, write, commitAll } from "./team-fixture";
+import { git, write, commitAll } from "./repo-fixture";
 
 /** A repo with code and one map's files, committed; returns the repo and the commit the proof ran at. */
 function repo(): { dir: string; tested: string } {
