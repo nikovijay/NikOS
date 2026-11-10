@@ -73,13 +73,16 @@ Usage: nikos <command> [options]
 For one command's options: nikos <command> --help
 
 Get started
-  start            Set up nikOS in this folder. In a terminal, it asks a few questions first.
-                   An agent passes --name and --key instead
+  start            Set up nikOS in this folder. Pick one: --plan makes the company's planning
+                   repo (--name, --year, --pillars); --map makes a story map for this code
+                   (--name, --key, --join <planning repo>). In a terminal, with no flags, it asks
+                   which one, then a few questions. An agent passes the flags
   serve            Open the dashboard in your browser: the plan and the story map
                    (--port; --export <file> saves it as one page you can share, add --editable
                    so people can suggest changes in it, and --with-linked to include linked plans)
   doctor           Check this repo is set up well, and say what to do next (--offline)
-  suggest          Say where things stand and what to do next (--json, --brief, --map)
+  suggest          Say where things stand and what to do next (--json, --brief, --map; in a
+                   planning repo, --in <area>)
 
 Plans: objectives, key results and bets
   plan <cmd>       The company's plan in one repo, with a folder for each department, group
@@ -134,7 +137,8 @@ Building and checking stories
                    (GitHub Actions or GitLab CI; --github, --gitlab)
 
 Decisions, exports and tools
-  decide "<title>" Record a decision in decisions.md (--why, --story, --category, --supersedes)
+  decide "<title>" Record a decision in decisions.md (--why, --story, --category, --supersedes;
+                   in a planning repo, --in <area> picks whose decisions.md, else the company's)
   decisions "<q>"  Show the decisions in decisions.md that mention a topic or story
   export --format <prd|linear|jira>  Turn the story map into a product brief or a file
                    to import into a tracker (--release, --out, --project-key)

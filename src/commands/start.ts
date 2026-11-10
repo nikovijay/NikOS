@@ -1,9 +1,9 @@
-// `nikos start` and `nikos company init`: the first run, for a repo and for a company.
-// start sets a repo up with sensible defaults: maps/<key>/ (name and key from the folder), a
-// Cucumber runner for its stack, and CI for its host, each only when it's missing.
-// company init writes a company plan repo that departments and groups join.
+// `nikos start`: the first run. --plan makes the company's planning repo; --map (or --name/--key) sets a
+// code repo up with a story map: maps/<key>/ (name and key from the folder), a Cucumber runner for its
+// stack, and CI for its host, each only when it's missing. With no flags, in a terminal, it asks Plan or Spec.
+// `company init` and `group init` are the old plan commands, kept until they're removed.
 import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { stringify } from "yaml";
 import { store } from "../lib/store.js";
 import { detectStack } from "../verify/detect.js";
@@ -17,6 +17,10 @@ import { cliCommand } from "../lib/cli-version.js";
 import { KEY } from "../lib/keys.js";
 import { BELOW, planYaml, type PlanLevel } from "../lib/group-plan.js";
 import { ownRepo } from "../lib/git.js";
+import { REPO_PATH } from "../lib/bets.js";
+import { initPlanRepo, oldLayoutProblem } from "../plan/repo.js";
+import { describeRepoJoin, joinPlanRepo } from "./join.js";
+import { isPlanRepo } from "../planning/model.js";
 
 export type { PlanLevel };
 
@@ -29,6 +33,9 @@ export interface StartResult {
 }
 
 export function start(root: string, opts: { name?: string; key?: string } = {}): StartResult {
+  if (isPlanRepo(root)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos start in one of those.");
+  const old = oldLayoutProblem(root);
+  if (old) throw new Error(old);
   if (store().isDir(join(root, "intent"))) throw new Error("This repo keeps its story map in intent/. Move it with nikos migrate maps first, then start.");
   if (store().isDir(join(root, "maps"))) throw new Error("This repo has maps/ (story maps). Add another story map with nikos map new, not start.");
   const done: string[] = [];
@@ -133,34 +140,85 @@ Nothing in your repo moves.
 /** A person at a terminal, not an agent, a pipe or CI: the only time start asks questions. */
 export const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY && !process.env.CI;
 
+const START_USAGE = `Usage: nikos start --plan --name "<company>" --year <year> [--pillars "<a>, <b>"] [--owner <who>] [--dir <path>]
+       nikos start --map [--name "<product>"] [--key <KEY>] [--join <planning repo>] [--host gitlab.com] [--dir <path>]
+Run it in a terminal, with no flags, to answer a few questions instead.`;
+
+/** The comma-separated list a flag takes, or none. */
+const listFlag = (a: string | undefined) => a?.split(",").map((x) => x.trim()).filter(Boolean);
+
 export async function runStart(args: string[]): Promise<number> {
   const flag = (n: string) => {
     const i = args.indexOf(`--${n}`);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  if (!flag("name") && !flag("key") && !args.includes("--yes") && interactive()) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    try {
-      const cwd = flag("dir") ?? process.cwd();
-      const answers = await askOnboarding(cwd, (q, s) => rl.question(`${q}${s ? ` [${s}]` : ""}${/[?)]$/.test(q) && !s ? " " : ": "}`));
-      rl.close();
-      console.log("");
-      for (const line of setUp(answers, cwd)) console.log(line);
-      return 0;
-    } catch (err) {
-      rl.close();
-      if (err instanceof Cancelled) {
-        console.log(err.message);
-        return 0;
-      }
-      console.error(`✗ ${(err as Error).message}`);
-      return 1;
-    }
+  const has = (n: string) => args.includes(`--${n}`);
+  const dir = flag("dir") ?? process.cwd();
+  if (has("plan") && has("map")) {
+    console.error(`✗ Pick one: --plan makes the company's planning repo, --map makes a story map for this code.\n\n${START_USAGE}`);
+    return 1;
   }
+  if (has("plan")) return startPlan(dir, flag, has);
+  if (has("map") || has("name") || has("key")) return startMap(dir, flag, has);
+  if (has("yes") || !interactive()) {
+    console.error(`✗ nikos start needs to know what to set up: pass --plan or --map. Run it in a terminal to answer questions instead.\n\n${START_USAGE}`);
+    return 1;
+  }
+  return startMenu(dir);
+}
+
+/** The Plan or Spec menu, in a terminal. */
+async function startMenu(cwd: string): Promise<number> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const r = start(flag("dir") ?? process.cwd(), { name: flag("name"), key: flag("key") });
+    const answers = await askOnboarding(cwd, (q, s) => rl.question(`${q}${s ? ` [${s}]` : ""}${/[?)]$/.test(q) && !s ? " " : ": "}`));
+    rl.close();
+    console.log("");
+    for (const line of setUp(answers, cwd)) console.log(line);
+    return 0;
+  } catch (err) {
+    rl.close();
+    if (err instanceof Cancelled) {
+      console.log(err.message);
+      return 0;
+    }
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}
+
+/** --plan: the company's planning repo, with no story map. */
+function startPlan(dir: string, flag: (n: string) => string | undefined, has: (n: string) => boolean): number {
+  try {
+    if (has("join")) throw new Error("--join links a code repo to a plan. Leave it out with --plan, and add departments with nikos plan add department <id>.");
+    const problem = oldLayoutProblem(dir);
+    if (problem) throw new Error(problem);
+    const name = flag("name");
+    if (!name) throw new Error('--plan needs the company\'s name, with --name, for example: nikos start --plan --name "Acme" --year 2027');
+    const files = initPlanRepo(dir, { name, year: flag("year") ?? "", pillars: listFlag(flag("pillars")), owner: flag("owner") });
+    const cli = cliCommand();
+    console.log(`Made the company's planning repo:\n${files.map((f) => `  + ${relative(dir, f)}`).join("\n")}`);
+    console.log(`\nNext steps:\n  1. Add a department: ${cli} plan add department <id> --name "<name>"\n  2. See the plan: ${cli} plan status\n  3. Open it in your browser: ${cli} plan serve`);
+    return 0;
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    return 1;
+  }
+}
+
+/** --map, or --name or --key: a story map for this code, and --join to link it to a planning repo. */
+function startMap(dir: string, flag: (n: string) => string | undefined, has: (n: string) => boolean): number {
+  try {
+    const joinTo = flag("join");
+    if (has("join") && (!joinTo || !REPO_PATH.test(joinTo))) throw new Error("--join needs the planning repo's path, for example: --join acme/company-plan");
+    const r = start(dir, { name: flag("name"), key: flag("key") });
     for (const d of r.done) console.log(`✓ ${d}`);
     for (const a of r.ask) console.log(`? ${a}`);
+    if (joinTo) {
+      const listed = joinPlanRepo(dir, { plan: joinTo, host: flag("host") });
+      if (!listed) throw new Error(`Couldn't read ${joinTo} as a planning repo (planning/company/), so nothing was joined. The story map is set up.`);
+      console.log(describeRepoJoin(listed));
+    }
     console.log(`\n${r.next.summary}\n${r.next.options.map((o, n) => `  ${n + 1}. ${o.label}`).join("\n")}`);
     console.log(`\nSee it in your browser: ${cliCommand()} serve`);
     return 0;

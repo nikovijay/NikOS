@@ -1,7 +1,7 @@
 // Paths the PR 2b review found, kept from coming back: several maps, story ids after a plan key is
 // added, the 0.2 layouts that are refused rather than ignored, and the owner in the drift message.
 import { describe, it, expect } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { init } from "../src/commands/init";
@@ -53,12 +53,11 @@ describe("story ids after a plan key is added", () => {
     expect(messages(validate(root))).toEqual([]);
   });
 
-  it("init's starter story takes the group key's prefix, as map new does", () => {
+  it("init refuses a repo whose plan is the old kind, and writes no story map", () => {
     const root = fresh();
     write(join(root, "planning/plan.yaml"), "name: Hello\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
-    init(root, { name: "Hello Todo", key: "HT" });
-    expect(readFileSync(join(root, "maps/ht/storymap.yaml"), "utf8")).toContain("[PAY-HT-1]");
-    expect(messages(validate(root))).toEqual([]);
+    expect(() => init(root, { name: "Hello Todo", key: "HT" })).toThrow("This repo has planning/plan.yaml, a plan of the old kind.");
+    expect(existsSync(join(root, "maps/ht"))).toBe(false);
   });
 });
 

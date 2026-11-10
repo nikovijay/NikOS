@@ -9,10 +9,15 @@ import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { detectStack } from "../verify/detect.js";
 import { checkStale, readLock, upstreamEntries } from "../planning/upstream.js";
-import { betIds, krIds } from "../planning/model.js";
+import { betIds, isPlanRepo, krIds } from "../planning/model.js";
 import { planningIssues } from "../planning/levels.js";
 import { loadPlan } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
+import { listAreas } from "../plan/repo.js";
+import { planIssues } from "../plan/cli.js";
+import { planDeliveries } from "../plan/delivery.js";
+import { loadRepos, type RepoEntry } from "../plan/repos.js";
+import { hostOfEntry } from "../plan/refresh.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validate, validateGroup } from "./validate.js";
@@ -47,8 +52,14 @@ const codeowners = (root: string) => ["CODEOWNERS", ".github/CODEOWNERS", ".gitl
 export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
-  const planOnly = isPlanOnly(root);
+  // A planning repo is checked as a plan: its areas, the code repos it lists, and its decisions.
+  if (isPlanRepo(root)) {
+    planRepoChecks(root, add);
+    return checks;
+  }
   const maps = mapDirs(root).length;
+  // A repo with a planning/ folder and no story map is an old-kind plan, until stage C removes it.
+  const planOnly = isPlanOnly(root);
   const oldLayout = store().isDir(join(root, "intent"));
   // A repo with maps/ gets the plan checks only when it has a planning/ folder to check.
   if (planOnly || (maps && store().isDir(join(root, "planning")))) planChecks(root, add);
@@ -156,6 +167,53 @@ const runsFolder = (root: string, file: string, folder: string) => {
     .join("\n");
   return !/\bpaths\b/.test(live) || live.includes(folder);
 };
+
+/**
+ * A planning repo: the plan (its areas, key results and bets, and any problems), the code repos it lists
+ * and whether each has been read, and the company's decisions.
+ */
+function planRepoChecks(root: string, add: (c: Check) => void) {
+  const areas = listAreas(root);
+  const issues = planIssues(root);
+  const errors = issues.filter((i) => !i.warning).length;
+  const warnings = issues.length - errors;
+  const krs = areas.reduce((n, a) => n + krIds(a.dir).length, 0);
+  const bets = areas.reduce((n, a) => n + betIds(a.dir).length, 0);
+  add(
+    errors
+      ? { name: "plan", status: "fail", found: `${count(errors, "problem")} in planning/`, next: "Run nikos plan validate and fix what it lists" }
+      : {
+          name: "plan",
+          status: warnings ? "warn" : "ok",
+          found: `${count(areas.length, "area", "areas")}, ${count(krs, "key result")}, ${count(bets, "bet")}${warnings ? `, ${count(warnings, "warning")}` : ""}`,
+          ...(warnings ? { next: "Run nikos plan validate to see the warnings" } : {}),
+        },
+  );
+  let listed: RepoEntry[] = [];
+  try {
+    listed = loadRepos(root).repos;
+  } catch {
+    // planning/repos.yaml that doesn't load is a problem plan validate reports.
+  }
+  const deliveries = planDeliveries(root);
+  const readCount = listed.filter((e) => deliveries.repos.some((r) => r.repo === e.repo && r.host === hostOfEntry(e))).length;
+  add(
+    !listed.length
+      ? { name: "code repos", status: "ok", found: "none listed yet in planning/repos.yaml" }
+      : {
+          name: "code repos",
+          status: readCount === listed.length ? "ok" : "warn",
+          found: `${count(listed.length, "code repo", "code repos")} listed: ${readCount} read, ${listed.length - readCount} never read`,
+          ...(readCount < listed.length ? { next: "Run nikos plan refresh to read them" } : {}),
+        },
+  );
+  const n = decisionEntries(root).length;
+  add(
+    n
+      ? { name: "decisions", status: "ok", found: `${count(n, "decision")} in ${rel(root, decisionsPath(root))}` }
+      : { name: "decisions", status: "ok", found: store().exists(decisionsPath(root)) ? "none recorded yet" : `no ${rel(root, decisionsPath(root))} yet`, next: 'Record one when you make it, for example: nikos decide "Use cards only at launch" --why "Most buyers pay by card"' },
+  );
+}
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
 function planChecks(root: string, add: (c: Check) => void) {

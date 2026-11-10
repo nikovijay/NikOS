@@ -3,6 +3,8 @@ import { store } from "../lib/store.js";
 import { STORY_ID, decisionsPath, isPlanOnly, read } from "../lib/project.js";
 import { formatResult, validate, validateGroup } from "./validate.js";
 import { mapDirs } from "../lib/maps.js";
+import { isPlanRepo } from "../planning/model.js";
+import { areaFor, findArea, findPlanRepo } from "../plan/repo.js";
 
 const PLAN_DECISIONS = `# Decisions
 
@@ -18,6 +20,8 @@ export interface DecisionInput {
   category?: string;
   supersedes?: string;
   date?: string;
+  /** In a planning repo: the area whose decisions.md gets it, as people write it (finance, departments/finance). The company's by default. */
+  area?: string;
 }
 
 /** Append a dated entry to decisions.md. Earlier entries are never touched. */
@@ -28,9 +32,11 @@ export function decide(input: DecisionInput, dir: string): string {
   if (input.story && !STORY_ID.test(input.story)) throw new Error(`'${input.story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const category = input.category ?? "architecture";
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
-  const path = decisionsPath(dir);
+  const planRepo = isPlanRepo(dir);
+  if (input.area && !planRepo) throw new Error("--in names an area of a planning repo, and this isn't one");
+  const path = decisionsPath(dir, planRepo ? findArea(dir, input.area ?? "company").rel : undefined);
   if (!store().exists(path)) {
-    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
+    if (!planRepo && !isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
     store().write(path, PLAN_DECISIONS, { create: true });
   }
 
@@ -59,15 +65,20 @@ export function runDecide(args: string[]): number {
     console.error('Usage: nikos decide "<title>" --why "<why>" [--story <id>] [--category product|architecture|design|interface|process] [--supersedes "<title>"]');
     return 1;
   }
-  const dir = opt("dir") ?? process.cwd();
+  const cwd = opt("dir") ?? process.cwd();
+  // In a planning repo, the decision goes to the area named with --in, or the folder you're in, else the company.
+  const repo = findPlanRepo(cwd);
+  const dir = repo ?? cwd;
   try {
-    decide({ title, why: opt("why") ?? "", story: opt("story"), category: opt("category"), supersedes: opt("supersedes") }, dir);
-    console.log(`Added to ${relative(dir, decisionsPath(dir))}: ${title}`);
+    const area = repo ? (opt("in") ?? areaFor(repo, undefined, cwd)?.rel) : opt("in");
+    decide({ title, why: opt("why") ?? "", story: opt("story"), category: opt("category"), supersedes: opt("supersedes"), area }, dir);
+    const shown = repo ? decisionsPath(dir, findArea(repo, area ?? "company").rel) : decisionsPath(dir);
+    console.log(`Added to ${relative(dir, shown)}: ${title}`);
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
-  if (isPlanOnly(dir) || !mapDirs(dir).length) return 0; // no story map to check
+  if (repo || !mapDirs(dir).length) return 0; // no story map to check
   const v = mapDirs(dir).length ? validateGroup(dir) : validate(dir);
   if (v.errors.length) {
     console.error(formatResult(v));

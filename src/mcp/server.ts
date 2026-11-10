@@ -22,6 +22,7 @@ import { show } from "../commands/show.js";
 import { setState, type Status } from "../commands/state.js";
 import { newActivity, newStep } from "../commands/step.js";
 import { companyInit, start as startRepo } from "../commands/start.js";
+import { initPlanRepo } from "../plan/repo.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate, validateGroup } from "../commands/validate.js";
@@ -48,8 +49,9 @@ is only done when its Cucumber scenarios pass. The person talks; you call these 
 - End every reply by asking what to do next: call status and offer its options, labels word for
   word, the first as the recommendation. Leave room for something else.
 - Never hand the person a command to run.
-- A group repo keeps one story map per bet, under maps/<id>/: pass map (the id, e.g. chk) to the story tools
-  when there is more than one. A map for a bet is made with nikos map new --bet <bet-id> --key <KEY>.
+- A planning repo holds the company's plan, one folder per area. status with area (e.g. departments/finance)
+  says where that area stands, and without it, the company. A code repo keeps its story maps under maps/<key>/:
+  pass map (the key, e.g. chk) to the story tools when there is more than one.
 - A map's state and approvals are in its own folder under maps/<key>/, and its story ids take the map's owner (ids like WEB-INB-1).
 - To see how a map's stories are doing, call map_status: a story's status counts only when
   it was proved against the current feature. Say which stories need attention and why.
@@ -83,8 +85,8 @@ export function createServer(repo: string): McpServer {
       }
     });
 
-  tool("status", "Where things stand, and two to four things the person could do next. Call it at the start and end of every request. In a group repo with several maps, map picks one; without it, each map's progress.", { map: z.string().optional() }, (a) => {
-    const s = suggest(root, a.map);
+  tool("status", "Where things stand, and two to four things the person could do next. Call it at the start and end of every request. In a code repo with several maps, map picks one; without it, each map's progress. In a planning repo, area picks one area (e.g. departments/finance); without it, the company.", { map: z.string().optional(), area: z.string().optional() }, (a) => {
+    const s = suggest(root, a.map, { area: a.area });
     return text(`${s.summary}\n${s.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`, s as unknown as Record<string, unknown>);
   }, true);
   tool("validate", "Check the story maps are well formed: each maps/<key> (map picks one), with its story map, state, features and approvals, and the constitution.md at the root.", { map: z.string().optional() }, (a) => {
@@ -158,9 +160,15 @@ export function createServer(repo: string): McpServer {
     const r = importTickets(a.tickets, root, { release: a.release, map: a.map });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
   });
-  tool("start", "Set this repo up in one go as a product's repo: its first story map in maps/<key>/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A repo with maps/ already isn't set up this way: its story maps are added with nikos map new in the terminal. Companies and departments use company_init.",{ name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("start", "Set this repo up in one go as a product's repo: its first story map in maps/<key>/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A repo with maps/ already isn't set up this way: its story maps are added with nikos map new in the terminal. A company's planning repo is made with plan_init.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = startRepo(root, a);
     return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
+  });
+  tool("plan_init", "Make this folder the company's planning repo: planning/company/ with the company's plan.yaml and decisions.md. Departments, groups and teams are added to it with nikos plan add in the terminal.", {
+    name: z.string(), year: z.string(), pillars: z.array(z.string()).optional(), owner: z.string().optional(),
+  }, (a) => {
+    const files = initPlanRepo(root, { name: a.name, year: a.year, pillars: a.pillars, owner: a.owner });
+    return text(`Made the company's planning repo: ${files.map((f) => f.slice(root.length + 1)).join(", ")}`);
   });
   tool("add_activity", "Add an activity to the story map.", { title: z.string(), id: z.string().optional(), map: z.string().optional() }, (a) => text(`Activity ${newActivity(a, root)}`));
   tool("company_init", "Write a company or department plan repo in this folder: plan.yaml, settings every level inherits, departments or groups, and a README on joining. A group's own repo, with its story maps in maps/, is set up with nikos group init in the terminal.", {
@@ -183,7 +191,7 @@ export function createServer(repo: string): McpServer {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
   });
-  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/ (one per bet in a group). A repo with intent/ is refused: it moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/. A repo with intent/ is refused: it moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
     return text(`Created ${r.created.length} files for maps/${basename(r.mapDir)}/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
   });
@@ -213,8 +221,8 @@ export function createServer(repo: string): McpServer {
     const r = verify(root, a.id, { map: a.map });
     return { ...text(r.output), isError: r.status !== 0 };
   });
-  tool("record_decision", "Append a decision to decisions.md. category: interface for anything later stories must keep to.", {
-    title: z.string(), why: z.string(), story: z.string().optional(), category: z.string().optional(), supersedes: z.string().optional(),
+  tool("record_decision", "Append a decision to decisions.md. category: interface for anything later stories must keep to. In a planning repo, area names whose decisions.md gets it (e.g. finance); the company's by default.", {
+    title: z.string(), why: z.string(), story: z.string().optional(), category: z.string().optional(), supersedes: z.string().optional(), area: z.string().optional(),
   }, (a) => text(`Recorded: ${decide(a, root)}`));
   tool("new_plan", "Start the next version of a story's plan.", { id: z.string(), summary: z.string().optional(), map: z.string().optional() }, (a) => text(`Wrote ${newPlan(a.id, { dir: root, summary: a.summary, map: a.map })}`));
 

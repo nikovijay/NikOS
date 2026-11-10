@@ -37,6 +37,16 @@ export function findPlanRepo(start: string): string | undefined {
   }
 }
 
+/**
+ * Why a repo can't be used as a story map or a planning repo yet: it has planning/plan.yaml, a plan of the
+ * old kind, and no planning/company/. Undefined when the repo is fine.
+ */
+export function oldLayoutProblem(dir: string): string | undefined {
+  const repo = resolve(dir);
+  if (!store().exists(join(repo, "planning", "plan.yaml")) || store().exists(join(repo, "planning", "company", "plan.yaml"))) return undefined;
+  return "This repo has planning/plan.yaml, a plan of the old kind. This version doesn't read it. Make the company's planning repo in a new folder with nikos plan init --name <company> --year <year>, then move the story map by hand.";
+}
+
 /** Every area of a planning repo: the company first, then departments, groups and teams. */
 export function listAreas(repo: string): Area[] {
   const company = areaOf(join(repo, "planning", "company"));

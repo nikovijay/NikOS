@@ -12,9 +12,9 @@ import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate, validateGroup } from "./validate.js";
-import { isStale } from "../planning/krs.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { betIds, krIds, loadBet, loadKr, loadPlan, today } from "../planning/model.js";
+import { areaFor, findArea, findPlanRepo } from "../plan/repo.js";
+import { suggestPlan } from "../plan/suggest.js";
 import { basename } from "node:path";
 
 export interface Option {
@@ -37,47 +37,7 @@ const MAX = 4;
 const named = (s: MapStory) => `${s.id}: ${s.title}`;
 const list = (ids: string[]) => (ids.length <= 3 ? ids.join(", ") : `${ids.slice(0, 2).join(", ")} and ${ids.length - 2} more`);
 
-/** The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results. */
-function planningOptions(root: string): Option[] {
-  if (!store().isDir(join(root, "planning"))) return [];
-  const options: Option[] = [];
-  const due = betIds(root).flatMap((id) => {
-    try {
-      const m = loadBet(root, id).meta;
-      return m.outcome === "open" && m.review_on && String(m.review_on) <= today() ? [{ id, on: String(m.review_on) }] : [];
-    } catch {
-      return [];
-    }
-  });
-  if (due.length) options.push({ label: due.length === 1 ? `Review the ${due[0].id} bet (due ${due[0].on})` : `Review ${due.length} bets that are due`, do: "Run the nikos-planning review playbook: continue, change, stop or complete each bet, with the reason." });
-  const stale = krIds(root).flatMap((id) => {
-    try {
-      const k = loadKr(root, id).data;
-      return isStale(k) ? [String(k.title ?? id)] : [];
-    } catch {
-      return [];
-    }
-  });
-  if (stale.length) options.push({ label: stale.length === 1 ? `Check in on "${stale[0]}"` : `Check in on ${stale.length} key results`, do: "Run the nikos-planning checkin playbook: ask for each key result's latest value and record it." });
-  return options;
-}
-
-const ROLLOUT: Option = { label: "See how the plans below are doing", do: "Run nikos planning rollout and summarise it for the person: each plan below, its key results, bets and delivery." };
-
-/** A company or department plan, with no story map of its own: its rituals, the plans below, and the plan. */
-function planSuggestion(root: string): Suggestion {
-  const plan = loadPlan(root) ?? {};
-  const krs = krIds(root).length;
-  const bets = betIds(root).length;
-  const options = planningOptions(root);
-  if (store().exists(join(root, "planning", "downstream.yaml"))) options.push(ROLLOUT);
-  options.push({ label: "Look at the plan", do: "Run nikos planning status, or open the planning dashboard with nikos serve, and show the person." });
-  if (!krs) options.unshift({ label: "Add a key result", do: "Run the nikos-planning plan playbook: ask what the period should change, and add the key results." });
-  const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
-  return { summary: `${plan.name ?? "This"} plan${plan.period ? ` (${plan.period})` : ""}: ${count(krs, "key result")}, ${count(bets, "bet")}`, options: options.slice(0, MAX) };
-}
-
-/** A group repo with several maps and none picked: each map's progress, and the group's rituals. */
+/** A code repo with several maps and none picked: each map's progress, and how to pick one. */
 function groupSuggestion(dir: string, maps: string[]): Suggestion {
   const ids = maps.map((d) => basename(d));
   const parts = ids.map((id) => {
@@ -88,7 +48,7 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
       return id;
     }
   });
-  const options = planningOptions(dir);
+  const options: Option[] = [];
   const problems = validateGroup(dir).errors.length;
   if (problems) options.unshift({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in maps/`, do: "Run nikos validate and fix each error it lists." });
   options.push({ label: "See each map's status", do: "Run nikos map status for each map and summarise what's done and approved, and what needs attention." });
@@ -96,20 +56,28 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
   return { summary: `${ids.length} story maps: ${parts.join(" · ")}`, options: options.slice(0, MAX) };
 }
 
-export function suggest(dir: string, mapId?: string): Suggestion {
+/**
+ * What to do next here. In a code repo, its story maps. In a planning repo, the area in --area (or the
+ * folder you're in), else the company.
+ */
+export function suggest(dir: string, mapId?: string, opts: { area?: string } = {}): Suggestion {
   const maps = mapDirs(dir);
   if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
   if (!maps.length && store().isDir(join(dir, "intent"))) {
     return { summary: "this repo keeps its story map in intent/", options: [{ label: "Move the story map into maps/", do: "Run nikos migrate maps, then commit the result." }] };
   }
   if (!maps.length) {
-    if (store().exists(join(dir, "planning", "plan.yaml"))) return planSuggestion(dir);
+    const repo = findPlanRepo(dir);
+    if (repo) {
+      const area = areaFor(repo, opts.area, dir) ?? findArea(repo, "company");
+      return suggestPlan(repo, area);
+    }
     return {
       summary: "nikOS isn't set up in this repo yet.",
       options: [
         { label: "Set up nikOS here", do: "Run the start playbook: nikos start, then the first story through to passing." },
         { label: "Map what this repo already does", do: "Run the map-existing playbook: draft the story map from the existing code, then prove what's there with scenarios." },
-        { label: "Join our company plan", do: "Ask which repo holds the company or department plan, then nikos join <repo path> (add --host for GitLab). It links this repo and shows the settings it inherits." },
+        { label: "Link this repo to a company plan", do: "Ask which repo holds the company's plan, then run nikos join <repo path> (add --host for GitLab). It lists this repo in that plan, on a branch for review." },
       ],
     };
   }
@@ -162,9 +130,6 @@ export function suggest(dir: string, mapId?: string): Suggestion {
   const ready = map.releases.filter(complete).at(-1);
   if (ready) add({ label: `Check release ${ready.number} is ready to ship`, do: `Run nikos release check ${ready.number} --run and report what it finds.` });
 
-  // The planning rituals, where the repo plans with nikOS: bets due for review, then stale key results.
-  planningOptions(repoRootOf(mapDir)).forEach(add);
-
   add({ label: "Add a story", do: "Ask what the person wants the product to do next, then add it with nikos story add and write its scenarios." });
   add({ label: "Look at the story map", do: "Run nikos map, or open the planning dashboard's map if it's running, and show the person." });
 
@@ -184,11 +149,12 @@ export function runSuggest(args: string[]): number {
   const i = args.indexOf("--dir");
   const dir = resolve(i >= 0 ? args[i + 1] : process.cwd());
   const mapId = mapFlag(args);
+  const area = args.indexOf("--in") >= 0 ? args[args.indexOf("--in") + 1] : undefined;
   // --brief is for a session-start hook: one line, and nothing at all outside a nikOS repo.
   if (args.includes("--brief")) {
-    if (!mapDirs(dir).length && !store().isDir(join(dir, "intent")) && !store().exists(join(dir, "planning", "plan.yaml"))) return 0;
+    if (!mapDirs(dir).length && !store().isDir(join(dir, "intent")) && !findPlanRepo(dir)) return 0;
     try {
-      const s = suggest(dir, mapId);
+      const s = suggest(dir, mapId, { area });
       console.log(`nikOS: ${s.summary}. Suggested next: ${s.options.map((o) => o.label).join(" · ")}.`);
       const stale = staleCliWarning();
       if (stale) console.log(`nikOS: ${stale}`);
@@ -198,7 +164,7 @@ export function runSuggest(args: string[]): number {
     return 0;
   }
   try {
-    const s = suggest(dir, mapId);
+    const s = suggest(dir, mapId, { area });
     if (args.includes("--json")) {
       console.log(JSON.stringify(s, null, 2));
       return 0;
