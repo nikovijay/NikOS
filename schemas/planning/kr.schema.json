@@ -3,7 +3,7 @@
   "$id": "https://nikos.tools/schemas/planning/kr.schema.json",
   "title": "nikOS Planning key result",
   "type": "object",
-  "required": ["id", "title", "owner", "baseline", "target", "original_target", "by", "checkins"],
+  "required": ["id", "title", "owner", "by", "checkins"],
   "additionalProperties": false,
   "properties": {
     "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
@@ -11,7 +11,22 @@
     "objective": { "type": "string", "minLength": 1 },
     "owner": { "type": "string", "minLength": 1 },
     "unit": { "type": "string" },
+    "kind": { "enum": ["number", "milestone"], "description": "number (the default) is a figure with a baseline and a target. milestone is a list of named steps with done dates." },
     "direction": { "enum": ["up", "down"], "description": "Which way the figure should move. Absent means up." },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "description": "A milestone's steps, in order. Only a milestone has them.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "done": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        }
+      }
+    },
     "baseline": { "type": "number" },
     "target": { "type": "number" },
     "original_target": { "type": "number" },
@@ -33,5 +48,18 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "milestone" } } },
+      "then": {
+        "required": ["steps"],
+        "not": { "anyOf": [{ "required": ["baseline"] }, { "required": ["target"] }, { "required": ["original_target"] }] }
+      },
+      "else": {
+        "required": ["baseline", "target", "original_target"],
+        "not": { "required": ["steps"] }
+      }
+    }
+  ]
 }

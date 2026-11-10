@@ -2,7 +2,7 @@
 // ones due, the key results gone stale, and any delivery warnings. The same shape as a story map's
 // suggestion, so every agent offers the same menu for the same situation.
 import type { Option, Suggestion } from "../commands/suggest.js";
-import { isStale } from "../planning/krs.js";
+import { isStale, kindOf } from "../planning/krs.js";
 import { count } from "../lib/project.js";
 import { betIds, krIds, loadBet, loadKr, today, type Area } from "../planning/model.js";
 import { planDeliveries } from "./delivery.js";
@@ -16,10 +16,19 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
   const file = areaFile(area) ?? {};
   const krs = krIds(area.dir);
   const bets = betIds(area.dir);
+  // A milestone is marked by its steps, not checked in, so its staleness is asked about apart from the figures.
   const stale = krs.flatMap((id) => {
     try {
       const k = loadKr(area.dir, id).data;
-      return isStale(k) ? [String(k.title ?? id)] : [];
+      return isStale(k) && kindOf(k) === "number" ? [String(k.title ?? id)] : [];
+    } catch {
+      return [];
+    }
+  });
+  const staleSteps = krs.flatMap((id) => {
+    try {
+      const k = loadKr(area.dir, id).data;
+      return isStale(k) && kindOf(k) === "milestone" ? [String(k.title ?? id)] : [];
     } catch {
       return [];
     }
@@ -45,6 +54,12 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
     options.push({
       label: stale.length === 1 ? `Check in on "${stale[0]}"` : `Check in on ${stale.length} key results`,
       do: "Ask for each key result's latest value, then record it with nikos plan checkin <kr-id> <value> --note \"<where it stands>\".",
+    });
+  }
+  if (staleSteps.length) {
+    options.push({
+      label: staleSteps.length === 1 ? `Ask about the steps of "${staleSteps[0]}"` : `Ask about the steps of ${staleSteps.length} milestones`,
+      do: "Ask which steps are done, and on what date, then mark each with nikos plan kr step <kr-id> \"<step>\" --date <date>.",
     });
   }
   if (warnings) {

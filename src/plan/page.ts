@@ -60,7 +60,15 @@ export function hrefOf(params: Record<string, string | undefined>): string {
 /** Progress as a share. Below 0 the figure has moved the wrong way, so the words say so rather than a minus sign. */
 const pct = (p: number) => (!Number.isFinite(p) ? "no progress yet" : p < 0 ? "moved the wrong way" : `${Math.round(p * 100)}%`);
 const checkinOf = (k: KrRef) => (k.latest ? `last ${k.latest.value} on ${k.latest.date}` : "no check-ins");
-const krMeta = (k: DashKr) => `${pct(k.progress)} toward ${k.target}${k.unit ? ` ${k.unit}` : ""}${k.direction === "down" ? " (should go down)" : ""}, ${checkinOf(k)}${k.stale ? " · stale" : ""}`;
+/** A milestone's steps done, as "2 of 5 steps done", and the names still to do. */
+const stepsOf = (k: KrRef) => `${k.steps.filter((s) => s.done).length} of ${k.steps.length} steps done`;
+const stepsLeft = (k: KrRef) => k.steps.filter((s) => !s.done).map((s) => s.name).join(", ");
+/** A key result's progress as the page says it: a share, or for a milestone its steps. */
+const shareOf = (k: KrRef) => (k.kind === "milestone" ? stepsOf(k) : pct(k.progress));
+const krMeta = (k: DashKr) =>
+  k.kind === "milestone"
+    ? `${stepsOf(k)}${stepsLeft(k) ? `. To do: ${stepsLeft(k)}` : ""}${k.stale ? " · stale" : ""}`
+    : `${pct(k.progress)} toward ${k.target}${k.unit ? ` ${k.unit}` : ""}${k.direction === "down" ? " (should go down)" : ""}, ${checkinOf(k)}${k.stale ? " · stale" : ""}`;
 
 /** A bet's delivery in words, as plan status says it: its own figures, or each bet below that has maps. */
 export function deliveryText(d: BetDelivery | undefined): string {
@@ -187,6 +195,13 @@ function quarters(page: AreaPage, state: PageState): string {
 /** The form that checks a key result in: the new value, and it saves on the area's nikos branch. Live page only. */
 function checkinForm(k: KrRef, live: boolean): string {
   if (!live) return "";
+  if (k.kind === "milestone") {
+    // A step is marked once, and its date is today unless one is given. A milestone with every step done has no form.
+    const todo = k.steps.filter((s) => !s.done);
+    if (!todo.length) return "";
+    const options = todo.map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join("");
+    return `<form class="save" data-op="kr.step" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>Step <select name="name" required>${options}</select></label><label>Done on <input name="date" type="date"></label><button type="submit">Mark step done</button><span class="save-msg" role="status"></span></form>`;
+  }
   return `<form class="save" data-op="checkin" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>New value <input name="value" type="number" step="any" required></label><button type="submit">Check in</button><span class="save-msg" role="status"></span></form>`;
 }
 
@@ -200,8 +215,8 @@ function betForm(page: AreaPage, live: boolean): string {
 function renderKeys(page: AreaPage, live: boolean): string {
   if (!page.krs.length) return "<p>None yet.</p>";
   const rows = page.krs.map((k) => {
-    const latest = k.latest ? `${k.latest.value} on ${k.latest.date}` : "no check-ins";
-    return `<tr><td><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span></td><td>${esc(k.objective)}</td><td>${esc(k.owner)}</td><td>${esc(pct(k.progress))}</td><td>${esc(String(k.target))}${k.unit ? ` ${esc(k.unit)}` : ""}</td><td>${esc(latest)}${k.stale ? " · stale" : ""}</td><td>${esc(k.by)}</td><td>${checkinForm(k, live)}</td></tr>`;
+    const latest = k.kind === "milestone" ? (stepsLeft(k) ? `To do: ${stepsLeft(k)}` : "All steps done") : k.latest ? `${k.latest.value} on ${k.latest.date}` : "no check-ins";
+    return `<tr><td><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span></td><td>${esc(k.objective)}</td><td>${esc(k.owner)}</td><td>${esc(shareOf(k))}</td><td>${k.kind === "milestone" ? "steps" : `${esc(String(k.target))}${k.unit ? ` ${esc(k.unit)}` : ""}`}</td><td>${esc(latest)}${k.stale ? " · stale" : ""}</td><td>${esc(k.by)}</td><td>${checkinForm(k, live)}</td></tr>`;
   });
   return `<table><thead><tr><th>Key result</th><th>Objective</th><th>Owner</th><th>Progress</th><th>Target</th><th>Latest</th><th>By</th><th>Check in</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
@@ -301,11 +316,11 @@ function renderLadder(page: AreaPage, state: PlanView): string {
 
   const aboveKrCells: Cell[] = page.aboveKrs.map((a) => ({
     key: `above-kr:${a.rel}/${a.id}`,
-    ...krLink(a.rel, a, `${a.rel} · ${pct(a.progress)} · ${a.owner}`, "above-kr"),
+    ...krLink(a.rel, a, `${a.rel} · ${shareOf(a)} · ${a.owner}`, "above-kr"),
   }));
   const krGroups = new Map<string, Cell[]>();
   for (const k of page.krs) {
-    const cell: Cell = { key: `kr:${k.id}`, ...krLink(k.rel, k, `${pct(k.progress)} ${quarterly(k) ? "this period" : "toward target"}`, "kr") };
+    const cell: Cell = { key: `kr:${k.id}`, ...krLink(k.rel, k, k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)} ${quarterly(k) ? "this period" : "toward target"}`, "kr") };
     krGroups.set(k.objective, [...(krGroups.get(k.objective) ?? []), cell]);
   }
   const krColumn: Group[] = [...krGroups].map(([head, cells]) => ({ ...(head ? { head } : {}), cells }));
@@ -426,7 +441,7 @@ function renderTimeline(page: AreaPage): string {
 
 function renderKrDrill(d: KrDrill, period?: string): string {
   const k = d.kr;
-  const head = `<h2>Key result: ${esc(k.title)}</h2><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(k.rel)} · ${esc(pct(k.progress))}, ${esc(checkinOf(k))}${k.stale ? " · stale" : ""}</p>`;
+  const head = `<h2>Key result: ${esc(k.title)}</h2><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(k.rel)} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>`;
   if (!d.areas.length) return `${head}<p>No bets aim at this key result yet.</p>`;
   const areas = d.areas.map((a) => {
     const items = a.bets.map((b: DrillBet) => {
@@ -505,7 +520,7 @@ document.addEventListener("submit", function (e) {
   var out = form.querySelector(".save-msg");
   var target = JSON.parse(form.getAttribute("data-target") || "{}");
   var args = {};
-  var fields = form.querySelectorAll("input[name]");
+  var fields = form.querySelectorAll("input[name], select[name]");
   for (var i = 0; i < fields.length; i++) {
     var f = fields[i];
     var v = f.value.trim();

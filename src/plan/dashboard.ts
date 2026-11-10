@@ -2,7 +2,7 @@
 // period, its key results and bets with their delivery, and the drill-downs from a key result or bet.
 // Everything here is read from the planning repo and its delivery copies. Nothing is written, and no
 // network is used. The server and the export both build their pages from these functions.
-import { directionOf, latest, isStale, progress } from "../planning/krs.js";
+import { directionOf, kindOf, latest, isStale, progress } from "../planning/krs.js";
 import { alignsList } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
@@ -48,6 +48,10 @@ export interface KrRef {
   progress: number;
   /** Which way the figure should move. Up unless the key result says down. */
   direction: "up" | "down";
+  /** number, or milestone: a list of steps, each done on a date or not yet. */
+  kind: "number" | "milestone";
+  /** A milestone's steps in order, with the date each was done (null while not). Empty for a number. */
+  steps: { name: string; done: string | null }[];
   latest: { value: number; date: string } | null;
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
@@ -313,6 +317,8 @@ function krRef(area: Area, id: string, on: string): KrRef {
     ...(d.period !== undefined ? { period: String(d.period) } : {}),
     progress: progress(d),
     direction: directionOf(d),
+    kind: kindOf(d),
+    steps: (d.steps ?? []).map((s: any) => ({ name: String(s.name), done: s.done ? String(s.done) : null })),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(d, on),
     version: kr.hash,

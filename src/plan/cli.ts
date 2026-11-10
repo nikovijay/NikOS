@@ -7,7 +7,7 @@ import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
 import { parseArgs } from "../lib/args.js";
-import { checkIn, directionOf, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
+import { checkIn, directionOf, isStale, kindOf, latest, markStep, newKr, reviseTarget } from "../planning/krs.js";
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
@@ -33,7 +33,9 @@ Key results and bets
   plan kr new <id>     Add a key result (--in <area>, --title, --owner, --baseline, --target,
                        --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to,
                        --direction up|down for a figure that should go down, such as days to close)
+                       A milestone has steps instead: --kind milestone --step "<name>" (repeat --step)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
+  plan kr step <id> "<name>"    Mark one step of a milestone done (--date, default today)
   plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date)
   plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
                        --also, --aligns-to, --starts, --deadline, --confidence, --evidence)
@@ -57,12 +59,25 @@ Without it, the area is the folder you're in.`;
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const num = (s: string | undefined) => (s === undefined || s.trim() === "" ? NaN : Number(s));
 
+/** A milestone's steps in words: "1 of 3 steps done: Map steps on 2026-11-10. To do: Pilot, Roll out". */
+function stepsText(k: any): string {
+  const steps: { name: string; done?: string }[] = k.steps ?? [];
+  const did = steps.filter((s) => s.done).map((s) => `${s.name} on ${s.done}`);
+  const todo = steps.filter((s) => !s.done).map((s) => s.name);
+  return `${steps.length - todo.length} of ${steps.length} steps done${did.length ? `: ${did.join(", ")}` : ""}${todo.length ? `. To do: ${todo.join(", ")}` : ""}`;
+}
+
 function krLine(area: Area, id: string): string {
   const k = loadKr(area.dir, id).data;
   const last = latest(k);
   const unit = k.unit ?? "";
   const u = unit === "" || unit === "%" || unit === "$" ? unit : ` ${unit}`;
   const aligns = alignsList(k.aligns_to);
+  if (kindOf(k) === "milestone") {
+    return `    ${id} — ${k.title}: ${stepsText(k)} (by ${k.by})${
+      area.level === "department" && k.period ? ` · ${k.period}` : ""
+    }${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${isStale(k) ? " · stale" : ""}`;
+  }
   return `    ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${
     area.level === "department" && k.period ? ` · ${k.period}` : ""
   }${directionOf(k) === "down" ? " · should go down" : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${isStale(k) ? " · stale" : ""}`;
@@ -147,6 +162,18 @@ export function planStatus(repo: string, area?: Area, deliveries: PlanDeliveries
 function keyResultJson(area: Area, id: string) {
   const k = loadKr(area.dir, id).data;
   const last = latest(k);
+  if (kindOf(k) === "milestone") {
+    return {
+      id,
+      title: k.title,
+      kind: "milestone",
+      by: k.by,
+      ...(k.period ? { period: k.period } : {}),
+      steps: (k.steps ?? []).map((s: any) => ({ name: s.name, done: s.done ?? null })),
+      stale: isStale(k),
+      aligns_to: alignsList(k.aligns_to),
+    };
+  }
   return {
     id,
     title: k.title,
@@ -250,6 +277,8 @@ export async function runPlanRepo(args: string[]): Promise<number> {
               unit: opt("unit"),
               objective: opt("objective"),
               direction: opt("direction") as "up" | "down" | undefined,
+              kind: opt("kind") as "number" | "milestone" | undefined,
+              steps: all("step"),
               alignsTo: all("aligns-to"),
               staleAfterDays: opt("stale-after") ? Number(opt("stale-after")) : undefined,
             },
@@ -260,6 +289,10 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         }
         if (sub === "target" && id && extra !== undefined) {
           console.log(`Wrote ${reviseTarget(areaHolding(need(), id, "key result").dir, id, num(extra))}`);
+          return 0;
+        }
+        if (sub === "step" && id && extra !== undefined) {
+          console.log(`Wrote ${markStep(areaHolding(need(), id, "key result").dir, id, extra, opt("date"))}`);
           return 0;
         }
         break;

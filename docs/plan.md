@@ -48,6 +48,15 @@ planning/
   way both ways, so at 9 it is half way. Past the baseline the page says the
   figure "moved the wrong way" rather than showing a minus sign. A direction
   that points against the target's side is a validate warning, not an error.
+- **A key result can be a milestone.** `--kind milestone` makes a key result
+  of named steps instead of a figure: `--step "Map steps"`, repeated for each
+  step, fixed when it's made. Nothing else is set (no baseline, target or
+  check-ins). `nikos plan kr step close-process "Map steps" --date 2026-11-10`
+  marks one step done, once: its date stays as first written, and a step name
+  that doesn't exist is refused. The page shows "2 of 3 steps done", and the
+  step form marks the next one. A milestone is stale only when a step was done
+  and none has been since `stale_after_days` (default 14). With no step done
+  it isn't stale.
 - **Ids are unique within the company.** No two areas, key results or bets
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
@@ -69,6 +78,8 @@ nikos plan kr new revenue --in company --title "Annual recurring revenue" --owne
 nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
 nikos plan checkin close-days 10 --note "First week of auto-match"
+nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1
+nikos plan kr step close-process "Map steps" --date 2026-11-10
 nikos plan bet review faster-checkout continue --why "On track"
 nikos plan status --in finance
 nikos plan status --json

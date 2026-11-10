@@ -31,6 +31,9 @@ const table: [string, unknown[]][] = [
   ["krFieldProblems", [{ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", direction: "sideways" }, "new"]],
   ["krFieldProblems", [{ direction: "down" }, "edit"]],
   ["krFieldProblems", [{ direction: "" }, "edit"]],
+  ["krFieldProblems", [{ title: "A", owner: "Ana", by: "2027-01-01", kind: "milestone" }, "new"]],
+  ["krFieldProblems", [{ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", kind: "sideways" }, "new"]],
+  ["krFieldProblems", [{ kind: "milestone" }, "edit"]],
   ["betFieldProblems", [{ outcome: "won" }]],
   ["betFieldProblems", [{ owner: "", review_on: "2026-01-02", confidence: "huge" }]],
 ];
@@ -58,6 +61,10 @@ describe("shared rules", () => {
     expect(rules.krFieldProblems({ baseline: 1 }, "edit")).toEqual(["'baseline' can't be edited here"]);
     expect(rules.krFieldProblems({ direction: "sideways" }, "edit")).toEqual(["direction is up or down"]);
     expect(rules.krFieldProblems({ direction: "down" }, "edit")).toEqual([]);
+    // A milestone needs no baseline or target; its steps are checked where the key result is made.
+    expect(rules.krFieldProblems({ title: "A", owner: "Ana", by: "2027-01-01", kind: "milestone" }, "new")).toEqual([]);
+    expect(rules.krFieldProblems({ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", kind: "sideways" }, "new")).toEqual(["kind is number or milestone"]);
+    expect(rules.krFieldProblems({ kind: "milestone" }, "edit")).toEqual(["'kind' can't be edited here"]);
     expect(rules.betFieldProblems({ outcome: "won" })).toEqual(["'outcome' can't be edited here"]);
     expect(rules.dateProblem("2026-02-30")).toBeTruthy();
     expect(rules.dateProblem("2026-13-40")).toBeTruthy();

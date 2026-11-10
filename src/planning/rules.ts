@@ -62,6 +62,7 @@ export function titleProblem(label: string, v: unknown): string | undefined {
 export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "edit"): string[] {
   const out: string[] = [];
   const editable = ["title", "owner", "by", "unit", "objective", "stale_after_days", "direction"];
+  // kind and steps are not here: a key result's kind is fixed at creation, and only kr step marks a step.
   if (mode === "edit") {
     for (const k of Object.keys(fields)) if (editable.indexOf(k) < 0) out.push("'" + k + "' can't be edited here");
   }
@@ -73,7 +74,10 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
   if (mode === "new" || has("owner")) {
     if (typeof fields.owner !== "string" || fields.owner.trim() === "") out.push("A key result needs an owner (--owner)");
   }
-  if (mode === "new") {
+  // A milestone has steps, not a baseline and a target: only a number key result needs those.
+  const kind = fields.kind;
+  if (kind !== undefined && kind !== null && kind !== "" && kind !== "number" && kind !== "milestone") out.push("kind is number or milestone");
+  if (mode === "new" && kind !== "milestone") {
     if (typeof fields.baseline !== "number" || !isFinite(fields.baseline) || typeof fields.target !== "number" || !isFinite(fields.target)) {
       out.push("A key result needs a numeric --baseline and --target");
     }
