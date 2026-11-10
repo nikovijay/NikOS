@@ -45,7 +45,8 @@ See and check it
                    is a warning: validate still passes
   plan refresh     Read each code repo in planning/repos.yaml, read-only, and keep its delivery copy
   plan serve       Open the planning dashboard in your browser, one area at a time (--at <area>
-                   to start on one, --port, --offline to skip the refresh, --export <file> for one page)
+                   to start on one, --port, --offline to skip the refresh). --export <file> writes
+                   one offline page: the --at area's, or every area's when there is no --at
   plan settings [set <key> <value>]   The settings for an area, and where each comes from (--in)
 
 --in takes company, departments/finance, groups/payments or teams/WEB, or just the id.

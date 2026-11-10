@@ -9,8 +9,9 @@ import type { Runner } from "../lib/git.js";
 import type { Area } from "../planning/model.js";
 import { areaPage, drillBet, drillKr, upChain, resolveAt, type AreaPage } from "./dashboard.js";
 import { planDeliveries, type PlanDeliveries } from "./delivery.js";
-import { renderPlanPage, viewOf, type PageState } from "./page.js";
-import { areaHolding, findArea } from "./repo.js";
+import { keyOf, linksIn, offlineDocument, type OfflinePage } from "./offline.js";
+import { renderPlanBody, renderPlanPage, planTitle, viewOf, type PageState } from "./page.js";
+import { areaHolding, findArea, listAreas } from "./repo.js";
 import { refreshDelivery } from "./refresh.js";
 
 export interface PlanServeOptions {
@@ -130,12 +131,30 @@ export async function runPlanServe(repo: string, opts: PlanServeOptions = {}): P
   });
 }
 
-/** `nikos plan serve --export <file>`: one area's page as a file, the area --at names or else the company. */
+/**
+ * `nikos plan serve --export <file>`: the dashboard as one offline file. With --at, the file holds that area's
+ * pages only, and links to other areas say they aren't in it. Without --at, it holds every area's pages.
+ */
 export async function exportPlanPage(repo: string, file: string, opts: { offline?: boolean; at?: string } = {}): Promise<{ wrote: string; notices: string[] }> {
   const at = opts.at === undefined ? undefined : findArea(repo, opts.at).rel;
   const notices = refreshNotices(repo, opts.offline);
+  const deliveries = planDeliveries(repo);
+  // Each page is built from the links the one before it carries, so every link in the file has its page.
+  const seeds = at ? [keyOf({ at })] : [keyOf({ at: "company" }), ...listAreas(repo).map((a) => keyOf({ at: a.rel }))];
+  const pages: Record<string, OfflinePage> = {};
+  const queue = [...seeds];
+  while (queue.length) {
+    const key = queue.shift()!;
+    if (key in pages) continue;
+    const { page, state } = pageOf(repo, new URLSearchParams(key), notices, deliveries);
+    if (at && page.plan.rel !== at) continue;
+    pages[key] = { title: planTitle(page), body: renderPlanBody(page, state, { offline: true }) };
+    queue.push(...linksIn(pages[key].body));
+  }
+  // The pages name each code repo they read, so a file that has any is one to share with care.
+  const names = deliveries.repos.map((r) => r.repo);
+  if (names.length) notices.push(`This page names the code repos ${names.join(", ")}. Share it only with people allowed to see them.`);
   const out = resolve(file);
-  const { page, state } = pageOf(repo, new URLSearchParams(at ? { at } : {}), notices);
-  writeFileSync(out, renderPlanPage(page, state));
+  writeFileSync(out, offlineDocument(pages, seeds[0]!));
   return { wrote: out, notices };
 }

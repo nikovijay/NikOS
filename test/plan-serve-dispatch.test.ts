@@ -24,7 +24,7 @@ async function run(args: string[]) {
 const target = () => join(mkdtempSync(join(tmpdir(), "nikos-serve-out-")), "page.html");
 
 describe("nikos plan serve from the command line", () => {
-  it("exports one area's page to a file, offline, with no form or script in it", async () => {
+  it("exports one area's page to a file, offline, with no form and no request in it", async () => {
     const repo = acmePlan();
     const out = target();
     const r = await run(["serve", "--dir", repo, "--at", "departments/finance", "--export", out, "--offline"]);
@@ -33,7 +33,9 @@ describe("nikos plan serve from the command line", () => {
     const html = readFileSync(out, "utf8");
     expect(html).toContain("Close days");
     expect(html).not.toContain("<form");
-    expect(html).not.toContain("<script");
+    // The page's own script only moves between the pages in the file; it asks for nothing.
+    expect(html).not.toContain("<script src");
+    expect(html).not.toContain("fetch(");
   });
 
   it("exports the company's page when no --at is given", async () => {

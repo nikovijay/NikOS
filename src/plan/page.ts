@@ -83,7 +83,7 @@ function betLine(b: BetRef | DashBet): string {
   return `<li>${betLink(b)} — ${esc(b.outcome)}${owner}. Delivery: ${esc(deliveryText(b.delivery))}</li>`;
 }
 
-const STYLE = `:root{--bg:#fbfbf8;--fg:#1d1d1b;--muted:#6b6b66;--line:#dcdcd4;--card:#ffffff;--purple:#5b3fb0;--purple-bg:#efeafb;--green:#23663f;--green-bg:#e4f2e8;--grey:#5d5d58;--grey-bg:#eeeeea;--notice:#fff4d6;--notice-fg:#4a3800;--link:#2b59c3}
+export const STYLE = `:root{--bg:#fbfbf8;--fg:#1d1d1b;--muted:#6b6b66;--line:#dcdcd4;--card:#ffffff;--purple:#5b3fb0;--purple-bg:#efeafb;--green:#23663f;--green-bg:#e4f2e8;--grey:#5d5d58;--grey-bg:#eeeeea;--notice:#fff4d6;--notice-fg:#4a3800;--link:#2b59c3}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#171716;--fg:#ecebe6;--muted:#a3a39b;--line:#3a3a36;--card:#21211f;--purple:#c2b2f5;--purple-bg:#2d2840;--green:#94d6aa;--green-bg:#1f3428;--grey:#b8b8b0;--grey-bg:#2a2a27;--notice:#3a3014;--notice-fg:#ffe7a3;--link:#9bb8ff}}
 :root[data-theme="dark"]{--bg:#171716;--fg:#ecebe6;--muted:#a3a39b;--line:#3a3a36;--card:#21211f;--purple:#c2b2f5;--purple-bg:#2d2840;--green:#94d6aa;--green-bg:#1f3428;--grey:#b8b8b0;--grey-bg:#2a2a27;--notice:#3a3014;--notice-fg:#ffe7a3;--link:#9bb8ff}
 body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:1rem;line-height:1.5;box-sizing:border-box}
@@ -134,13 +134,17 @@ function altitudes(page: AreaPage): string {
   }).join("");
 }
 
-/** The area picker for the chosen altitude: choosing an area goes to its page. */
-function picker(page: AreaPage): string {
+/**
+ * The area picker for the chosen altitude: choosing an area goes to its page. The offline export has no
+ * script of its own here: its page moves the picker to the next page itself.
+ */
+function picker(page: AreaPage, offline: boolean): string {
   const options = page.tree
     .filter((n) => n.level === page.plan.level)
     .map((n) => `<option value="${esc(hrefOf({ at: n.rel }))}"${n.rel === page.plan.rel ? " selected" : ""}>${esc(n.level === "team" ? `${n.name} (${n.id})` : n.name)}</option>`)
     .join("");
-  return `<label>${esc(LEVEL_LABEL[page.plan.level])} <select onchange="location.href=this.value">${options}</select></label>`;
+  const onchange = offline ? "" : ' onchange="location.href=this.value"';
+  return `<label>${esc(LEVEL_LABEL[page.plan.level])} <select${onchange}>${options}</select></label>`;
 }
 
 /** The breadcrumb: Company, then each area above this one. Each part links to its area. */
@@ -373,8 +377,13 @@ function renderBetDrill(d: BetDrill, up: UpChain): string {
   return `${head}${maps}<h2>Up the chain</h2>${chain}${below}`;
 }
 
-/** One area's page. The view shows the area; a drill-down (kr or bet) replaces the view with its page. */
-export function renderPlanPage(page: AreaPage, state: PageState): string {
+/** What an offline export changes: the picker's own script, which the export's page does instead. */
+export interface PlanRenderOptions {
+  offline?: boolean;
+}
+
+/** One area's page, as the content of its body. The view shows the area; a drill-down (kr or bet) replaces it. */
+export function renderPlanBody(page: AreaPage, state: PageState, opts: PlanRenderOptions = {}): string {
   const name = page.plan.name;
   const period = page.period ?? page.plan.period;
   const views = viewsFor(page.plan.level);
@@ -397,13 +406,9 @@ export function renderPlanPage(page: AreaPage, state: PageState): string {
   const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current }))}">Back to ${esc(name)}</a></p>` : "";
   const reads = page.repos.map((r) => `<li>${esc(repoLabel(r))}: ${esc(r.age)}</li>`);
   const list = (items: string[]) => (items.length ? `<ul>${items.join("")}</ul>` : "<p>None yet.</p>");
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(name)} · nikOS plan</title><style>${STYLE}</style></head>
-<body>
-<header class="top">
+  return `<header class="top">
 <nav class="altitudes" aria-label="Altitude">${altitudes(page)}</nav>
-<div>${picker(page)}</div>
+<div>${picker(page, !!opts.offline)}</div>
 </header>
 <nav class="crumbs" aria-label="Breadcrumb">${crumbs(page)}</nav>
 <h1>${esc(name)} <span class="id">${esc(LEVEL_LABEL[page.plan.level])}${period ? ` · ${esc(period)}` : ""}</span></h1>
@@ -416,6 +421,20 @@ ${body}
 ${list(reads)}
 ${page.warnings.length ? `<h2>Warnings</h2>${list(page.warnings.map((w) => esc(w.message)))}` : ""}
 ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map((p) => esc(p)))}` : ""}
-</body></html>
+`;
+}
+
+/** The page title: the area's name, then the product. */
+export function planTitle(page: AreaPage): string {
+  return `${esc(page.plan.name)} · nikOS plan`;
+}
+
+/** One area's page as a whole HTML document, for the dashboard server. */
+export function renderPlanPage(page: AreaPage, state: PageState): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${planTitle(page)}</title><style>${STYLE}</style></head>
+<body>
+${renderPlanBody(page, state)}</body></html>
 `;
 }
