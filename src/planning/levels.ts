@@ -32,12 +32,13 @@ export function krTargetProblems(root: string, refs: string[]): string[] {
   return area ? areaKrTargetProblems(area, refs) : [];
 }
 
-/** A direction that points against the target's side: 'down' with the target above the baseline. A warning, since a figure may still be right. */
-export function directionProblem(kr: any): string | undefined {
+/** A direction that points against the target's side: 'down' with the target above the baseline. A warning, since a figure may still be right. Says how to fix it. */
+export function directionProblem(kr: any, id: string): string | undefined {
   if (kr.target === kr.baseline || typeof kr.target !== "number" || typeof kr.baseline !== "number") return undefined;
   const above = kr.target > kr.baseline;
-  if (kr.direction === "down" && above) return `direction is down, but the target ${kr.target} is above the baseline ${kr.baseline}`;
-  if (kr.direction !== "down" && !above) return `direction is up, but the target ${kr.target} is below the baseline ${kr.baseline}`;
+  const fix = (dir: string) => `Set it with nikos plan kr direction ${id} ${dir}, or move the target with nikos plan kr target ${id} <value>`;
+  if (kr.direction === "down" && above) return `direction is down, but the target ${kr.target} is above the baseline ${kr.baseline}. ${fix("up")}`;
+  if (kr.direction !== "down" && !above) return `direction is up, but the target ${kr.target} is below the baseline ${kr.baseline}. ${fix("down")}`;
   return undefined;
 }
 
@@ -60,7 +61,7 @@ export function levelIssues(root: string): PlanningIssue[] {
     try {
       const kr = loadKr(root, id);
       for (const m of areaAlignmentProblems(area, alignsList(kr.data?.aligns_to), "kr")) issues.push({ file: kr.file, message: m });
-      const direction = directionProblem(kr.data ?? {});
+      const direction = directionProblem(kr.data ?? {}, id);
       if (direction) issues.push({ file: kr.file, message: direction, warning: true });
       for (const m of laddersIssues("kr", id, kr.data ?? {}, area)) issues.push({ file: kr.file, ...m });
     } catch {

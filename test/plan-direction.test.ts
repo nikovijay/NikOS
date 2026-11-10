@@ -2,7 +2,7 @@
 // progress formula is the same both ways. Direction only changes the words, and a validate warning when
 // it points against the target's side. Text alone never feeds a figure, and that is not tested here.
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runPlanRepo, planIssues } from "../src/plan/cli";
@@ -94,10 +94,14 @@ describe("a key result that should go down", () => {
     await run(repo, "kr", "new", "close-days", "--in", "finance", ...flat(CLOSE_DAYS));
     const issues = planIssues(repo);
     const warnings = issues.filter((i) => i.warning).map((i) => i.message);
-    expect(warnings).toEqual(["direction is down, but the target 9 is above the baseline 4", "direction is up, but the target 7 is below the baseline 11"]);
+    // Each warning says the command that fixes it: the direction, or the target.
+    expect(warnings).toEqual([
+      "direction is down, but the target 9 is above the baseline 4. Set it with nikos plan kr direction backlog up, or move the target with nikos plan kr target backlog <value>",
+      "direction is up, but the target 7 is below the baseline 11. Set it with nikos plan kr direction close-days down, or move the target with nikos plan kr target close-days <value>",
+    ]);
     const validate = await run(repo, "validate");
     expect(validate.code).toBe(0);
-    expect(validate.out).toContain("! planning/departments/finance/krs/backlog.yaml: direction is down, but the target 9 is above the baseline 4");
+    expect(validate.out).toContain("! planning/departments/finance/krs/backlog.yaml: direction is down, but the target 9 is above the baseline 4. Set it with nikos plan kr direction backlog up");
     expect(validate.out).toContain("✓ The plan for 2027 is valid");
   });
 
@@ -139,3 +143,37 @@ function flat(fields: Record<string, unknown>): string[] {
   for (const [k, v] of Object.entries(fields)) out.push(`--${k}`, String(v));
   return out;
 }
+
+describe("the direction command, and the wording for a figure that moved the wrong way", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("plan kr direction sets it, up is not written, and a word that is neither up nor down is refused", async () => {
+    const repo = acme();
+    const file = join(repo, "planning/departments/finance/krs/close-days.yaml");
+    await run(repo, "kr", "new", "close-days", "--in", "finance", ...flat(CLOSE_DAYS));
+    // Without a direction the figure goes up, and a target below the baseline is warned about, with the command that fixes it.
+    expect(planIssues(repo).filter((i) => i.warning)).toHaveLength(1);
+    expect((await run(repo, "kr", "direction", "close-days", "down")).code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("direction: down");
+    expect(planIssues(repo).filter((i) => i.warning)).toEqual([]);
+    expect((await run(repo, "kr", "direction", "close-days", "up")).code).toBe(0);
+    expect(readFileSync(file, "utf8")).not.toContain("direction");
+    const bad = await run(repo, "kr", "direction", "close-days", "sideways");
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("direction is up or down");
+    expect(readFileSync(file, "utf8")).not.toContain("direction");
+  });
+
+  it("status says it moved the wrong way once a figure that should go down rises past the baseline", async () => {
+    const repo = acme();
+    await run(repo, "kr", "new", "close-days", "--in", "finance", "--direction", "down", ...flat(CLOSE_DAYS));
+    await run(repo, "checkin", "close-days", "12");
+    expect((await run(repo, "status", "--in", "finance")).out).toContain("12 on 2026-11-10 (baseline 11, target 7 by 2027-03-31) · 2027-Q1 · should go down · moved the wrong way");
+    await run(repo, "checkin", "close-days", "9");
+    expect((await run(repo, "status", "--in", "finance")).out).not.toContain("moved the wrong way");
+  });
+});

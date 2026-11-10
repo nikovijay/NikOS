@@ -439,9 +439,12 @@ function renderTimeline(page: AreaPage): string {
   return `<table><thead><tr><th>Date</th><th>What</th><th>Item</th><th>Area</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
+/** A text-only item's line on its own drill-down: what it says, and that no figure counts it. Nothing once a link backs it. */
+const notLinkedLine = (text?: string) => (text ? `<p class="meta">Not linked yet: "${esc(text)}". It counts in no figure.</p>` : "");
+
 function renderKrDrill(d: KrDrill, period?: string): string {
   const k = d.kr;
-  const head = `<h2>Key result: ${esc(k.title)}</h2><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(k.rel)} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>`;
+  const head = `<h2>Key result: ${esc(k.title)}</h2><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(k.rel)} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>${notLinkedLine(k.laddersUp)}`;
   if (!d.areas.length) return `${head}<p>No bets aim at this key result yet.</p>`;
   const areas = d.areas.map((a) => {
     const items = a.bets.map((b: DrillBet) => {
@@ -455,7 +458,7 @@ function renderKrDrill(d: KrDrill, period?: string): string {
 
 function renderBetDrill(d: BetDrill, up: UpChain, period?: string): string {
   const b = d.bet;
-  const head = `<h2>Bet: ${esc(b.id)}</h2><p>${esc(b.outcome)}</p><p class="meta">In ${esc(b.rel)}${b.owner ? ` · Owner: ${esc(b.owner)}` : ""}</p><p>Delivery: ${esc(deliveryText(b.delivery))}</p>`;
+  const head = `<h2>Bet: ${esc(b.id)}</h2><p>${esc(b.outcome)}</p><p class="meta">In ${esc(b.rel)}${b.owner ? ` · Owner: ${esc(b.owner)}` : ""}</p><p>Delivery: ${esc(deliveryText(b.delivery))}</p>${notLinkedLine(b.laddersUp)}`;
   const maps = d.maps.length ? `<h3>Story maps that deliver it</h3><ul>${d.maps.map((m) => `<li>${esc(mapText(m))}</li>`).join("")}</ul>` : "";
   const chain = up.levels.length
     ? up.levels.map((lvl) => `<h3>${lvl.depth === 1 ? "Aligns to" : `Level ${lvl.depth} up`}</h3><ul>${lvl.bets.map((x) => `<li>${betLink(x, period)} (${esc(x.rel)}) — ${esc(x.outcome)}</li>`).join("")}</ul>`).join("")

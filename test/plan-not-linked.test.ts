@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { areaPage, drillKr } from "../src/plan/dashboard";
+import { areaPage, drillBet, drillKr, upChain } from "../src/plan/dashboard";
 import { planDeliveries } from "../src/plan/delivery";
 import { renderPlanBody, renderPlanPage, viewOf } from "../src/plan/page";
 import { exportPlanPage } from "../src/plan/serve";
@@ -166,5 +166,44 @@ describe("suggest offers to link text-only items", () => {
     expect(s.options.length).toBe(4);
     expect(labels.at(-1)).toBe("Look at the plan");
     expect(labels[0]).toMatch(/^Review /);
+  });
+});
+
+describe("not linked yet, on a drill-down, in every quarter, and on a team's ladder", () => {
+  it("a text-only key result's drill-down says what it ladders up to, and that no figure counts it", async () => {
+    const repo = acme();
+    await world(repo);
+    const drill = drillKr(repo, "pay-ledger", planDeliveries(repo, NOW), NOW);
+    expect(drill).toBeDefined();
+    const html = renderPlanBody(page(repo, "departments/finance", "2027-Q1"), { view: viewOf(new URLSearchParams("view=okrs"), "department"), drill: { kind: "kr", kr: drill! } }, { offline: true });
+    expect(html).toContain('Not linked yet: "reconciliation revenue faster". It counts in no figure.');
+  });
+
+  it("a text-only bet's drill-down says what it ladders up to, instead of 'Nothing above it'", async () => {
+    const repo = acme();
+    await world(repo);
+    const bet = drillBet(repo, "checkout-first", planDeliveries(repo, NOW));
+    const up = upChain(repo, "checkout-first", planDeliveries(repo, NOW));
+    expect(bet && up).toBeTruthy();
+    const html = renderPlanBody(page(repo, "company"), { view: viewOf(new URLSearchParams("view=okrs"), "company"), drill: { kind: "bet", bet: bet!, up: up! } }, { offline: true });
+    expect(html).toContain('Not linked yet: "checkout work for revenue". It counts in no figure.');
+    expect(html).toContain("Nothing above it.");
+  });
+
+  it("lists a text-only key result in every quarter, as plan status and the suggestion do, not only the quarter shown", async () => {
+    const repo = acme();
+    await world(repo);
+    await run(repo, "kr", "new", "pay-next", "--in", "finance", "--period", "2027-Q2", "--title", "Next ledger", "--owner", "Mira", "--baseline", "0", "--target", "9", "--ladders-up", "next quarter ledger");
+    expect(page(repo, "departments/finance", "2027-Q2").unlinked.map((u) => u.id).sort()).toEqual(["pay-ledger", "pay-next"]);
+    expect(suggest(repo, undefined, { area: "departments/finance" }).options.map((o) => o.label)).toContain("Link 2 items to what they ladder up to");
+  });
+
+  it("a team's bet draws its lines: one to the key result it aims at, and one to the bet it aligns to", async () => {
+    const repo = acme();
+    await world(repo);
+    expect(await run(repo, "bet", "new", "more-checks", "--in", "WEB", "--owner", "Sam", "--hypothesis", "More checks", "--review", "2027-02-14", "--kr", "revenue", "--aligns-to", "checkout-first")).toBe(0);
+    const html = bodyOf(repo, "teams/WEB", "ladder");
+    expect(html.match(/<path /g)?.length).toBe(2);
+    expect(html).toContain("more-checks");
   });
 });

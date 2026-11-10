@@ -55,7 +55,7 @@
       "if": { "required": ["kind"], "properties": { "kind": { "const": "milestone" } } },
       "then": {
         "required": ["steps"],
-        "not": { "anyOf": [{ "required": ["baseline"] }, { "required": ["target"] }, { "required": ["original_target"] }] }
+        "not": { "anyOf": [{ "required": ["baseline"] }, { "required": ["target"] }, { "required": ["original_target"] }, { "required": ["direction"] }] }
       },
       "else": {
         "required": ["baseline", "target", "original_target"],

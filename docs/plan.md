@@ -48,6 +48,7 @@ planning/
   way both ways, so at 9 it is half way. Past the baseline the page says the
   figure "moved the wrong way" rather than showing a minus sign. A direction
   that points against the target's side is a validate warning, not an error.
+  Change the direction with `nikos plan kr direction <id> up|down`.
 - **A key result can be a milestone.** `--kind milestone` makes a key result
   of named steps instead of a figure: `--step "Map steps"`, repeated for each
   step, fixed when it's made. Nothing else is set (no baseline, target or
@@ -65,7 +66,7 @@ planning/
   validate warns. `nikos plan ladder` lists the unlinked ones. `nikos plan
   ladder <id>` ranks what it could link to by the words it shares with the
   text. A key result can link to key results above it, and a bet to key
-  results at its level or above, or to bets above it. `nikos plan ladder
+  results in the company or a department, or to bets above it. `nikos plan ladder
   accept <id> <candidate>` writes the link, once, through the same checks as
   a hand-written one, and clears the text. `nikos plan ladder clear <id>`
   drops the text when no link is wanted. Nothing is accepted without the
@@ -74,7 +75,7 @@ planning/
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
 - **Links go up.** A key result aligns to key results above it, and a bet to
-  bets above it. A bet aims at key results at its own level or above. A team's
+  bets above it. A bet aims at any company or department key result, whatever its level. A team's
   bets may align to any department's or group's bet.
 - **Settings come down the folders.** The company's are in `nikos.settings.yaml` at the planning repo's root.
   Each department, group or team can change what nobody above it locked. A code
@@ -88,7 +89,7 @@ nikos plan add department finance --name "Finance" --owner Mira
 nikos plan add group payments --name "Payments" --department finance
 nikos plan add team WEB --name "Checkout web" --home payments
 nikos plan kr new revenue --in company --title "Annual recurring revenue" --owner Niko --baseline 0 --target 60000 --unit USD
-nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --aligns-to revenue
+nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --direction down --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
 nikos plan checkin close-days 10 --note "First week of auto-match"
 nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1

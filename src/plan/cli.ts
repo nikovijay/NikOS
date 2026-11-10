@@ -7,7 +7,7 @@ import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
 import { parseArgs } from "../lib/args.js";
-import { checkIn, directionOf, isStale, kindOf, latest, markStep, newKr, reviseTarget } from "../planning/krs.js";
+import { checkIn, directionOf, editKr, isStale, kindOf, latest, markStep, newKr, progress, reviseTarget } from "../planning/krs.js";
 import { alignsList, laddersOf, linkedOf, planningIssues } from "../planning/levels.js";
 import { acceptLadder, clearLadder, findItem, ladderFor, unlinkedItems } from "../planning/ladder.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
@@ -37,6 +37,7 @@ Key results and bets
                        A milestone has steps instead: --kind milestone --step "<name>" (repeat --step)
                        --ladders-up "<text>" says what it ladders up to until a link exists (not for a company key result)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
+  plan kr direction <id> up|down   Change which way a key result should move
   plan kr step <id> "<name>"    Mark one step of a milestone done (--date, default today)
   plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date). Not for a milestone: use plan kr step
   plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
@@ -98,7 +99,7 @@ function krLine(area: Area, id: string): string {
   }
   return `    ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${
     area.level === "department" && k.period ? ` · ${k.period}` : ""
-  }${directionOf(k) === "down" ? " · should go down" : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(k, "kr")}${isStale(k) ? " · stale" : ""}`;
+  }${directionOf(k) === "down" ? " · should go down" : ""}${progress(k) < 0 ? " · moved the wrong way" : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(k, "kr")}${isStale(k) ? " · stale" : ""}`;
 }
 
 function betLine(area: Area, id: string): string {
@@ -313,6 +314,10 @@ export async function runPlanRepo(args: string[]): Promise<number> {
           console.log(`Wrote ${reviseTarget(areaHolding(need(), id, "key result").dir, id, num(extra))}`);
           return 0;
         }
+        if (sub === "direction" && id && extra) {
+          console.log(`Wrote ${editKr(areaHolding(need(), id, "key result").dir, id, { direction: extra })}`);
+          return 0;
+        }
         if (sub === "step" && id && extra !== undefined) {
           console.log(`Wrote ${markStep(areaHolding(need(), id, "key result").dir, id, extra, opt("date"))}`);
           return 0;
@@ -389,7 +394,8 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         if (has("json")) console.log(JSON.stringify(r, null, 2));
         else {
           const lines = [`${r.id} (${r.kind}, ${r.rel})${r.text ? ` ladders up to "${r.text}"` : ": no ladders_up text"}${r.linked ? " · already linked" : ""}`];
-          if (!r.candidates.length) lines.push(`  Nothing above it shares words with its text. Link it by hand with --aligns-to${r.kind === "bet" ? " (a bet) or --kr (a key result)" : ""}.`);
+          // No command links an existing item by hand, so with no candidate the text stays, or goes with ladder clear.
+          if (!r.candidates.length && r.text) lines.push(`  Nothing above it shares words with its text, so there's nothing to link to yet. Keep the text, or clear it with nikos plan ladder clear ${r.id}.`);
           for (const c of r.candidates) lines.push(`  ${c.id} — ${c.kind} in ${c.rel}: ${c.title} (shares ${c.shared.join(", ")})`);
           if (r.candidates.length) lines.push(`\nLink one with: nikos plan ladder accept ${r.id} <candidate>`);
           console.log(lines.join("\n"));

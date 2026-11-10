@@ -56,6 +56,8 @@ export interface KrRef {
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
   version: string;
+  /** Its ladders_up text, when no link backs it yet: the page says not linked yet, and it counts in no figure. */
+  laddersUp?: string;
 }
 
 /** A key result on an area's page: the ladder row, plus its objective, targets and what it aligns to. */
@@ -78,6 +80,8 @@ export interface BetRef {
   owner: string;
   delivery?: BetDelivery;
   stories: StoryRow[];
+  /** Its ladders_up text, when no link backs it yet: the page says not linked yet, and it counts in no figure. */
+  laddersUp?: string;
 }
 
 /** A bet on an area's page: its key results, what it aligns to, and its delivery. */
@@ -332,6 +336,7 @@ function krRef(area: Area, id: string, on: string): KrRef {
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(d, on),
     version: kr.hash,
+    ...(laddersOf(d) && !linkedOf("kr", d) ? { laddersUp: laddersOf(d)! } : {}),
   };
 }
 
@@ -426,6 +431,7 @@ function betRefOf(rec: BetRec, deliveries: PlanDeliveries): BetRef {
     owner: rec.owner,
     ...(delivery ? { delivery } : {}),
     stories: deliveries.stories.get(rec.id) ?? [],
+    ...(rec.laddersUp && !rec.linked ? { laddersUp: rec.laddersUp } : {}),
   };
 }
 
@@ -470,11 +476,12 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     // A department's quarterly key results show for the quarter picked; the company's are for the year.
     try {
       const d = loadKr(holder.dir, id).data;
+      const row = krRef(holder, id, today);
+      // Listed whatever quarter the page shows, as plan status and the suggestion list it: the quarter only picks the figures.
+      if (row.laddersUp) unlinked.push({ id, rel: holder.rel, kind: "key result", text: row.laddersUp });
       const quarterly = holder.level === "department" && d.period !== undefined;
       if (quarterly && period !== undefined && String(d.period) !== period) continue;
-      const row = krRef(holder, id, today);
       const aligns = alignsList(d.aligns_to);
-      if (laddersOf(d) && !linkedOf("kr", d)) unlinked.push({ id, rel: holder.rel, kind: "key result", text: laddersOf(d)! });
       krs.push({
         ...row,
         objective: d.objective ?? "",

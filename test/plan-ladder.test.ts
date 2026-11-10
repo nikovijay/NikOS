@@ -114,12 +114,63 @@ describe("candidates", () => {
     expect(r.candidates[0].score).toBeGreaterThan(r.candidates[1].score);
   });
 
-  it("a company bet can aim at company key results only, and has no bets above it", async () => {
+  it("a company bet's candidates are key results, and it has no bets above it", async () => {
     const repo = acme();
     await world(repo);
     const r = ladderFor(repo, "checkout-first");
     expect(r.candidates.length).toBeGreaterThan(0);
-    expect(r.candidates.every((c) => c.kind === "key result" && c.rel === "company")).toBe(true);
+    expect(r.candidates.every((c) => c.kind === "key result")).toBe(true);
+  });
+
+  it("a company bet may aim at a department key result (rule 2), so it is offered one that shares its words", async () => {
+    const repo = acme();
+    await world(repo);
+    expect((await run(repo, "bet", "new", "cash-first", "--in", "company", "--owner", "Mira", "--hypothesis", "Cash first", "--review", "2027-02-14", "--ladders-up", "close days faster")).code).toBe(0);
+    expect(ladderFor(repo, "cash-first").candidates.map((c) => [c.id, c.rel])).toEqual([["close-days", "departments/finance"]]);
+    // The link a person picks is written the same as any other, and the check passes.
+    expect((await run(repo, "ladder", "accept", "cash-first", "close-days")).code).toBe(0);
+    expect(read(repo, "planning/company/bets/cash-first.md")).toContain("primary: close-days");
+    expect((await run(repo, "validate")).code).toBe(0);
+    // A hand-written aim gets the same answer: no refusal for the level.
+    expect((await run(repo, "bet", "new", "close-faster", "--in", "company", "--owner", "Mira", "--hypothesis", "Closing faster frees cash", "--review", "2027-02-14", "--kr", "close-days")).code).toBe(0);
+  });
+
+  it("a department key result's candidates leave out its own department's and the other department's key results, even with shared words", async () => {
+    const repo = acme();
+    await world(repo);
+    // Both share 'revenue' with pay-ledger's text. Neither is above the finance department, so the validator must keep them out.
+    await run(repo, "kr", "new", "revenue-leaks", "--in", "ops", "--period", "2027-Q1", "--title", "Revenue leaks", "--owner", "Sam", "--baseline", "0", "--target", "5");
+    await run(repo, "kr", "new", "revenue-close", "--in", "finance", "--period", "2027-Q1", "--title", "Revenue close", "--owner", "Mira", "--baseline", "0", "--target", "5");
+    expect(ladderFor(repo, "pay-ledger").candidates.map((c) => c.id)).toEqual(["revenue"]);
+  });
+
+  it("a team bet's candidates leave out the bets at its own level, even when they share words", async () => {
+    const repo = acme();
+    await world(repo);
+    // ship-checkout is in the same team and shares 'checkout' with the text, so only the validator keeps it out.
+    expect(wordsOf("faster checkout keeps revenue up")).toContain("checkout");
+    expect(ladderFor(repo, "faster-checkout").candidates.map((c) => c.id)).not.toContain("ship-checkout");
+  });
+
+  it("shows at most three candidates, best first, ties to the id", async () => {
+    const repo = acme();
+    await world(repo);
+    for (const [id, title] of [["revenue-a", "Revenue A"], ["revenue-b", "Revenue B"], ["revenue-c", "Revenue C"], ["revenue-d", "Revenue D"]]) {
+      await run(repo, "kr", "new", id, "--in", "company", "--title", title, "--owner", "Mira", "--baseline", "0", "--target", "1");
+    }
+    const r = ladderFor(repo, "pay-ledger");
+    expect(r.candidates.map((c) => c.id)).toEqual(["revenue", "revenue-a", "revenue-b"]);
+  });
+
+  it("with no candidate, says nothing above shares its words, offers keeping or clearing the text, and names no flag", async () => {
+    const repo = acme();
+    await world(repo);
+    await run(repo, "kr", "new", "fix-speed", "--in", "finance", "--period", "2027-Q1", "--title", "Fix speed", "--owner", "Mira", "--baseline", "0", "--target", "1", "--ladders-up", "xyzzy quux");
+    const r = await run(repo, "ladder", "fix-speed");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("Nothing above it shares words with its text, so there's nothing to link to yet. Keep the text, or clear it with nikos plan ladder clear fix-speed.");
+    expect(r.out).not.toContain("--aligns-to");
+    expect(r.out).not.toContain("nikos plan ladder accept");
   });
 
   it("ranks the closest key result first for the text, and says which words it shares", async () => {

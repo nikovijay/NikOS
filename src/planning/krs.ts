@@ -130,10 +130,15 @@ export function editKr(root: string, id: string, fields: Record<string, unknown>
   if (problem) throw new Error(problem);
   if (typeof fields.ladders_up === "string" && fields.ladders_up.trim() && areaOf(root)?.level === "company") throw new Error(NO_ABOVE_KR);
   const kr = loadKr(root, id);
+  // A milestone has no direction, the same as newKr refuses it. A blank value is nothing to set, so it passes.
+  if (kindOf(kr.data) === "milestone" && fields.direction !== undefined && fields.direction !== null && fields.direction !== "") {
+    throw new Error("A milestone has no direction: each step is done or not");
+  }
   const data = structuredClone(kr.data);
   for (const [k, raw] of Object.entries(fields)) {
     const v = k === "ladders_up" && typeof raw === "string" ? raw.trim() : raw;
-    if (v === "" || v === null || v === undefined) delete data[k];
+    // up is the default, so it is not written: only down is.
+    if (v === "" || v === null || v === undefined || (k === "direction" && v === "up")) delete data[k];
     else data[k] = typeof v === "string" && (k === "title" || k === "owner" || k === "unit" || k === "objective") ? v.trim() : v;
   }
   return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: expect ?? kr.hash });

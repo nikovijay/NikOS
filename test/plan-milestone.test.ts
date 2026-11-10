@@ -9,7 +9,10 @@ import { join } from "node:path";
 import { runPlanRepo } from "../src/plan/cli";
 import { exportPlanPage, startPlanServe, type PlanServe } from "../src/plan/serve";
 import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
-import { runOp } from "../src/planning/ops";
+import { OP_LEVELS, runOp } from "../src/planning/ops";
+import { areaPage } from "../src/plan/dashboard";
+import { planDeliveries } from "../src/plan/delivery";
+import { renderPlanBody, viewOf } from "../src/plan/page";
 import { checkIn, isStale, markStep, newKr, progress, reviseTarget } from "../src/planning/krs";
 import { hash } from "../src/planning/model";
 import { checkKr } from "../src/planning/model";
@@ -251,5 +254,54 @@ describe("the suggestions for a milestone", () => {
     expect(labels.some((l) => l.startsWith("Check in on"))).toBe(false);
     const option = suggestion.options.find((o) => o.label.startsWith("Ask about the steps"));
     expect(option?.do).toContain("nikos plan kr step <kr-id>");
+  });
+});
+
+describe("a milestone and direction, the levels kr.step is made at, and its form", () => {
+  it("kr.edit and kr direction refuse a direction on a milestone, and leave the file as it was", async () => {
+    const repo = acme();
+    await withMilestone(repo);
+    const before = readFileSync(CLOSE(repo), "utf8");
+    expect(() => runOp(FINANCE(repo), { op: "kr.edit", target: { kr: "close-process" }, args: { direction: "down" } })).toThrow("A milestone has no direction: each step is done or not");
+    expect(readFileSync(CLOSE(repo), "utf8")).toBe(before);
+    const cli = await run(repo, "kr", "direction", "close-process", "down", "--in", "finance");
+    expect(cli.code).toBe(1);
+    expect(cli.out).toContain("A milestone has no direction: each step is done or not");
+    expect(readFileSync(CLOSE(repo), "utf8")).toBe(before);
+  });
+
+  it("the schema refuses a direction on a milestone, as newKr does", () => {
+    const base = { id: "close-process", title: "Close process", owner: "Mira", by: "2027-03-31", checkins: [], kind: "milestone", steps: [{ name: "Map steps" }] };
+    expect(checkKr(base)).toBe(true);
+    expect(checkKr({ ...base, direction: "down" })).toBe(false);
+  });
+
+  it("plan kr direction is refused on a milestone, and a number key result's direction can be set and cleared", async () => {
+    const repo = acme();
+    await withMilestone(repo);
+    await run(repo, "kr", "new", "close-days", "--in", "finance", "--period", "2027-Q1", "--title", "Median days to close", "--owner", "Mira", "--baseline", "11", "--target", "7");
+    const file = join(FINANCE(repo), "krs", "close-days.yaml");
+    expect((await run(repo, "kr", "direction", "close-days", "down", "--in", "finance")).code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("direction: down");
+    expect((await run(repo, "kr", "direction", "close-days", "up", "--in", "finance")).code).toBe(0);
+    expect(readFileSync(file, "utf8")).not.toContain("direction");
+  });
+
+  it("kr.step is made at the company and a department only, so a group or team has no list that names it", () => {
+    expect(OP_LEVELS["kr.step"]).toEqual(["company", "department"]);
+    expect(OP_LEVELS["kr.edit"]).toEqual(["company", "department"]);
+  });
+
+  it("the live form goes once every step is done, and the page says all of them are", async () => {
+    const repo = acme();
+    await withMilestone(repo);
+    const now = new Date("2026-11-10T12:00:00Z");
+    const page = () => areaPage(repo, findArea(repo, "finance"), { deliveries: planDeliveries(repo, now), now, period: "2027-Q1" });
+    const live = () => renderPlanBody(page(), { view: viewOf(new URLSearchParams("view=keys"), "department") }, { live: true });
+    expect(live()).toContain('data-op="kr.step"');
+    for (const name of ["Map steps", "Pilot", "Roll out"]) expect((await run(repo, "kr", "step", "close-process", name, "--in", "finance", "--date", "2026-11-10")).code).toBe(0);
+    const html = live();
+    expect(html).not.toContain('data-op="kr.step"');
+    expect(html).toContain("3 of 3 steps done");
   });
 });
