@@ -311,7 +311,7 @@ function readMap(dir: string, key: string): CachedMap {
   }
   const summary: CachedMap = { key, problems, ...(storymap ? { storymap } : {}) };
   if (!store().exists(join(dir, "delivery.yaml"))) return summary;
-  const read = readDeliverySummaryResult(dir);
+  const read = readDeliverySummaryResult(dir, "planning");
   if (read.ok) return { ...summary, summary: read.summary };
   problems.push(read.newer ? read.reason : `delivery.yaml: ${read.reason}`);
   return summary;

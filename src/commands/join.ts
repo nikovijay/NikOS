@@ -8,7 +8,7 @@ import { parse, parseDocument, stringify } from "yaml";
 import { REPO_PATH } from "../lib/bets.js";
 import { fetchCopy } from "../lib/fetch-copy.js";
 import { asLine, hostNameOf, hostOf, requestArgv } from "../lib/forge.js";
-import { baseBranch, commitPaths, gitIn, isGit, nextBranchName, ownRepo, pushBranch, statusOf, switchNewBranch } from "../lib/git.js";
+import { baseBranch, commitPaths, gitIn, isGit, nextBranchName, ownRepo, pushBranch, remoteBranches, statusOf, switchNewBranch } from "../lib/git.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting, type Resolved } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { keyClash } from "../lib/keys.js";
@@ -112,6 +112,8 @@ export interface RepoJoin {
   alreadyListed: boolean;
   /** The nikos/join branch the entry is on, when one was made. */
   branch?: string;
+  /** A nikos/join branch origin already has for this repo: it is proposed there, so nothing was written. */
+  proposed?: string;
   /** The planning checkout the branch is in, when one was made. A temp clone stays until it is reviewed. */
   where?: string;
   pushed: boolean;
@@ -166,7 +168,13 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin |
     const next = addRepo(before, entry);
     if (!next.added) return { plan: input.plan, repo: code, alreadyListed: true, pushed: false };
 
-    const name = nextBranchName(copy, `nikos/join-${code.replace(/\//g, "-")}-${today()}`);
+    // A join branch origin already has for this repo means it's proposed there: a second join adds nothing. A new
+    // name avoids every branch origin has, not just the local ones (a fresh clone has none of the others).
+    const prefix = `nikos/join-${code.replace(/\//g, "-")}-`;
+    const taken = remoteBranches(copy);
+    const proposed = taken.find((b) => new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\d{4}-\\d{2}-\\d{2}(-\\d+)?$`).test(b));
+    if (proposed) return { plan: input.plan, repo: code, alreadyListed: false, proposed, pushed: false };
+    const name = nextBranchName(copy, `${prefix}${today()}`, undefined, taken);
     const made = switchNewBranch(copy, name);
     if (!made.ok) throw new Error(`Couldn't create a branch in ${copy}: ${made.error}`);
     // The branch exists now, so the clone stays for review, even if the commit below fails.
@@ -190,6 +198,7 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin |
 /** What joining a planning repo did, in words. */
 export function describeRepoJoin(r: RepoJoin): string {
   if (r.alreadyListed) return `${r.repo} is already listed in ${r.plan}'s planning/repos.yaml. Nothing was written.`;
+  if (r.proposed) return `${r.repo} is already proposed to ${r.plan} on branch ${r.proposed}, on its origin. Nothing was written.`;
   const lines = [`✓ Listed ${r.repo} in ${r.plan}'s planning/repos.yaml, on branch ${r.branch}.`, `The branch is in ${r.where}.`];
   if (r.pushed) lines.push(`Pushed ${r.branch} to ${r.plan}.`);
   else lines.push(`Not pushed. To send it for review: git -C ${r.where} push -u origin ${r.branch}`);

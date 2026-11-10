@@ -98,7 +98,7 @@ describe("a bet's delivery says how old the summary it counts is", () => {
     const r = rollout(co);
     const bet = r.plans.find((p) => p.name === "Payments")!.bets.find((b) => b.id === "pay-card");
     expect(bet?.delivery).toMatch(/^Shipped, 1 of 1 done, read 3 days ago \(\d{4}-\d{2}-\d{2}\)/);
-    expect(readDeliverySummary(join(grp, "maps/chk"))?.read_at).toBe(old);
+    expect(readDeliverySummary(join(grp, "maps/chk"), "code")?.read_at).toBe(old);
   });
 });
 
@@ -109,6 +109,6 @@ describe("a delivery summary is rewritten on each run", () => {
     const base = { version: 1 as const, map: "am", owner: "PAY" };
     writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-01T00:00:00Z", stories: [] });
     expect(() => writeDeliverySummary(join(dir, "maps/am"), { ...base, read_at: "2027-01-02T00:00:00Z", stories: [] })).not.toThrow();
-    expect(readDeliverySummary(join(dir, "maps/am"))?.read_at).toBe("2027-01-02T00:00:00Z");
+    expect(readDeliverySummary(join(dir, "maps/am"), "code")?.read_at).toBe("2027-01-02T00:00:00Z");
   });
 });

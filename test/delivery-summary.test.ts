@@ -29,7 +29,7 @@ describe("the delivery summary a map's owner commits", () => {
   it("the reader reads what the writer wrote, and says how old it is", () => {
     const g = groupRepo("PAY");
     writeSummaries(g, mapStatus(g), NOW);
-    const summary = readDeliverySummary(join(g, "maps/chk"));
+    const summary = readDeliverySummary(join(g, "maps/chk"), "planning");
     expect(summary?.stories.length).toBe(3);
     expect(summaryAge(summary!, new Date("2026-11-11T09:12:00Z"))).toBe("read 3 days ago (2026-11-08)");
     expect(summaryAge(summary!, new Date("2026-11-09T09:12:00Z"))).toBe("read 1 day ago (2026-11-08)");
@@ -41,8 +41,8 @@ describe("the delivery summary a map's owner commits", () => {
     writeSummaries(g, mapStatus(g), NOW);
     const path = join(g, "maps/chk/delivery.yaml");
     writeFileSync(path, readFileSync(path, "utf8").replace(/^read_at: .*\n/m, ""));
-    expect(readDeliverySummary(join(g, "maps/chk"))).toBeUndefined();
-    expect(readDeliverySummaryResult(join(g, "maps/chk"))).toMatchObject({ ok: false, reason: expect.stringMatching(/read_at/) });
+    expect(readDeliverySummary(join(g, "maps/chk"), "planning")).toBeUndefined();
+    expect(readDeliverySummaryResult(join(g, "maps/chk"), "planning")).toMatchObject({ ok: false, reason: expect.stringMatching(/read_at/) });
   });
 
   it("a summary from a newer nikOS throws NewerContractError, so it is never mistaken for no summary", () => {
@@ -50,9 +50,9 @@ describe("the delivery summary a map's owner commits", () => {
     writeSummaries(g, mapStatus(g), NOW);
     const path = join(g, "maps/chk/delivery.yaml");
     writeFileSync(path, readFileSync(path, "utf8").replace("version: 1", "version: 2"));
-    expect(() => readDeliverySummary(join(g, "maps/chk"))).toThrow(NewerContractError);
-    expect(() => readDeliverySummary(join(g, "maps/chk"))).toThrow("this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo");
-    expect(readDeliverySummaryResult(join(g, "maps/chk"))).toEqual({
+    expect(() => readDeliverySummary(join(g, "maps/chk"), "planning")).toThrow(NewerContractError);
+    expect(() => readDeliverySummary(join(g, "maps/chk"), "planning")).toThrow("this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo");
+    expect(readDeliverySummaryResult(join(g, "maps/chk"), "planning")).toEqual({
       ok: false,
       reason: "this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo",
       newer: true,
@@ -63,7 +63,7 @@ describe("the delivery summary a map's owner commits", () => {
     const g = groupRepo("PAY");
     setState("PAY-CHK-2", "in_progress", { dir: g });
     writeSummaries(g, mapStatus(g), NOW);
-    const data = readDeliverySummary(join(g, "maps/chk"))!;
+    const data = readDeliverySummary(join(g, "maps/chk"), "planning")!;
     expect(data.owner).toBe("PAY");
     expect(data.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
   });

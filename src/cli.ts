@@ -88,8 +88,10 @@ Plans: objectives, key results and bets
                    for a department's plan (--name, --period, --departments, --repo, --host)
   group init       Make a group plan: bets aimed at a department's key results. A group has
                    no key results of its own (--name, --key, --period, --repo, --host)
-  join <repo>      Link this repo to the plan above it, and take on that plan's settings
-                   (--host gitlab.com, --url, --ref)
+  join <repo>      Link this repo to the plan above it. A planning repo (planning/repos.yaml)
+                   gets this repo listed on a nikos/join branch for review. An older plan's
+                   settings are inherited (--push sends the branch, --plan-dir <checkout> uses
+                   a checkout you have, --host gitlab.com, --url, --ref)
   planning <cmd>   Add key results, bets and check-ins. Run nikos planning help to see how
   apply <file>     Apply a changes file someone downloaded from an editable dashboard page.
                    It goes on a new branch and nothing is pushed (--dir, --commit, --pr)

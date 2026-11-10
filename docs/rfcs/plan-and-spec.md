@@ -1,6 +1,6 @@
 # RFC: nikOS Plan and nikOS Spec
 
-**Status:** approved. PR 1 (the planning repo) is built: see [docs/plan.md](../plan.md). The dashboard (`nikos plan serve`), `nikos plan refresh` and `nikos plan owners` come in later PRs.
+**Status:** approved. PR 1 (the planning repo) is built: see [docs/plan.md](../plan.md). The dashboard (`nikos plan serve`) and `nikos plan owners` come in later PRs.
 
 ## Summary
 

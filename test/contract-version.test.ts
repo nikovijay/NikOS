@@ -1,14 +1,16 @@
 // The contract files a planning repo reads (delivery.yaml, storymap.yaml) are tolerant: unknown fields
 // pass, and a version newer than this nikOS reads is refused by name. The writers stay strict.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import { validate } from "../src/commands/validate";
 import { readDeliverySummaryResult, writeDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
+import { writeMapSummary } from "../src/lib/map-summary";
+import { planningData } from "../src/planning/server";
 import { contractProblems, contractVersion, NewerContractError, schemaProblems } from "../src/lib/schema";
 import { groupRepo, write } from "./repo-fixture";
-import { mapStatus, writeSummaries } from "../src/commands/map-status";
+import { mapStatus, runMapStatus, writeSummaries } from "../src/commands/map-status";
 
 const NOW = new Date("2026-11-08T09:12:00Z");
 const NEWER_PLANNING = "this delivery.yaml was written by a newer nikOS: upgrade nikos in the planning repo";
@@ -56,7 +58,7 @@ describe("delivery.yaml is read tolerantly by a planning repo", () => {
     data.forecast = "soon";
     (data.stories as Record<string, unknown>[])[0].team = "checkout";
     putSummary(g, data);
-    const read = readDeliverySummaryResult(join(g, "maps/chk"));
+    const read = readDeliverySummaryResult(join(g, "maps/chk"), "planning");
     expect(read.ok).toBe(true);
     if (read.ok) expect(read.summary.stories.map((s) => s.id)).toEqual(["PAY-CHK-1", "PAY-CHK-2", "PAY-CHK-3"]);
   });
@@ -67,7 +69,51 @@ describe("delivery.yaml is read tolerantly by a planning repo", () => {
     const data = summaryOf(g);
     data.version = 2;
     putSummary(g, data);
-    expect(readDeliverySummaryResult(join(g, "maps/chk"))).toEqual({ ok: false, reason: NEWER_PLANNING, newer: true });
+    expect(readDeliverySummaryResult(join(g, "maps/chk"), "planning")).toEqual({ ok: false, reason: NEWER_PLANNING, newer: true });
+  });
+});
+
+describe("a newer delivery.yaml is never overwritten by a code repo's nikOS", () => {
+  const NEWER_CODE = "this delivery.yaml was written by a newer nikOS: upgrade nikos in the code repo";
+
+  it("nikos map status refuses, names the code repo to upgrade, and leaves the file as the newer nikOS wrote it", () => {
+    const g = groupRepo("PAY");
+    writeSummaries(g, mapStatus(g), NOW);
+    const data = summaryOf(g);
+    data.version = 2;
+    putSummary(g, data);
+    const before = readFileSync(join(g, "maps/chk/delivery.yaml"), "utf8");
+    expect(() => writeMapSummary(g, join(g, "maps/chk"), NOW)).toThrow(NEWER_CODE);
+    expect(() => writeSummaries(g, mapStatus(g), NOW)).toThrow(NewerContractError);
+    expect(readFileSync(join(g, "maps/chk/delivery.yaml"), "utf8")).toBe(before);
+
+    const out = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(runMapStatus(["--dir", g])).toBe(1);
+      expect(err.mock.calls.flat().join("\n")).toContain(NEWER_CODE);
+    } finally {
+      out.mockRestore();
+      err.mockRestore();
+    }
+  });
+
+  it("a delivery.yaml that isn't YAML is nikOS's to regenerate, so the writer replaces it", () => {
+    const g = groupRepo("PAY");
+    write(join(g, "maps/chk/delivery.yaml"), "stories: [unclosed\n");
+    writeMapSummary(g, join(g, "maps/chk"), NOW);
+    expect(summaryOf(g).version).toBe(1);
+  });
+
+  it("the planning page keeps a map's stories when its summary is refused, and names the refusal as the map's problem", () => {
+    const g = groupRepo("PAY");
+    writeSummaries(g, mapStatus(g), NOW);
+    const data = summaryOf(g);
+    data.version = 2;
+    putSummary(g, data);
+    const map = planningData(g).maps.find((m) => m.id === "chk") as { stories: { id: string }[]; problem?: string };
+    expect(map.stories.length).toBeGreaterThan(0);
+    expect(map.problem).toBe("this delivery.yaml was written by a newer nikOS: upgrade nikos in the code repo");
   });
 });
 

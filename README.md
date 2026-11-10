@@ -132,7 +132,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos next` | Print the next story to build |
 | `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`, converting it to the current format. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
-| `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
+| `nikos join <repo>` | Join a plan in another repo. A planning repo gets this repo listed on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). An older plan's settings are inherited ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |

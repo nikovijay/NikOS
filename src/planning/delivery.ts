@@ -37,7 +37,7 @@ export interface Delivery {
  */
 const summaryIn = (dir: string) => {
   try {
-    return readDeliverySummary(dir);
+    return readDeliverySummary(dir, "planning");
   } catch (err) {
     if (err instanceof NewerContractError) return undefined;
     throw err;

@@ -6,8 +6,9 @@ import { describe, it, expect, vi } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describeJoin, joinPlan, joinPlanRepo, runJoin } from "../src/commands/join";
+import { describeJoin, describeRepoJoin, joinPlan, joinPlanRepo, runJoin } from "../src/commands/join";
 import { fetchCopy } from "../src/lib/fetch-copy";
+import { nextBranchName, realRun } from "../src/lib/git";
 import { hostNameOf } from "../src/lib/forge";
 import { initPlanRepo } from "../src/plan/repo";
 import { loadRepos } from "../src/plan/repos";
@@ -103,6 +104,63 @@ describe("nikos join to a planning repo", () => {
     const r = joinPlan(code, { repo: "acme/company-plan", url: companyRepo() });
     expect(r.added).toBe(true);
     expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+  });
+
+  it("nikos join from the command line still joins an old-kind plan when the code repo has no origin or a local-path origin", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const noOrigin = codeRepo();
+      git(noOrigin, "remote", "remove", "origin");
+      expect(runJoin(["--dir", noOrigin, "--url", companyRepo(), "acme/company-plan"])).toBe(0);
+      expect(readFileSync(join(noOrigin, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+
+      const localOrigin = codeRepo();
+      git(localOrigin, "remote", "set-url", "origin", bareOrigin());
+      expect(runJoin(["--dir", localOrigin, "--url", companyRepo(), "acme/company-plan"])).toBe(0);
+      expect(readFileSync(join(localOrigin, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("nikos join to an old-kind plan that can't be reached still lists it in planning/upstream.yaml, and exits 1", () => {
+    const code = codeRepo();
+    const out: string[] = [];
+    const err = vi.spyOn(console, "error").mockImplementation((...a) => void out.push(a.join(" ")));
+    try {
+      expect(runJoin(["--dir", code, "--url", join(tmpdir(), "no-such-old-plan-nikos-join"), "acme/company-plan"])).toBe(1);
+    } finally {
+      err.mockRestore();
+    }
+    expect(out.join("\n")).toContain("listed in planning/upstream.yaml");
+    expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+  });
+
+  it("a second --push of a repo already proposed is refused: it's named as proposed on its branch, and nothing is written", () => {
+    const origin = planOnOrigin();
+    const code = codeRepo();
+    const first = joinPlanRepo(code, { plan: "acme/company-plan", url: origin, push: true })!;
+    const before = tempJoins();
+    const again = joinPlanRepo(code, { plan: "acme/company-plan", url: origin, push: true })!;
+    expect(again).toEqual({ plan: "acme/company-plan", repo: "acme/checkout-web", alreadyListed: false, proposed: first.branch, pushed: false });
+    expect(describeRepoJoin(again)).toBe(`acme/checkout-web is already proposed to acme/company-plan on branch ${first.branch}, on its origin. Nothing was written.`);
+    expect(tempJoins()).toEqual(before);
+    expect(git(origin, "branch", "--list", "nikos/*").split("\n").filter(Boolean)).toHaveLength(1);
+    expect(git(code, "status", "--porcelain")).toBe("");
+  });
+
+  it("a join that can't list the planning repo's branches writes nothing, and says why", () => {
+    const checkout = checkoutOf(planOnOrigin());
+    git(checkout, "remote", "set-url", "origin", "/no/such/origin-nikos-join");
+    expect(() => joinPlanRepo(codeRepo(), { plan: "acme/company-plan", planDir: checkout })).toThrow("Couldn't list the branches on origin");
+    expect(git(checkout, "branch", "--show-current")).toBe("main");
+    expect(existsSync(join(checkout, "planning/repos.yaml"))).toBe(false);
+  });
+
+  it("a new join branch name avoids every name origin has, as well as the local ones", () => {
+    const checkout = checkoutOf(planOnOrigin());
+    expect(nextBranchName(checkout, "nikos/join-x-2026-11-10", realRun, ["nikos/join-x-2026-11-10"])).toBe("nikos/join-x-2026-11-10-2");
+    expect(nextBranchName(checkout, "nikos/join-x-2026-11-10", realRun, [])).toBe("nikos/join-x-2026-11-10");
   });
 
   it("a code repo whose origin is a local path can't be listed, and says why", () => {

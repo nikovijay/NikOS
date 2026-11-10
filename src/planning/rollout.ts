@@ -206,7 +206,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
           // does in delivery.ts: this map's next story still shows, from its own queue.
           let summary;
           try {
-            summary = readDeliverySummary(ref.dir);
+            summary = readDeliverySummary(ref.dir, "planning");
           } catch (err) {
             if (!(err instanceof NewerContractError)) throw err;
           }

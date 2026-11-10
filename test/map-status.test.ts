@@ -105,7 +105,7 @@ describe("nikos map status: a group's map", () => {
     const g = groupRepo("PAY");
     const written = writeSummaries(g, mapStatus(g), NOW);
     expect(written).toEqual([join(g, "maps/chk/delivery.yaml")]);
-    expect(readDeliverySummary(join(g, "maps/chk"))?.stories.map((s) => [s.id, s.status])).toEqual([
+    expect(readDeliverySummary(join(g, "maps/chk"), "code")?.stories.map((s) => [s.id, s.status])).toEqual([
       ["PAY-CHK-1", "todo"],
       ["PAY-CHK-2", "todo"],
       ["PAY-CHK-3", "todo"],
@@ -205,7 +205,7 @@ describe("nikos map status: a repo's own map", () => {
     commitAll(t, "approved");
     expect(story(mapStatus(t), "PAY-INB-1")).toMatchObject({ approval: "approved", approved_by: "Ada Lovelace" });
     writeSummaries(t, mapStatus(t), NOW);
-    expect(readDeliverySummary(join(t, "maps/inb"))?.stories.find((s) => s.id === "PAY-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
+    expect(readDeliverySummary(join(t, "maps/inb"), "code")?.stories.find((s) => s.id === "PAY-INB-1")).toMatchObject({ status: "done", approval: "approved", approved_by: "Ada Lovelace" });
   });
 
   it("a repo with a map reads its own map's state: the map is the one read", () => {

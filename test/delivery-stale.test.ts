@@ -64,7 +64,7 @@ describe("a map's delivery.yaml is checked against its files", () => {
     const g = groupRepo("PAY");
     setState("PAY-CHK-2", "in_progress", { dir: g });
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
-    expect(readDeliverySummary(join(g, "maps/chk"))?.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
+    expect(readDeliverySummary(join(g, "maps/chk"), "code")?.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
   });
 
   it("approve rewrites it, so the approval shows in the summary straight away", () => {
@@ -73,7 +73,7 @@ describe("a map's delivery.yaml is checked against its files", () => {
     setState("PAY-CHK-1", "done", { dir: g });
     approve("PAY-CHK-1", { dir: g, by: "Priya Shah", date: "2027-01-06" });
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
-    expect(readDeliverySummary(join(g, "maps/chk"))?.stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ approval: "approved", approved_by: "Priya Shah" });
+    expect(readDeliverySummary(join(g, "maps/chk"), "code")?.stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ approval: "approved", approved_by: "Priya Shah" });
   });
 
   it("a story added with nikos story new is in the summary too, so validate passes", () => {
