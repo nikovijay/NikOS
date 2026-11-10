@@ -126,8 +126,10 @@ export function validateGroup(root: string): ValidationResult {
       else owner.set(key, id);
     }
     const r = validateMap({ root, dir, id, inRepo: true });
-    errors.push(...r.errors);
-    warnings.push(...r.warnings);
+    // A map's issues name its own files; say which map, since a repo can hold several.
+    const inMap = (x: Issue): Issue => (x.file.startsWith("maps/") ? x : { ...x, file: `maps/${id}/${x.file}` });
+    errors.push(...r.errors.map(inMap));
+    warnings.push(...r.warnings.map(inMap));
     stories += r.stories;
     releases += r.releases;
     // A map that doesn't read is reported by validateMap; its stories can't be checked for clashes.

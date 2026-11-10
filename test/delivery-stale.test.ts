@@ -8,7 +8,7 @@ import { parse, stringify } from "yaml";
 import { setState } from "../src/commands/state";
 import { approve } from "../src/commands/approve";
 import { newStory } from "../src/commands/story";
-import { validate } from "../src/commands/validate";
+import { validate, validateGroup } from "../src/commands/validate";
 import { readDeliverySummary } from "../src/lib/delivery-summary";
 import { groupRepo, write, commitAll } from "./repo-fixture";
 
@@ -25,6 +25,13 @@ describe("a map's delivery.yaml is checked against its files", () => {
     rmSync(join(g, "maps/chk/delivery.yaml"));
     const errs = deliveryErrors(validate(g, "chk"));
     expect(errs).toEqual([{ file: "delivery.yaml", message: "is missing", hint: "run nikos map status, then commit it" }]);
+  });
+
+  it("checking every map at once says which map's delivery.yaml is missing", () => {
+    const g = groupRepo("PAY");
+    rmSync(join(g, "maps/chk/delivery.yaml"));
+    const errs = validateGroup(g).errors.filter((e) => e.file.endsWith("delivery.yaml"));
+    expect(errs).toEqual([{ file: "maps/chk/delivery.yaml", message: "is missing", hint: "run nikos map status, then commit it" }]);
   });
 
   it("a state.yaml changed by hand after delivery.yaml was written fails, and names the story", () => {
