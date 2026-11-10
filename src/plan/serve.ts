@@ -10,7 +10,7 @@ import type { Area } from "../planning/model.js";
 import { areaPage, drillBet, drillKr, upChain, resolveAt, type AreaPage } from "./dashboard.js";
 import { planDeliveries, type PlanDeliveries } from "./delivery.js";
 import { keyOf, linksIn, offlineDocument, type OfflinePage } from "./offline.js";
-import { renderPlanBody, renderPlanPage, planTitle, viewOf, type PageState } from "./page.js";
+import { renderPlanBody, renderPlanPage, planTitleText, viewOf, type PageState } from "./page.js";
 import { areaHolding, findArea, listAreas } from "./repo.js";
 import { refreshDelivery } from "./refresh.js";
 
@@ -19,7 +19,7 @@ export interface PlanServeOptions {
   port?: number;
   /** Skip the refresh of the code repos' copies on start. */
   offline?: boolean;
-  /** The area the first page shows, named as --in names it. Unknown names are an error. */
+  /** The area the first page shows, named as --in names it (--at is the same). Unknown names are an error. */
   at?: string;
   /** Runs git for the save buttons. Tests pass a runner that records the calls. */
   run?: Runner;
@@ -98,9 +98,9 @@ export async function startPlanServe(repo: string, opts: PlanServeOptions = {}):
   const first = opts.at === undefined ? undefined : findArea(repo, opts.at);
   const notices = refreshNotices(repo, opts.offline);
   const pages: PageSource = {
-    page: (query) => {
+    page: (query, token) => {
       const { page, state } = pageOf(repo, query, notices);
-      return renderPlanPage(page, state);
+      return renderPlanPage(page, state, { token });
     },
     data: (query) => {
       const { page, state } = pageOf(repo, query, notices);
@@ -132,8 +132,8 @@ export async function runPlanServe(repo: string, opts: PlanServeOptions = {}): P
 }
 
 /**
- * `nikos plan serve --export <file>`: the dashboard as one offline file. With --at, the file holds that area's
- * pages only, and links to other areas say they aren't in it. Without --at, it holds every area's pages.
+ * `nikos plan serve --export <file>`: the dashboard as one offline file. With --in, the file holds that area's
+ * pages only, and links to other areas say they aren't in it. Without --in, it holds every area's pages.
  */
 export async function exportPlanPage(repo: string, file: string, opts: { offline?: boolean; at?: string } = {}): Promise<{ wrote: string; notices: string[] }> {
   const at = opts.at === undefined ? undefined : findArea(repo, opts.at).rel;
@@ -148,7 +148,7 @@ export async function exportPlanPage(repo: string, file: string, opts: { offline
     if (key in pages) continue;
     const { page, state } = pageOf(repo, new URLSearchParams(key), notices, deliveries);
     if (at && page.plan.rel !== at) continue;
-    pages[key] = { title: planTitle(page), body: renderPlanBody(page, state, { offline: true }) };
+    pages[key] = { title: planTitleText(page), body: renderPlanBody(page, state, { offline: true }) };
     queue.push(...linksIn(pages[key].body));
   }
   // The pages name each code repo they read, so a file that has any is one to share with care.

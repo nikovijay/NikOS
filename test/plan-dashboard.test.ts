@@ -29,7 +29,7 @@ function acme(): string {
   newBet(bet("one-inbox", { primary: "revenue" }), at("company"));
   newBet(bet("inbox-match", { primary: "close-days", alignsTo: ["one-inbox"] }), at("finance"));
   newBet(bet("faster-checkout", { primary: "close-days", alignsTo: ["inbox-match"] }), at("payments"));
-  newBet(bet("web-bet", { primary: "revenue", also: ["close-days"], alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
+  newBet(bet("web-bet", { primary: "close-days", alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
   return repo;
 }
 
@@ -131,7 +131,7 @@ describe("the chain of bets above a bet", () => {
     expect(chain?.levels.map((l) => l.depth)).toEqual([1, 2]);
     expect(chain?.levels[0].bets.map((b) => b.id).sort()).toEqual(["faster-checkout", "inbox-match"]);
     expect(chain?.levels[1].bets.map((b) => b.id)).toEqual(["one-inbox"]);
-    expect(chain?.krs).toEqual({ primary: "revenue", also: ["close-days"] });
+    expect(chain?.krs).toEqual({ primary: "close-days", also: [] });
   });
 });
 
@@ -143,7 +143,7 @@ describe("drilling down from a key result and a bet", () => {
     expect(drill?.areas.map((a) => [a.rel, a.bets.map((b) => [b.id, b.aims])])).toEqual([
       ["departments/finance", [["inbox-match", "primary"]]],
       ["groups/payments", [["faster-checkout", "primary"]]],
-      ["teams/WEB", [["web-bet", "also"]]],
+      ["teams/WEB", [["web-bet", "primary"]]],
     ]);
   });
 
@@ -154,7 +154,7 @@ describe("drilling down from a key result and a bet", () => {
       ["company", [["one-inbox", "primary"]]],
       ["departments/finance", [["inbox-match", "via"]]],
       ["groups/payments", [["faster-checkout", "via"]]],
-      ["teams/WEB", [["web-bet", "primary"]]],
+      ["teams/WEB", [["web-bet", "via"]]],
     ]);
     expect(drillKr(repo, "nope", planDeliveries(repo, NOW), NOW)).toBeUndefined();
   });

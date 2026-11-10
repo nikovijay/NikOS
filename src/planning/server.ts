@@ -6,7 +6,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { renderMap, storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { featureOf } from "../commands/story.js";
@@ -374,7 +374,8 @@ export interface SaveTarget {
 
 /** Pages another dashboard (nikos plan serve) serves in place of the planning one: / and /api/data. */
 export interface PageSource {
-  page(query: URLSearchParams): string;
+  /** The page for a query. The token is the server's, for the page's own saves. */
+  page(query: URLSearchParams, token: string): string;
   data(query: URLSearchParams): unknown;
   /** Where the change in body goes. Without it the pages take no change (the git buttons too). */
   saveIn?(body: Record<string, any>): SaveTarget;
@@ -398,7 +399,7 @@ interface Ctx {
   /** How many saves this server has made since it started. */
   session: { ops: number };
   pages?: PageSource;
-  /** The areas saved to since it started, by rel. The git buttons commit these areas' files and no others. */
+  /** The areas saved to since the last commit, by rel. The git buttons commit these areas' files and no others. */
   touched: Set<string>;
 }
 
@@ -406,7 +407,7 @@ interface Ctx {
 export async function startServer(root: string, opts: StartOptions = {}): Promise<RunningServer> {
   const token = randomBytes(24).toString("hex");
   let port = 0;
-  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages, touched: new Set() };
+  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages, touched: opts.pages?.saveIn ? savedBefore(root) : new Set() };
   const server = createServer((req, res) => {
     ctx.port = port;
     route(ctx, req, res).catch((err) => send(res, 500, { error: (err as Error).message }));
@@ -503,7 +504,7 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
 function serveGet(ctx: Ctx, path: string, req: IncomingMessage, res: ServerResponse) {
   const { root, token, mapId, pages } = ctx;
   const query = new URL(req.url ?? "/", "http://127.0.0.1").searchParams;
-  if (path === "/") return send(res, 200, pages ? pages.page(query) : renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
+  if (path === "/") return send(res, 200, pages ? pages.page(query, token) : renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
   if (path === "/api/data") return send(res, 200, pages ? pages.data(query) : planningData(root, mapId));
   if (path === "/api/pending") {
     const given = req.headers["x-nikos-token"];
@@ -654,7 +655,10 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
   try {
     const r = runOp(where.root, op, { strict: true });
     ctx.session.ops++;
-    if (where.area) ctx.touched.add(where.area);
+    if (where.area) {
+      ctx.touched.add(where.area);
+      keepSaved(ctx.root, ctx.touched);
+    }
     return send(res, 200, { ok: true, message: r.message, changed: r.changed, branch: prep.branch ?? null, ...(where.area ? { area: where.area } : {}), ...(prep.notice ? { notice: prep.notice } : {}) });
   } catch (err) {
     return saveError(res, err);
@@ -681,9 +685,37 @@ function beginSave(ctx: Ctx, area?: string): { ok: true; branch?: string; notice
   return { ok: true, branch: name };
 }
 
+/** Where a plan dashboard keeps the areas it has saved to and not committed. It's under .nikos/, which git ignores. */
+const savedFile = (root: string) => join(root, ".nikos", "saved-areas.json");
+
+/** The areas saved to before this start, from that file. None when it's missing or unreadable. */
+function savedBefore(root: string): Set<string> {
+  try {
+    const v = JSON.parse(readFileSync(savedFile(root), "utf8"));
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Keeps the list of areas saved to. A save is on disk already, so a list that can't be written costs only the restart. */
+function keepSaved(root: string, areas: Set<string>): void {
+  try {
+    mkdirSync(join(root, ".nikos"), { recursive: true });
+    writeFileSync(savedFile(root), `${JSON.stringify([...areas].sort())}\n`);
+  } catch {
+    // The save stands; only a restart would forget which areas it was in.
+  }
+}
+
+/** The areas a plan dashboard's git buttons commit: the ones saved to and not committed yet, and no other area's files. */
+function savedAreas(ctx: Ctx): string[] {
+  return [...ctx.touched].sort();
+}
+
 /** The paths the git buttons work on: the planning/ and maps/ folders, or in a plan dashboard the areas saved to. */
 function savePaths(ctx: Ctx): string[] {
-  return ctx.pages?.saveIn ? [...ctx.touched].map((a) => `planning/${a}`) : nikosPaths(ctx.root);
+  return ctx.pages?.saveIn ? savedAreas(ctx).map((a) => `planning/${a}`) : nikosPaths(ctx.root);
 }
 
 /** What the pending bar shows: the saved files not yet committed, the branch, and the forge's commands. */
@@ -739,10 +771,15 @@ function gitRequest(ctx: Ctx, path: string, body: Record<string, any>, res: Serv
     const secret = files.find(looksSecret);
     if (secret) return send(res, 400, { error: `Not committing ${secret}: it looks like a secret. Remove it from the repo, or commit it by hand` });
     const changed = files.length;
-    const what = ctx.pages?.saveIn ? `plan changes to ${[...ctx.touched].join(", ")}` : `${loadPlan(root)?.level ?? "plan"} changes`;
+    const what = ctx.pages?.saveIn ? `plan changes to ${savedAreas(ctx).join(", ")}` : `${loadPlan(root)?.level ?? "plan"} changes`;
     const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : `nikos: ${what} (${changed})`;
     const r = commitPaths(root, files, message, run);
     if (!r.ok) return send(res, 400, { error: r.error });
+    // Committed: no area is waiting now, so a restart has none to remember.
+    if (ctx.pages?.saveIn) {
+      ctx.touched.clear();
+      keepSaved(root, ctx.touched);
+    }
     return send(res, 200, { committed: r.sha, message, branch });
   }
   if (path === "/api/git/push") {

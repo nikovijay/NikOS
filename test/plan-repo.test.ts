@@ -111,8 +111,8 @@ describe("a planning repo", () => {
     newBet(bet("one-inbox", { primary: "revenue" }), at("company"));
     newBet(bet("inbox-match", { primary: "close-days", alignsTo: ["one-inbox"] }), at("finance"));
     newBet(bet("faster-checkout", { primary: "close-days", alignsTo: ["inbox-match"] }), at("payments"));
-    // A team may align to any department's or group's bet, and aim at company or department key results.
-    newBet(bet("web-bet", { primary: "revenue", also: ["close-days"], alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
+    // A team may align to any department's or group's bet, and aim at department key results (not the company's).
+    newBet(bet("web-bet", { primary: "close-days", alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
     expect(planIssues(repo)).toEqual([]);
     expect(() => newBet(bet("down", { alignsTo: ["faster-checkout"] }), at("finance"))).toThrow("faster-checkout is in groups/payments, which isn't above departments/finance");
     expect(() => newBet(bet("same", { alignsTo: ["one-inbox"] }), at("company"))).toThrow("A company bet has nothing above it to align to");
@@ -120,8 +120,9 @@ describe("a planning repo", () => {
     expect(() => newBet(bet("kr-as-bet", { alignsTo: ["revenue"] }), at("payments"))).toThrow("revenue is a key result: a bet aligns to bets");
     expect(() => newBet(bet("ghost", { primary: "nope" }), at("payments"))).toThrow("There's no key result called 'nope'");
     expect(() => newKr(kr("dept-kr", { period: "2027-Q2", alignsTo: ["one-inbox"] }), at("finance"))).toThrow("one-inbox is a bet: a key result aligns to key results");
-    // The bet's key results are set by id, wherever they are.
-    setBetKrs(at("payments"), "faster-checkout", { primary: "revenue", also: ["close-days"] });
+    // A group's bet aims at department key results only: the company's are refused, and the bet keeps what it had.
+    expect(() => setBetKrs(at("payments"), "faster-checkout", { primary: "revenue", also: [] })).toThrow("revenue is a company key result");
+    setBetKrs(at("payments"), "faster-checkout", { primary: "close-days", also: [] });
     expect(planIssues(repo)).toEqual([]);
   });
 

@@ -28,7 +28,7 @@ function chain(): string {
   newBet(bet("one-inbox", { primary: "revenue" }), at("company"));
   newBet(bet("inbox-match", { primary: "close-days", alignsTo: ["one-inbox"] }), at("finance"));
   newBet(bet("faster-checkout", { primary: "close-days", alignsTo: ["inbox-match"] }), at("payments"));
-  newBet(bet("web-bet", { primary: "revenue", alignsTo: ["faster-checkout"] }), at("WEB"));
+  newBet(bet("web-bet", { primary: "close-days", alignsTo: ["faster-checkout"] }), at("WEB"));
   return repo;
 }
 

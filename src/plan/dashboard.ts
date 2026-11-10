@@ -4,6 +4,7 @@
 // network is used. The server and the export both build their pages from these functions.
 import { latest, isStale, progress } from "../planning/krs.js";
 import { alignsList } from "../planning/levels.js";
+import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
 import { below, readCache, type BetDelivery, type DeliveryWarning, type PlanDeliveries, type RepoRead, type StoryRow } from "./delivery.js";
 import { areaFile, areaHolding, chainOf, findArea, listAreas, parentOf } from "./repo.js";
@@ -36,6 +37,8 @@ export interface KrRef {
   id: string;
   /** The area that holds the key result, as people write it. */
   rel: string;
+  /** The key results it aligns to, by bare id. */
+  aligns: string[];
   title: string;
   owner: string;
   unit: string;
@@ -61,6 +64,8 @@ export interface DashKr extends KrRef {
 export interface BetRef {
   id: string;
   rel: string;
+  /** The bets it aligns to, by bare id. */
+  aligns: string[];
   outcome: string;
   owner: string;
   delivery?: BetDelivery;
@@ -249,23 +254,31 @@ export function pickPeriod(periods: string[], requested: string | undefined, tod
 }
 
 /** The key result a reference names, wherever it's held in the company, as a ladder row. Undefined when there's none. */
-export function aboveKr(repo: string, id: string, on: string = new Date().toISOString().slice(0, 10)): KrRef | undefined {
-  return holderKr(repo, id, on)?.ref;
+export function aboveKr(repo: string, id: string, on: string = new Date().toISOString().slice(0, 10), problems?: string[]): KrRef | undefined {
+  return holderKr(repo, id, on, problems)?.ref;
 }
 
-/** A key result held somewhere in the company, as a ladder row, with the references it aligns to. */
-function holderKr(repo: string, id: string, on: string): { ref: KrRef; aligns: string[] } | undefined {
+/**
+ * A key result held somewhere in the company, as a ladder row. A key result that won't load is a problem
+ * for the page to say, and only that one is left out: the rest of the ladder still shows.
+ */
+function holderKr(repo: string, id: string, on: string, problems?: string[]): { ref: KrRef } | undefined {
   let holder: Area;
   try {
     holder = areaHolding(repo, id, "key result");
   } catch {
     return undefined;
   }
-  return { ref: krRef(holder, id, on), aligns: alignsList(loadKr(holder.dir, id).data.aligns_to) };
+  try {
+    return { ref: krRef(holder, id, on) };
+  } catch (err) {
+    problems?.push((err as Error).message.split("\n")[0]);
+    return undefined;
+  }
 }
 
 /** Every key result above the given references, through aligns_to, each once. A cycle ends. */
-function krAncestors(repo: string, aligns: string[], on: string): KrRef[] {
+function krAncestors(repo: string, aligns: string[], on: string, problems?: string[]): KrRef[] {
   const out = new Map<string, KrRef>();
   const seen = new Set<string>();
   const queue = [...aligns];
@@ -273,10 +286,10 @@ function krAncestors(repo: string, aligns: string[], on: string): KrRef[] {
     const ref = queue.shift()!;
     if (seen.has(ref)) continue;
     seen.add(ref);
-    const hit = holderKr(repo, ref, on);
+    const hit = holderKr(repo, ref, on, problems);
     if (!hit) continue;
     out.set(`${hit.ref.rel}/${hit.ref.id}`, hit.ref);
-    queue.push(...hit.aligns);
+    queue.push(...hit.ref.aligns);
   }
   return [...out.values()];
 }
@@ -287,6 +300,7 @@ function krRef(area: Area, id: string, on: string): KrRef {
   return {
     id,
     rel: area.rel,
+    aligns: alignsList(d.aligns_to),
     title: d.title ?? id,
     owner: d.owner ?? "",
     unit: d.unit ?? "",
@@ -379,6 +393,7 @@ function betRefOf(rec: BetRec, deliveries: PlanDeliveries): BetRef {
   return {
     id: rec.id,
     rel: rec.area.rel,
+    aligns: rec.aligns,
     outcome: rec.outcome,
     owner: rec.owner,
     ...(delivery ? { delivery } : {}),
@@ -437,7 +452,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
         target: d.target,
         aligns_to: aligns,
         above: aligns.flatMap((r) => {
-          const hit = aboveKr(repo, r, today);
+          const hit = aboveKr(repo, r, today, problems);
           return hit ? [hit] : [];
         }),
       });
@@ -445,10 +460,11 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       problems.push((err as Error).message.split("\n")[0]);
     }
   }
-  // One level above by default; widened, every level above through aligns_to.
+  // One level above by default; widened, every level above through aligns_to. A key result in the column is not repeated above.
+  const own = new Set(krs.map((k) => k.id));
   const aboveKrs = new Map<string, KrRef>();
   for (const k of krs) {
-    for (const a of widen.up ? krAncestors(repo, k.aligns_to, today) : k.above) aboveKrs.set(`${a.rel}/${a.id}`, a);
+    for (const a of widen.up ? krAncestors(repo, k.aligns_to, today, problems) : k.above) if (!own.has(a.id)) aboveKrs.set(`${a.rel}/${a.id}`, a);
   }
 
   const bets: DashBet[] = ownBets.map((b) => {
@@ -474,23 +490,25 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   }
 
   // Widened down: the bets below the area's bets, and the bets that aim at its key results, with the bets below those.
+  // A bet above the area, or already listed above or as the area's own, is left out; so is one not below it in level.
   const belowBets: BelowBet[] = [];
   if (widen.down) {
-    const listed = new Set(ownBets.map((b) => b.id));
+    const rank = RANK[area.level];
+    const listed = new Set<string>([...ownBets.map((b) => b.id), ...[...aboveBets.values()].map((a) => a.id), ...ownBets.flatMap((b) => upLevels(records, b.id).flat().map((r) => r.id))]);
+    const lower = (id: string) => RANK[records.get(id)!.area.level] > rank;
     const children = childrenOf(records);
     for (const b of ownBets) {
       for (const c of below(b.id, children)) {
-        if (listed.has(c)) continue;
+        if (listed.has(c) || !lower(c)) continue;
         listed.add(c);
         belowBets.push({ ...betRefOf(records.get(c)!, opts.deliveries), how: "child", of: b.id });
       }
     }
     for (const k of krs) {
       for (const [id, aim] of aimsAt(records, k.id)) {
-        if (listed.has(id)) continue;
+        if (listed.has(id) || !lower(id)) continue;
         listed.add(id);
-        const how = aim === "via" ? "via" : aim;
-        belowBets.push({ ...betRefOf(records.get(id)!, opts.deliveries), how, of: k.id });
+        belowBets.push({ ...betRefOf(records.get(id)!, opts.deliveries), how: aim, of: k.id });
       }
     }
   }

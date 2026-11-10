@@ -4,13 +4,14 @@
 // the URL, both ?at= and #at=. Nothing in the file asks for anything over the network.
 import { STYLE } from "./page.js";
 
-/** A page as the export keeps it: its title, and the content of its body. */
+/** A page as the export keeps it: its title as plain text, and the content of its body. */
 export interface OfflinePage {
   title: string;
   body: string;
 }
 
 const unescape = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** The page keys a body links to: each href or option value that is a query on this dashboard, normalised. */
 export function linksIn(body: string): string[] {
@@ -72,7 +73,7 @@ document.addEventListener("change", function (e) {
 })();`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${first?.title ?? "nikOS plan"}</title><style>${STYLE}</style></head>
+<title>${esc(first?.title ?? "nikOS plan")}</title><style>${STYLE}</style></head>
 <body>
 ${first?.body ?? ""}<script>
 ${script}

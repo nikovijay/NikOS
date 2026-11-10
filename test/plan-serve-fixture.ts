@@ -22,7 +22,7 @@ export function acmePlan(listed?: string): string {
   newBet({ id: "one-inbox", owner: "Sam", hypothesis: "One inbox cuts close time.", reviewOn: "2027-02-14", primary: "revenue" }, at("company"));
   newBet({ id: "inbox-match", owner: "Sam", hypothesis: "Matching cuts close time.", reviewOn: "2027-02-14", primary: "close-days", alignsTo: ["one-inbox"] }, at("finance"));
   newBet({ id: "faster-checkout", owner: "Ana", hypothesis: "Checkout is quicker.", reviewOn: "2027-02-14", primary: "close-days", alignsTo: ["inbox-match"] }, at("payments"));
-  newBet({ id: "web-bet", owner: "Ana", hypothesis: "Web checkout sells more.", reviewOn: "2027-02-14", primary: "revenue", also: ["close-days"], alignsTo: ["faster-checkout"] }, at("WEB"));
+  newBet({ id: "web-bet", owner: "Ana", hypothesis: "Web checkout sells more.", reviewOn: "2027-02-14", primary: "close-days", alignsTo: ["faster-checkout"] }, at("WEB"));
   if (listed !== undefined) write(join(repo, "planning/repos.yaml"), `version: 1\nrepos:\n  - repo: acme/payments-web\n    host: github.com\n    url: "${listed}"\n`);
   return repo;
 }

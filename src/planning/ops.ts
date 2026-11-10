@@ -63,7 +63,6 @@ const GROUP: OpName[] = [
   "bet.edit",
   "bet.review",
   "bet.align",
-  "bet.krs",
   "story.new",
   "story.rename",
   "story.move",
@@ -78,6 +77,9 @@ const GROUP: OpName[] = [
   "release.reorder",
   "map.new",
 ];
+// A planning area's group and team make bets that aim at department key results (bet.krs), so they are
+// listed here. A legacy planning repo keeps the lists it had: a group's bet.krs and a team are refused there.
+const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 // A team makes bets only: it has no key results, and its bets aim at the key results above it.
 const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
 
@@ -115,13 +117,19 @@ const NAMES: Record<OpName, true> = {
 
 export const OP_NAMES = Object.keys(NAMES) as OpName[];
 
-/** The levels each op is made at, from the level lists. A group or team has no key results, so kr.* and checkin are refused there. */
-export const OP_LEVELS: Record<OpName, Level[]> = Object.fromEntries(
-  OP_NAMES.map((name) => [
-    name,
-    (["company", "department", "group", "team"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : lv === "group" ? GROUP : TEAM).includes(name)),
-  ]),
-) as Record<OpName, Level[]>;
+/** The levels each op is made at, from the four level lists. A group or team has no key results, so kr.* and checkin are refused there. */
+const levelsOf = (group: OpName[], team: OpName[]): Record<OpName, Level[]> =>
+  Object.fromEntries(
+    OP_NAMES.map((name) => [
+      name,
+      (["company", "department", "group", "team"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : lv === "group" ? group : team).includes(name)),
+    ]),
+  ) as Record<OpName, Level[]>;
+
+/** The levels each op is made at in a planning area (a folder of nikos plan). */
+export const OP_LEVELS = levelsOf(AREA_GROUP, TEAM);
+/** The levels each op is made at in a legacy planning repo (nikos planning). It has no team, and a group has no bet.krs. */
+const LEGACY_OP_LEVELS = levelsOf(GROUP, []);
 
 /**
  * The argument names each op reads. Any other name is refused, so a misspelt one is never dropped
@@ -202,7 +210,8 @@ function precheck(root: string, op: Op): void {
   const keys = op.op.startsWith("kr.") || op.op === "checkin";
   if (area && keys && krAreaProblem(area)) throw new Error(krAreaProblem(area)!);
   if (level === "group" && keys) throw new Error(krLevelProblem(level)!);
-  if (level && !OP_LEVELS[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
+  const levels = area ? OP_LEVELS : LEGACY_OP_LEVELS;
+  if (level && !levels[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
   for (const [kind, id] of Object.entries(op.target ?? {})) {
     const k = TARGET_KINDS[kind];
     const problem = k ? idProblem(k, id) : `'${kind}' isn't a kind of target nikOS knows`;

@@ -2,7 +2,7 @@
 // the delivery copies plan refresh keeps (a real local code repo, no network). A group's and team's key
 // result columns are the ones their bets aim at: primary and also.
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { appendFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { areaPage, drillBet } from "../src/plan/dashboard";
@@ -12,6 +12,7 @@ import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
 import { newBet } from "../src/planning/bets";
 import { checkIn, newKr } from "../src/planning/krs";
 import { groupRepo, write } from "./repo-fixture";
+import { acmePlan } from "./plan-serve-fixture";
 
 const NOW = new Date("2026-11-10T12:00:00Z");
 const NOW_ISO = NOW.toISOString();
@@ -36,7 +37,7 @@ function acmeRead(): { repo: string; at: (ref: string) => string } {
   newBet(bet("one-inbox", { primary: "revenue" }), at("company"));
   newBet(bet("inbox-match", { primary: "close-days", alignsTo: ["one-inbox"] }), at("finance"));
   newBet(bet("faster-checkout", { primary: "close-days", alignsTo: ["inbox-match"] }), at("payments"));
-  newBet(bet("web-bet", { primary: "revenue", also: ["close-days"], alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
+  newBet(bet("web-bet", { primary: "close-days", alignsTo: ["faster-checkout", "inbox-match"] }), at("WEB"));
   write(join(repo, "planning/repos.yaml"), `version: 1\nrepos:\n  - repo: acme/payments-web\n    host: github.com\n    url: "${code}"\n`);
   refreshDelivery(repo, { now: NOW });
   return { repo, at };
@@ -115,11 +116,12 @@ describe("a group's and a team's pages", () => {
     expect(p.breadcrumb.map((c) => c.label)).toEqual(["Company", "Finance", "Payments"]);
   });
 
-  it("gives a team the key results its bets aim at, both primary and also, in the order they're aimed at", () => {
+  it("gives a team the key results its bets aim at, and the company's above them", () => {
     const { repo } = acmeRead();
     const p = page(repo, "teams/WEB");
-    expect(p.krs.map((k) => k.id)).toEqual(["revenue", "close-days"]);
-    expect(p.bets[0]).toMatchObject({ id: "web-bet", team: "", krs: { primary: "revenue", also: ["close-days"] } });
+    expect(p.krs.map((k) => k.id)).toEqual(["close-days"]);
+    expect(p.aboveKrs.map((k) => k.id)).toEqual(["revenue"]);
+    expect(p.bets[0]).toMatchObject({ id: "web-bet", team: "", krs: { primary: "close-days", also: [] } });
     expect(p.bets[0].aligns_to.map((b) => b.id).sort()).toEqual(["faster-checkout", "inbox-match"]);
     expect(p.aboveBets.map((b) => b.id).sort()).toEqual(["faster-checkout", "inbox-match"]);
     expect(p.breadcrumb.map((c) => c.label)).toEqual(["Company", "Finance", "Payments", "WEB"]);
@@ -140,5 +142,28 @@ describe("a page with a file that won't load", () => {
     const p = page(repo, "groups/payments");
     expect(p.problems.join("\n")).toContain("broken.md is missing its details block");
     expect(p.bets.map((b) => b.id)).toEqual(["faster-checkout"]);
+  });
+});
+
+describe("a page that names what won't load", () => {
+  it("leaves out only the key result above that won't load: the area's own still shows, and the problem is named", () => {
+    const repo = acmePlan();
+    // close-days aligns to revenue, and revenue's file is broken.
+    appendFileSync(join(findArea(repo, "departments/finance").dir, "krs", "close-days.yaml"), "aligns_to:\n  - revenue\n");
+    write(join(findArea(repo, "company").dir, "krs", "revenue.yaml"), "title: [unclosed\n");
+    const p = page(repo, "departments/finance");
+    expect(p.krs.map((k) => k.id)).toEqual(["close-days"]);
+    expect(p.aboveKrs).toEqual([]);
+    expect(p.problems.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the bets below a group, when it widens down", () => {
+  it("lists only the bets below it: not the bets above it, nor its own", () => {
+    const repo = acmePlan();
+    const p = areaPage(repo, findArea(repo, "groups/payments"), { deliveries: planDeliveries(repo, NOW), now: NOW, widen: { up: false, down: true } });
+    expect(p.belowBets.map((b) => [b.id, b.how])).toEqual([["web-bet", "child"]]);
+    expect(p.belowBets.map((b) => b.id)).not.toContain("one-inbox");
+    expect(p.belowBets.map((b) => b.id)).not.toContain("inbox-match");
   });
 });

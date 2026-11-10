@@ -47,8 +47,9 @@ planning/
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
 - **Links go up.** A key result aligns to key results above it, and a bet to
-  bets above it. A bet aims at key results at its own level or above. A team's
-  bets may align to any department's or group's bet.
+  bets above it. A bet aims at key results at its own level or above, but a
+  group's or team's bets aim at department key results only. A team's bets may
+  align to any department's or group's bet.
 - **Settings come down the folders.** The company's are in
   `nikos.settings.yaml` at the root. Each department, group or team can have
   a `settings.yaml` that changes what nobody above it locked.
@@ -132,16 +133,16 @@ origin, so nikOS can tell whose bet it is.
 
 ## The dashboard
 
-`nikos plan serve` opens the plan in your browser, on 127.0.0.1, one area at a
-time. It starts on the company. The link it prints has a private key in it, so
+`nikos plan serve` runs the plan's dashboard on 127.0.0.1, one area at a time,
+and prints the link to open in your browser. It starts on the company. The link it prints has a private key in it, so
 keep the link to yourself.
 
 ```bash
 nikos plan serve                          # the company, on a free port
-nikos plan serve --at departments/finance # start on one area
+nikos plan serve --in departments/finance # start on one area
 nikos plan serve --port 4777 --offline    # a fixed port, and no refresh of the code repos
 nikos plan serve --export plan.html       # one offline page, for every area
-nikos plan serve --export finance.html --at departments/finance   # one offline page, for one area
+nikos plan serve --export finance.html --in departments/finance   # one offline page, for one area
 ```
 
 - **Altitude, then area.** The switcher at the top chooses the level: Company,
@@ -163,8 +164,11 @@ nikos plan serve --export finance.html --at departments/finance   # one offline 
   key result's due date.
 - **The place is in the link.** Every link carries the area, for example
   `?at=departments/finance`, so a page can be bookmarked or shared.
-- **Read only.** The dashboard reads the plan and the delivery copies, and changes
-  nothing. Make changes with the `nikos plan` commands above.
+- **Saves are small and never pushed.** A key result has a check-in form, and the
+  Bets page has a form to add a bet. Each save goes in the area's own folder, on
+  a `nikos/plan-<area>-<date>` branch. A bar at the top lists the saved changes:
+  Commit commits only those areas' files, and Push is the only thing that sends
+  them. Other changes are made with the `nikos plan` commands above.
 
 A dashboard that can't refresh the code repos on start still opens, and says why
 at the top of every page. `--offline` skips the refresh.

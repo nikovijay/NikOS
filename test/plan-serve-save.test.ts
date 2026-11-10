@@ -86,14 +86,33 @@ describe("a save from the plan dashboard", () => {
     expect(git(repo, "status", "--porcelain")).toBe("");
   });
 
-  it("a group's bet takes key results above it, and names the group's branch", async () => {
+  it("a group's bet takes a department key result, and names the group's branch", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
     const bet = "planning/groups/payments/bets/faster-checkout.md";
-    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "close-days", also: ["revenue"] }, expect: versionOf(repo, bet) });
+    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "close-days", also: [] }, expect: versionOf(repo, bet) });
     expect(r.status).toBe(200);
     expect(r.body.branch).toBe(`nikos/plan-groups-payments-${today()}`);
-    expect(readFileSync(join(repo, bet), "utf8")).toContain("revenue");
+  });
+
+  it("refuses a company key result for a group's bet: a group's bets aim at department key results", async () => {
+    const repo = gitPlan();
+    const plan = await start(repo);
+    const bet = "planning/groups/payments/bets/faster-checkout.md";
+    const before = readFileSync(join(repo, bet), "utf8");
+    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "revenue", also: [] }, expect: versionOf(repo, bet) });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toContain("revenue is a company key result");
+    expect(readFileSync(join(repo, bet), "utf8")).toBe(before);
+  });
+
+  it("refuses a company key result for a team's bet too", async () => {
+    const repo = gitPlan();
+    const plan = await start(repo);
+    const bet = "planning/teams/WEB/bets/web-bet.md";
+    const r = await post(plan, "/api/op", { op: "bet.krs", target: { bet: "web-bet" }, args: { primary: "revenue", also: [] }, expect: versionOf(repo, bet) });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toContain("revenue is a company key result");
   });
 
   it("refuses a key result that isn't in the company's plan", async () => {
@@ -181,5 +200,22 @@ describe("a save from the plan dashboard", () => {
     expect([...res.changes.keys()].map((p) => p.split("/").slice(-5).join("/"))).toEqual(["planning/departments/finance/krs/close-days.yaml"]);
     const stale = runOps(area, [{ op: "checkin", target: { kr: "close-days" }, args: { value: 8, date: today() }, expect: "0000000000000000" }]);
     expect(stale.results[0]).toMatchObject({ ok: false, skipped: expect.any(String) });
+  });
+});
+
+describe("a restart of the plan dashboard", () => {
+  it("keeps the saves not yet committed: the pending bar lists them, and a commit takes them", async () => {
+    const repo = gitPlan();
+    const first = await start(repo);
+    const made = await post(first, "/api/op", { op: "checkin", target: { kr: "close-days" }, args: { value: 8, date: today() }, expect: versionOf(repo, CLOSE) });
+    expect(made.status).toBe(200);
+    await first.srv.close();
+    open = open.filter((p) => p !== first);
+    const second = await start(repo);
+    const pending = await fetch(`http://127.0.0.1:${second.srv.port}/api/pending`, { headers: { "x-nikos-token": second.srv.token } }).then((x) => x.json());
+    expect(pending.paths).toEqual([CLOSE]);
+    const committed = await post(second, "/api/git/commit", {});
+    expect(committed.status).toBe(200);
+    expect(git(repo, "show", "--name-only", "--format=", "HEAD").split("\n").filter(Boolean)).toEqual([CLOSE]);
   });
 });

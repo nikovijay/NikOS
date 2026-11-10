@@ -74,8 +74,21 @@ describe("nikos plan serve from the command line", () => {
     expect(r.out).toContain("This isn't a planning repo");
   });
 
-  it("lists plan serve in the plan help", async () => {
+  it("lists plan serve in the plan help, with --in and the link it prints", async () => {
     const r = await run(["help"]);
     expect(r.out).toContain("plan serve");
+    expect(r.out).toContain("--in <area>");
+    expect(r.out).toContain("print its link");
+  });
+
+  it("takes --in for the area a page starts on, as the help says", async () => {
+    const repo = acmePlan();
+    const out = target();
+    const r = await run(["serve", "--dir", repo, "--in", "departments/finance", "--export", out, "--offline"]);
+    expect(r.code).toBe(0);
+    expect(readFileSync(out, "utf8")).toContain("Close days");
+    const bad = await run(["serve", "--dir", repo, "--in", "nowhere", "--export", target(), "--offline"]);
+    expect(bad.code).toBe(1);
+    expect(bad.out).toContain("There's no area called 'nowhere'");
   });
 });

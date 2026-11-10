@@ -32,14 +32,16 @@ function get(port: number, path: string, opts: { headers?: Record<string, string
 }
 
 describe("the plan dashboard's pages", () => {
-  it("shows the company at / with its key results and bets, and no form", async () => {
+  it("shows the company at / with its key results and bets, and the save forms with the server's token", async () => {
     const { srv } = await start(acmePlan());
     const r = await get(srv.port, "/");
     expect(r.status).toBe(200);
     expect(r.text).toContain("Acme");
     expect(r.text).toContain("Revenue");
     expect(r.text).toContain("one-inbox");
-    expect(r.text).not.toContain("<form");
+    // The live page saves through /api/op with this token; the offline export has no forms (plan-export.test.ts).
+    expect(r.text).toContain(`<meta name="nikos-token" content="${srv.token}">`);
+    expect(r.text).toContain('data-op="checkin"');
   });
 
   it("shows the area ?at= names, with its quarter, its check-ins and where it sits", async () => {

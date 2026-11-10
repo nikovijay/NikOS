@@ -44,9 +44,10 @@ See and check it
   plan validate    Check the whole plan. A map that names an unknown bet, or a repo never read,
                    is a warning: validate still passes
   plan refresh     Read each code repo in planning/repos.yaml, read-only, and keep its delivery copy
-  plan serve       Open the planning dashboard in your browser, one area at a time (--at <area>
-                   to start on one, --port, --offline to skip the refresh). --export <file> writes
-                   one offline page: the --at area's, or every area's when there is no --at
+  plan serve       Run the planning dashboard and print its link, to open in your browser. One area
+                   at a time (--in <area> to start on one, --port, --offline to skip the refresh).
+                   --export <file> writes one offline page: the --in area's, or every area's when
+                   there is no --in
   plan settings [set <key> <value>]   The settings for an area, and where each comes from (--in)
 
 --in takes company, departments/finance, groups/payments or teams/WEB, or just the id.
@@ -309,20 +310,21 @@ export async function runPlanRepo(args: string[]): Promise<number> {
       }
       case "serve": {
         // Checked here: parseArgs ignores a flag it doesn't know, and a typo should not start a server.
-        const flags = ["port", "offline", "export", "at", "dir"];
+        const flags = ["port", "offline", "export", "in", "at", "dir"];
         const unknown = args.filter((a) => a.startsWith("--")).map((a) => a.slice(2)).filter((n) => !flags.includes(n));
         if (unknown.length) throw new Error(`Unknown option --${unknown[0]} for plan serve. The options are ${flags.map((f) => `--${f}`).join(", ")}`);
         const portText = opt("port");
         const port = portText === undefined ? undefined : Number(portText);
         if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error("--port takes a port number, for example --port 4777");
         const repo = need();
+        const at = opt("in") ?? opt("at");
         if (opt("export") !== undefined) {
-          const { wrote, notices } = await exportPlanPage(repo, opt("export")!, { offline: has("offline"), at: opt("at") });
+          const { wrote, notices } = await exportPlanPage(repo, opt("export")!, { offline: has("offline"), at });
           for (const n of notices) console.log(`! ${n}`);
           console.log(`Saved the plan page: ${wrote}`);
           return 0;
         }
-        return await runPlanServe(repo, { port, offline: has("offline"), at: opt("at") });
+        return await runPlanServe(repo, { port, offline: has("offline"), at });
       }
       case "validate": {
         const repo = need();

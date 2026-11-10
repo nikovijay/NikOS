@@ -109,3 +109,16 @@ describe("nikos plan serve --export", () => {
     expect(Object.keys(pagesIn(readFileSync(out, "utf8")))).toContain("at=company");
   });
 });
+
+describe("the export's title", () => {
+  it("is plain text in the file's script, and escaped in the document head", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "nikos-export-title-"));
+    initPlanRepo(repo, { name: "Fish & Chips", year: "2027" });
+    addArea(repo, "department", "finance", { name: "Finance" });
+    const out = join(repo, "page.html");
+    await exportPlanPage(repo, out, { offline: true, at: "company" });
+    const html = readFileSync(out, "utf8");
+    expect(html).toContain("<title>Fish &amp; Chips · nikOS plan</title>");
+    expect(html).toContain('"title":"Fish & Chips · nikOS plan"');
+  });
+});

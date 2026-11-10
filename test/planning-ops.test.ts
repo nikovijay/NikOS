@@ -1,7 +1,8 @@
 // Every change goes through runOp: the level, the ids, the command's own refusals, and the stale
 // check. Each op here has a success, the refusals it can give (verbatim), and its wrong level.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMapNew, newMap } from "../src/commands/map";
 import { setState } from "../src/commands/state";
@@ -296,5 +297,16 @@ describe("cleanup", () => {
     expect(dry.results[0].ok).toBe(true);
     expect(dry.changes.get("planning/downstream.yaml")).toContain("Payments");
     expect(existsSync(join(co, "planning", "downstream.yaml")) ? readText(co, "planning/downstream.yaml") : undefined).toBe(before);
+  });
+});
+
+describe("nikos planning keeps the lists it had", () => {
+  it("refuses bet.krs at a legacy group, and a team at all, as before", () => {
+    const g = groupRepo();
+    expect(() => runOp(g, { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "pay-1" } }, { strict: true })).toThrow("bet.krs isn't a change the group plan makes here");
+    const team = mkdtempSync(join(tmpdir(), "nikos-legacy-team-"));
+    write(join(team, "planning/plan.yaml"), "name: Web\nkey: WEB\nperiod: Q1 2027\nlevel: team\npillars: []\n");
+    write(join(team, "planning/bets/web-copy.md"), "---\nid: web-copy\n---\n");
+    expect(() => runOp(team, { op: "bet.new", target: { bet: "web-copy" }, args: {} }, { strict: true })).toThrow("bet.new isn't a change the team plan makes here");
   });
 });

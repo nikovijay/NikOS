@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startPlanServe, type PlanServe } from "../src/plan/serve";
 import { newBet } from "../src/planning/bets";
 import { findArea } from "../src/plan/repo";
+import { newKr } from "../src/planning/krs";
 import { acmePlan } from "./plan-serve-fixture";
 
 let open: PlanServe[] = [];
@@ -40,19 +41,20 @@ describe("the altitude switcher and the area picker", () => {
   it("shows the four altitudes, marks the chosen one, and links each to an area at that level", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, "/?at=departments/finance")).text;
+    // An area's link carries the quarter the page shows; the company's does not, since its key results are for the year.
     expect(r).toContain('<a href="?at=company">Company</a>');
-    expect(r).toContain('<a href="?at=departments%2Ffinance" class="on" aria-current="page">Departments</a>');
-    expect(r).toContain('<a href="?at=groups%2Fpayments">Groups</a>');
-    expect(r).toContain('<a href="?at=teams%2FWEB">Teams</a>');
+    expect(r).toContain('<a href="?at=departments%2Ffinance&amp;period=2027-Q1" class="on" aria-current="page">Departments</a>');
+    expect(r).toContain('<a href="?at=groups%2Fpayments&amp;period=2027-Q1">Groups</a>');
+    expect(r).toContain('<a href="?at=teams%2FWEB&amp;period=2027-Q1">Teams</a>');
   });
 
   it("lists only the areas at the chosen altitude in the picker, with no form around it", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, "/?at=groups/payments")).text;
     expect(r).toContain('<select onchange="location.href=this.value">');
-    expect(r).toContain('<option value="?at=groups%2Fpayments" selected>Payments</option>');
+    expect(r).toContain('<option value="?at=groups%2Fpayments&amp;period=2027-Q1" selected>Payments</option>');
     expect(r).not.toContain("Finance</option>");
-    expect(r).not.toContain("<form");
+    expect(r).not.toMatch(/<form[^>]*>(?:(?!<\/form>)[\s\S])*<select/);
     expect(r).not.toContain("<script src");
   });
 
@@ -68,7 +70,7 @@ describe("breadcrumbs and the place in the URL", () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, "/?at=teams/WEB")).text;
     expect(r).toContain(
-      '<nav class="crumbs" aria-label="Breadcrumb"><a href="?at=company">Company</a> › <a href="?at=departments%2Ffinance">Finance</a> › <a href="?at=groups%2Fpayments">Payments</a> › <a href="?at=teams%2FWEB">WEB</a></nav>',
+      '<nav class="crumbs" aria-label="Breadcrumb"><a href="?at=company">Company</a> › <a href="?at=departments%2Ffinance&amp;period=2027-Q1">Finance</a> › <a href="?at=groups%2Fpayments&amp;period=2027-Q1">Payments</a> › <a href="?at=teams%2FWEB&amp;period=2027-Q1">WEB</a></nav>',
     );
   });
 
@@ -88,7 +90,7 @@ describe("the views each level has", () => {
     const dept = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
     expect(dept).toContain("<table>");
     expect(dept).toContain("Key result</th>");
-    expect(dept).toContain(`href="?${FINANCE}&amp;kr=close-days"`);
+    expect(dept).toContain(`href="?${FINANCE}&amp;kr=close-days&amp;period=2027-Q1"`);
     const group = (await get(srv.port, "/?at=groups/payments")).text;
     expect(group).not.toContain("Key result</th>");
     expect(group).not.toContain("view=keys");
@@ -99,7 +101,7 @@ describe("the views each level has", () => {
   it("opens on the OKRs and bets page by default, with each key result's bets under it", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}`)).text;
-    expect(r).toContain('<a href="?at=departments%2Ffinance" class="on"');
+    expect(r).toContain('<a href="?at=departments%2Ffinance&amp;view=okrs&amp;period=2027-Q1" class="on"');
     expect(r).toContain("Key results and the bets that aim at them");
     expect(r).toContain("Close days");
     expect(r).toContain("last 9 on 2026-11-09");
@@ -118,8 +120,8 @@ describe("the views each level has", () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, "/?at=teams/WEB&view=bets")).text;
     expect(r).toContain("Aims at");
-    expect(r).toContain('href="?at=teams%2FWEB&amp;kr=revenue"');
-    expect(r).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout"');
+    expect(r).toContain('href="?at=teams%2FWEB&amp;kr=close-days&amp;period=2027-Q1"');
+    expect(r).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout&amp;period=2027-Q1"');
   });
 });
 
@@ -131,7 +133,7 @@ describe("the ladder", () => {
     expect(r).toContain('class="cell kr"');
     expect(r).toContain('class="cell bet"');
     expect(r).toContain("text-overflow:ellipsis");
-    expect(r).toContain('<a class="t" href="?at=departments%2Ffinance&amp;kr=close-days">Close days</a>');
+    expect(r).toContain('<a class="t" href="?at=departments%2Ffinance&amp;kr=close-days&amp;period=2027-Q1">Close days</a>');
     expect(r).toContain("50% this period");
   });
 
@@ -146,10 +148,11 @@ describe("the ladder", () => {
     const { srv } = await start(acmePlan());
     const one = (await get(srv.port, "/?at=teams/WEB&view=ladder")).text;
     expect(one).toContain('class="cell above-bet"');
-    expect(one).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout">faster-checkout');
-    expect(one).not.toContain('bet=inbox-match">inbox-match</a></div>');
+    expect(one).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout&amp;period=2027-Q1">faster-checkout');
+    expect(one).not.toContain('bet=inbox-match&amp;period=2027-Q1">inbox-match</a></div>');
     const up = (await get(srv.port, "/?at=teams/WEB&view=ladder&widen=up")).text;
-    expect(up).toContain('bet=inbox-match">inbox-match</a>');
+    expect(up).toContain('bet=inbox-match&amp;period=2027-Q1">inbox-match</a>');
+    // The company's bets carry no quarter: the company's key results are for the year.
     expect(up).toContain('bet=one-inbox">one-inbox</a>');
     expect(up).toContain("Hide the levels above");
   });
@@ -176,7 +179,7 @@ describe("the ladder", () => {
     expect(capped).toContain("more=all");
     const all = (await get(srv.port, `/?${FINANCE}&view=ladder&more=all`)).text;
     expect(all).not.toContain("more ·");
-    expect(all).toContain('bet=extra-13">');
+    expect(all).toContain('bet=extra-13&amp;period=2027-Q1">');
   });
 });
 
@@ -188,8 +191,8 @@ describe("the drill-downs", () => {
     expect(r).toContain("Finance <span class=\"id\">departments/finance</span>");
     expect(r).toContain("Payments <span class=\"id\">groups/payments</span>");
     expect(r).toContain("Checkout web <span class=\"id\">teams/WEB</span>");
-    expect(r).toContain("Also aims at it");
-    expect(r).toContain("no story map names this bet yet");
+    expect(r).toContain("Aims at close-days");
+    expect(r).toContain("no story map yet");
     expect(r).toContain("Back to Finance");
   });
 
@@ -198,11 +201,11 @@ describe("the drill-downs", () => {
     const r = (await get(srv.port, "/?at=groups/payments&bet=faster-checkout")).text;
     expect(r).toContain("<h2>Bet: faster-checkout</h2>");
     expect(r).toContain("<h2>Up the chain</h2>");
-    expect(r).toContain('href="?at=departments%2Ffinance&amp;bet=inbox-match">inbox-match</a>');
+    expect(r).toContain('href="?at=departments%2Ffinance&amp;bet=inbox-match&amp;period=2027-Q1">inbox-match</a>');
     expect(r).toContain("Level 2 up");
     expect(r).toContain('href="?at=company&amp;bet=one-inbox">one-inbox</a>');
     expect(r).toContain("<h3>Below it</h3>");
-    expect(r).toContain('bet=web-bet">web-bet</a>');
+    expect(r).toContain('bet=web-bet&amp;period=2027-Q1">web-bet</a>');
   });
 
   it("names a key result or bet that isn't there, and shows the page without it", async () => {
@@ -216,15 +219,23 @@ describe("the drill-downs", () => {
 });
 
 describe("what the page is made of", () => {
-  it("has no form, no script from another place, and one inline line of script that parses", async () => {
+  it("has no form on the ladder, no script from another place, and an inline script that parses", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&view=ladder&widen=all`)).text;
     expect(r).not.toContain("<form");
     expect(r).not.toMatch(/<script\s+src=/);
     expect(r).not.toMatch(/https?:\/\//);
-    expect(r).not.toContain("fetch(");
     const onchange = /onchange="([^"]*)"/.exec(r)![1].replace(/&amp;/g, "&");
     expect(() => new Function(onchange)).not.toThrow();
+  });
+
+  it("has a live script that parses, which posts only to this server's own save routes", async () => {
+    const { srv } = await start(acmePlan());
+    const r = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
+    const script = /<script>([\s\S]*?)<\/script>/.exec(r)![1];
+    expect(() => new Function(script)).not.toThrow();
+    expect(script).toContain('"/api/op"');
+    expect(script).not.toMatch(/https?:\/\//);
   });
 
   it("gives the same page's data as JSON, with the view and the drill", async () => {
@@ -237,5 +248,64 @@ describe("what the page is made of", () => {
     const down = JSON.parse((await get(srv.port, "/api/data?at=company&widen=all")).text);
     expect(down.widen).toEqual({ up: true, down: true });
     expect(down.drill).toBeNull();
+  });
+});
+
+describe("the quarter, the labels and the forms", () => {
+  it("shows the quarters that have key results as links, and each link keeps the view and the widening", async () => {
+    const repo = acmePlan();
+    newKr({ id: "close-days-q2", title: "Close days in Q2", owner: "Mira", baseline: 9, target: 6, by: "2027-06-30", period: "2027-Q2" }, findArea(repo, "finance").dir);
+    const { srv } = await start(repo);
+    const q2 = (await get(srv.port, `/?${FINANCE}&period=2027-Q2&view=timeline`)).text;
+    expect(q2).toContain('<p class="quarters">Quarter: <a href="?at=departments%2Ffinance&amp;view=timeline&amp;period=2027-Q1">2027-Q1</a> · <span class="on" aria-current="true">2027-Q2</span></p>');
+    expect(q2).toContain('href="?at=departments%2Ffinance&amp;view=keys&amp;period=2027-Q2"');
+    expect(q2).toContain("Close days in Q2");
+  });
+
+  it("names a company key result's progress as toward its target, and a department's as this quarter's", async () => {
+    const { srv } = await start(acmePlan());
+    const company = (await get(srv.port, "/?at=company&view=ladder")).text;
+    expect(company).toContain("toward target");
+    expect(company).not.toContain("this period");
+    const dept = (await get(srv.port, `/?${FINANCE}&view=ladder`)).text;
+    expect(dept).toContain("50% this period");
+  });
+
+  it("draws a line into every cell above the area when widened up, and each one is reached", async () => {
+    const { srv } = await start(acmePlan());
+    const up = (await get(srv.port, "/?at=teams/WEB&view=ladder&widen=up")).text;
+    expect((up.match(/class="cell above-bet"/g) ?? []).length).toBe(3);
+    // web-bet to faster-checkout, faster-checkout to inbox-match, inbox-match to one-inbox, and close-days to web-bet.
+    expect((up.match(/<path /g) ?? []).length).toBe(4);
+    const one = (await get(srv.port, "/?at=teams/WEB&view=ladder")).text;
+    expect((one.match(/<path /g) ?? []).length).toBe(2);
+  });
+
+  it("has the bet form and the check-in forms on the live page, each with the area it saves to", async () => {
+    const { srv } = await start(acmePlan());
+    const bets = (await get(srv.port, "/?at=teams/WEB&view=bets")).text;
+    expect(bets).toContain('<form class="save" data-op="bet.new" data-area="teams/WEB"');
+    expect(bets).toContain('<input name="bet" required>');
+    const finance = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
+    expect(finance).toContain('data-op="checkin" data-area="departments/finance" data-target="{&quot;kr&quot;:&quot;close-days&quot;}"');
+  });
+
+  it("labels a bet's delivery in the ladder, and dates its start and deadline on the timeline", async () => {
+    const repo = acmePlan();
+    newBet({ id: "dated-bet", owner: "Sam", hypothesis: "Dates show.", reviewOn: "2027-02-14", primary: "close-days", starts: "2027-01-05", deadline: "2027-06-30" }, findArea(repo, "finance").dir);
+    const { srv } = await start(repo);
+    const ladder = (await get(srv.port, `/?${FINANCE}&view=ladder`)).text;
+    expect(ladder).toContain("Own bet · no story map yet");
+    const timeline = (await get(srv.port, `/?${FINANCE}&view=timeline`)).text;
+    expect(timeline).toContain("<td>Starts</td>");
+    expect(timeline).toContain("<td>Deadline</td>");
+    expect(timeline).toContain("2027-06-30");
+  });
+
+  it("lists the areas below the company as a sub-area heading that doesn't clash with the bets' one", async () => {
+    const { srv } = await start(acmePlan());
+    const r = (await get(srv.port, "/?at=company")).text;
+    expect(r).toContain("<h2>Areas below this</h2>");
+    expect(r).not.toContain("<h2>Below this</h2>");
   });
 });
