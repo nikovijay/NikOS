@@ -97,15 +97,22 @@ describe("what the plan dashboard refuses", () => {
     expect(r.text).toContain("only answers on its own address");
   });
 
-  it("takes no save: a POST gets a refusal and changes nothing", async () => {
+  it("takes no save without the token, and no save but /api/op and the git buttons", async () => {
     const { srv } = await start(acmePlan());
-    const r = await get(srv.port, "/api/op", {
+    const wrong = await get(srv.port, "/api/op", {
       method: "POST",
       headers: { "content-type": "application/json", "x-nikos-token": "wrong" },
       body: JSON.stringify({ op: "checkin", target: { kr: "close-days" }, args: { value: 8 }, expect: "x" }),
     });
-    expect(r.status).toBe(501);
-    expect(r.text).toContain("Saving from the plan dashboard isn't on yet");
+    expect(wrong.status).toBe(403);
+    expect(wrong.text).toContain("Missing or wrong token");
+    const legacy = await get(srv.port, "/api/checkin", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-nikos-token": srv.token },
+      body: JSON.stringify({ id: "close-days", value: 8, expect: "x" }),
+    });
+    expect(legacy.status).toBe(501);
+    expect(legacy.text).toContain("saves through /api/op");
   });
 
   it("has none of the planning dashboard's other pages", async () => {

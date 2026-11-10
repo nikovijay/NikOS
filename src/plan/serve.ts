@@ -4,11 +4,12 @@
 // The server is the planning dashboard's own (planning/server.ts), given these pages in place of its own.
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { startServer, type PageSource, type RunningServer } from "../planning/server.js";
-import type { AreaLevel } from "../planning/model.js";
+import { startServer, type PageSource, type RunningServer, type SaveTarget } from "../planning/server.js";
+import type { Runner } from "../lib/git.js";
+import type { Area, AreaLevel } from "../planning/model.js";
 import { areaPage, resolveAt, type AreaPage } from "./dashboard.js";
 import { planDeliveries, type BetDelivery } from "./delivery.js";
-import { findArea } from "./repo.js";
+import { areaHolding, findArea } from "./repo.js";
 import { refreshDelivery } from "./refresh.js";
 import { figuresText, readsText } from "./words.js";
 
@@ -19,6 +20,8 @@ export interface PlanServeOptions {
   offline?: boolean;
   /** The area the first page shows, named as --in names it. Unknown names are an error. */
   at?: string;
+  /** Runs git for the save buttons. Tests pass a runner that records the calls. */
+  run?: Runner;
 }
 
 export interface PlanServe {
@@ -46,6 +49,23 @@ function refreshNotices(repo: string, offline = false): string[] {
 function pageOf(repo: string, query: URLSearchParams, notices: string[]): AreaPage {
   const { area, notice } = resolveAt(repo, query.get("at") ?? undefined);
   return areaPage(repo, area, { deliveries: planDeliveries(repo), now: new Date(), notices: [...notices, ...(notice ? [notice] : [])] });
+}
+
+/**
+ * The folder a change goes in: the area that holds the key result or bet it names. A new key result or bet
+ * names its area, and so does a change that names neither. An area that isn't one is refused.
+ */
+export function saveIn(repo: string, body: Record<string, any>): SaveTarget {
+  const target = body.target && typeof body.target === "object" ? body.target : {};
+  const op = String(body.op ?? "");
+  const creates = op === "kr.new" || op === "bet.new";
+  let area: Area;
+  if (!creates && typeof target.kr === "string") area = areaHolding(repo, target.kr, "key result");
+  else if (!creates && typeof target.bet === "string") area = areaHolding(repo, target.bet, "bet");
+  else if (typeof body.area === "string" && body.area) area = findArea(repo, body.area);
+  else if (creates) throw new Error(`Say which area the ${op === "kr.new" ? "key result" : "bet"} goes in, e.g. departments/finance`);
+  else throw new Error("Say which key result or bet the change is to, or the area it goes in (area, e.g. departments/finance)");
+  return { root: area.dir, area: area.rel };
 }
 
 const LEVEL_NAME: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team" };
@@ -112,8 +132,9 @@ export async function startPlanServe(repo: string, opts: PlanServeOptions = {}):
   const pages: PageSource = {
     page: (query) => pageHtml(pageOf(repo, query, notices)),
     data: (query) => pageOf(repo, query, notices),
+    saveIn: (body) => saveIn(repo, body),
   };
-  const srv = await startServer(repo, { port: opts.port, pages });
+  const srv = await startServer(repo, { port: opts.port, pages, run: opts.run });
   const url = `http://127.0.0.1:${srv.port}/?${first ? `at=${encodeURIComponent(first.rel)}&` : ""}token=${srv.token}`;
   return { srv, url, notices };
 }

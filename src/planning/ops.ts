@@ -16,8 +16,9 @@ import { editBet, newBet, reviewBet } from "./bets.js";
 import { setAligns, setBetKrs } from "./aligns.js";
 import { krLevelProblem, levelOf, planningIssues } from "./levels.js";
 import { idProblem, betFieldProblems, decisionProblem, numberProblem, reasonProblem } from "./rules.js";
-import { hash, StaleError, checkHash } from "./model.js";
+import { areaOf, hash, labelRoot, StaleError, checkHash } from "./model.js";
 import { validate, validateGroup } from "../commands/validate.js";
+import { krAreaProblem, repoIssues } from "../plan/repo.js";
 
 export type OpName =
   | "checkin"
@@ -46,7 +47,7 @@ export type OpName =
   | "setting.set"
   | "downstream.add";
 
-export type Level = "company" | "department" | "group";
+export type Level = "company" | "department" | "group" | "team";
 
 export interface Op {
   op: OpName;
@@ -62,6 +63,7 @@ const GROUP: OpName[] = [
   "bet.edit",
   "bet.review",
   "bet.align",
+  "bet.krs",
   "story.new",
   "story.rename",
   "story.move",
@@ -76,6 +78,11 @@ const GROUP: OpName[] = [
   "release.reorder",
   "map.new",
 ];
+// A team makes bets only: it has no key results, and its bets aim at the key results above it.
+const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
+
+/** Ops that edit a story map or the settings of a code repo. A planning area never makes them: maps stay in the code repos. */
+const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set", "downstream.add"]);
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
 const NAMES: Record<OpName, true> = {
@@ -108,9 +115,12 @@ const NAMES: Record<OpName, true> = {
 
 export const OP_NAMES = Object.keys(NAMES) as OpName[];
 
-/** The levels each op is made at, from the three level lists. A group plan has no key results, so kr.* and checkin are refused there. */
+/** The levels each op is made at, from the level lists. A group or team has no key results, so kr.* and checkin are refused there. */
 export const OP_LEVELS: Record<OpName, Level[]> = Object.fromEntries(
-  OP_NAMES.map((name) => [name, (["company", "department", "group"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : GROUP).includes(name))]),
+  OP_NAMES.map((name) => [
+    name,
+    (["company", "department", "group", "team"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : lv === "group" ? GROUP : TEAM).includes(name)),
+  ]),
 ) as Record<OpName, Level[]>;
 
 /**
@@ -187,7 +197,11 @@ const refs = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(
 function precheck(root: string, op: Op): void {
   if (!Object.prototype.hasOwnProperty.call(OP_LEVELS, op.op)) throw new Error(`'${String(op.op)}' isn't a change nikOS knows`);
   const level = levelOf(root);
-  if (level === "group" && (op.op.startsWith("kr.") || op.op === "checkin")) throw new Error(krLevelProblem(level)!);
+  const area = areaOf(root);
+  if (area && AREA_REFUSED.has(op.op)) throw new Error(`${op.op} isn't a change a planning area makes: story maps and settings stay in the code repos`);
+  const keys = op.op.startsWith("kr.") || op.op === "checkin";
+  if (area && keys && krAreaProblem(area)) throw new Error(krAreaProblem(area)!);
+  if (level === "group" && keys) throw new Error(krLevelProblem(level)!);
   if (level && !OP_LEVELS[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
   for (const [kind, id] of Object.entries(op.target ?? {})) {
     const k = TARGET_KINDS[kind];
@@ -355,8 +369,11 @@ function apply(root: string, op: Op): string {
 
 /** The text of the files a dry run needs: planning, the story maps, settings, and the copies of other plans. */
 const SNAPSHOT = ["planning", "maps", "nikos.settings.yaml", ".nikos/upstream"];
+/** A planning area's dry run needs the whole planning/ folder: the checks compare areas with each other. */
+const SNAPSHOT_AREA = ["planning"];
 
-function snapshotFiles(root: string): Record<string, string> {
+/** The files under root, keyed by their path relative to root. */
+function snapshotFiles(root: string, parts: string[] = SNAPSHOT): Record<string, string> {
   const out: Record<string, string> = {};
   const visit = (rel: string) => {
     const abs = join(root, rel);
@@ -364,7 +381,7 @@ function snapshotFiles(root: string): Record<string, string> {
     if (diskStore.isDir(abs)) for (const name of diskStore.list(abs)) visit(join(rel, name));
     else out[rel.split(sep).join("/")] = diskStore.read(abs);
   };
-  for (const p of SNAPSHOT) visit(p);
+  for (const p of parts) visit(p);
   return out;
 }
 
@@ -378,6 +395,9 @@ export function checkRepo(root: string): Problems {
   const errors: string[] = [];
   const warnings: string[] = [];
   for (const i of planningIssues(root)) (i.warning ? warnings : errors).push(`${i.file}: ${i.message}`);
+  // In an area, the repo's own rules too: an id must not be used in another area.
+  const area = areaOf(root);
+  if (area) for (const i of repoIssues(area.repo)) (i.warning ? warnings : errors).push(`${i.file}: ${i.message}`);
   // intent/ with no maps/ still gets validateGroup's migrate hint.
   if (mapDirs(root).length || store().isDir(join(root, "intent"))) {
     for (const i of validateGroup(root).errors) errors.push(`${i.file}: ${i.message}`);
@@ -389,6 +409,7 @@ export function checkRepo(root: string): Problems {
 function recorded<T>(root: string, fn: () => T): { value: T; changed: string[] } {
   const base = store();
   const written = new Set<string>();
+  const label = labelRoot(root);
   const note = (p: string) => written.add(resolve(p));
   const wrapped: Store = {
     read: (p) => base.read(p),
@@ -410,7 +431,7 @@ function recorded<T>(root: string, fn: () => T): { value: T; changed: string[] }
     memory: base.memory,
   };
   const value = withStore(wrapped, fn);
-  return { value, changed: [...written].sort().map((p) => relative(root, p).split(sep).join("/")) };
+  return { value, changed: [...written].sort().map((p) => relative(label, p).split(sep).join("/")) };
 }
 
 /**
@@ -462,8 +483,10 @@ export interface OpResult {
  */
 export function runOps(root: string, ops: Op[], opts: { chain?: boolean } = {}): { results: OpResult[]; changes: Map<string, string>; removed: string[]; validation: Problems; baseline: Problems } {
   const abs = resolve(root);
-  const files = snapshotFiles(abs);
-  const mem = new MemoryStore(files, abs);
+  // An area's files are keyed by the repo's root, so the checks see the whole planning/ folder.
+  const base = labelRoot(abs);
+  const files = snapshotFiles(base, areaOf(abs) ? SNAPSHOT_AREA : SNAPSHOT);
+  const mem = new MemoryStore(files, base);
   const seen = new Map<string, string>();
   if (opts.chain) for (const [rel, text] of Object.entries(files)) seen.set(hash(text), rel);
   const results: OpResult[] = [];
@@ -476,7 +499,7 @@ export function runOps(root: string, ops: Op[], opts: { chain?: boolean } = {}):
       }
       let next = op;
       if (opts.chain && op.expect !== undefined && seen.has(op.expect)) {
-        const file = join(abs, seen.get(op.expect)!);
+        const file = join(base, seen.get(op.expect)!);
         if (mem.exists(file)) next = { ...op, expect: hash(mem.read(file)) };
       }
       try {
