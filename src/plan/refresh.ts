@@ -15,6 +15,9 @@ export const KEPT_FILES = ["storymap.yaml", "delivery.yaml"];
 
 const HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/i;
 
+/** The host a listed repo is read from: its own, else its url's, else github.com. */
+export const hostOfEntry = (entry: RepoEntry): string => entry.host ?? (entry.url ? hostNameOf(entry.url) : undefined) ?? "github.com";
+
 export interface CacheEntry {
   repo: string;
   host: string;
@@ -138,7 +141,7 @@ function readOne(
   scratch: string,
   now: Date,
 ): { entry: CacheEntry; report: RepoRead; host: string } {
-  const host = entry.host ?? (entry.url ? hostNameOf(entry.url) : undefined) ?? "github.com";
+  const host = hostOfEntry(entry);
   const ref = entry.ref ?? "default";
   const at = now.toISOString();
   const key = cacheKey(host, entry.repo);

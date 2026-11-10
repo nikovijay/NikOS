@@ -121,6 +121,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
+| `nikos plan status [--in <area>] [--json]` | The plan's key results and bets, each bet's delivery from the code repos listed in `planning/repos.yaml`, and how old each copy is ([docs/plan.md](docs/plan.md)) |
+| `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files under `.nikos/` |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |

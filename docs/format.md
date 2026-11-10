@@ -407,6 +407,16 @@ founder sends it, never the agent.
 
 **Format:** YAML with `version`, `map`, an optional `owner` (the map's owner, else the repo's group key), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade.
 
+---
+
+## planning/repos.yaml
+
+**Purpose:** the code repos a planning repo reads delivery from. `nikos plan refresh` reads each one, read-only.
+
+**Path:** `planning/repos.yaml` in the planning repo, optional.
+
+**Format:** YAML with `version: 1` and `repos`, a list of entries with `repo` (owner/repo, or group/project on GitLab), and optional `host`, `ref` (the default is the repo's default branch) and `url`. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade. `nikos join` writes it, and `nikos plan validate` checks it. Its copies are kept under `.nikos/delivery/`, which is never committed. See [docs/plan.md](plan.md).
+
 ## Upgrading from intent/
 
 A repo from before this release keeps its story map in `intent/`, and most commands

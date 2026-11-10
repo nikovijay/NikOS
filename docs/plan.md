@@ -4,12 +4,13 @@ nikOS Plan keeps a whole company's plan in **one repo**. Each level has a
 folder under `planning/`. The design is in
 [docs/rfcs/plan-and-spec.md](rfcs/plan-and-spec.md). This page covers what
 is built so far: the repo, its areas, key results, bets, check-ins, reviews,
-status, validation and settings. The dashboard and delivery from code repos
-come in later releases.
+status, validation, settings, and each bet's delivery from the code repos
+listed in `planning/repos.yaml`. The dashboard comes in a later release.
 
 ```
 nikos.settings.yaml               the company's settings and locks
 planning/
+  repos.yaml                      optional: the code repos whose delivery this plan reads
   company/
     plan.yaml                     name, period (the year), pillars, owner, objectives
     krs/<id>.yaml                 annual key results
@@ -65,7 +66,9 @@ nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" 
 nikos plan checkin close-days 10 --note "First week of auto-match"
 nikos plan bet review faster-checkout continue --why "On track"
 nikos plan status --in finance
+nikos plan status --json
 nikos plan validate
+nikos plan refresh
 nikos plan settings --in WEB
 ```
 
@@ -76,3 +79,54 @@ wherever it is.
 
 `nikos plan new <story-id>` still starts a new version of a story's plan, as
 before. In a planning repo, `nikos planning …` points you to `nikos plan …`.
+
+## Delivery from code repos
+
+A bet's delivery is worked out from the story maps that name it. A code repo
+is read by listing it in `planning/repos.yaml`:
+
+```yaml
+version: 1
+repos:
+  - repo: acme/payments-web      # owner/repo, or group/project on GitLab
+    host: github.com             # optional: the default is github.com
+    ref: main                    # optional: the default is the repo's default branch
+    url: https://github.com/acme/payments-web.git   # optional: any git url, such as a local path in tests
+```
+
+To list a code repo from its own checkout, run `nikos join <plan repo>` there.
+It writes the repo's line into `planning/repos.yaml` on a `nikos/join-…`
+branch with one commit, and prints where the branch is and how to open the
+review. Nothing in the code repo moves. It pushes only with `--push`, and
+`--plan-dir <checkout>` uses a checkout you already have.
+
+`nikos plan refresh` reads each listed repo, read-only, and keeps a copy of
+its `maps/<key>/storymap.yaml` and `delivery.yaml` under `.nikos/delivery/`,
+which git ignores. It prints one line per repo with how old its copy is. A
+repo that can't be read keeps its last good copy and says why the read
+failed. A repo that is no longer listed loses its copy.
+
+`nikos plan status` shows each bet under its line:
+
+```
+    delivery: Building, 2 of 5 done (1 approved), 1 in progress · acme/payments-web: read today (2026-11-10)
+```
+
+A bet with no story map of its own shows the bets below it that have maps,
+through `aligns_to`, each on its own line. Figures are never added up across
+bets: a map that feeds two bets counts once under each. A cancelled story is
+left out. A story that no summary lists yet
+counts as to do. `nikos plan status --json` gives the same figures as data,
+with each repo's read time as `read_at` as well as its age.
+
+`nikos plan status` and `nikos plan validate` warn, without failing, when:
+
+- a map names a bet this plan doesn't have, such as a misspelt id;
+- a map names a bet in another plan (`owner/repo#id`), which isn't counted here;
+- a listed repo has never been read, or no repo has been read yet;
+- a map's `delivery.yaml` is from a newer nikOS, so it isn't counted.
+
+A bet link to this plan can be written with the id alone, or in full as
+`<this plan's repo>#<id>`. The full form needs the planning repo to have an
+origin, so nikOS can tell whose bet it is.
+
