@@ -366,11 +366,19 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
+/** Pages another dashboard (nikos plan serve) serves in place of the planning one: / and /api/data. */
+export interface PageSource {
+  page(query: URLSearchParams): string;
+  data(query: URLSearchParams): unknown;
+}
+
 export interface StartOptions {
   port?: number;
   map?: string;
   /** Runs git and the forge tools. Tests pass a runner that records the calls. */
   run?: Runner;
+  /** Serves these pages instead of the planning dashboard's. Its saves are not open, so every POST is refused. */
+  pages?: PageSource;
 }
 
 interface Ctx {
@@ -381,13 +389,14 @@ interface Ctx {
   run: Runner;
   /** How many saves this server has made since it started. */
   session: { ops: number };
+  pages?: PageSource;
 }
 
 /** Start the dashboard on 127.0.0.1 with a fresh token. The url carries the token for the browser. */
 export async function startServer(root: string, opts: StartOptions = {}): Promise<RunningServer> {
   const token = randomBytes(24).toString("hex");
   let port = 0;
-  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 } };
+  const ctx: Ctx = { root, token, port: 0, mapId: opts.map, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages };
   const server = createServer((req, res) => {
     ctx.port = port;
     route(ctx, req, res).catch((err) => send(res, 500, { error: (err as Error).message }));
@@ -474,19 +483,24 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
   }
   const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
   if (req.method === "GET") return serveGet(ctx, path, req, res);
+  // The plan dashboard's saves come in a later change: until then no POST changes the plan.
+  if (ctx.pages && req.method === "POST") return send(res, 501, { error: "Saving from the plan dashboard isn't on yet: use the nikos plan commands" });
   if (req.method === "POST" && POSTS.has(path)) return postRequest(ctx, path, req, res);
   return send(res, 404, { error: "Not found" });
 }
 
 function serveGet(ctx: Ctx, path: string, req: IncomingMessage, res: ServerResponse) {
-  const { root, token, mapId } = ctx;
-  if (path === "/") return send(res, 200, renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
-  if (path === "/api/data") return send(res, 200, planningData(root, mapId));
+  const { root, token, mapId, pages } = ctx;
+  const query = new URL(req.url ?? "/", "http://127.0.0.1").searchParams;
+  if (path === "/") return send(res, 200, pages ? pages.page(query) : renderDashboard({ data: planningData(root, mapId), token, readOnly: false }), HTML);
+  if (path === "/api/data") return send(res, 200, pages ? pages.data(query) : planningData(root, mapId));
   if (path === "/api/pending") {
     const given = req.headers["x-nikos-token"];
     if (typeof given !== "string" || !sameToken(given, token)) return send(res, 403, { error: TOKEN_ERROR });
     return send(res, 200, pendingOf(ctx));
   }
+  // The other pages are the planning dashboard's own: a plan repo has none of them.
+  if (pages) return send(res, 404, { error: "Not found" });
   if (path === "/map") return send(res, 200, renderMap(root, { live: true, map: mapId }), HTML);
   if (path === "/nikos-view.js") return send(res, 200, VIEW_SCRIPT, JS);
   const m = /^\/views\/([^/]+)$/.exec(path);
