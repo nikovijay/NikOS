@@ -3,6 +3,7 @@
 // bets are found by id anywhere in the company, since ids are unique within it.
 import { relative } from "node:path";
 import { closest } from "../lib/closest.js";
+import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
 import { parseArgs } from "../planning/cli.js";
@@ -11,6 +12,7 @@ import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, parentOf, repoIssues } from "./repo.js";
 import { reposIssues } from "./repos.js";
+import { refreshDelivery } from "./refresh.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
@@ -36,6 +38,7 @@ Key results and bets
 See and check it
   plan status      Every area's key results and bets, or one area's (--in <area>)
   plan validate    Check the whole plan
+  plan refresh     Read each code repo in planning/repos.yaml, read-only, and keep its delivery copy
   plan settings [set <key> <value>]   The settings for an area, and where each comes from (--in)
 
 --in takes company, departments/finance, groups/payments or teams/WEB, or just the id.
@@ -191,6 +194,15 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         console.log(planStatus(repo, areaFor(repo, opt("in"), cwd)));
         return 0;
       }
+      case "refresh": {
+        const repo = need();
+        for (const r of refreshDelivery(repo).repos) {
+          if (r.state === "ok") console.log(`✓ ${r.repo}: ${summaryAge({ read_at: r.read_at! })} at ${r.commit!.slice(0, 7)}`);
+          else if (r.kept) console.log(`! ${r.repo}: unreachable (${r.reason}); showing the copy ${summaryAge({ read_at: r.read_at! })}`);
+          else console.log(`! ${r.repo}: unreachable (${r.reason}); no copy yet`);
+        }
+        return 0;
+      }
       case "validate": {
         const repo = need();
         const found = planIssues(repo);
@@ -225,7 +237,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         return 0;
       }
     }
-    const known = ["init", "add", "kr", "checkin", "bet", "status", "validate", "settings", "help"];
+    const known = ["init", "add", "kr", "checkin", "bet", "status", "validate", "refresh", "settings", "help"];
     if (!known.includes(cmd)) {
       const near = closest(cmd, [...known, "new"]);
       console.error(`Unknown plan command '${cmd}'.${near ? ` Did you mean: nikos plan ${near}?` : ""}\nSee every plan command: nikos plan help`);

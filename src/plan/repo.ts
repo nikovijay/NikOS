@@ -235,6 +235,13 @@ export function initPlanRepo(dir: string, input: { name: string; year: string; p
     [join(repo, "planning", "company", "decisions.md"), `# ${plan.name}: decisions\n`],
   ] as const;
   for (const [path, text] of files) store().write(path, text, { create: true });
+  // plan refresh keeps its copies of the code repos under .nikos/, which is never committed.
+  const ignore = join(repo, ".gitignore");
+  const old = store().exists(ignore) ? store().read(ignore) : "";
+  if (!/^\/?\.nikos\/?$/m.test(old)) {
+    store().write(ignore, `${old && !old.endsWith("\n") ? `${old}\n` : old}# nikOS plan: the delivery copies from plan refresh\n.nikos/\n`);
+    return [...files.map(([p]) => p), ignore];
+  }
   return files.map(([p]) => p);
 }
 
