@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/planning/repos",
+  "title": "planning/repos.yaml: the code repos a planning repo reads delivery from",
+  "description": "Read tolerantly: unknown fields are allowed, so a newer nikOS can add to it. A version newer than 1 is refused before this schema runs.",
+  "type": "object",
+  "required": ["version", "repos"],
+  "properties": {
+    "version": { "const": 1, "description": "The version of this file's format. nikOS reads 1." },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["repo"],
+        "properties": {
+          "repo": {
+            "type": "string",
+            "pattern": "^(?!\\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+)+$",
+            "description": "The repo's path on its host: owner/repo, or group/subgroup/project on GitLab."
+          },
+          "host": { "type": "string", "minLength": 1, "description": "The host, when it isn't github.com." },
+          "ref": { "type": "string", "minLength": 1, "description": "A branch to read. Absent means the repo's default branch." },
+          "url": { "type": "string", "minLength": 1, "description": "The git url to read from, when it isn't derived from host and repo." }
+        }
+      }
+    }
+  }
+}

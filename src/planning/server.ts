@@ -14,6 +14,7 @@ import { BET_ID } from "../lib/bets.js";
 import { keyOfMap, mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { loadMapData, mapStoryIds } from "../lib/map-data.js";
 import { readDeliverySummary } from "../lib/delivery-summary.js";
+import { NewerContractError } from "../lib/schema.js";
 import { read, walk } from "../lib/project.js";
 import { store } from "../lib/store.js";
 import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, onBaseBranch, ownRepo, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
@@ -21,7 +22,7 @@ import { asLine, hostOf, requestArgv, runForge, toolFor } from "../lib/forge.js"
 import { editBet, reviewBet } from "./bets.js";
 import { delivery } from "./delivery.js";
 import { checkIn, isStale, latest, progress } from "./krs.js";
-import { betIds, hash, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
+import { betIds, hash, isPlanRepo, krIds, loadBet, loadKr, loadPlan, paths, StaleError, today } from "./model.js";
 import { betDeliveryText, rollout } from "./rollout.js";
 import { loadUpstream, upstreamEntries } from "./upstream.js";
 import { alignsList } from "./levels.js";
@@ -130,6 +131,8 @@ function upstreamRef(upstream: Upstream, ref: string | undefined) {
  */
 function mapsData(root: string) {
   if (!mapDirs(root).length) return [];
+  // The repo this nikos reads for: a planning repo's maps are read by its planning nikos, a code repo's by its own.
+  const side = isPlanRepo(root) ? "planning" : "code";
   return mapDirs(root).map((dir) => {
     const id = basename(dir);
     const key = keyOfMap(dir) ?? id;
@@ -139,7 +142,15 @@ function mapsData(root: string) {
       const info = new Map<string, { title: string; activity: string; release: number }>();
       for (const r of sm.releases) for (const s of r.stories) info.set(s.id, { title: s.title, activity: s.activity, release: r.number });
       for (const s of sm.unreleased) info.set(s.id, { title: s.title, activity: s.activity, release: 0 });
-      const summary = readDeliverySummary(dir);
+      // A summary a newer nikOS wrote isn't read: the stories still show, and the refusal is the map's problem.
+      let summary: ReturnType<typeof readDeliverySummary>;
+      let summaryProblem: string | undefined;
+      try {
+        summary = readDeliverySummary(dir, side);
+      } catch (err) {
+        if (!(err instanceof NewerContractError)) throw err;
+        summaryProblem = err.message;
+      }
       const byId = new Map((summary?.stories ?? []).map((s) => [s.id, s]));
       const stories = mapStoryIds(loadMapData(dir)).map((sid) => {
         const i = info.get(sid);
@@ -164,6 +175,7 @@ function mapsData(root: string) {
         // The bet this map specs: the storymap.yaml's own bet key, so the page can show each map under its bet.
         bet: (parse(read(join(ref.dir, "storymap.yaml"))) as any)?.bet ?? null,
         stories,
+        ...(summaryProblem ? { problem: summaryProblem } : {}),
       };
     } catch (err) {
       return { id, key, title: key, storymapHash: "", stories: [], problem: (err as Error).message.split("\n")[0] };

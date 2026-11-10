@@ -24,7 +24,7 @@ export interface SummaryBodyStory {
 
 /** A summary without read_at: what the files say now. */
 export interface SummaryBody {
-  format_version: 1;
+  version: 1;
   map: string;
   /** The map's owner; absent when the map names none and the repo has no key. */
   owner?: string;
@@ -75,7 +75,7 @@ export function summaryBody(root: string, dir: string): SummaryBody {
       ...(proof ? { proof } : {}),
     };
   });
-  return { format_version: 1, map: basename(dir), ...(owner ? { owner } : {}), stories };
+  return { version: 1, map: basename(dir), ...(owner ? { owner } : {}), stories };
 }
 
 /** The summary with read_at set on the file and on each story: what gets written. */
@@ -93,7 +93,7 @@ export function writeMapSummary(root: string, dir: string, now: Date = new Date(
 export function summaryDrift(body: SummaryBody, onDisk: unknown): { file: string; message: string } | undefined {
   const disk = onDisk as Partial<SummaryBody> | undefined;
   if (!disk || typeof disk !== "object") return { file: DELIVERY_SUMMARY, message: "is not a delivery summary" };
-  for (const field of ["format_version", "map", "owner"] as const) {
+  for (const field of ["version", "map", "owner"] as const) {
     if (disk[field] !== body[field]) return { file: DELIVERY_SUMMARY, message: `${field} is '${disk[field] ?? "none"}' in ${DELIVERY_SUMMARY}, but '${body[field] ?? "none"}' now` };
   }
   const byId = new Map((Array.isArray(disk.stories) ? disk.stories : []).map((s: any) => [s?.id, s]));

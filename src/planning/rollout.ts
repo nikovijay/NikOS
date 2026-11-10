@@ -18,6 +18,7 @@ import { next } from "../commands/next.js";
 import { decisionEntries } from "../commands/decisions.js";
 import { delivery, describeDelivery, doneHere, mapCounts, mapDeliveryIn, type Delivery } from "./delivery.js";
 import { readDeliverySummary, summaryAge } from "../lib/delivery-summary.js";
+import { NewerContractError } from "../lib/schema.js";
 import { copyKeys, duplicateKeys } from "../lib/keys.js";
 import { progress, isStale } from "./krs.js";
 import { betIds, krIds, loadBet, loadKr, today } from "./model.js";
@@ -201,15 +202,21 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       for (const ref of refs) {
         try {
           // A map with a summary: each story's status is the summary's, which says what its proof shows. A proof that
-          // isn't current is work to redo, so it isn't next.
-          const summary = readDeliverySummary(ref.dir);
+          // isn't current is work to redo, so it isn't next. A summary from a newer nikOS counts as none, as summaryIn
+          // does in delivery.ts: this map's next story still shows, from its own queue.
+          let summary;
+          try {
+            summary = readDeliverySummary(ref.dir, "planning");
+          } catch (err) {
+            if (!(err instanceof NewerContractError)) throw err;
+          }
           const states = summary && Object.fromEntries(summary.stories.map((s) => [s.id, { status: s.proof && isDone(s.status) ? "needs_rework" : s.status }]));
           const id = next(dir, ref.id, states ? { states } : {}).story;
           if (!id) continue;
           nextUp = { id, title: titles.get(id) ?? id };
           break;
         } catch {
-          // no state.yaml or queue in this map: delivery and blockers still show
+          // no state.yaml or queue in this map, or a bad summary: delivery and blockers still show
         }
       }
       // Blockers are read from each map's state in the copy.

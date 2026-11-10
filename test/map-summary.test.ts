@@ -40,7 +40,7 @@ describe("the summary a map's files say", () => {
     const g = groupRepo("PAY");
     const b = summaryBody(g, join(g, "maps/chk"));
     expect(b).toEqual({
-      format_version: 1,
+      version: 1,
       map: "chk",
       owner: "PAY",
       stories: [
@@ -125,13 +125,13 @@ describe("the summary a map's files say", () => {
     const body = summaryBody(g, join(g, "maps/chk"));
     expect(body).not.toHaveProperty("owner");
     expect(body.map).toBe("chk");
-    expect(summaryDrift(body, { format_version: 1, map: "chk", stories: body.stories })).toBeUndefined();
+    expect(summaryDrift(body, { version: 1, map: "chk", stories: body.stories })).toBeUndefined();
   });
 
 });
 
 describe("the drift check against a committed delivery.yaml", () => {
-  const body: SummaryBody = { format_version: 1, map: "chk", owner: "PAY", stories: [{ id: "PAY-CHK-1", status: "todo", approval: "none" }, { id: "PAY-CHK-2", status: "done", approval: "approved", approved_by: "Priya" }] };
+  const body: SummaryBody = { version: 1, map: "chk", owner: "PAY", stories: [{ id: "PAY-CHK-1", status: "todo", approval: "none" }, { id: "PAY-CHK-2", status: "done", approval: "approved", approved_by: "Priya" }] };
 
   it("a file that says the same, with its own read_at and in any order, has no drift", () => {
     const onDisk = parse(JSON.stringify(summaryWith({ ...body, stories: [...body.stories].reverse() }, new Date("2027-01-01T00:00:00Z"))));

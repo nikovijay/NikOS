@@ -150,6 +150,31 @@ export function onBaseBranch(branch: string, base: string | undefined): boolean 
   return branch === base || (!base && !branch.startsWith("nikos/"));
 }
 
+/**
+ * The base name if no branch has it, else base-2, base-3, and so on. A name is taken when a local branch has it or
+ * it's in `taken` (the branches origin has, from remoteBranches).
+ */
+export function nextBranchName(root: string, base: string, run: Runner = realRun, taken: string[] = []): string {
+  let name = base;
+  for (let n = 2; branchExists(root, name, run) || taken.includes(name); n++) name = `${base}-${n}`;
+  return name;
+}
+
+/**
+ * The branch names origin has, from ls-remote, or [] when the repo has no origin. Throws when origin can't be
+ * listed, so a caller never guesses that a name is free.
+ */
+export function remoteBranches(root: string, run: Runner = realRun): string[] {
+  if (gitIn(root, ["remote", "get-url", "origin"], run).status !== 0) return [];
+  const r = gitIn(root, ["ls-remote", "--heads", "origin"], run);
+  if (r.status !== 0) throw new Error(`Couldn't list the branches on origin: ${firstLine(r.stderr) || "git ls-remote failed"}`);
+  return r.stdout
+    .split("\n")
+    .map((line) => line.split("\t")[1] ?? "")
+    .filter(Boolean)
+    .map((ref) => ref.replace(/^refs\/heads\//, ""));
+}
+
 /** Create a branch from HEAD and switch to it. Uncommitted changes come along. */
 export function switchNewBranch(root: string, name: string, run: Runner = realRun): { ok: boolean; error?: string } {
   const r = gitIn(root, ["switch", "-c", name], run);

@@ -13,7 +13,7 @@ function repo(): { dir: string; tested: string } {
   write(join(dir, "src/app.ts"), "export const app = 1;\n");
   write(join(dir, "maps/chk/state.yaml"), "format_version: 1\nstories: {}\n");
   write(join(dir, "maps/chk/approvals/PAY-CHK-1.yaml"), "by: Priya\n");
-  write(join(dir, "maps/chk/delivery.yaml"), "format_version: 1\n");
+  write(join(dir, "maps/chk/delivery.yaml"), "version: 1\n");
   git(dir, "init", "-q", "-b", "main");
   commitAll(dir, "code");
   return { dir, tested: headOf(dir)! };
@@ -24,7 +24,7 @@ describe("bookkeeping never counts as code", () => {
     const { dir, tested } = repo();
     write(join(dir, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done }\n");
     write(join(dir, "maps/chk/approvals/PAY-CHK-1.yaml"), "by: Ada\n");
-    write(join(dir, "maps/chk/delivery.yaml"), "format_version: 1\nread_at: now\n");
+    write(join(dir, "maps/chk/delivery.yaml"), "version: 1\nread_at: now\n");
     write(join(dir, "maps/chk/approvals/PAY-CHK-2.yaml"), "by: Ada\n");
     write(join(dir, ".nikos/upstream/x.txt"), "cache\n");
     commitAll(dir, "status only");
@@ -50,7 +50,7 @@ describe("bookkeeping never counts as code", () => {
     const { dir } = repo();
     expect(codeIsDirty(dir)).toBe(false);
     write(join(dir, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done }\n");
-    write(join(dir, "maps/chk/delivery.yaml"), "format_version: 1\nread_at: now\n");
+    write(join(dir, "maps/chk/delivery.yaml"), "version: 1\nread_at: now\n");
     expect(codeIsDirty(dir)).toBe(false);
     write(join(dir, "src/app.ts"), "export const app = 4;\n");
     expect(codeIsDirty(dir)).toBe(true);

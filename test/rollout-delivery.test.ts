@@ -21,8 +21,8 @@ function setup(summary: DeliverySummary["stories"]) {
   git(grp, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
   write(join(grp, "maps/hr/storymap.yaml"), "format_version: 1\nproject: hr\nkey: HR\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-HR-1]\n");
   write(join(grp, "maps/hr/state.yaml"), "format_version: 1\nstories:\n  PAY-HR-1: { status: done }\n");
-  writeDeliverySummary(join(grp, "maps/hr"), { format_version: 1, map: "hr", owner: "PAY", read_at: NOW, stories: [{ id: "PAY-HR-1", status: "done", approval: "none", read_at: NOW }] });
-  writeDeliverySummary(join(grp, "maps/chk"), { format_version: 1, map: "chk", owner: "PAY", read_at: NOW, stories: summary });
+  writeDeliverySummary(join(grp, "maps/hr"), { version: 1, map: "hr", owner: "PAY", read_at: NOW, stories: [{ id: "PAY-HR-1", status: "done", approval: "none", read_at: NOW }] });
+  writeDeliverySummary(join(grp, "maps/chk"), { version: 1, map: "chk", owner: "PAY", read_at: NOW, stories: summary });
   commitAll(grp, "map and summary");
 
   write(join(co, "planning/downstream.yaml"), `- name: Payments\n  repo: acme/payments-group\n  url: ${grp}\n`);

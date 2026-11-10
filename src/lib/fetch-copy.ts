@@ -30,15 +30,18 @@ export function errorLine(stderr: string): string {
   return why.replace(/^(fatal|error):\s*/i, "");
 }
 
-/** The commit read, or the line of git's error when the branch can't be fetched. */
-export function fetchCopy(url: string, ref: string, dir: string, paths?: string[]): { commit: string } | { error: string } {
+/**
+ * The commit read, or the line of git's error when the branch can't be fetched. No ref reads the repo's
+ * default branch. keepGit keeps the copy's .git, so it can be committed and pushed (a join's planning repo).
+ */
+export function fetchCopy(url: string, ref: string | undefined, dir: string, paths?: string[], opts: { keepGit?: boolean } = {}): { commit: string } | { error: string } {
   const bad = urlProblem(url);
   if (bad) return { error: bad };
   rmSync(dir, { recursive: true, force: true });
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   // "--" ends the options, so a url or folder can never be read as one.
   const attempt = (sparse: boolean) =>
-    spawnSync("git", ["clone", "--quiet", "--depth", "1", ...(sparse ? ["--filter=blob:none", "--sparse"] : []), "--branch", ref, "--", url, dir], {
+    spawnSync("git", ["clone", "--quiet", "--depth", "1", ...(sparse ? ["--filter=blob:none", "--sparse"] : []), ...(ref ? ["--branch", ref] : []), "--", url, dir], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       env,
@@ -59,6 +62,6 @@ export function fetchCopy(url: string, ref: string, dir: string, paths?: string[
     return { error: errorLine(clone.stderr || "") };
   }
   const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).stdout.trim();
-  rmSync(join(dir, ".git"), { recursive: true, force: true }); // a plain copy: nothing to push back
+  if (!opts.keepGit) rmSync(join(dir, ".git"), { recursive: true, force: true }); // a plain copy: nothing to push back
   return { commit };
 }

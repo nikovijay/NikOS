@@ -30,7 +30,7 @@ import { count, read } from "../lib/project.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
-import { describeJoin, joinPlan } from "../commands/join.js";
+import { describeJoin, describeRepoJoin, joinPlan, joinPlanRepo } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
@@ -125,9 +125,16 @@ export function createServer(repo: string): McpServer {
     setSetting(root, a.key, a.value);
     return text(`${a.key}: ${JSON.stringify(resolveSettings(root)[a.key].value)} (this repo)`);
   });
-  tool("join", "Plan against a company or department plan in another repo, and inherit its settings. repo is its path on the host (owner/repo, or group/subgroup/project on GitLab).", {
+  tool("join", "Join a plan in another repo. A planning repo (planning/repos.yaml) gets this repo listed on a nikos/join branch for review, and nothing in this repo moves: push sends that branch to the planning repo's origin (off by default), and plan_dir uses a checkout of the planning repo already on this computer. An older plan (planning/plan.yaml) is joined the old way, and its settings are inherited. repo is the plan's path on the host (owner/repo, or group/subgroup/project on GitLab).", {
     repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
+    push: z.boolean().optional(), plan_dir: z.string().optional(),
   }, (a) => {
+    try {
+      const listed = joinPlanRepo(root, { plan: a.repo, host: a.host, url: a.url, ref: a.ref, push: a.push, planDir: a.plan_dir });
+      if (listed) return text(describeRepoJoin(listed), listed as unknown as Record<string, unknown>);
+    } catch (err) {
+      return fail(err);
+    }
     const r = joinPlan(root, a);
     return { ...text(describeJoin(r)), isError: !r.fetched };
   });

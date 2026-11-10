@@ -48,17 +48,23 @@ describe("a map's delivery.yaml is checked against its files", () => {
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
   });
 
+  it("a delivery.yaml from a newer nikOS fails by name, and says which repo to upgrade", () => {
+    const g = groupRepo("PAY");
+    writeFileSync(join(g, "maps/chk/delivery.yaml"), "version: 2\nmap: chk\nowner: PAY\nread_at: x\nstories: []\n");
+    expect(deliveryErrors(validate(g, "chk"))[0].message).toBe("this delivery.yaml was written by a newer nikOS: upgrade nikos in the code repo");
+  });
+
   it("a delivery.yaml that doesn't read against its schema fails with the schema's message", () => {
     const g = groupRepo("PAY");
-    writeFileSync(join(g, "maps/chk/delivery.yaml"), "format_version: 2\nmap: chk\nowner: PAY\nread_at: x\nstories: []\n");
-    expect(deliveryErrors(validate(g, "chk"))[0].message).toMatch(/format_version/);
+    writeFileSync(join(g, "maps/chk/delivery.yaml"), "map: chk\nowner: PAY\nread_at: x\nstories: []\n");
+    expect(deliveryErrors(validate(g, "chk"))[0].message).toMatch(/missing required field 'version'/);
   });
 
   it("state set rewrites it, so validate passes straight after a move", () => {
     const g = groupRepo("PAY");
     setState("PAY-CHK-2", "in_progress", { dir: g });
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
-    expect(readDeliverySummary(join(g, "maps/chk"))?.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
+    expect(readDeliverySummary(join(g, "maps/chk"), "code")?.stories.find((s) => s.id === "PAY-CHK-2")).toMatchObject({ status: "in_progress" });
   });
 
   it("approve rewrites it, so the approval shows in the summary straight away", () => {
@@ -67,7 +73,7 @@ describe("a map's delivery.yaml is checked against its files", () => {
     setState("PAY-CHK-1", "done", { dir: g });
     approve("PAY-CHK-1", { dir: g, by: "Priya Shah", date: "2027-01-06" });
     expect(deliveryErrors(validate(g, "chk"))).toEqual([]);
-    expect(readDeliverySummary(join(g, "maps/chk"))?.stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ approval: "approved", approved_by: "Priya Shah" });
+    expect(readDeliverySummary(join(g, "maps/chk"), "code")?.stories.find((s) => s.id === "PAY-CHK-1")).toMatchObject({ approval: "approved", approved_by: "Priya Shah" });
   });
 
   it("a story added with nikos story new is in the summary too, so validate passes", () => {

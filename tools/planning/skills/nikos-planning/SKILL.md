@@ -28,7 +28,7 @@ is worked out from those stories; its outcome (open, awaiting evidence, won,
 lost, stopped) is only ever set from the key result evidence. Shipped is not
 won.
 
-The commands are `nikos planning …`. Check `nikos --version` against
+The commands are `nikos planning …`. A repo with `planning/company/` (made with `nikos plan init`) is a planning repo of the newer kind: use `nikos plan …` there. `nikos plan refresh` reads the code repos it lists in `planning/repos.yaml`, and `nikos plan status --json` gives each bet's delivery as data, with how old each copy is. Check `nikos --version` against
 `npx -y nikos@latest --version` first: if `nikos` isn't installed or is older,
 run them as `npx -y nikos@latest planning …` and tell the person once that
 `npm install -g nikos@latest` updates theirs. Every write goes through them or

@@ -121,6 +121,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
+| `nikos plan status [--in <area>] [--json]` | The plan's key results and bets, each bet's delivery from the code repos listed in `planning/repos.yaml`, and how old each copy is ([docs/plan.md](docs/plan.md)) |
+| `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files under `.nikos/` |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
@@ -130,7 +132,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos next` | Print the next story to build |
 | `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`, converting it to the current format. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
-| `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
+| `nikos join <repo>` | Join a plan in another repo. A planning repo gets this repo listed on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). An older plan's settings are inherited ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |
