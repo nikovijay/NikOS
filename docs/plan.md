@@ -94,6 +94,9 @@ nikos plan checkin close-days 10 --note "First week of auto-match"
 nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1
 nikos plan kr step close-process "Map steps" --date 2026-11-10
 nikos plan bet review faster-checkout continue --why "On track"
+nikos plan ladder                          # what is waiting for a link
+nikos plan ladder <id>                     # what it could link to
+nikos plan ladder accept <id> <candidate>  # link it, once the person has picked
 nikos plan status --in finance
 nikos plan status --json
 nikos plan validate

@@ -38,7 +38,7 @@ Key results and bets
                        --ladders-up "<text>" says what it ladders up to until a link exists (not for a company key result)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
   plan kr step <id> "<name>"    Mark one step of a milestone done (--date, default today)
-  plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date)
+  plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date). Not for a milestone: use plan kr step
   plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
                        --also, --aligns-to, --starts, --deadline, --confidence, --evidence, --ladders-up)
   plan bet review <id> <continue|change|stop|complete>   Record a review (--why, --outcome)

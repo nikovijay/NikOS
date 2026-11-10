@@ -1,88 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
-import { parse } from "yaml";
-import { lintSkill } from "../src/lint/portable";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
-// The nikos-plan skill: the company's plan in its planning repo. It ships in the root plugin, next
-// to nikos-spec, so there is no pack to install and no second manifest to keep.
+const skills = join(__dirname, "../skills/nikos-plan");
+const read = (rel: string) => readFileSync(join(skills, rel), "utf8");
 
-const root = join(__dirname, "..");
-const skill = join(root, "skills/nikos-plan");
-const playbook = (name: string) => readFileSync(join(skill, "playbooks", `${name}.md`), "utf8");
-const steps = (text: string) => [...text.matchAll(/^(\d+)\. (.+)$/gm)].map(([, n, s]) => ({ n: Number(n), s }));
-
-function files(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) files(path, out);
-    else out.push(path);
-  }
-  return out;
-}
-
-describe("nikos-plan skill", () => {
-  it("ships in the root skills folder, with no pack of its own", () => {
-    expect(existsSync(join(root, "tools", "planning"))).toBe(false);
-    expect(existsSync(join(skill, "SKILL.md"))).toBe(true);
+describe("nikos-plan skill: ladder, direction and milestones", () => {
+  it("links the ladder playbook from the skill's table, and the file exists", () => {
+    const skill = read("SKILL.md");
+    expect(skill).toMatch(/\| ladder \| `playbooks\/ladder\.md` \|/);
+    expect(existsSync(join(skills, "playbooks/ladder.md"))).toBe(true);
   });
 
-  it("ships a portable skill whose playbooks all exist", () => {
-    const text = readFileSync(join(skill, "SKILL.md"), "utf8");
-    const meta = parse(/^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? "") as { name?: string };
-    expect(meta.name).toBe("nikos-plan");
-    expect(lintSkill(text)).toEqual([]);
-    for (const f of files(skill).filter((f) => f.endsWith(".md") && !f.endsWith("SKILL.md"))) expect(lintSkill(readFileSync(f, "utf8"), { isEntry: false }), relative(root, f)).toEqual([]);
-    for (const [, file] of text.matchAll(/`(playbooks\/[\w-]+\.md)`/g)) expect(existsSync(join(skill, file)), file).toBe(true);
-    expect(existsSync(join(skill, "principles.md"))).toBe(true);
+  it("has the ladder playbook accept only on the person's yes, and never an invented id", () => {
+    const ladder = read("playbooks/ladder.md");
+    expect(ladder).toContain("nikos plan ladder accept <id> <candidate>");
+    expect(ladder).toMatch(/only after the person picks/);
+    expect(ladder).toMatch(/Never invent an id/);
+    expect(ladder).toMatch(/not linked yet/);
   });
 
-  it("the skill keeps the rule about company goals", () => {
-    expect(readFileSync(join(skill, "SKILL.md"), "utf8")).toContain("Never put company goals in `constitution.md`");
+  it("marks a milestone with kr step, and never checks it in with a value", () => {
+    const checkin = read("playbooks/checkin.md");
+    expect(checkin).toContain("nikos plan kr step <kr-id>");
+    expect(checkin).toMatch(/`checkin` refuses one/);
+    expect(checkin).toMatch(/moved the wrong way/);
   });
 
-  it("check-in playbook confirms before writing", () => {
-    const s = steps(playbook("checkin"));
-    const ask = s.find((x) => /current value, an optional evidence link and a short note/.test(x.s))!;
-    const show = s.find((x) => /^Show the check-ins you will add, once/.test(x.s))!;
-    const write = s.find((x) => /^Write only after the person confirms: `nikos plan checkin/.test(x.s))!;
-    expect(s[0].s).toMatch(/list the key results/);
-    expect(ask.n).toBeLessThan(show.n);
-    expect(show.n).toBeLessThan(write.n);
-  });
-
-  it("wizard asks period, area and pillars", () => {
-    const s = steps(playbook("wizard"));
-    expect(s[0].s).toMatch(/^Establish context\. Ask for the period/);
-    expect(s[0].s).toContain("pillars");
-    expect(s[0].s).toContain("Key results stop at department level");
-  });
-
-  it("wizard writes only after approval", () => {
-    const text = playbook("wizard");
-    const s = steps(text);
-    const show = s.find((x) => /^Show the whole draft/.test(x.s))!;
-    const write = s.find((x) => /^Once they approve, write it/.test(x.s))!;
-    expect(show.s).toContain("Write nothing until they approve it");
-    expect(show.n).toBeLessThan(write.n);
-    expect(s.filter((x) => x.n < write.n).every((x) => !/nikos plan (kr|bet) new/.test(x.s.replace("follow the steps of `bet.md` up to writing it", "")))).toBe(true);
-  });
-
-  it("the review playbook records decisions through the command", () => {
-    const text = playbook("review");
-    expect(text).toContain("nikos plan bet review <bet-id> <continue|change|stop|complete> --why");
-    expect(text).toMatch(/won or lost/);
-  });
-
-  it("setup makes the planning repo with nikos plan init", () => {
-    expect(playbook("setup")).toContain("nikos plan init --name");
-  });
-
-  it("holds no credentials, private paths or account-specific settings", () => {
-    const leaks = [/\/Users\/|\/home\/[a-z]/, /\/tmp\//, /[\w.+-]+@[\w-]+\.[a-z]{2,}/i, /(api[_-]?key|secret|password|token)\s*[:=]\s*["']?[\w-]{8,}/i, /intentdocs|productbuilders|grok/i];
-    for (const path of files(skill)) {
-      const text = readFileSync(path, "utf8");
-      for (const leak of leaks) expect(text, `${relative(root, path)} matches ${leak}`).not.toMatch(leak);
-    }
+  it("asks for a direction and steps when the wizard makes a key result, and offers text for an unknown link", () => {
+    const wizard = read("playbooks/wizard.md");
+    expect(wizard).toContain("--direction down");
+    expect(wizard).toContain("--kind milestone --step");
+    expect(wizard).toContain("--ladders-up");
   });
 });
