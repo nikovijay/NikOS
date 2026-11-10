@@ -30,7 +30,7 @@ import { count, read } from "../lib/project.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
-import { describeJoin, joinPlan } from "../commands/join.js";
+import { describeJoin, describeRepoJoin, joinPlan, joinPlanRepo } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
@@ -128,6 +128,12 @@ export function createServer(repo: string): McpServer {
   tool("join", "Plan against a company or department plan in another repo, and inherit its settings. repo is its path on the host (owner/repo, or group/subgroup/project on GitLab).", {
     repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
   }, (a) => {
+    try {
+      const listed = joinPlanRepo(root, { plan: a.repo, host: a.host, url: a.url, ref: a.ref });
+      if (listed) return text(describeRepoJoin(listed), listed as unknown as Record<string, unknown>);
+    } catch (err) {
+      return fail(err);
+    }
     const r = joinPlan(root, a);
     return { ...text(describeJoin(r)), isError: !r.fetched };
   });

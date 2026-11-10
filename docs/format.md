@@ -422,8 +422,10 @@ the state and approvals entries.
 ## Versioning this format
 
 `format_version` in `storymap.yaml` and `state.yaml`, and `version` in
-`delivery.yaml`, is the version of this document. Breaking changes bump it.
+`delivery.yaml` and `planning/repos.yaml`, is the version of this document.
+Breaking changes bump it.
 A reader refuses a file whose version is newer than this nikOS reads, and
 says which repo to upgrade. Readers in a planning repo accept unknown fields
-in `storymap.yaml` and `delivery.yaml`; the writers in a story map repo stay
-strict, and `nikos validate` reads it and explains any migration needed.
+in `storymap.yaml`, `delivery.yaml` and `planning/repos.yaml`; the writers in
+a story map repo stay strict, and `nikos validate` reads it and explains any
+migration needed.

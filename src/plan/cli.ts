@@ -10,6 +10,7 @@ import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.j
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, parentOf, repoIssues } from "./repo.js";
+import { reposIssues } from "./repos.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
@@ -83,7 +84,7 @@ export function planStatus(repo: string, area?: Area): string {
 
 /** Every problem in the plan: the repo's own rules, then each area's files and links. */
 export function planIssues(repo: string): PlanningIssue[] {
-  return [...repoIssues(repo), ...listAreas(repo).flatMap((a) => planningIssues(a.dir))];
+  return [...repoIssues(repo), ...reposIssues(repo), ...listAreas(repo).flatMap((a) => planningIssues(a.dir))];
 }
 
 export async function runPlanRepo(args: string[]): Promise<number> {

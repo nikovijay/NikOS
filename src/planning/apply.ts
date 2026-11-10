@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { hostOf, asLine, requestArgv, runForge, toolFor } from "../lib/forge.js";
-import { branchExists, commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nikosPaths, pushBranch, realRun, baseBranch, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
+import { commitPaths, currentBranch, firstLine, gitIn, headOf, isGit, nextBranchName, nikosPaths, pushBranch, realRun, baseBranch, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
 import { schemaProblems } from "../lib/schema.js";
 import { store } from "../lib/store.js";
 import { levelOf } from "./levels.js";
@@ -39,14 +39,6 @@ export async function askYes(question: string): Promise<boolean> {
   } finally {
     rl.close();
   }
-}
-
-/** A new branch name for the change: nikos/plan-<level>-<date>, with -2, -3 when it's taken. */
-function branchName(root: string, level: string, run: Runner): string {
-  const stamp = today();
-  let name = `nikos/plan-${level}-${stamp}`;
-  for (let n = 2; branchExists(root, name, run); n++) name = `nikos/plan-${level}-${stamp}-${n}`;
-  return name;
 }
 
 /** One operation as a short line for the report: its name and the ids it targets. */
@@ -121,7 +113,8 @@ export async function applyChanges(file: string, opts: ApplyOptions = {}): Promi
     return 2;
   }
 
-  const name = branchName(root, level!, run);
+  // A new nikos branch for the change: nikos/plan-<level>-<date>, with -2, -3 when it is taken.
+  const name = nextBranchName(root, `nikos/plan-${level!}-${today()}`, run);
   const from = currentBranch(root, run) ?? "HEAD";
   const made = switchNewBranch(root, name, run);
   if (!made.ok) return refuse(`Couldn't create a branch: ${made.error}`);

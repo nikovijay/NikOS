@@ -12,6 +12,12 @@ export function hostOf(url: string): Host | undefined {
   return undefined;
 }
 
+/** The host name in a remote url: https or ssh, or git@host:path. Undefined for a local path. */
+export function hostNameOf(url: string): string | undefined {
+  const m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:]+)/i.exec(url) ?? /^(?:[^@\s/]+@)?([^:\s/]+):/.exec(url);
+  return m?.[1]?.toLowerCase();
+}
+
 /** The forge a host name is, for planning/upstream.yaml's host or a url's host. */
 export function kindOfHost(host: string): Host | undefined {
   if (host === "github.com") return "github";

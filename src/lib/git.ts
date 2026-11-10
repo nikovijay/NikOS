@@ -150,6 +150,13 @@ export function onBaseBranch(branch: string, base: string | undefined): boolean 
   return branch === base || (!base && !branch.startsWith("nikos/"));
 }
 
+/** The base name if no branch has it, else base-2, base-3, and so on. */
+export function nextBranchName(root: string, base: string, run: Runner = realRun): string {
+  let name = base;
+  for (let n = 2; branchExists(root, name, run); n++) name = `${base}-${n}`;
+  return name;
+}
+
 /** Create a branch from HEAD and switch to it. Uncommitted changes come along. */
 export function switchNewBranch(root: string, name: string, run: Runner = realRun): { ok: boolean; error?: string } {
   const r = gitIn(root, ["switch", "-c", name], run);
