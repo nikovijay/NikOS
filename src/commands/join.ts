@@ -9,6 +9,7 @@ import { asLine, hostNameOf, hostOf, requestArgv } from "../lib/forge.js";
 import { baseBranch, commitPaths, gitIn, isGit, nextBranchName, ownRepo, pushBranch, remoteBranches, statusOf, switchNewBranch } from "../lib/git.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { oldLayoutProblem } from "../plan/repo.js";
+import { pullPlanSettings } from "../plan/settings-link.js";
 import { addRepo, loadRepos, writeRepos, type RepoEntry } from "../plan/repos.js";
 import { isPlanRepo, today } from "../planning/model.js";
 
@@ -172,7 +173,14 @@ export function runSettings(args: string[]): number {
       console.log(`${key}: ${JSON.stringify(resolveSettings(root)[key].value)}  (this repo)`);
       return 0;
     }
-    console.error("Usage: nikos settings [show] | nikos settings set <key> <value> [--dir <path>]");
+    if (sub === "pull" && key === undefined) {
+      const { link, warnings } = pullPlanSettings(root);
+      const owners = Object.keys(link.owners);
+      console.log(`✓ Pulled the settings from ${link.plan.repo} at ${link.read.commit.slice(0, 7)}${owners.length ? ` for ${owners.join(", ")}` : ""}.`);
+      for (const w of warnings) console.log(`! ${w}`);
+      return 0;
+    }
+    console.error("Usage: nikos settings [show] | nikos settings set <key> <value> | nikos settings pull [--dir <path>]");
     return 1;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);

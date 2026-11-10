@@ -119,7 +119,7 @@ export function resolveSettingsDetailed(root: string): { resolved: Resolved; pro
 }
 
 /** An area's own settings file: the company's is nikos.settings.yaml at the root, any other area's is its settings.yaml. */
-const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.repo, SETTINGS_FILE) : join(area.dir, "settings.yaml"));
+export const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.repo, SETTINGS_FILE) : join(area.dir, "settings.yaml"));
 
 /**
  * The settings for an area of a planning repo: the company's, then each level down the folders to
