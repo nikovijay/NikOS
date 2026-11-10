@@ -667,8 +667,8 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
   ).toUpperCase();
   if (!KEY.test(key)) throw new MigrateError(`'${key}' isn't a valid map key (letters and digits, starting with a letter, up to 10)`, 2);
 
-  // The bet: the one local bet the releases name, when planning/ has its card. --new-bet names the bet
-  // and writes a stub card for it. Without planning/, no bet can be named in the map, so its links are listed.
+  // The bet: the one local bet the releases name. With planning/, its card must be there; --new-bet names
+  // the bet and writes a stub card for it. A map names one bet, so any other links are listed as dropped.
   const planning = store().isDir(join(dir, "planning"));
   const named = namedBets(storymap);
   let bet: string | undefined;
@@ -678,9 +678,10 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
     if (!planning) throw new MigrateError("--new-bet needs a planning/ folder: the bet card goes in planning/bets/. There is no planning/ here.", 2);
     bet = opts.newBet;
     stub = !store().exists(join(planPaths(dir).bets, `${bet}.md`));
-  } else if (named.length === 1 && planning) {
+  } else if (named.length === 1) {
+    // Without planning/ there is no card to check, so the name the map had is kept as it is.
     bet = named[0];
-    if (!store().exists(join(planPaths(dir).bets, `${bet}.md`))) {
+    if (planning && !store().exists(join(planPaths(dir).bets, `${bet}.md`))) {
       throw new MigrateError(`planning/bets/${bet}.md doesn't exist: pass --new-bet ${bet} to make a stub, or write the card by hand, then retry.`, 2);
     }
   }

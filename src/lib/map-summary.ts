@@ -6,7 +6,7 @@ import { basename } from "node:path";
 import { approvalLapse, loadApprovals } from "./approvals.js";
 import { loadMapData, mapStoryIds } from "./map-data.js";
 import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./delivery-summary.js";
-import { groupKeyOf, mapOwnerOf } from "./maps.js";
+import { prefixOf } from "./maps.js";
 import { isDone, specHash } from "./project.js";
 import { loadStates } from "./state-files.js";
 
@@ -33,7 +33,7 @@ export interface SummaryBody {
 
 /** The owner a map's summary carries: its storymap owner, else the repo's group key. Undefined when neither is set. */
 export function ownerFor(root: string, dir: string): string | undefined {
-  return mapOwnerOf(dir) ?? groupKeyOf(root);
+  return prefixOf({ root, dir, id: basename(dir) });
 }
 
 /**
@@ -94,7 +94,7 @@ export function summaryDrift(body: SummaryBody, onDisk: unknown): { file: string
   const disk = onDisk as Partial<SummaryBody> | undefined;
   if (!disk || typeof disk !== "object") return { file: DELIVERY_SUMMARY, message: "is not a delivery summary" };
   for (const field of ["format_version", "map", "owner"] as const) {
-    if (disk[field] !== body[field]) return { file: DELIVERY_SUMMARY, message: `${field} is '${disk[field]}' in ${DELIVERY_SUMMARY}, but '${body[field]}' now` };
+    if (disk[field] !== body[field]) return { file: DELIVERY_SUMMARY, message: `${field} is '${disk[field] ?? "none"}' in ${DELIVERY_SUMMARY}, but '${body[field] ?? "none"}' now` };
   }
   const byId = new Map((Array.isArray(disk.stories) ? disk.stories : []).map((s: any) => [s?.id, s]));
   for (const want of body.stories) {

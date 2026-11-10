@@ -189,6 +189,13 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
   const warnings: Issue[] = [];
   const storymap = loadYaml(dir, "storymap.yaml", errors);
   const state = loadYaml(dir, "state.yaml", errors);
+  // The 0.2 layouts are no longer read. Each is named, so its entries are never dropped without a word.
+  if (store().isDir(join(dir, "state"))) {
+    errors.push({ file: "state/", message: "is the 0.2 per-story state layout, which nikOS no longer reads", hint: "fold each state/<ID>.yaml into state.yaml under stories:" });
+  }
+  if (store().exists(join(dir, "approvals.yaml"))) {
+    errors.push({ file: "approvals.yaml", message: "is the 0.2 single approvals file, which nikOS no longer reads", hint: "move each entry into approvals/<ID>.yaml" });
+  }
 
   if (storymap !== undefined && !checkStorymap(storymap)) {
     for (const e of checkStorymap.errors ?? []) {

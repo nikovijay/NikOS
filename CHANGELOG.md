@@ -17,7 +17,7 @@
 
 ### Removed
 
-- `nikos migrate per-story` and `nikos migrate single-file`, the `state/<id>.yaml` and single `approvals.yaml` layouts, `templates/intent/`, and the `findIntentDir`, `perStory` and `migrate` library exports. The `--group-key`, `--rename-ids` and `--bet` options of `nikos migrate maps` and the MCP `migrate` tool are gone too. To move a repo by hand, `git mv intent maps/<key>`, move `constitution.md` and `decisions.md` up to the repo root, and fold `state/` and `approvals.yaml` as [docs/format.md](docs/format.md) describes.
+- `nikos migrate per-story` and `nikos migrate single-file`, the `state/<id>.yaml` and single `approvals.yaml` layouts, `templates/intent/`, and the `findIntentDir`, `perStory` and `migrate` library exports. The `--group-key`, `--rename-ids` and `--bet` options of `nikos migrate maps` and the MCP `migrate` tool are gone too. To move a repo by hand, `git mv intent maps/<key>`, move `constitution.md` and `decisions.md` up to the repo root, fold each `state/<ID>.yaml` into `state.yaml` under `stories:`, and split `approvals.yaml` into one `approvals/<ID>.yaml` per approval. `nikos validate` names any of these it still finds.
 - `nikos assign`, `nikos sync`, `nikos team` (`init`, `join`, `member`, `show`), `nikos.team.yaml`, `assignments.yaml`, `.nikos/assigned/` and `.nikos/teams/`, and the team `status/` and `approvals/` folders, are gone. Nothing migrates them, and nikOS ignores those files from this release. To keep a team's story map, move it by hand into `maps/<key>/` in the repo that builds it, as `intent/` moves. The company plan's team level (`nikos plan add team`) is unchanged.
 
 ## 0.4.3 (2026-11-09)

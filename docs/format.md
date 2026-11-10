@@ -415,7 +415,9 @@ refuse it until it moves. `nikos migrate maps` moves it, shows the plan first wi
 `state.yaml`, `intent/approvals.yaml` splits into one file per approval,
 `constitution.md` and `decisions.md` go to the root, and the map lands in
 `maps/<key>/`. Story ids change only when `planning/plan.yaml` has a key the ids
-lack. Nothing else in the repo is touched.
+lack. Beyond the move, it rewrites what names a renamed id or a moved path: the
+CODEOWNERS rules, the verify runner paths, feature tags, decision headings, and
+the state and approvals entries.
 
 ## Versioning this format
 

@@ -25,7 +25,7 @@ const changes = withStore(repo, () => {
   return repo.changes(); // [{ path: "maps/ht/storymap.yaml", text: "…" }, …]
 });
 // Commit `changes` as one commit, or open a pull or merge request with them.
-// repo.deletions() lists the files to delete in the same commit (nikos migrate removes some).
+// repo.deletions() lists the files to delete in the same commit .
 ```
 
 Inside `withStore`, every nikOS function reads and writes the store instead of

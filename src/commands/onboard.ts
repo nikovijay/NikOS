@@ -112,6 +112,8 @@ const WHAT: Record<Kind, string> = {
 };
 
 export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Promise<OnboardAnswers> {
+  // A repo with intent/ is migrated, not set up again: say so before asking anything.
+  if (existsSync(join(cwd, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
   const kind = KINDS[(await askUntil(ask, MENU, "4", (a) => (KINDS[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type a number from 1 to 5.`))).toLowerCase()];
   const atHome = resolve(cwd) === resolve(home);
   const label = {
@@ -126,7 +128,7 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
   );
 
   // Never a home folder, and never on top of another project without a yes.
-  const busy = !atHome && readdirSync(cwd).some((f) => !f.startsWith(".")) && !existsSync(join(cwd, "intent")) && !existsSync(join(cwd, "maps")) && !existsSync(join(cwd, "planning"));
+  const busy = !atHome && readdirSync(cwd).some((f) => !f.startsWith(".")) && !existsSync(join(cwd, "maps")) && !existsSync(join(cwd, "planning"));
   let dir = resolve(cwd);
   if (atHome || (busy && !(await confirm(ask, `This folder already has other files in it:\n  ${resolve(cwd)}\nSet nikOS up in this folder anyway?`, "n")))) {
     const suggestion = slugify(name);

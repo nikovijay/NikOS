@@ -48,6 +48,21 @@ function lastNumber(ref: StoryMapRef, prefix: string, releases: any[]): number {
   return Math.max(0, ...[...ids].filter((s) => s.startsWith(`${prefix}-`)).map((s) => Number(s.slice(prefix.length + 1)) || 0));
 }
 
+/**
+ * The label a new story id takes in this map: the one its existing ids already carry (WEB-CHK, CHK),
+ * so a plan key added later does not change them. An empty map takes the repo's label.
+ */
+function labelInUse(ref: StoryMapRef, key: string, releases: any[]): string {
+  const ids: unknown[] = [...releases.flatMap((r) => r?.stories ?? []), ...Object.keys(loadStates(ref.dir))];
+  for (const f of walk(join(ref.dir, "features"), ".feature")) ids.push(...featureStoryIds(read(f)));
+  const own = new RegExp(`^(?:([A-Z][A-Z0-9]{0,9})-)?${key}-[0-9]+$`);
+  for (const id of ids) {
+    const m = typeof id === "string" ? own.exec(id) : null;
+    if (m) return m[1] ? `${m[1]}-${key}` : key;
+  }
+  return storyPrefix(ref, key);
+}
+
 /** Add a story to storymap.yaml and state.yaml, and write its starter feature file. */
 export function newStory(input: StoryInput, dir: string): StoryResult {
   const title = input.title?.trim();
@@ -79,7 +94,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   if (index < 0) throw new Error(`There is no release ${input.release}. Releases: ${releases.map((r) => r?.number).join(", ")}`);
   const release = releases[index].number as number;
 
-  const prefix = storyPrefix(ref, plain.key as string);
+  const prefix = labelInUse(ref, plain.key as string, releases);
   const id = `${prefix}-${lastNumber(ref, prefix, releases) + 1}`;
 
   const feature = join(mapDir, "features", input.activity, `${slugify(title)}.feature`);

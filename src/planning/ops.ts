@@ -378,7 +378,8 @@ export function checkRepo(root: string): Problems {
   const errors: string[] = [];
   const warnings: string[] = [];
   for (const i of planningIssues(root)) (i.warning ? warnings : errors).push(`${i.file}: ${i.message}`);
-  if (mapDirs(root).length) {
+  // intent/ with no maps/ still gets validateGroup's migrate hint.
+  if (mapDirs(root).length || store().isDir(join(root, "intent"))) {
     for (const i of validateGroup(root).errors) errors.push(`${i.file}: ${i.message}`);
   }
   return { errors, warnings };

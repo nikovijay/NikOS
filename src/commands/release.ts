@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, isDone, read, setFeatureTag, walk } from "../lib/project.js";
 import { resolveStoryMap } from "../lib/maps.js";
-import { storyMapOf } from "./map.js";
+import { storyMapOfRef } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
 import { loadApprovals } from "../lib/approvals.js";
 import { failingScenarios } from "./state.js";
@@ -174,12 +174,13 @@ const STATUS_WORD: Record<string, string> = { todo: "to do", in_progress: "in pr
  * outside the release must be done too. With run, each done story's scenarios run again.
  */
 export function checkRelease(input: { map?: string; number: number; run?: boolean }, dir: string): ReleaseCheck {
-  const map = storyMapOf(dir, input.map);
+  // The map is picked first, so several maps with no --map say so, rather than reading as an empty map.
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const map = storyMapOfRef(ref);
   const release = map.releases.find((r) => r.number === input.number);
   if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
   const inRelease = new Set(release.stories.map((s) => s.id));
   // approval.policy: required-for-release makes a done story without a sign-off a gap.
-  const ref = resolveStoryMap(dir, { map: input.map });
   const needApproval = resolveSettings(ref.root)["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   // A done story with an approval on file that no longer holds: say so, as validate does.

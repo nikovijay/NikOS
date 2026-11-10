@@ -67,7 +67,7 @@ export function runDecide(args: string[]): number {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
-  if (isPlanOnly(dir)) return 0; // no story map to check
+  if (isPlanOnly(dir) || !mapDirs(dir).length) return 0; // no story map to check
   const v = mapDirs(dir).length ? validateGroup(dir) : validate(dir);
   if (v.errors.length) {
     console.error(formatResult(v));

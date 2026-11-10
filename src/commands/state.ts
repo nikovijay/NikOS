@@ -1,10 +1,10 @@
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
-import { resolveStoryMap } from "../lib/maps.js";
+import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { codeIsDirty, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { writeMapSummary } from "../lib/map-summary.js";
-import { validate } from "./validate.js";
+import { validate, validateGroup } from "./validate.js";
 import { verify, type VerifyResult } from "./verify.js";
 
 export type Status = "todo" | "in_progress" | "needs_rework" | "done" | "cancelled";
@@ -166,7 +166,9 @@ export function runState(args: string[]): number {
     console.error(`✗ ${e.message}`);
     return 1;
   }
-  const v = validate(opt("dir") ?? process.cwd(), opt("map"));
+  // Several maps and no --map: check them all, as nikos validate does, so the move is not refused after it is written.
+  const dir = opt("dir") ?? process.cwd();
+  const v = mapDirs(dir).length > 1 && !opt("map") ? validateGroup(dir) : validate(dir, opt("map"));
   // An approval that no longer holds is a warning here: the move above was written, and approve says what's needed.
   // Only the story this command changed is named: another story's lapse is still in nikos validate, not repeated on every set.
   for (const w of [...v.errors, ...v.warnings].filter((e) => e.lapse && (!lapsedFor || e.file.includes(lapsedFor) || e.message.includes(lapsedFor)))) console.log(`! ${w.file}: ${w.message}${w.hint ? `\n    → ${w.hint}` : ""}`);

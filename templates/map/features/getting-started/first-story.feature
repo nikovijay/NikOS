@@ -1,4 +1,4 @@
-@{{key}}-1 @release-1 @must @activity-getting-started
+@{{first_id}} @release-1 @must @activity-getting-started
 Feature: First story
 
   As a first user

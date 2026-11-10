@@ -273,12 +273,12 @@ describe("the plan", () => {
     expect(text).toContain("dropped bet links: release 1 names acme/payments#one-tap-pay: a bet in another repo can't be named here, so it's dropped");
   });
 
-  it("a bet named with no planning/ folder is dropped and listed, and the map names no bet", async () => {
+  it("a bet named with no planning/ folder is kept as the map's bet, since there is no card to check", async () => {
     const dir = legacyRepo({ plan: null, bets: {} });
     const r = await migrateMaps(dir, { ...yes, dryRun: true });
     const text = r.lines.join("\n");
-    expect(text).toContain("(no bet; bets: and story_bets: dropped)");
-    expect(text).toContain("dropped bet links: release 1 names checkout-speed: a map names one bet, in bet:, so this link is dropped");
+    expect(text).toContain("(bet: checkout-speed; bets: and story_bets: dropped)");
+    expect(text).not.toContain("dropped bet links");
     expect(text).not.toContain("Creates");
   });
 
@@ -351,7 +351,7 @@ describe("applying the plan", () => {
     expect(existsSync(join(dir, "planning"))).toBe(false);
     const story = readFileSync(join(dir, "maps/ht/storymap.yaml"), "utf8");
     expect(story).toContain("stories: [HT-1, HT-2, HT-12]");
-    expect(story).not.toContain("bet:");
+    expect(story).toContain("bet: checkout-speed");
     expect(readFileSync(join(dir, "maps/ht/state.yaml"), "utf8")).toContain("HT-2:");
     expect(readFileSync(join(dir, "maps/ht/approvals/HT-1.yaml"), "utf8")).toContain("by: Ada Lovelace");
     expect(validate(dir).errors).toEqual([]);

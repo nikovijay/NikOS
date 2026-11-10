@@ -9,6 +9,7 @@ import { storyPrefix, type StoryMapRef } from "../src/lib/maps";
 import { newMap } from "../src/commands/map";
 import { validate } from "../src/commands/validate";
 import { groupRepo, write, commitAll } from "./repo-fixture";
+import { writeMapSummary } from "../src/lib/map-summary";
 
 const chk = (root: string): StoryMapRef => ({ root, dir: join(root, "maps/chk"), id: "chk" });
 
@@ -78,6 +79,8 @@ describe("the owner field in storymap.yaml", () => {
     write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
     expect(storyPrefix(chk(g), "CHK")).toBe("CHK");
     expect(messages(validate(g, "chk")).filter((m) => m.includes("must start with"))).toEqual([]);
+    writeMapSummary(g, join(g, "maps/chk"));
+    expect(readFileSync(join(g, "maps/chk/delivery.yaml"), "utf8")).not.toMatch(/^owner:/m);
   });
 
   it("bet is optional: a map with no bet validates", () => {

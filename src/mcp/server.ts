@@ -14,7 +14,7 @@ import { decide } from "../commands/decide.js";
 import { findDecisions, formatDecisions } from "../commands/decisions.js";
 import { exportMap, FORMATS } from "../commands/export.js";
 import { init } from "../commands/init.js";
-import { storyMapOf } from "../commands/map.js";
+import { storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { newPlan } from "../commands/plan.js";
 import { addRelease, checkRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
@@ -24,9 +24,10 @@ import { newActivity, newStep } from "../commands/step.js";
 import { companyInit, start as startRepo } from "../commands/start.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
-import { formatResult, validate } from "../commands/validate.js";
+import { formatResult, validate, validateGroup } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
 import { count, read } from "../lib/project.js";
+import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { describeJoin, joinPlan } from "../commands/join.js";
@@ -87,11 +88,12 @@ export function createServer(repo: string): McpServer {
     return text(`${s.summary}\n${s.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`, s as unknown as Record<string, unknown>);
   }, true);
   tool("validate", "Check the story maps are well formed: each maps/<key> (map picks one), with its story map, state, features and approvals, and the constitution.md at the root.", { map: z.string().optional() }, (a) => {
-    const v = validate(root, a.map);
+    const v = mapDirs(root).length > 1 && !a.map ? validateGroup(root) : validate(root, a.map);
     return text(formatResult(v), { errors: v.errors, warnings: v.warnings });
   }, true);
   tool("story_map", "The story map as data: activities and steps, releases with goals and bets, and every story's status.", { map: z.string().optional() }, (a) => {
-    const m = storyMapOf(root, a.map);
+    // Several maps and no map named: say so, rather than an empty map.
+    const m = !a.map && mapDirs(root).length > 1 ? storyMapOfRef(resolveStoryMap(root)) : storyMapOf(root, a.map);
     return text(m.releases.map((r) => `Release ${r.number} · ${r.title}: ${r.stories.map((s) => `${s.id} ${s.title} (${s.status})`).join(", ") || "no stories"}`).join("\n"), m as unknown as Record<string, unknown>);
   }, true);
   tool("show_story", "Everything about one story: feature, status, approval, dependencies, plan, bets and decisions.", { id: z.string(), map: z.string().optional() }, (a) => text(show(a.id, root, a.map)), true);

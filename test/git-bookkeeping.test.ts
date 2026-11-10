@@ -25,9 +25,7 @@ describe("bookkeeping never counts as code", () => {
     write(join(dir, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done }\n");
     write(join(dir, "maps/chk/approvals/PAY-CHK-1.yaml"), "by: Ada\n");
     write(join(dir, "maps/chk/delivery.yaml"), "format_version: 1\nread_at: now\n");
-    write(join(dir, "maps/chk/state/PAY-CHK-2.yaml"), "status: todo\n");
     write(join(dir, "maps/chk/approvals/PAY-CHK-2.yaml"), "by: Ada\n");
-    write(join(dir, "maps/chk/approvals.yaml"), "approvals: {}\n");
     write(join(dir, ".nikos/upstream/x.txt"), "cache\n");
     commitAll(dir, "status only");
     expect(codeChangedSince(dir, tested)).toBe(false);

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { walk } from "../lib/project.js";
+import { storyPrefix } from "../lib/maps.js";
 import { diskStore, store, withStore } from "../lib/store.js";
 import { validate, formatResult, type ValidationResult } from "./validate.js";
 import { writeMapSummary } from "../lib/map-summary.js";
@@ -48,8 +49,10 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   const key = (opts.key ?? keyFor(name)).toUpperCase();
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(key)) throw new Error(`'${key}' isn't a valid project key (letters and digits, starting with a letter)`);
   if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
-  const values: Record<string, string> = { project_name: name, project_slug: slugify(name), key };
   const mapDir = join(root, "maps", key.toLowerCase());
+  // The starter story's id carries the same label map new gives a story: the group key's, if the repo has one.
+  const first_id = `${storyPrefix({ root, dir: mapDir, id: key.toLowerCase() }, key)}-1`;
+  const values: Record<string, string> = { project_name: name, project_slug: slugify(name), key, first_id };
   if (store().exists(join(mapDir, "storymap.yaml"))) throw new Error(`maps/${key.toLowerCase()}/ already exists`);
   const created: string[] = [];
   const skipped: string[] = [];

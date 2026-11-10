@@ -62,7 +62,7 @@ describe("approve", () => {
     expect(await runApprove(["HT-1", "--dir", copyExample()])).toBe(1);
   });
 
-  it("records a sign-off in approvals.yaml that lapses when the feature changes or the story is redone", async () => {
+  it("records a sign-off in approvals/<ID>.yaml that lapses when the feature changes or the story is redone", async () => {
     const root = mkdtempSync(join(tmpdir(), "nikos-approve-"));
     init(root, { name: "Fixture", key: "FX" });
     writeFileSync(join(root, "package.json"), '{"name":"fx","private":true}');
