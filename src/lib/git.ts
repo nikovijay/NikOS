@@ -177,6 +177,11 @@ export function switchNewBranch(root: string, name: string, run: Runner = realRu
 }
 
 /** Stage the planning paths and commit only them, so nothing else in the index is taken. */
+/** Make a branch from a start point (e.g. main) and switch to it. The start point's commits are the branch's; the current branch is left as it is. */
+export function switchNewBranchFrom(root: string, name: string, from: string, run: Runner = realRun): { ok: boolean; error?: string } {
+  const r = gitIn(root, ["switch", "-c", name, from], run);
+  return r.status === 0 ? { ok: true } : { ok: false, error: firstLine(r.stderr) || "git switch failed" };
+}
 export function commitPaths(root: string, paths: string[], message: string, run: Runner = realRun): { ok: boolean; sha?: string; error?: string } {
   if (!paths.length) return { ok: false, error: "Nothing to commit" };
   const add = gitIn(root, ["add", "--", ...paths], run);

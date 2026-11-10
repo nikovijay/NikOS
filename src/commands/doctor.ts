@@ -1,9 +1,9 @@
 // `nikos doctor`: is this repo set up the way nikOS works best? Each check says what it found
 // and, when something's missing, the next thing to do, in words an agent can act on.
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { count, decisionsPath, rel } from "../lib/project.js";
-import { resolveSettings } from "../lib/settings.js";
+import { resolveSettings, resolveSettingsDetailed } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { detectStack } from "../verify/detect.js";
 import { betIds, isPlanRepo, krIds } from "../planning/model.js";
@@ -15,7 +15,8 @@ import { hostOfEntry } from "../plan/refresh.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validateGroup } from "./validate.js";
-import { mapDirs } from "../lib/maps.js";
+import { mapDirs, mapOwnerOf } from "../lib/maps.js";
+import { LINK_BRANCH, LINK_FILE, linkBranchNote, planHead, readLink, SNAPSHOT_STALE_DAYS, linkProblem, type PlanLink } from "../plan/settings-link.js";
 
 import { read } from "../lib/project.js";
 
@@ -97,10 +98,67 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
     );
   }
 
+  const link = readLink(root);
+  if (link) planLinkChecks(root, link, add, opts);
+  else {
+    const note = linkBranchNote(root);
+    if (note) add({ name: "plan settings", status: "warn", found: note, next: `Merge ${LINK_BRANCH} to main, so main takes the plan's settings` });
+  }
+
   const stale = staleCliWarning();
   if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
 
   return checks;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A code repo linked to a plan (nikos.plan.yaml): the snapshot matches its hash and is fresh, the plan
+ * hasn't moved on (a network check, skipped with --offline), each map's owner has a team in the snapshot,
+ * and no value of this repo's own file is ignored because a level above locks it.
+ */
+function planLinkChecks(root: string, link: PlanLink, add: (c: Check) => void, opts: { offline?: boolean }) {
+  const plan = link.plan.repo;
+  const edited = linkProblem(root);
+  if (edited) {
+    add({ name: "plan settings", status: "fail", found: `${LINK_FILE}: ${edited}`, next: "Run nikos settings pull to refresh them from the plan, then commit it" });
+  } else {
+    const days = Math.max(0, Math.floor((Date.now() - Date.parse(link.read.at)) / DAY_MS));
+    const found = `from ${plan} at ${link.read.commit.slice(0, 7)}, read ${days === 0 ? "today" : `${count(days, "day")} ago`}`;
+    add(days > SNAPSHOT_STALE_DAYS ? { name: "plan settings", status: "warn", found, next: "Run nikos settings pull to refresh them from the plan" } : { name: "plan settings", status: "ok", found });
+  }
+
+  if (!opts.offline) {
+    const head = planHead(link);
+    if ("error" in head) add({ name: "plan current", status: "warn", found: `couldn't reach ${plan} to check it: ${head.error}`, next: "Check that you can read the plan, or run nikos doctor --offline to skip this check" });
+    else if (head.commit !== link.read.commit) add({ name: "plan current", status: "warn", found: `${plan} has moved on since the snapshot (${link.read.commit.slice(0, 7)} → ${head.commit.slice(0, 7)})`, next: "Run nikos settings pull to refresh them from the plan" });
+    else add({ name: "plan current", status: "ok", found: `${plan} hasn't moved on since the snapshot` });
+  }
+
+  // The owner a map takes its settings from is the one the snapshot bound it to. An owner the snapshot has no entry for
+  // is either a team the plan doesn't have yet, or a team added since the snapshot: either way the snapshot needs a pull.
+  const gaps = mapDirs(root).flatMap((dir) => {
+    const id = basename(dir);
+    const bound = id in link.maps ? link.maps[id] : mapOwnerOf(dir) ?? "";
+    if (!bound) return [`maps/${id} has no owner, so it takes the company's settings only`];
+    if (!mapOwnerOf(dir)) return [`maps/${id} has no owner in its storymap (the snapshot still takes ${bound}'s settings)`];
+    return link.owners[bound] ? [] : [`${bound} (maps/${id}) has no team in ${plan}, as of the last pull, so those maps take the company's settings only`];
+  });
+  add(
+    gaps.length
+      ? { name: "map owners", status: "warn", found: gaps.join("; "), next: "If the plan has that team, run nikos settings pull to take its settings. Otherwise set each map's owner in storymap.yaml to a team in the plan" }
+      : { name: "map owners", status: "ok", found: "every map's owner has a team in the plan" },
+  );
+
+  // A value here that a level above locks does nothing, so it's reported where it can be fixed. Each map's chain is checked
+  // on its own, since a team's lock can cover one map and not the others.
+  const ignored = [...new Set([{}, ...mapDirs(root).map((map) => ({ map }))].flatMap((opts) => resolveSettingsDetailed(root, opts).problems))].filter((p) => p.includes(" from this repo is ignored: "));
+  add(
+    ignored.length
+      ? { name: "own settings", status: "warn", found: ignored.join("; "), next: "Remove those keys from nikos.settings.yaml: the plan locks them" }
+      : { name: "own settings", status: "ok", found: "none ignored" },
+  );
 }
 
 /**

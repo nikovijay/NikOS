@@ -1,14 +1,17 @@
 // Settings in nikos.settings.yaml, at a repo's root. In a planning repo the company sets them once and
 // each area inherits them down the folders, changing any value the levels above haven't locked. A code
-// repo keeps its own file and inherits nothing. Each value remembers where it came from.
+// repo keeps its own file, and once it's linked to a plan it takes the plan's settings for each map's owner
+// from its nikos.plan.yaml. Each value remembers where it came from.
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { areaOf, type Area } from "../planning/model.js";
 import { chainOf } from "../plan/repo.js";
+import { readLink, type PlanLink } from "../plan/settings-link.js";
+import { mapDirs, mapOwnerOf } from "./maps.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,46 +64,108 @@ export function checkSettingsText(text: string): string | undefined {
   return `${SETTINGS_FILE}: ${e.instancePath.replace(/^\//, "").replace(/\//g, ".") || "(root)"} ${e.message}`;
 }
 
-/** A repo's own settings file, parsed and checked. */
-export function readSettings(root: string): { values: Record<string, unknown>; locked: string[] } {
-  const path = join(root, SETTINGS_FILE);
-  if (!store().exists(path)) return { values: {}, locked: [] };
-  const text = store().read(path);
-  const bad = checkSettingsText(text);
-  if (bad) throw new Error(bad);
-  const data = parse(text) ?? {};
-  return { values: flatten(data), locked: data.locked ?? [] };
+/** One level of settings, parsed and checked: the label a value from it carries, and its data. */
+export interface SettingsLevel {
+  label: string;
+  data: any;
+}
+
+/** A value a level tried to set, which a level above had locked. It is ignored. */
+export interface IgnoredSetting {
+  key: string;
+  level: string;
+  lockedBy: string;
 }
 
 /**
- * The settings that apply to a repo. In a planning repo that's its area's chain (areaSettings). A code
- * repo takes only its own nikos.settings.yaml over the defaults: nothing is inherited into it.
+ * Layer settings levels over the defaults, top to bottom. A level changes only what the levels above
+ * haven't locked, and its own locked list locks keys for the levels below. A value a level tries to
+ * change and can't is returned as ignored. Planning areas and code repos both layer this way.
  */
-export function resolveSettings(root: string): Resolved {
-  return resolveSettingsDetailed(root).resolved;
+export function layerSettings(levels: SettingsLevel[]): { resolved: Resolved; ignored: IgnoredSetting[] } {
+  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
+  const ignored: IgnoredSetting[] = [];
+  for (const level of levels) {
+    for (const [key, value] of Object.entries(flatten(level.data))) {
+      if (out[key].lockedBy) ignored.push({ key, level: level.label, lockedBy: out[key].lockedBy! });
+      else out[key] = { value, from: level.label };
+    }
+    for (const key of level.data?.locked ?? []) if (out[key] && !out[key].lockedBy) out[key].lockedBy = level.label;
+  }
+  return { resolved: out, ignored };
 }
 
-/** resolveSettings, with the problems found in the levels above (a settings file that doesn't read). */
-export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
+const formatIgnored = (i: IgnoredSetting) => `${i.key} from ${i.level} is ignored: ${i.lockedBy} locks it`;
+
+/**
+ * The settings that apply to a repo. In a planning repo that's its area's chain (areaSettings). A code
+ * repo takes the company's and its map owner's levels from its nikos.plan.yaml snapshot (when it has one),
+ * then its own nikos.settings.yaml, and each level changes only what the levels above haven't locked.
+ */
+export function resolveSettings(root: string, opts: { map?: string } = {}): Resolved {
+  return resolveSettingsDetailed(root, opts).resolved;
+}
+
+/**
+ * The owner a map takes its settings from: the owner the snapshot bound it to, so a change to the map's
+ * storymap.yaml takes effect only when the snapshot is refreshed (validate fails until then). A map the
+ * snapshot doesn't name takes its storymap's owner.
+ */
+const boundOwner = (dir: string, link: PlanLink | undefined): string | undefined => {
+  const id = basename(dir);
+  if (link && id in link.maps) return link.maps[id] || undefined;
+  return mapOwnerOf(dir);
+};
+
+/**
+ * The owner whose chain a code repo's settings take: the map's own owner when a map is given. With no
+ * map, the owner the repo's maps agree on. When they differ, there's no one chain, so only the company's
+ * settings apply and a problem says so.
+ */
+function ownerOf(root: string, map: string | undefined, link: PlanLink | undefined): { owner?: string; problem?: string } {
+  if (map) return { owner: boundOwner(map, link) };
+  const owners = new Set(mapDirs(root).map((d) => boundOwner(d, link)));
+  if (owners.size <= 1) return { owner: [...owners][0] };
+  const names = [...owners].map((o) => o ?? "no owner").sort().join(", ");
+  return { problem: `the maps have different owners (${names}), so this shows the company's settings only. A command that works on one story (approve, release check) uses that map's owner` };
+}
+
+/** resolveSettings, with the problems found in the levels (a settings file that doesn't read, or a value a level above locked). */
+export function resolveSettingsDetailed(root: string, opts: { map?: string } = {}): { resolved: Resolved; problems: string[] } {
   const area = areaOf(root);
   if (area) return areaSettings(area);
-  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
-  const own = readSettings(root);
-  for (const [key, value] of Object.entries(own.values)) out[key] = { value, from: "this repo" };
-  for (const key of own.locked) if (out[key]) out[key].lockedBy = "this repo";
-  return { resolved: out, problems: [] };
+  const problems: string[] = [];
+  const levels: SettingsLevel[] = [];
+  const link = readLink(root);
+  if (link) {
+    const { owner, problem } = ownerOf(root, opts.map, link);
+    if (problem) problems.push(problem);
+    const label = (rel: string) => `${link.plan.repo} ${rel}`;
+    for (const level of link.company) levels.push({ label: label(level.rel), data: level.data });
+    // An owner with no team in the plan has no entry here, so its maps take the company's settings only.
+    if (owner && link.owners[owner]) for (const level of link.owners[owner].levels) levels.push({ label: label(level.rel), data: level.data });
+  }
+  const path = join(root, SETTINGS_FILE);
+  if (store().exists(path)) {
+    const text = store().read(path);
+    const bad = checkSettingsText(text);
+    if (bad) throw new Error(bad);
+    levels.push({ label: "this repo", data: parse(text) ?? {} });
+  }
+  const { resolved, ignored } = layerSettings(levels);
+  return { resolved, problems: [...problems, ...ignored.map(formatIgnored)] };
 }
 
 /** An area's own settings file: the company's is nikos.settings.yaml at the root, any other area's is its settings.yaml. */
-const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.repo, SETTINGS_FILE) : join(area.dir, "settings.yaml"));
+export const areaSettingsFile = (area: Area) => (area.level === "company" ? join(area.repo, SETTINGS_FILE) : join(area.dir, "settings.yaml"));
 
 /**
  * The settings for an area of a planning repo: the company's, then each level down the folders to
  * this one. Each level changes what nobody above it locked. See docs/rfcs/plan-and-spec.md, rule 6.
  */
 function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
-  const out: Resolved = Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, { value: v, from: "default" }]));
   const problems: string[] = [];
+  const levels: SettingsLevel[] = [];
   for (const level of chainOf(area)) {
     const path = areaSettingsFile(level);
     if (!store().exists(path)) continue;
@@ -110,20 +175,25 @@ function areaSettings(area: Area): { resolved: Resolved; problems: string[] } {
       problems.push(`${level.rel}'s settings are skipped: ${bad.replace(SETTINGS_FILE, relative(area.repo, path))}`);
       continue;
     }
-    const data = parse(text) ?? {};
-    for (const [key, value] of Object.entries(flatten(data))) if (!out[key].lockedBy) out[key] = { value, from: level.rel };
-    for (const key of data.locked ?? []) if (out[key] && !out[key].lockedBy) out[key].lockedBy = level.rel;
+    levels.push({ label: level.rel, data: parse(text) ?? {} });
   }
-  return { resolved: out, problems };
+  const { resolved, ignored } = layerSettings(levels);
+  return { resolved, problems: [...problems, ...ignored.map(formatIgnored)] };
 }
 
-/** Change a setting in this repo's own file, unless a level above locked it. */
+/**
+ * Change a setting in this repo's own file, unless a level above locked it. A code repo's maps can have
+ * different owners, so the key is checked against each map's chain too: a team's lock on one map still holds.
+ */
 export function setSetting(root: string, key: string, value: unknown): string {
   if (!(key in DEFAULTS)) throw new Error(`'${key}' isn't a setting. Settings: ${Object.keys(DEFAULTS).join(", ")}`);
-  const current = resolveSettings(root)[key];
   const area = areaOf(root);
   const own = area ? area.rel : "this repo";
-  if (current.lockedBy && current.lockedBy !== own) throw new Error(`${key} is locked by ${current.lockedBy}, so it can't be changed here`);
+  const views: { map?: string }[] = area ? [{}] : [{}, ...mapDirs(root).map((map) => ({ map }))];
+  for (const opts of views) {
+    const current = resolveSettings(root, opts)[key];
+    if (current.lockedBy && current.lockedBy !== own) throw new Error(`${key} is locked by ${current.lockedBy}${opts.map ? ` (for maps/${basename(opts.map)})` : ""}, so it can't be changed here`);
+  }
   const path = area ? areaSettingsFile(area) : join(root, SETTINGS_FILE);
   const doc = parseDocument(store().exists(path) ? store().read(path) : "# nikOS settings for this repo.\nformat_version: 1\n");
   doc.setIn(key.split("."), value);

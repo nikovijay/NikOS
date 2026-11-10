@@ -13,6 +13,7 @@ import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
+import { LINK_BRANCH, LINK_FILE, linkBranchNote, linkProblem } from "../plan/settings-link.js";
 import { approvalsDir, storyFiles } from "../lib/state-files.js";
 import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
@@ -98,7 +99,25 @@ export function validate(start: string, map?: string): ValidationResult {
   const ref = resolveStoryMap(start, { map });
   const r = validateMap(ref);
   lintRootConstitution(ref.root, r.errors, r.warnings);
+  checkPlanLink(ref.root, r.errors, r.warnings);
   return r;
+}
+
+/**
+ * A code repo's nikos.plan.yaml must still match the hash of its settings, and each map's owner must still be
+ * the one the snapshot bound it to. A hand edit, or an owner changed in a storymap, fails here, so CI catches it.
+ * A link that's only on nikos/link is a warning: this branch doesn't take the plan's settings until that merges.
+ * Offline: validate never reads the plan, so a stale snapshot is doctor's to report.
+ */
+function checkPlanLink(root: string, errors: Issue[], warnings: Issue[]): void {
+  try {
+    const problem = linkProblem(root);
+    if (problem) errors.push({ file: LINK_FILE, message: problem, hint: "commit the refreshed file" });
+  } catch (err) {
+    errors.push({ file: LINK_FILE, message: (err as Error).message });
+  }
+  const note = linkBranchNote(root);
+  if (note) warnings.push({ file: LINK_FILE, message: note, hint: `merge ${LINK_BRANCH} to main` });
 }
 
 /** The repo's constitution.md, at its root: linted once, whatever the number of maps. */
@@ -157,6 +176,7 @@ export function validateGroup(root: string): ValidationResult {
     }
   }
   lintRootConstitution(root, errors, warnings);
+  checkPlanLink(root, errors, warnings);
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
 }
 

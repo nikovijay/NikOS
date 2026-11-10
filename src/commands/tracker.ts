@@ -18,8 +18,8 @@ import { newActivity } from "./step.js";
 export type NikosStatus = "todo" | "in_progress" | "needs_rework" | "done" | "approved" | "cancelled";
 
 /** The tracker settings that apply here. */
-function trackerOf(root: string) {
-  const s = resolveSettings(root);
+function trackerOf(root: string, map?: string) {
+  const s = resolveSettings(root, { map });
   return {
     system: s["tracker.system"].value as string,
     statuses: s["tracker.statuses"].value as Record<string, NikosStatus>,
@@ -65,7 +65,7 @@ export interface RecordResult {
 export function recordTicket(input: { id: string; status: string; by?: string; on?: string; map?: string }, dir: string): RecordResult {
   const ref = resolveStoryMap(dir, { story: input.id, map: input.map });
   const root = ref.root;
-  const t = trackerOf(root);
+  const t = trackerOf(root, ref.dir);
   if (t.system === "none") throw new Error("No tracker is set up here: set tracker.system first (nikos settings set tracker.system jira)");
   const means = t.statuses[input.status];
   if (!means) {
@@ -113,7 +113,7 @@ export interface TicketMove {
 /** For each linked story, the tracker status its ticket should be in. The agent moves the tickets. */
 export function ticketMoves(dir: string, mapId?: string): TicketMove[] {
   const ref = resolveStoryMap(dir, { map: mapId });
-  const t = trackerOf(ref.root);
+  const t = trackerOf(ref.root, ref.dir);
   const stories = storyMapOfRef(ref).releases.flatMap((r) => r.stories);
   const statusFor = (s: NikosStatus) => Object.entries(t.statuses).find(([, v]) => v === s)?.[0] ?? (s === "approved" ? Object.entries(t.statuses).find(([, v]) => v === "done")?.[0] : undefined);
   const out: TicketMove[] = [];

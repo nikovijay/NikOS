@@ -12,7 +12,7 @@ import { findDecisions, formatDecisions } from "../src/commands/decisions";
 import { checkRelease } from "../src/commands/release";
 import { suggest } from "../src/commands/suggest";
 import { approve } from "../src/commands/approve";
-import { resolveSettings, setSetting } from "../src/lib/settings";
+import { layerSettings, resolveSettings, setSetting } from "../src/lib/settings";
 import { copyExample, edit, rootOf } from "./helpers";
 
 const git = (cwd: string, ...args: string[]) => {
@@ -36,7 +36,7 @@ const plainRepo = () => {
 };
 
 describe("settings", () => {
-  it("a code repo reads only its own nikos.settings.yaml: nothing is inherited into it", () => {
+  it("an unlinked code repo reads only its own nikos.settings.yaml: nothing is inherited into it", () => {
     const root = settingsRepo("approval:\n  policy: required-for-release\ntracker:\n  system: jira\n  site: acme.atlassian.net\nlocked: [approval.policy]\n");
     const s = resolveSettings(root);
     expect(s["approval.policy"]).toEqual({ value: "required-for-release", from: "this repo", lockedBy: "this repo" });
@@ -50,6 +50,26 @@ describe("settings", () => {
     expect(readFileSync(join(root, "nikos.settings.yaml"), "utf8")).toContain("project: PAY-TEAM");
     expect(() => setSetting(root, "approval.routes", ["email"])).toThrow("approval.routes");
     expect(() => setSetting(root, "nope", 1)).toThrow("'nope' isn't a setting");
+  });
+
+  it("layers levels top-down: a locked key stays put, and a lower level's change to it is ignored and reported", () => {
+    const company = { label: "company", data: { approval: { policy: "required-for-release" }, tracker: { system: "linear" }, locked: ["approval.policy"] } };
+    const team = { label: "teams/WEB", data: { approval: { policy: "off" }, tracker: { system: "jira", project: "PAY" } } };
+    const r = layerSettings([company, team]);
+    expect(r.resolved["approval.policy"]).toEqual({ value: "required-for-release", from: "company", lockedBy: "company" });
+    expect(r.resolved["tracker.system"]).toEqual({ value: "jira", from: "teams/WEB" });
+    expect(r.resolved["tracker.project"]).toEqual({ value: "PAY", from: "teams/WEB" });
+    expect(r.ignored).toEqual([{ key: "approval.policy", level: "teams/WEB", lockedBy: "company" }]);
+    expect(layerSettings([]).resolved["approval.policy"]).toEqual({ value: "optional", from: "default" });
+  });
+
+  it("a code repo's own file can't change a key locked above: its value is ignored and reported", () => {
+    const above = { label: "acme/company-plan company", data: { approval: { policy: "off" }, locked: ["approval.policy"] } };
+    const own = { label: "this repo", data: { approval: { policy: "required-for-release" }, tracker: { system: "jira" }, locked: ["tracker.system"] } };
+    const r = layerSettings([above, own]);
+    expect(r.resolved["approval.policy"]).toEqual({ value: "off", from: "acme/company-plan company", lockedBy: "acme/company-plan company" });
+    expect(r.resolved["tracker.system"]).toEqual({ value: "jira", from: "this repo", lockedBy: "this repo" });
+    expect(r.ignored).toEqual([{ key: "approval.policy", level: "this repo", lockedBy: "acme/company-plan company" }]);
   });
 });
 

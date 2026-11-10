@@ -30,7 +30,7 @@ import { formatResult, validate, validateGroup } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
 import { read } from "../lib/project.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
-import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
+import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { describeRepoJoin, joinPlanRepo } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
@@ -118,19 +118,20 @@ export function createServer(repo: string): McpServer {
   }, true);
   tool("export", "The story map as a PRD in Markdown, or Linear or Jira import JSON.", { format: z.enum(FORMATS), release: z.number().int().optional(), map: z.string().optional() }, (a) => text(exportMap(root, a.format, { release: a.release, map: a.map })), true);
 
-  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals and tracker) and what to do next.", {}, () => {
+  tool("doctor", "Check this repo is set up well (story map, scenario runner, CI, approvals, tracker and the plan it is linked to) and what to do next. It reads the linked plan over the network.", {}, () => {
     const checks = doctor(root);
     return text(checks.map((c) => `${{ ok: "✓", warn: "!", fail: "✗" }[c.status]} ${c.name}: ${c.found}${c.next ? ` → ${c.next}` : ""}`).join("\n"), { checks });
   }, true);
-  tool("settings", "The settings that apply here, where each comes from (this repo, or a company or department plan above it), and which are locked.", {}, () => {
-    const s = resolveSettings(root);
-    return text(formatSettings(s), s as unknown as Record<string, unknown>);
+  tool("settings", "The settings that apply here and where each comes from: this repo's own file, and for a repo linked to a plan, the company's and its map owner's team settings from nikos.plan.yaml. Also says which are locked, and which of this repo's values a lock ignores. map picks one story map, since a repo's maps can have different owners.", { map: z.string().optional() }, (a) => {
+    const dir = a.map ? resolveStoryMap(root, { map: a.map }).dir : undefined;
+    const r = resolveSettingsDetailed(root, dir ? { map: dir } : {});
+    return text([formatSettings(r.resolved), ...r.problems.map((p) => `! ${p}`)].join("\n"), { settings: r.resolved, problems: r.problems });
   }, true);
-  tool("change_setting", "Change a setting in this repo, unless a level above locked it. Ask the person first.", { key: z.string(), value: z.any() }, (a) => {
+  tool("change_setting", "Change a setting in this repo, unless a level above locked it (for any of its story maps). Ask the person first.", { key: z.string(), value: z.any() }, (a) => {
     setSetting(root, a.key, a.value);
-    return text(`${a.key}: ${JSON.stringify(resolveSettings(root)[a.key].value)} (this repo)`);
+    return text(`${a.key}: ${JSON.stringify(resolveSettingsDetailed(root).resolved[a.key].value)} (this repo)`);
   });
-  tool("join", "Join a planning repo. It gets this repo listed in planning/repos.yaml on a nikos/join branch for review, and nothing in this repo moves: push sends that branch to the planning repo's origin (off by default), and plan_dir uses a checkout of the planning repo already on this computer. repo is the planning repo's path on the host (owner/repo, or group/subgroup/project on GitLab).", {
+  tool("join", "Join a planning repo. It gets this repo listed in planning/repos.yaml on a nikos/join branch for review, and commits nikos.plan.yaml (the settings its maps take from the plan) on a nikos/link branch here. This repo must have no uncommitted changes, and main is never touched. push sends both branches to their origins (off by default), and plan_dir uses a checkout of the planning repo already on this computer. A repo linked to another plan is refused. repo is the planning repo's path on the host (owner/repo, or group/subgroup/project on GitLab).", {
     repo: z.string(), host: z.string().optional(), url: z.string().optional(), ref: z.string().optional(),
     push: z.boolean().optional(), plan_dir: z.string().optional(),
   }, (a) => {

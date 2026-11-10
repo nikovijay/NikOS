@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/plan-link.schema.json",
+  "title": "nikos.plan.yaml: a code repo's link to its planning repo, and the settings its maps take from it",
+  "description": "Written by nikos join and refreshed by nikos settings pull. A version newer than 1 is refused before this schema runs.",
+  "type": "object",
+  "required": ["format_version", "plan", "read", "company", "owners", "maps", "sha256"],
+  "additionalProperties": false,
+  "$defs": {
+    "levels": {
+      "type": "array",
+      "description": "Settings files from the top down, each with the folder it came from (e.g. teams/WEB).",
+      "items": {
+        "type": "object",
+        "required": ["rel", "data"],
+        "additionalProperties": false,
+        "properties": {
+          "rel": { "type": "string", "minLength": 1 },
+          "data": { "type": "object" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "format_version": { "const": 1, "description": "The version of this file's format. nikOS reads 1." },
+    "plan": {
+      "type": "object",
+      "required": ["repo"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|#|$))[A-Za-z0-9_.-]+)+$",
+          "description": "The planning repo's path on its host: owner/repo, or group/subgroup/project on GitLab."
+        },
+        "host": { "type": "string", "minLength": 1, "description": "The host, when it isn't github.com." },
+        "url": { "type": "string", "minLength": 1, "description": "The git url to read from, when it isn't derived from host and repo. Never carries a password." }
+      }
+    },
+    "read": {
+      "type": "object",
+      "required": ["commit", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$", "description": "The planning repo's commit the snapshot was read from." },
+        "at": { "type": "string", "minLength": 1, "description": "When it was read, as an ISO time." },
+        "ref": { "type": "string", "minLength": 1, "description": "The branch read. Absent means the planning repo's default branch." }
+      }
+    },
+    "company": { "$ref": "#/$defs/levels", "description": "The company's settings. Every map takes these, whatever its owner." },
+    "owners": {
+      "type": "object",
+      "description": "Each owning team's chain, below the company, keyed by the team's key (e.g. WEB). An owner with no team in the plan has no entry.",
+      "propertyNames": { "pattern": "^[A-Z][A-Z0-9]{0,9}$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["levels"],
+        "additionalProperties": false,
+        "properties": { "levels": { "$ref": "#/$defs/levels" } }
+      }
+    },
+    "maps": {
+      "type": "object",
+      "description": "Each story map's bound owner when the snapshot was taken, keyed by the map's folder (e.g. chk). An empty string is no owner. A map whose storymap.yaml names another owner fails validate until the snapshot is pulled again.",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string", "pattern": "^([A-Z][A-Z0-9]{0,9})?$" }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "A hash of company, owners and maps. It catches a hand edit; it is not security." }
+  }
+}

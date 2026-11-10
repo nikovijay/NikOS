@@ -12,7 +12,7 @@ import { newKr } from "../src/planning/krs";
 import { newBet } from "../src/planning/bets";
 import { setBetKrs } from "../src/planning/aligns";
 import { areaOf, loadKr } from "../src/planning/model";
-import { resolveSettings, setSetting } from "../src/lib/settings";
+import { resolveSettings, resolveSettingsDetailed, setSetting } from "../src/lib/settings";
 import { spawnSync } from "node:child_process";
 
 const cli = (...args: string[]) =>
@@ -155,6 +155,15 @@ describe("a planning repo", () => {
     expect(parse(readFileSync(join(at("payments"), "settings.yaml"), "utf8")).approval.policy).toBe("off");
     expect(resolveSettings(at("WEB"))["approval.policy"]).toEqual({ value: "off", from: "groups/payments" });
     expect(() => setSetting(at("WEB"), "tracker.system", "jira")).toThrow("tracker.system is locked by company");
+  });
+
+  it("reports a level's value that a level above locked, and keeps the locked one", () => {
+    const { repo, at } = acme();
+    writeFileSync(join(repo, "nikos.settings.yaml"), "format_version: 1\ntracker:\n  system: linear\nlocked: [tracker.system]\n");
+    writeFileSync(join(at("WEB"), "settings.yaml"), "format_version: 1\ntracker:\n  system: jira\n");
+    const r = resolveSettingsDetailed(at("WEB"));
+    expect(r.resolved["tracker.system"]).toEqual({ value: "linear", from: "company", lockedBy: "company" });
+    expect(r.problems).toEqual(["tracker.system from teams/WEB is ignored: company locks it"]);
   });
 });
 

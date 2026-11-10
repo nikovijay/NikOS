@@ -79,7 +79,9 @@ planning/
   bets may align to any department's or group's bet.
 - **Settings come down the folders.** The company's are in `nikos.settings.yaml` at the planning repo's root.
   Each department, group or team can change what nobody above it locked. A code
-  repo linked to the plan keeps its own settings and doesn't inherit them.
+  repo linked to the plan takes the company's settings and its map owner's team
+  settings from a committed snapshot, `nikos.plan.yaml`, and its own settings
+  file changes only what the plan leaves open. See [docs/settings.md](settings.md).
 
 ## Commands
 
@@ -130,8 +132,12 @@ repos:
 To list a code repo from its own checkout, run `nikos join <plan repo>` there.
 It writes the repo's line into `planning/repos.yaml` on a `nikos/join-…`
 branch with one commit, and prints where the branch is and how to open the
-review. Nothing in the code repo moves. It pushes only with `--push`, and
-`--plan-dir <checkout>` uses a checkout you already have.
+review. In the code repo it commits `nikos.plan.yaml` (the settings its maps
+take from the plan) on a `nikos/link` branch, and `main` is never touched. It
+refuses a repo with uncommitted changes, and a repo already linked to another
+plan. It pushes only with `--push`, and `--plan-dir <checkout>` uses a checkout
+you already have. `nikos settings pull` refreshes the snapshot. See
+[docs/settings.md](settings.md).
 
 `nikos plan refresh` reads each listed repo, read-only, and keeps a copy of
 its `maps/<key>/storymap.yaml` and `delivery.yaml` under `.nikos/delivery/`,

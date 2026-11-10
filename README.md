@@ -139,8 +139,8 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`) |
 | `nikos next` | Print the next story to build |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
-| `nikos join <repo>` | Run in a code repo: list it in the company's planning repo (`planning/repos.yaml`) on a `nikos/join-…` branch for review (`--push` sends it, `--plan-dir` uses a checkout you have). Settings aren't inherited: a code repo keeps its own ([docs/settings.md](docs/settings.md)) |
-| `nikos settings` | The settings that apply here, and where each comes from |
+| `nikos join <repo>` | Run in a code repo: list it in the company's planning repo (`planning/repos.yaml`) on a `nikos/join-…` branch for review, and commit `nikos.plan.yaml` (the settings its maps take from the plan) on a `nikos/link` branch here. `--push` sends both, `--plan-dir` uses a checkout you have, and `main` is never touched ([docs/settings.md](docs/settings.md)) |
+| `nikos settings [set <key> <value> \| pull]` | The settings that apply here, and where each comes from; `set` changes one this repo may change; `pull` refreshes the snapshot of the plan's settings this repo is linked to ([docs/settings.md](docs/settings.md)) |
 | `nikos doctor` | Check the repo is set up well, and what to do next |
 | `nikos tracker link\|record\|sync\|import` | Keep the story map and Jira, Linear, GitHub or GitLab issues in step, through the tracker's MCP |
 | `nikos show <id>` | Summarise a story: feature, status, plan, bets, decisions |
