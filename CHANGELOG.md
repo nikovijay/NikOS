@@ -1,45 +1,94 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-11-10)
+
+nikOS is now two products in one package. **nikOS Plan** keeps a company's objectives, key results and bets in one planning repo, with a folder for each level: company, departments, groups and teams. **nikOS Spec** keeps each code repo's story map in `maps/<key>/`, next to the code that builds it. The two meet in small committed files. A map names the bet it delivers, and writes `delivery.yaml` for the plan to read. The plan lists its code repos in `planning/repos.yaml`. A code repo keeps a copy of the plan's settings in `nikos.plan.yaml`. The design is `docs/rfcs/plan-and-spec.md`.
+
+This release changes the layout, and 0.4 repos are refused until they are moved by hand. See "Moving a 0.4 setup" under Breaking.
 
 ### Breaking
 
-- **This release (0.5) changes the layout.** nikOS now has two products. The company's plan lives in one planning repo, made with `nikos plan init`, with a folder for each level under `planning/`: `company/`, `departments/<id>/`, `groups/<id>/` and `teams/<KEY>/`. A code repo keeps only its story map, in `maps/<key>/`. `nikos company init`, `nikos group init`, every `nikos planning` command, `nikos apply` with `--editable` change files, `nikos migrate maps` and the `planning/upstream.yaml`, `downstream.yaml` and `upstream.lock` files are gone. A repo with a `planning/plan.yaml` of the old kind, or an `intent/` folder, is refused until it's moved by hand.
-- **`nikos start` asks what you're setting up.** `--plan` makes the company's planning repo, and `--map` (with `--name` and `--key`, and `--join <planning repo>` to link it) makes a story map for this code. With no flags in a terminal it asks which; outside a terminal it exits with usage and writes nothing.
-- **`nikos serve` shows the story map of a code repo, and is no longer the plan's dashboard.** In a planning repo it stops and says to run `nikos plan serve`. The old dashboard and its custom views are gone.
-- **A code repo takes its settings from its plan.** `nikos join` commits `nikos.plan.yaml` on a `nikos/link` branch in the code repo: a snapshot of the company's settings and of its map owner's team chain. The repo's own `nikos.settings.yaml` comes last and can change only what the plan leaves open. Settings no longer come down through `upstream.yaml`. A repo joined before this release has no `nikos.plan.yaml` until it runs `nikos join <planning repo>` again. Areas of one planning repo still inherit from the folders above them.
-- **Two skills, one plugin.** `nikos-spec` covers the code side (it was `nikos-mode`). `nikos-plan` covers the company's plan (it was in the Planning pack). The Planning pack, `tools/planning/`, is gone: install `nikos@nikos` and drop `nikos-planning@nikos`.
-- **Moving a 0.4 test setup by hand.** Copy each plan repo's `planning/` folder into an area folder of a new planning repo: a company's `planning/` becomes `planning/company/`, and a department's becomes `planning/departments/<id>/`. Then run `nikos plan validate` there. For a code repo whose story map is in `intent/`, run `git mv intent maps/<key>` (with a key of your choice), then `nikos map status` and commit the result. Each code repo can then join the plan with `nikos join <planning repo>`.
+- **One planning repo replaces plans spread across repos.** `nikos company init`, `nikos group init`, every `nikos planning` command, the rollout, `nikos apply` with `--editable` change files, and the `planning/upstream.yaml`, `downstream.yaml` and `upstream.lock` files are gone. A repo with a `planning/plan.yaml` of the old kind is refused, with a pointer to `nikos plan init`.
+- **Every story map lives in `maps/<key>/`, and `intent/` is gone.** A repo that still keeps `intent/` is refused until it's moved. `nikos migrate maps`, `migrate per-story` and `migrate single-file` are removed, and so are the MCP `migrate` tool, `templates/intent/` and the `findIntentDir`, `perStory` and `migrate` library exports.
+- **Assignments and team sync are gone.** `nikos assign`, `nikos sync`, `nikos team` (`init`, `join`, `member`, `show`), `nikos.team.yaml`, `assignments.yaml`, `.nikos/assigned/`, `.nikos/teams/` and the team `status/` and `approvals/` folders are removed, and nikOS ignores those files. A map lives in the repo that builds it. A bet that spans repos gets one map in each.
+- **`nikos start` asks what you're setting up.** `--plan` makes the company's planning repo. `--map` makes a story map for this code, with `--name` and `--key`, and `--join <planning repo>` to link it. With no flags in a terminal it asks which. Outside a terminal it exits with usage and writes nothing.
+- **`nikos serve` shows a code repo's story map.** It is no longer the plan's dashboard, which is now `nikos plan serve`. In a planning repo `nikos serve` stops and says so. With several maps it lists them, and `--export` asks which one to save with `--map`. The old dashboard and its custom views are gone.
+- **A code repo takes its settings from its plan.** Settings no longer come down through `upstream.yaml`. A repo joined before this release has no `nikos.plan.yaml` until it runs `nikos join <planning repo>` again. See "Settings from the plan" below.
+- **`delivery.yaml` says `version: 1`, not `format_version`.** Run `nikos map status` once in each code repo to rewrite it.
+- **Two skills in the one plugin.** `nikos-spec` covers the code side (it was `nikos-mode`). `nikos-plan` covers the company's plan (it was in the Planning pack). The Planning pack, `tools/planning/`, is gone: install `nikos@nikos` and drop `nikos-planning@nikos`.
+- **Moving a 0.4 setup.** Make a planning repo with `nikos plan init`. Copy each old plan repo's `planning/` folder into an area folder: a company's goes to `planning/company/`, and a department's to `planning/departments/<id>/`. Then run `nikos plan validate`. In each code repo whose map is in `intent/`:
+  1. Run `git mv intent maps/<key>`, with a key of your choice.
+  2. Move `constitution.md` and `decisions.md` up to the repo root.
+  3. Fold each `state/<ID>.yaml` into `state.yaml` under `stories:`, and split `approvals.yaml` into one `approvals/<ID>.yaml` per approval.
+  4. Run `nikos map status`, commit the result, and run `nikos join <planning repo>`.
+
+  `nikos validate` names anything still in the old layout.
 
 ### Added
 
-- **Settings from the plan, in a code repo.** `nikos join` writes `nikos.plan.yaml` in the code repo, and each map takes its owner's chain from it. Locks hold: a value the company or a team locked is ignored in the repo's own file, and `nikos settings` says which level locked it. `nikos settings pull` refreshes the snapshot from the plan, refuses a settings file that doesn't read (and names it), and keeps the last snapshot. `nikos validate` fails on a hand-edited snapshot, offline. `nikos doctor` warns about a snapshot over 14 days old, a map with no owner or an owner with no team in the plan, and an own value a lock ignores; online, it also warns when the plan has moved on (`--offline` skips that). A repo can link to one plan only.
-- **Ladders up.** A key result or bet can say what it ladders up to as text (`nikos plan kr new --ladders-up "<text>"`, `nikos plan bet new --ladders-up`) until a link exists. `nikos plan ladder` lists the unlinked ones and ranks the items each could link to, and `nikos plan ladder accept <id> <candidate>` writes the link and clears the text. Text alone is shown as "not linked yet" and feeds no figure, progress or delivery. The dashboard lists those items under "Not linked yet" at every level and in the offline export, and suggest offers to link them.
-- **Key results can go down.** `nikos plan kr new --direction down` marks a figure that should fall, such as days to close. Its progress is worked out from the baseline toward the target either way. A figure past the baseline shows "moved the wrong way", and a direction against the target's side is a validate warning.
-- **Milestone key results.** `nikos plan kr new --kind milestone --step "<name>"` (repeat `--step`) makes a key result of named steps. `nikos plan kr step <id> "<name>" [--date]` marks one done, once. The page shows "2 of 3 steps done", and status and `--json` list each step with its date. A milestone is stale only after a step was done and none has been since `stale_after_days`.
-- **The planning skill covers the new fields.** `nikos-plan` has a ladder playbook: it lists what each text-only item could link to, and links one only on the person's yes. Its check-in playbook marks a milestone's steps with `kr step`, never with a value, and reads a figure that should go down as improving as it falls.
+- **nikOS Plan: the company's plan in one repo.** `nikos plan init` makes the planning repo, and `nikos plan add department|group|team` adds its areas: `planning/company/`, `planning/departments/<id>/`, `planning/groups/<id>/` and `planning/teams/<KEY>/`.
+  - The company plans by year and departments by quarter. A department's key result takes `--period 2027-Q1`, inside the company's year.
+  - Only the company and departments have key results. Every level has bets, and any bet may aim at a company or department key result.
+  - Ids are unique within the company, so a link is just an id.
+  - Key results, bets, check-ins, target changes and reviews are `nikos plan` commands, in the area named with `--in` or the area folder you're in.
+  - `nikos plan status` and `nikos plan validate` cover the whole company.
+  - Settings come down the folders: each area's `settings.yaml` changes what no level above it locked.
+  - See `docs/plan.md`.
+- **Each bet shows its delivery.** `nikos plan refresh` reads each code repo listed in `planning/repos.yaml`, read-only, and keeps its maps' `delivery.yaml` under `.nikos/delivery/`. A repo that can't be read keeps its last good copy.
+  - `nikos plan status` puts a delivery line under each bet, from the maps that name it. It shows how many stories are done (and approved), in progress, not current with their feature, or not in a summary yet, and how old each repo's copy is.
+  - A bet with no maps of its own shows the bets below it that have maps.
+  - `--json` gives the same as data.
+- **`nikos plan serve`: the planning dashboard, one area at a time.**
+  - An altitude switcher (Company · Departments · Groups · Teams), an area picker and a breadcrumb move between areas.
+  - Each area has its pages: key results, OKRs and bets, a four-column ladder, bets and a timeline.
+  - You can drill down from a key result to the bets and story maps that deliver it.
+  - The link holds the place (`?at=departments/finance`), so it can be shared.
+  - Check-ins and new bets are saved on a nikos branch in the area's folder, and nothing is pushed until Push.
+  - It refreshes the code repos on start. `--offline` skips that.
+  - `--export <file>` writes one offline page: one area's with `--in`, or every area's.
+- **`nikos join` links a code repo to the plan.** It lists the repo in `planning/repos.yaml` on a `nikos/join-…` branch in the planning repo. It also commits `nikos.plan.yaml` on a `nikos/link` branch made from `main` in the code repo.
+  - Nothing is pushed without `--push`.
+  - It refuses a code repo with uncommitted changes, and a repo already linked to another plan.
+  - `--plan-dir` uses a checkout of the planning repo you already have.
+- **Settings from the plan, in a code repo.** Each map takes its settings in this order:
+  1. the defaults;
+  2. the company;
+  3. its owning team's chain of folders: department, group, team;
+  4. the repo's own `nikos.settings.yaml`.
 
-- **nikOS Plan: the company's plan in one repo.** `nikos plan init` makes a planning repo with a folder for each level: `planning/company/`, `planning/departments/<id>/`, `planning/groups/<id>/` and `planning/teams/<KEY>/`. Add them with `nikos plan add department|group|team`. Key results, bets, check-ins, target changes and reviews are `nikos plan` commands, in the area named with `--in` or the area folder you're in. The company plans by year and departments by quarter: a department's key result needs `--period 2027-Q1` inside the company's year, and is due at the quarter's end. Ids are unique within the company, so links inside the repo are just ids. A link goes up a level, never down. Settings come down the folders: each area's `settings.yaml` changes what nobody above it locked. `nikos plan status` and `nikos plan validate` cover the whole company. See `docs/plan.md`. This is the first of the changes in `docs/rfcs/plan-and-spec.md`. The dashboard is `nikos plan serve`, below.
-- **Each bet shows its delivery.** `nikos plan status` puts a delivery line under each bet, from the stories of the code repo maps that name it: how many are done (and approved), in progress, not current with their feature, or not in a summary yet, with how old each repo's copy is. A bet with no maps of its own shows each bet below it that has maps, on its own line. `nikos plan status --json` gives the same as data, and `--in <area>` narrows it. `nikos plan validate` and `status` warn, without failing, about a map that names an unknown bet, a bet in another plan, or a repo that was never read.
-- **`nikos plan refresh` reads the code repos a plan lists.** `planning/repos.yaml` lists the code repos a plan reads, with `version: 1`. `nikos plan refresh` reads each one, read-only, and keeps its story maps' status files under `.nikos/delivery/`, which git ignores. A repo that can't be read keeps its last good copy, and the output says how old it is and why the read failed.
-- **`nikos plan serve`: the planning dashboard, one area at a time.** It opens on the company, and an altitude switcher (Company · Departments · Groups · Teams) and an area picker move between the areas at each level. Each area has a breadcrumb back up the company, and its own pages: key results (company and departments), OKRs and bets, the ladder, bets and a timeline. The ladder shows the key results above an area and the bets above its bets, widens to everything above or below, and each bet's delivery comes from the code repos listed in `planning/repos.yaml`. From a key result you can open the bets that aim at it and the story maps that deliver them; from a bet, the chain it aligns to. The page's link holds the area (`?at=departments/finance`), so it can be shared or bookmarked. A key result has a check-in form, and the Bets page an add-a-bet form: each save goes in the area's folder on a nikos branch, and nothing is pushed until Push. Other changes are still made with the `nikos plan` commands. It refreshes the code repos on start, and `--offline` skips that. A repo that can't be read shows as a notice, and the dashboard still opens. `--port` picks the port, and `--in <area>` starts on one area. `nikos plan serve --export <file>` writes one offline page that works without a server: with `--in`, that area's pages only (links to other areas say they aren't in the file); without it, every area's. It names the code repos it reads, so share it with care.
-- **`nikos join` can list a code repo in a planning repo.** Run it in a code repo with the planning repo's path. It writes the repo's line into `planning/repos.yaml` on a `nikos/join-…` branch, with one commit, and prints how to open the review. It also commits `nikos.plan.yaml` on a `nikos/link` branch in the code repo (see Settings from the plan above), and nothing is pushed unless you add `--push`. `--plan-dir` uses a checkout you already have. A second join is refused when origin already has a `nikos/join-…` branch for the repo, and says which one.
+  A lock from a level above always holds. A value set on a locked key further down is ignored and reported.
+  - `nikos settings --map <id>` shows where each value comes from.
+  - `nikos settings pull` refreshes `nikos.plan.yaml` from the plan. If a settings file doesn't read, the pull refuses, names the file and keeps the last copy.
+  - `nikos validate` fails, offline, when the copy was edited by hand, or when a map's owner no longer matches it.
+  - `nikos doctor` warns about a copy over 14 days old, a map with no owner or an owner that isn't a team in the plan, a value a lock ignores, and a branch without the link. Online, it also warns when the plan has moved on, and `--offline` skips that check.
+  - A map with no owner takes the company's settings only.
+- **Ladders up.** A key result or bet can say what it ladders up to in words before a link exists: `--ladders-up "<text>"` on `nikos plan kr new` and `nikos plan bet new`.
+  - `nikos plan ladder` lists the items that have text and no link.
+  - `nikos plan ladder <id>` ranks what each could link to, by the words they share. A bet can link to key results and to the bets above it.
+  - `nikos plan ladder accept <id> <candidate>` writes the link and clears the text. `nikos plan ladder clear <id>` drops the text.
+  - Text alone counts in no figure. The dashboard, status and validate list it as "not linked yet".
+- **Key results that go down.** `nikos plan kr new --direction down`, or `nikos plan kr direction <id> down`, marks a figure that should fall, such as days to close.
+  - Progress runs from the baseline toward the target either way.
+  - A figure that moved past the baseline shows "moved the wrong way".
+  - A direction against the target's side is a validate warning.
+- **Milestone key results.** `nikos plan kr new --kind milestone --step "<name>"` (repeat `--step`) makes a key result of named steps.
+  - `nikos plan kr step <id> "<name>"` marks one step done, once.
+  - The dashboard shows "2 of 3 steps done" and has a step form.
+  - A milestone is stale only when a step was done, some are still to do, and none has been marked for `stale_after_days`.
+- **The skills follow the split.** `nikos-plan` covers the plan, and has ladder, check-in, status and dashboard playbooks. It links a text-only item only on the person's yes. `nikos-spec` covers the code side, including join and settings.
+- **`nikos suggest`, MCP `status`, `doctor` and `decide --in` work by area in a planning repo.** In a code repo they work on its maps.
 
 ### Changed
 
-- **Every story map lives in `maps/<key>/`, and `intent/` is gone.** A repo's one story map and a group's maps use the same layout: `maps/<key>/` holds its `storymap.yaml`, `features/`, `plans/`, `state.yaml`, `approvals/` (one file per approval), `outreach/` and `delivery.yaml`. `constitution.md` and `decisions.md` sit at the repo root, and the constitution is checked once. `nikos init`, `start` and `map new` write there, and `validate`, `doctor` and the other commands refuse a repo that still keeps `intent/`, and say to move it to `maps/<key>/` by hand. Commands find a story's map from its id, so `state set`, `approve`, `show`, `plan new`, `release move` and the rest need no `--map` when the id is in one map only; `nikos next` with several maps and no `--map` refuses. An id in two maps, or a `--map` that doesn't hold the id, is refused. Story ids take the map's owner, or nothing: `WEB-CHK-3`, `PAY-CHK-3`, or `HT-1` for a map with no owner. Every story in one map uses the same prefix. The approval and code gates apply to every map in a git repo, and a change to `decisions.md` or `constitution.md` never lapses an approval.
-- **There's no migration command.** `nikos migrate maps` is removed (see Breaking). Move an `intent/` story map by hand, as the Removed section says, then run `nikos map status` and commit the result.
-- **This release changes the layout.** Each story map lives in the repo that builds it, under `maps/<key>/`, and its `storymap.yaml` can name an `owner` (a team key such as `WEB`). Its story ids are then `WEB-CHK-3`: `nikos map new --owner <KEY>` sets it, and a map with no owner has bare ids, such as `HT-1`. A map's `bet:` is optional. A map's state and approvals are kept in its own folder.
-- `nikos map status` is local: it reads the map's own files, with no fetch, no `--offline` and no team section. It writes `maps/<key>/delivery.yaml` for each map, and the plans above read that committed file. `nikos state set`, `approve`, `map new` and `story new` keep `delivery.yaml` current too.
-- `nikos validate` fails when a map's `delivery.yaml` is missing or no longer matches its files, such as after a hand edit. Run `nikos map status` and commit the result.
-- In a code repo, approval now checks the code it was tested at: `nikos approve` refuses a story whose code changed since it was tested, or with uncommitted code, and `validate` warns about it. Approval lapses on a code change from this release. A story done before this release has no recorded test commit, so approve refuses it until its scenarios run again: `nikos state set <id> needs_rework`, then `in_progress`, `done`, and `approve`.
-- **`delivery.yaml` says `version: 1`, not `format_version`.** Maps written before this release need `nikos map status` run once to be rewritten. A planning repo refuses a `delivery.yaml` or `planning/repos.yaml` written by a newer nikOS, and says which repo to upgrade. It reads the rest of such a file as before, so a newer nikOS can add fields without breaking an older plan.
-- **`nikos join --push` to a planning repo that can't be reached writes nothing.** It says why. Without `--push`, a plan that can't be reached joins the old way, as before: it's listed in `planning/upstream.yaml` for a later sync, and so is an old-kind plan (`planning/plan.yaml`).
-
-### Removed
-
-- `nikos migrate per-story` and `nikos migrate single-file`, the `state/<id>.yaml` and single `approvals.yaml` layouts, `templates/intent/`, and the `findIntentDir`, `perStory` and `migrate` library exports. `nikos migrate maps` itself, its `--group-key`, `--rename-ids` and `--bet` options, and the MCP `migrate` tool are gone too. To move a repo by hand, `git mv intent maps/<key>`, move `constitution.md` and `decisions.md` up to the repo root, fold each `state/<ID>.yaml` into `state.yaml` under `stories:`, and split `approvals.yaml` into one `approvals/<ID>.yaml` per approval. `nikos validate` names any of these it still finds.
-- `nikos assign`, `nikos sync`, `nikos team` (`init`, `join`, `member`, `show`), `nikos.team.yaml`, `assignments.yaml`, `.nikos/assigned/` and `.nikos/teams/`, and the team `status/` and `approvals/` folders, are gone. Nothing migrates them, and nikOS ignores those files from this release. To keep a team's story map, move it by hand into `maps/<key>/` in the repo that builds it, as `intent/` moves. The company plan's team level (`nikos plan add team`) is unchanged.
+- **A story map's `storymap.yaml` can name an `owner`** (a team key such as `WEB`) and a `bet`. Both are optional.
+  - Story ids take the owner as a prefix, or nothing: `WEB-CHK-3`, or `CHK-3` for a map with no owner.
+  - `nikos map new --owner <KEY> --bet <id>` sets them.
+  - Commands find a story's map from its id, so `state set`, `approve`, `show` and the rest need no `--map` when the id is in one map only.
+- **`nikos map status` is local.** It reads the map's own files, with no fetch, and writes `maps/<key>/delivery.yaml` for the plan to read. `state set`, `approve`, `map new` and `story new` keep it current. `nikos validate`, and so CI, fails when `delivery.yaml` is missing or out of date.
+- **A planning repo refuses a `delivery.yaml` or `repos.yaml` from a newer nikOS,** and says which side to upgrade. It reads unknown fields as before, so a newer Spec can add fields without breaking an older Plan.
+- **In a code repo, an approval is tied to the code it was tested at.** `nikos approve` refuses a story whose code changed since it was tested, or that has uncommitted code, and `validate` warns about it.
+  - A story done before this release has no recorded test commit. Run `nikos state set <id> needs_rework`, then `in_progress`, `done` and `approve`.
+  - A change to `decisions.md` or `constitution.md` never lapses an approval.
 
 ## 0.4.3 (2026-11-09)
 
