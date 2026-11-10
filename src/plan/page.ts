@@ -581,11 +581,22 @@ ${subs}
 ${state.drill ? "" : `<nav class="views" aria-label="Views">${viewLinks}</nav>`}
 ${back}
 ${body}
+${state.drill ? "" : renderUnlinked(page)}
 <h2>Code repos read</h2>
 ${list(reads)}
 ${page.warnings.length ? `<h2>Warnings</h2>${list(page.warnings.map((w) => esc(w.message)))}` : ""}
 ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map((p) => esc(p)))}` : ""}
 `;
+}
+
+/** What's not linked yet: the words a person wrote, with no link behind them. Listed by name, with no line in the ladder and no figure. */
+function renderUnlinked(page: AreaPage): string {
+  if (!page.unlinked.length) return "";
+  const items = page.unlinked.map((u) => {
+    const href = u.kind === "key result" ? krHref(u.rel, u.id, page.period) : betHref(u.rel, u.id, page.period);
+    return `<li><a href="${esc(href)}">${esc(u.id)}</a> (${esc(u.kind)}, ${esc(u.rel)}) — "${esc(u.text)}"</li>`;
+  });
+  return `<h2>Not linked yet</h2><p class="meta">These say what they ladder up to in words, but no link backs them yet. They count in no figure. To see what each could link to, run nikos plan ladder &lt;id&gt;.</p><ul>${items.join("")}</ul>`;
 }
 
 /** The page title, as text: the area's name, then the product. The export puts it in the document's own title. */

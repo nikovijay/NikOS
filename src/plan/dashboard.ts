@@ -3,7 +3,7 @@
 // Everything here is read from the planning repo and its delivery copies. Nothing is written, and no
 // network is used. The server and the export both build their pages from these functions.
 import { directionOf, kindOf, latest, isStale, progress } from "../planning/krs.js";
-import { alignsList } from "../planning/levels.js";
+import { alignsList, laddersOf, linkedOf } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
 import { below, readCache, type BetDelivery, type DeliveryWarning, type PlanDeliveries, type RepoRead, type StoryRow } from "./delivery.js";
@@ -109,6 +109,14 @@ export interface DrillMap {
   age: string;
 }
 
+/** A key result or bet whose ladders_up text no link backs yet. It is listed as not linked yet, and counts in no figure. */
+export interface UnlinkedRef {
+  id: string;
+  rel: string;
+  kind: "key result" | "bet";
+  text: string;
+}
+
 export interface AreaPage {
   plan: { rel: string; level: AreaLevel; id: string; name: string; period?: string; reportsTo: string | null };
   today: string;
@@ -133,6 +141,8 @@ export interface AreaPage {
   /** What the page says before the rest: an unknown area, or a quarter with no key results. */
   notices: string[];
   warnings: DeliveryWarning[];
+  /** This area's key results and bets with ladders_up text and no link: listed as not linked yet, and in no figure. */
+  unlinked: UnlinkedRef[];
   /** Files that won't load. The page still shows the rest. */
   problems: string[];
 }
@@ -340,6 +350,9 @@ interface BetRec {
   deadline: string;
   krs: { primary: string | null; also: string[] };
   aligns: string[];
+  /** The ladders_up text, when there is any, and whether a link backs it. */
+  laddersUp?: string;
+  linked: boolean;
 }
 
 /** Every bet in the company, read once. A bet that won't load is listed as a problem, and left out. */
@@ -362,6 +375,8 @@ function betRecords(repo: string): { bets: Map<string, BetRec>; problems: string
           deadline: dateOf(m.deadline),
           krs: { primary: m.krs?.primary ?? null, also: m.krs?.also ?? [] },
           aligns: alignsList(m.aligns_to),
+          ...(laddersOf(m) ? { laddersUp: laddersOf(m) } : {}),
+          linked: linkedOf("bet", m),
         });
       } catch (err) {
         problems.push((err as Error).message.split("\n")[0]);
@@ -450,6 +465,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     }
   }
   const krs: DashKr[] = [];
+  const unlinked: UnlinkedRef[] = [];
   for (const { id, holder } of holders) {
     // A department's quarterly key results show for the quarter picked; the company's are for the year.
     try {
@@ -458,6 +474,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       if (quarterly && period !== undefined && String(d.period) !== period) continue;
       const row = krRef(holder, id, today);
       const aligns = alignsList(d.aligns_to);
+      if (laddersOf(d) && !linkedOf("kr", d)) unlinked.push({ id, rel: holder.rel, kind: "key result", text: laddersOf(d)! });
       krs.push({
         ...row,
         objective: d.objective ?? "",
@@ -479,6 +496,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   for (const k of krs) {
     for (const a of widen.up ? krAncestors(repo, k.aligns_to, today, problems) : k.above) if (!own.has(a.id)) aboveKrs.set(`${a.rel}/${a.id}`, a);
   }
+
+  unlinked.push(...ownBets.filter((b) => b.laddersUp && !b.linked).map((b) => ({ id: b.id, rel: b.area.rel, kind: "bet" as const, text: b.laddersUp! })));
 
   const bets: DashBet[] = ownBets.map((b) => {
     const aligns = b.aligns.flatMap((ref) => {
@@ -548,6 +567,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     aboveBets: [...aboveBets.values()],
     widen,
     belowBets,
+    unlinked,
     repos: opts.deliveries.repos,
     notices,
     warnings,

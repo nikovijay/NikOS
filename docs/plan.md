@@ -188,6 +188,10 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
 - **Drill down.** From a key result, the bets that aim at it, and the story maps
   that deliver them, with how old each copy is. From a bet, the chain it aligns
   to, the bets below it, and its maps.
+- **Not linked yet.** A key result or bet whose `ladders_up` text has no link
+  is listed under "Not linked yet" on its area's page, at every level and in the
+  offline export. It has no line in the ladder, and no figure counts it. Suggest
+  offers to link these, one at a time, with `nikos plan ladder`.
 - **Dates.** The timeline lists each bet's start, review and deadline, and each
   key result's due date.
 - **The place is in the link.** Every link carries the area, for example

@@ -13,7 +13,7 @@
 
 ### Added
 
-- **Ladders up.** A key result or bet can say what it ladders up to as text (`nikos plan kr new --ladders-up "<text>"`, `nikos plan bet new --ladders-up`) until a link exists. `nikos plan ladder` lists the unlinked ones and ranks the items each could link to, and `nikos plan ladder accept <id> <candidate>` writes the link and clears the text. Text alone is shown as "not linked yet" and feeds no figure, progress or delivery.
+- **Ladders up.** A key result or bet can say what it ladders up to as text (`nikos plan kr new --ladders-up "<text>"`, `nikos plan bet new --ladders-up`) until a link exists. `nikos plan ladder` lists the unlinked ones and ranks the items each could link to, and `nikos plan ladder accept <id> <candidate>` writes the link and clears the text. Text alone is shown as "not linked yet" and feeds no figure, progress or delivery. The dashboard lists those items under "Not linked yet" at every level and in the offline export, and suggest offers to link them.
 - **Key results can go down.** `nikos plan kr new --direction down` marks a figure that should fall, such as days to close. Its progress is worked out from the baseline toward the target either way. A figure past the baseline shows "moved the wrong way", and a direction against the target's side is a validate warning.
 - **Milestone key results.** `nikos plan kr new --kind milestone --step "<name>"` (repeat `--step`) makes a key result of named steps. `nikos plan kr step <id> "<name>" [--date]` marks one done, once. The page shows "2 of 3 steps done", and status and `--json` list each step with its date. A milestone is stale only after a step was done and none has been since `stale_after_days`.
 
