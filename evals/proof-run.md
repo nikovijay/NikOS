@@ -1,6 +1,6 @@
 # Proof run: building `split` with nikOS
 
-> Note: this run predates the maps/ layout (PR 2b). Paths that say `intent/` are the 0.2 layout, which `nikos migrate maps` moves to `maps/<key>/`. The run was not repeated.
+> Note: this run predates the maps/ layout (PR 2b). Paths that say `intent/` are the 0.2 layout, which `nikos migrate maps` (removed in 0.5) moved to `maps/<key>/`. The run was not repeated.
 
 **Story:** NO-10. Build one small real app entirely with nikOS.
 **Date:** 2026-11-03

@@ -38,8 +38,8 @@ repo's root path inside the store (`/repo` by default); pass it, or
 Moving a story to done, `approve` and `verify` run the story's Cucumber
 scenarios, so they need the code on disk. A tool without a checkout leaves
 those to CI: `nikos ci setup` writes a pipeline that runs every story's
-scenarios on each pull or merge request. The same goes for cloning upstream
-plans (`nikos planning sync`) and the local dashboard.
+scenarios on each pull or merge request. The same goes for reading the company's
+plan (`nikos plan refresh`) and the local dashboards.
 
 ## What's exported
 

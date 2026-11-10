@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
-import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { groupKeyOf, mapDirs, mapOwnerOf, repoRootOf, resolveStoryMap, storyIdsOf, type StoryMapRef } from "../lib/maps.js";
+import { BET_ID } from "../lib/bets.js";
+import { mapDirs, mapOwnerOf, resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 import { summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { oldLayoutProblem } from "../plan/repo.js";
 import { approvalsDir, storyFiles } from "../lib/state-files.js";
-import { STORY_ID, featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
+import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
 import { contractVersion, schemaProblems } from "../lib/schema.js";
 import { codeChangedSince } from "../lib/git.js";
-import { upstreamEntries } from "../planning/upstream.js";
 
 export interface Issue {
   file: string;
@@ -93,6 +93,8 @@ function loadYaml(dir: string, name: string, issues: Issue[]): any {
  * Check one story map: maps/<key>, chosen with --map, or the repo's only map.
  */
 export function validate(start: string, map?: string): ValidationResult {
+  const old = oldLayoutProblem(start);
+  if (old) throw new Error(old);
   const ref = resolveStoryMap(start, { map });
   const r = validateMap(ref);
   lintRootConstitution(ref.root, r.errors, r.warnings);
@@ -116,7 +118,7 @@ export function validateGroup(root: string): ValidationResult {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   if (store().isDir(join(root, "intent"))) {
-    errors.push({ file: "intent/", message: "this repo has intent/: run nikos migrate maps", hint: "run nikos migrate maps, then commit the result" });
+    errors.push({ file: "intent/", message: "this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe", hint: "move intent/ to maps/<key>/ by hand, then commit the result" });
   }
   const owner = new Map<string, string>();
   const featureOwner = new Map<string, string>();
@@ -158,31 +160,6 @@ export function validateGroup(root: string): ValidationResult {
   return { dir: root, errors, warnings, stories, releases, label: "maps/" };
 }
 
-/**
- * A map names a bet in a plan above it: that plan must be one this repo joins, and its bet must be in
- * the synced copy (a warning when the copy isn't synced yet).
- */
-function crossBet(root: string, id: string | undefined, bet: string, errors: Issue[], warnings: Issue[]): void {
-  const [repo, betId] = bet.split("#");
-  const file = "storymap.yaml";
-  let joined: string[] = [];
-  try {
-    joined = upstreamEntries(root).map((e) => e.repo);
-  } catch {
-    joined = []; // planning/upstream.yaml that doesn't read is reported by doctor
-  }
-  if (!joined.includes(repo)) {
-    errors.push({ file, message: `maps/${id} names bet ${bet}, but this repo doesn't join ${repo}`, hint: `join it first (nikos join ${repo}), or name one of this repo's own bets` });
-    return;
-  }
-  const copy = join(root, ".nikos", "upstream", ...repo.split("/"));
-  if (!store().isDir(copy)) {
-    warnings.push({ file, message: `bet ${bet} can't be checked yet: ${repo} isn't synced`, hint: "run nikos planning sync" });
-    return;
-  }
-  if (!store().exists(join(copy, "planning", "bets", `${betId}.md`))) errors.push({ file, message: `maps/${id} names bet ${bet}, which ${repo} doesn't have`, hint: "check the bet's id in that plan" });
-}
-
 export function validateMap(ref: StoryMapRef): ValidationResult {
   const dir = ref.dir;
   const errors: Issue[] = [];
@@ -212,12 +189,11 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
 
   // Cross-file checks only when both files parsed into objects.
   const mapStories = new Map<string, number>();
-  // A story id is [PREFIX-]KEY-n. The prefix is the map's owner, the repo's group key, or nothing,
-  // and every story in one map uses the same one.
+  // A story id is [PREFIX-]KEY-n. The prefix is the map's owner or nothing, and every story in one
+  // map uses the same one.
   const key: string | undefined = typeof storymap?.key === "string" ? storymap.key : undefined;
   const owner = mapOwnerOf(dir);
-  const group = groupKeyOf(ref.root);
-  const expected = owner ?? group;
+  const expected = owner;
   const idPrefixes = new Map<string, string>();
   const activityIds = new Set<string>();
   const personaIds = new Set<string>();
@@ -248,7 +224,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
         if (key && typeof id === "string") {
           const m = new RegExp(`^(?:([A-Z][A-Z0-9]{0,9})-)?${key}-[0-9]+$`).exec(id);
           const prefix = m ? (m[1] ?? "") : undefined;
-          if (prefix === undefined || (prefix && prefix !== owner && prefix !== group)) {
+          if (prefix === undefined || (prefix && prefix !== owner)) {
             errors.push({ file: "storymap.yaml", message: expected ? `story ${id} must start with ${expected}-${key}-` : `${id} doesn't use the project key '${key}'` });
           } else {
             idPrefixes.set(id, prefix);
@@ -387,35 +363,14 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     errors.push({ file: featureIds.get(loop[0])!, message: `stories depend on each other in a loop: ${[...loop, loop[0]].join(" → ")}`, hint: "remove one of the @depends tags" });
   }
 
-  // Bet links: each names a bet in planning/bets/ or one in another repo (<repo path>#id).
+  // Bet links are checked for form only: a code repo can't read a planning repo, so a bet's card is
+  // not looked up here. A map names its one bet in bet:, so its releases and stories don't name bets.
   if (storymap && typeof storymap === "object") {
-    const betsDir = join(planningDirOf(repoRootOf(dir)), "bets");
-    // A bet is checked here only when the repo has a planning/ folder to check it against.
-    const hasPlanning = store().isDir(join(repoRootOf(dir), "planning"));
-    const check = (where: string, refs: unknown) => {
-      for (const ref of Array.isArray(refs) ? refs : []) {
-        if (typeof ref !== "string") continue;
-        if (CROSS_REF.test(ref)) continue; // another repo's bet: checked for form only, never fetched
-        if (!BET_ID.test(ref)) {
-          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which is neither a bet id nor <repo path>#id`, hint: "use a bet id like faster-checkout, or owner/repo#bet-id for another repo's bet" });
-        } else if (hasPlanning && !store().exists(join(betsDir, `${ref}.md`))) {
-          errors.push({ file: "storymap.yaml", message: `${where} names bet '${ref}', which has no planning/bets/${ref}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
-        }
-      }
-    };
-    // A map names its one bet in bet:, so its releases and stories don't name bets.
     for (const r of storymap.releases ?? []) if (r?.bets !== undefined) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove bets: from release ${r?.number}` });
     for (const id of Object.keys(storymap.story_bets ?? {})) errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names its bet in bet:, so releases and stories don't name bets: remove story_bets from ${id}` });
     // The bet is optional (RFC rule 5): a map with none is valid, and counts toward no bet.
-    if (typeof storymap.bet !== "string") {
-      // nothing to check: the bet is optional
-    } else if (CROSS_REF.test(storymap.bet)) {
-      // A map can name a bet in a plan above it: it's checked against the plan this repo joins.
-      crossBet(ref.root, ref.id, storymap.bet, errors, warnings);
-    } else if (!BET_ID.test(storymap.bet)) {
+    if (typeof storymap.bet === "string" && !BET_ID.test(storymap.bet)) {
       errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which is not a bet id`, hint: "use a bet id like faster-checkout" });
-    } else if (hasPlanning && !store().exists(join(betsDir, `${storymap.bet}.md`))) {
-      errors.push({ file: "storymap.yaml", message: `maps/${ref.id} names bet ${storymap.bet}, which has no planning/bets/${storymap.bet}.md`, hint: "create it with `nikos planning bet new`, or fix the name" });
     }
   }
 

@@ -26,9 +26,9 @@ maps/
       <date>-<channel>.md
 ```
 
-A repo with one story map has one folder under `maps/`. A group's repo has one per
+A repo with one story map has one folder under `maps/`. A repo can hold one map per
 bet, and a monorepo can hold several teams' maps. The repo's `planning/` folder, when
-it has one, is described in [planning.md](planning.md).
+it has one, is described in [plan.md](plan.md).
 
 Two rules hold across every file:
 
@@ -134,11 +134,10 @@ Rules:
   `nikos validate` warns when they differ.
 - Persona ids are unique, and a story's `@persona-<id>` must name one.
 - A story id is the map's `key` and a number, with a prefix first. The prefix is
-  the map's `owner` if it has one, else the planning group's key from
-  `planning/plan.yaml`, else nothing: `WEB-HT-1`, `PAY-HT-1` or `HT-1`. Every
-  story in one map uses the same prefix, and a map with no owner and no group key
-  keeps the bare `HT-1`. Adding a group key or an owner later doesn't rename
-  existing ids: they keep their prefix, and `nikos validate` accepts it.
+  the map's `owner` if it has one, else nothing: `WEB-HT-1` or `HT-1`. Every
+  story in one map uses the same prefix, and a map with no owner keeps the bare
+  `HT-1`. Adding an owner later doesn't rename existing ids: they keep their
+  prefix, and `nikos validate` accepts it.
 - A story's `@depends-<id>` must name another story, and dependencies can't
   form a loop. `nikos validate` warns when a story depends on one in a later
   release, or on a cancelled one. `nikos next` won't pick a story until
@@ -147,22 +146,21 @@ Rules:
 ### Bet links (optional)
 
 A release can name the bets it delivers, and a single story can override its
-release's list. The bets themselves live outside the map, in `planning/`
-(the Planning pack, see [planning.md](planning.md)).
+release's list. The bets themselves live in the company's planning repo, under
+`planning/<area>/bets/` (see [plan.md](plan.md)).
 
 ```yaml
 releases:
   - number: 1
     title: MVP
-    bets: [fewer-missed-tasks]                 # a bet in planning/bets/
+    bets: [fewer-missed-tasks]                 # a bet id from the company's plan
     stories: [HT-1, HT-2]
 story_bets:
-  HT-2: [acme/company-plan#focus-mode]         # this story serves another repo's bet
+  HT-2: [focus-mode]                           # this story serves this bet
 ```
 
-- A bet id must have a `planning/bets/<id>.md` in the same repo.
-- `owner/repo#id` names another repo's bet. `nikos validate` checks its form
-  only and never fetches it.
+- A bet is named by its bare id, the same in every repo. `nikos validate` checks
+  its form only: `repo#bet` is refused, and nothing is fetched.
 - A story's `story_bets` entry replaces its release's `bets` for that story.
 
 Add a story with `nikos story add "<title>" --activity <id> [--step <id>]`.
@@ -243,7 +241,7 @@ summary: One to three plain sentences on the approach.
 ## 1. Store tasks locally
 **Why:** tasks survive a refresh.
 **Criteria:** AC1
-**Files:** src/store.ts
+**Files:** src/lib/store.ts
 
 Notes for the agent.
 ```
@@ -259,8 +257,9 @@ existing file.
 **Purpose:** why things are the way they are. Append-only; never rewrite an
 entry, add a new one that supersedes it.
 
-**Path:** `decisions.md` at the repo root, or `planning/decisions.md` in a company or
-department plan with no story map (see [planning.md](planning.md))
+**Path:** `decisions.md` at the repo root. In a planning repo, each area keeps its own at
+`planning/<area>/decisions.md`: the company's is `planning/company/decisions.md`, and
+`nikos decide --in <area>` picks another (see [plan.md](plan.md))
 
 **Format:** Markdown. One `##` entry per decision, newest last:
 
@@ -405,7 +404,7 @@ founder sends it, never the agent.
 
 **Path:** `maps/<key>/delivery.yaml`, one per map.
 
-**Format:** YAML with `version`, `map`, an optional `owner` (the map's owner, else the repo's group key), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade.
+**Format:** YAML with `version`, `map`, an optional `owner` (the map's owner, when it has one), `read_at`, and `stories` (id, status, approval, and proof). `nikos map status`, `state set`, `approve` and `map new` write it, and `nikos validate` checks it is current. Commit it with the map. A planning repo reads it with unknown fields allowed, so a newer nikOS can add to it; a `version` newer than 1 is refused, and the message says which repo to upgrade.
 
 ---
 
@@ -419,15 +418,10 @@ founder sends it, never the agent.
 
 ## Upgrading from intent/
 
-A repo from before this release keeps its story map in `intent/`, and most commands
-refuse it until it moves. `nikos migrate maps` moves it, shows the plan first with
-`--dry-run`, and converts it on the way: `intent/state/<id>.yaml` folds into
-`state.yaml`, `intent/approvals.yaml` splits into one file per approval,
-`constitution.md` and `decisions.md` go to the root, and the map lands in
-`maps/<key>/`. Story ids change only when `planning/plan.yaml` has a key the ids
-lack. Beyond the move, it rewrites what names a renamed id or a moved path: the
-CODEOWNERS rules, the verify runner paths, feature tags, decision headings, and
-the state and approvals entries.
+A repo from before 0.5 keeps its story map in `intent/`, and nikOS refuses it
+until it moves. Move it by hand, as the CHANGELOG's 0.5 notes say: `git mv intent
+maps/<key>`, with `constitution.md` and `decisions.md` at the repo root. Then run
+`nikos validate` and `nikos map status`, and commit the result.
 
 ## Versioning this format
 

@@ -63,11 +63,11 @@ describe("UX pack", () => {
   });
 
   it("the router sends a request for a component library to the ux-library playbook, which hands over to the pack", () => {
-    const index = readFileSync(join(root, "skills/nikos-mode/playbooks/index.md"), "utf8");
+    const index = readFileSync(join(root, "skills/nikos-spec/playbooks/index.md"), "utf8");
     const rows = [...index.matchAll(/^\| ([\w-]+) \| `([^`]+)` \| (.+) \|$/gm)].map(([, name, file, when]) => ({ name, file, when }));
     const first = rows.find((r) => /component library/i.test(r.when));
     expect(first).toMatchObject({ name: "ux-library", file: "ux-library.md" });
-    const playbook = readFileSync(join(root, "skills/nikos-mode/playbooks", first!.file), "utf8");
+    const playbook = readFileSync(join(root, "skills/nikos-spec/playbooks", first!.file), "utf8");
     expect(playbook).toMatch(/^1\. Check the UX pack is installed/m);
     expect(playbook).toContain("`design-library`");
     expect(playbook).toContain("/plugin install nikos-ux@nikos");

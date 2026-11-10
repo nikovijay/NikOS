@@ -1,7 +1,6 @@
 // Git facts about a repo that nikOS needs: which repo path it is on its host, and its commit.
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { realpathSync } from "node:fs";
 
 /** This repo's path on its host, from the origin remote: owner/repo, or group/subgroup/project. */
 export function ownRepo(root: string): string | undefined {
@@ -111,10 +110,6 @@ export function remoteHas(root: string, name: string, run: Runner = realRun): bo
 }
 
 /** The planning folders a save writes, that exist in the repo. */
-export function nikosPaths(root: string): string[] {
-  return ["planning", "maps"].filter((p) => existsSync(join(root, p)));
-}
-
 /** git status lines for paths (or all of them, when paths is undefined), as git prints them. No paths is no lines. */
 export function statusOf(root: string, paths: string[] | undefined, run: Runner = realRun): string[] {
   if (paths && paths.length === 0) return [];

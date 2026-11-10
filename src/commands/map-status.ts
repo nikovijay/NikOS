@@ -36,7 +36,7 @@ const REASON: Record<Proof, string> = {
 /** The status of each map in maps/, or only --map's. Throws when there is no map to read. */
 export function mapStatus(root: string, opts: { map?: string } = {}): MapStatus[] {
   const dirs = mapDirs(root);
-  if (!dirs.length) throw new Error("no story maps in maps/: nikos map status runs in a group repo (nikos map new --bet <bet-id> --key <KEY> makes one)");
+  if (!dirs.length) throw new Error("no story maps in maps/: nikos map status runs in a code repo with a story map (nikos map new --key <KEY> makes one)");
   const want = opts.map?.toLowerCase();
   const picked = want ? dirs.filter((d) => basename(d) === want) : dirs;
   if (!picked.length) throw new Error(`no story map "${opts.map}" in maps/ (have: ${dirs.map((d) => basename(d)).join(", ")})`);

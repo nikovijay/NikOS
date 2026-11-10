@@ -31,7 +31,7 @@ export interface SummaryBody {
   stories: SummaryBodyStory[];
 }
 
-/** The owner a map's summary carries: its storymap owner, else the repo's group key. Undefined when neither is set. */
+/** The owner a map's summary carries: its storymap owner. Undefined when it has none. */
 export function ownerFor(root: string, dir: string): string | undefined {
   return prefixOf({ root, dir, id: basename(dir) });
 }

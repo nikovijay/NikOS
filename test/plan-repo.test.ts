@@ -13,7 +13,6 @@ import { newBet } from "../src/planning/bets";
 import { setBetKrs } from "../src/planning/aligns";
 import { areaOf, loadKr } from "../src/planning/model";
 import { resolveSettings, setSetting } from "../src/lib/settings";
-import { runPlanning } from "../src/planning/cli";
 import { spawnSync } from "node:child_process";
 
 const cli = (...args: string[]) =>
@@ -200,13 +199,16 @@ describe("nikos plan", () => {
     expect(cli("plan", "--help").stdout).toContain("nikos plan: the company's plan, in one planning repo");
   });
 
-  it("points nikos planning to nikos plan in a planning repo", async () => {
-    const repo = mkdtempSync(join(tmpdir(), "nikos-planold-"));
-    initPlanRepo(repo, { name: "Acme", year: "2027" });
-    const r = await run(runPlanning, ["status", "--dir", repo]);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain("Use nikos plan status instead");
-    expect(planStatus(repo)).toBe("company — Acme (2027)\n  Key results: none\n  Bets: none");
+  it("lets a key result align to several key results above it, and one stays a single reference", () => {
+    const { repo, at } = acme();
+    newKr(kr("revenue", { baseline: 0, target: 1 }), at("company"));
+    newKr(kr("margin", { baseline: 0, target: 1 }), at("company"));
+    newKr(kr("pay-1", { period: "2027-Q2", alignsTo: ["revenue", "margin"] }), at("finance"));
+    expect(loadKr(at("finance"), "pay-1").data.aligns_to).toEqual(["revenue", "margin"]);
+    expect(readFileSync(join(at("finance"), "krs/pay-1.yaml"), "utf8")).toContain("aligns_to: [revenue, margin]");
+    newKr(kr("pay-2", { period: "2027-Q2", alignsTo: "revenue" }), at("finance"));
+    expect(loadKr(at("finance"), "pay-2").data.aligns_to).toBe("revenue");
+    expect(planIssues(repo)).toEqual([]);
   });
 
   it("won't make a planning repo over an old plan", () => {

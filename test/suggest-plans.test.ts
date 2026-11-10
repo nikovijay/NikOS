@@ -7,8 +7,7 @@ import { createServer } from "../src/mcp/server";
 import { runSuggest, suggest } from "../src/commands/suggest";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
-import { addDownstream } from "../src/planning/rollout";
-import { companyRepo } from "./planning-fixture";
+import { acmePlan } from "./plan-serve-fixture";
 import { commitAll, groupRepo } from "./repo-fixture";
 
 const brief = (dir: string) => {
@@ -19,10 +18,10 @@ const brief = (dir: string) => {
   return out;
 };
 
-/** The payments group with a second map, hr, so nothing can pick a map for you. */
+/** The payments map repo with a second map, hr, so nothing can pick a map for you. */
 function twoMaps(): string {
   const group = groupRepo("PAY");
-  newMap({ bet: "faster-checkout", key: "HR" }, group);
+  newMap({ bet: "faster-checkout", key: "HR", owner: "PAY" }, group);
   newStory({ title: "Show a line to a reviewer", activity: "getting-started", map: "hr" }, group);
   commitAll(group, "a second map");
   return group;
@@ -35,17 +34,18 @@ describe("suggest on plans and groups", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("a company plan with no story map gets its plan's menu, not setup", () => {
-    const company = companyRepo();
-    addDownstream(company, { name: "Payments", repo: "acme/payments-plan" });
-    const s = suggest(company);
-    expect(s.summary).toBe("Acme plan (Q1 2027): 1 key result, 0 bets");
+  it("a planning repo gets the company's menu, not setup", () => {
+    const plan = acmePlan();
+    const s = suggest(plan);
+    expect(s.summary).toBe("Acme (2027): 1 key result, 1 bet");
     const labels = s.options.map((o) => o.label);
     expect(labels).not.toContain("Set up nikOS here");
-    expect(labels).toEqual(expect.arrayContaining(["See how the plans below are doing", "Look at the plan"]));
-    expect(s.options.find((o) => o.label === "See how the plans below are doing")?.do).toContain("nikos planning rollout");
+    // Revenue has no check-in yet, so it's stale: the menu asks for one, then offers the plan.
+    expect(labels).toEqual(['Check in on "Revenue"', "Look at the plan"]);
+    expect(s.options[0].do).toContain("nikos plan checkin <kr-id> <value>");
+    expect(s.options[1].do).toContain("nikos plan status --in company");
     // The session-start line shows for a plan too.
-    expect(brief(company)).toContain("nikOS: Acme plan (Q1 2027): 1 key result, 0 bets. Suggested next:");
+    expect(brief(plan)).toContain('nikOS: Acme (2027): 1 key result, 1 bet. Suggested next: Check in on "Revenue" · Look at the plan.');
   });
 
   it("a group with several maps gets each map's progress without --map, and one map's menu with it", () => {

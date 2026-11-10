@@ -6,6 +6,8 @@ import { storyPrefix } from "../lib/maps.js";
 import { diskStore, store, withStore } from "../lib/store.js";
 import { validate, formatResult, type ValidationResult } from "./validate.js";
 import { writeMapSummary } from "../lib/map-summary.js";
+import { isPlanRepo } from "../planning/model.js";
+import { oldLayoutProblem } from "../plan/repo.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const templatesDir = [join(here, "../../templates"), join(here, "../templates")].find((d) => existsSync(d))!;
@@ -48,9 +50,12 @@ export function init(root: string, opts: InitOptions = {}): InitResult {
   const name = opts.name ?? basename(resolve(root));
   const key = (opts.key ?? keyFor(name)).toUpperCase();
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(key)) throw new Error(`'${key}' isn't a valid project key (letters and digits, starting with a letter)`);
-  if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (isPlanRepo(root)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos init there.");
+  const old = oldLayoutProblem(root);
+  if (old) throw new Error(old);
+  if (store().isDir(join(root, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const mapDir = join(root, "maps", key.toLowerCase());
-  // The starter story's id carries the same label map new gives a story: the group key's, if the repo has one.
+  // The starter story's id carries the same label map new gives a story: the map's owner, if it has one.
   const first_id = `${storyPrefix({ root, dir: mapDir, id: key.toLowerCase() }, key)}-1`;
   const values: Record<string, string> = { project_name: name, project_slug: slugify(name), key, first_id };
   if (store().exists(join(mapDir, "storymap.yaml"))) throw new Error(`maps/${key.toLowerCase()}/ already exists`);

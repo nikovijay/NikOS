@@ -1,5 +1,7 @@
 # RFC: plans, bets, story maps and team assignments
 
+> **Superseded** by [plan-and-spec.md](plan-and-spec.md). Kept for the record; do not build from it.
+
 **Status:** draft, for review. PR 1 (plan levels) and PR 2 (story maps in group repos) are built. PR 3 (teams) is built as described in "PR 3 status" below, PR 4 (status flowing back) as described in "PR 4 status", PR 5 (views, editing from the dashboard, editable snapshots and `nikos apply`) as described in "PR 5 status", and PR 6 (migration and onboarding) as described in "PR 6 status".
 
 ## Amendment: teams that own a story map (after 0.3.0)

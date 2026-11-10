@@ -19,13 +19,6 @@ export function hostNameOf(url: string): string | undefined {
   return m?.[1]?.toLowerCase();
 }
 
-/** The forge a host name is, for planning/upstream.yaml's host or a url's host. */
-export function kindOfHost(host: string): Host | undefined {
-  if (host === "github.com") return "github";
-  if (/gitlab/i.test(host)) return "gitlab";
-  return undefined;
-}
-
 /** The argv that opens the request for a pushed branch, or undefined for a forge nikOS doesn't know. */
 export function requestArgv(kind: Host | undefined, base: string, branch: string): string[] | undefined {
   if (kind === "github") return ["gh", "pr", "create", "--base", base, "--head", branch, "--fill"];

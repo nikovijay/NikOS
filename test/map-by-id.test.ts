@@ -30,7 +30,7 @@ const storymapOf = (dir: string, map: string) => parse(readFileSync(join(dir, "m
 /** A group repo with two maps: maps/chk (PAY-CHK-1 to 3) and maps/pay (PAY-PAY-1), committed. */
 function twoMaps(): string {
   const g = groupRepo("PAY");
-  newMap({ bet: "faster-checkout", key: "PAY" }, g);
+  newMap({ bet: "faster-checkout", key: "PAY", owner: "PAY" }, g);
   newStory({ title: "Pay now", activity: "getting-started", map: "pay" }, g);
   commitAll(g, "second map");
   return g;

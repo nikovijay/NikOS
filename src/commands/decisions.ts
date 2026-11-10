@@ -58,7 +58,7 @@ export function findDecisions(query: string, dir: string): DecisionEntry[] {
     .map((m) => m.e);
 }
 
-/** decisions.md as the repo names it: decisions.md at the root, or planning/decisions.md in a plan-only repo. */
+/** decisions.md as the repo names it: decisions.md at the root, or planning/<area>/decisions.md in a planning repo. */
 const fileName = (dir?: string) => (dir ? relative(dir, decisionsPath(dir)) : "decisions.md");
 
 export function formatDecisions(query: string, found: DecisionEntry[], dir?: string): string {

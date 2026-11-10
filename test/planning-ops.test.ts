@@ -11,33 +11,29 @@ import { runOp, runOps } from "../src/planning/ops";
 import { newBet } from "../src/planning/bets";
 import { newKr, checkIn } from "../src/planning/krs";
 import { hash, loadBet, loadKr } from "../src/planning/model";
-import { sync } from "../src/planning/upstream";
 import { specHash } from "../src/lib/project";
-import { commitAll, companyRepo, departmentRepo, git, groupRepo, readText, write } from "./planning-fixture";
+import { commitAll, companyRepo, git, groupRepo, readText, write } from "./planning-fixture";
+
+/** The company's area of a new planning repo: ops run on an area folder, and its paths are the repo's. */
+const area = () => join(companyRepo(), "planning", "company");
 
 afterEach(() => vi.restoreAllMocks());
 
-const kr1 = (co: string) => hash(readText(co, "planning/krs/kr-1.yaml"));
+const kr1 = (co: string) => hash(readText(co, "krs/kr-1.yaml"));
 
 describe("runOp: names, levels and ids", () => {
   it("refuses an op nikOS doesn't know", () => {
-    const co = companyRepo();
+    const co = area();
     expect(() => runOp(co, { op: "bet.delete" as any, args: {} })).toThrow("'bet.delete' isn't a change nikOS knows");
   });
 
   it("refuses an op at the wrong level, with the level it's for", () => {
-    const co = companyRepo();
-    expect(() => runOp(co, { op: "story.rename", target: { story: "HT-1" }, args: { title: "x" } })).toThrow("story.rename isn't a change the company plan makes here");
-  });
-
-  it("refuses key results and check-ins at group level, with the key result rule's message", () => {
-    const g = groupRepo("PAY");
-    expect(() => runOp(g, { op: "checkin", target: { kr: "missed-tasks" }, args: { value: 1 } })).toThrow(/Key results stop at department level/);
-    expect(() => runOp(g, { op: "kr.new", target: { kr: "pay-1" }, args: {} })).toThrow(/Key results stop at department level/);
+    const co = area();
+    expect(() => runOp(co, { op: "story.rename", target: { story: "HT-1" }, args: { title: "x" } })).toThrow("story.rename isn't a change a planning area makes: story maps and settings stay in the code repos");
   });
 
   it("checks the id of each target by its kind before the command runs", () => {
-    const co = companyRepo();
+    const co = area();
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "../../etc" }, args: { title: "x" }, expect: kr1(co) })).toThrow(
       "'../../etc' is not a key result id (lowercase words joined by hyphens)",
     );
@@ -49,103 +45,50 @@ describe("runOp: names, levels and ids", () => {
 
 describe("kr ops", () => {
   it("kr.edit: refuses an empty title, and a field it can't edit", () => {
-    const co = companyRepo();
+    const co = area();
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { title: "" }, expect: kr1(co) })).toThrow("A key result needs a title (--title)");
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { baseline: 3 }, expect: kr1(co) })).toThrow("'baseline' can't be edited here");
   });
 
   it("kr.edit: writes the new title under planning/, and refuses a stale expect", () => {
-    const co = companyRepo();
+    const co = area();
     const r = runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { title: "Grow paid revenue", unit: "" }, expect: kr1(co) });
     expect(loadKr(co, "kr-1").data.title).toBe("Grow paid revenue");
     expect(loadKr(co, "kr-1").data.unit).toBeUndefined();
-    expect(r.changed).toEqual(["planning/krs/kr-1.yaml"]);
+    expect(r.changed).toEqual(["planning/company/krs/kr-1.yaml"]);
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { title: "again" }, expect: "0000000000000000" })).toThrow(/changed on disk since it was loaded/);
   });
 
   it("kr.target: moves the target and keeps the original", () => {
-    const co = companyRepo();
+    const co = area();
     runOp(co, { op: "kr.target", target: { kr: "kr-1" }, args: { target: 3 }, expect: kr1(co) });
     expect(loadKr(co, "kr-1").data).toMatchObject({ target: 3, original_target: 2 });
     expect(() => runOp(co, { op: "kr.target", target: { kr: "kr-1" }, args: { target: "many" }, expect: kr1(co) })).toThrow("A target needs a numeric value");
   });
 
-  it("kr.align (department): refuses a plan that isn't directly above, and a bet", () => {
-    const co = companyRepo();
-    newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
-    commitAll(co, "bet");
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31" }, dept);
-    expect(() => runOp(dept, { op: "kr.align", target: { kr: "pay-1" }, args: { aligns_to: ["acme/other#kr-1"] }, expect: hash(readText(dept, "planning/krs/pay-1.yaml")) })).toThrow(
-      "acme/other#kr-1: acme/other isn't a plan this department joins (planning/upstream.yaml lists acme/company-plan)",
-    );
-    expect(() => runOp(dept, { op: "kr.align", target: { kr: "pay-1" }, args: { aligns_to: ["acme/company-plan#faster"] }, expect: hash(readText(dept, "planning/krs/pay-1.yaml")) })).toThrow(
-      "acme/company-plan#faster is a bet: a key result aligns to key results",
-    );
-    runOp(dept, { op: "kr.align", target: { kr: "pay-1" }, args: { aligns_to: ["acme/company-plan#kr-1"] }, expect: hash(readText(dept, "planning/krs/pay-1.yaml")) });
-    expect(loadKr(dept, "pay-1").data.aligns_to).toBe("acme/company-plan#kr-1");
-  });
 });
 
 describe("bet ops", () => {
-  it("bet.align (group): refuses a key result, which a bet can't align to", () => {
-    const co = companyRepo();
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31" }, dept);
-    commitAll(dept, "pay-1");
-    const g = groupRepo("PAY");
-    write(join(g, "planning/upstream.yaml"), `- repo: acme/payments-plan\n  url: ${dept}\n`);
-    git(g, "add", ".");
-    git(g, "commit", "-q", "-m", "upstream");
-    sync(g);
-    expect(() => runOp(g, { op: "bet.align", target: { bet: "faster-checkout" }, args: { aligns_to: ["acme/payments-plan#pay-1"] }, expect: hash(readText(g, "planning/bets/faster-checkout.md")) })).toThrow(
-      "acme/payments-plan#pay-1 is a key result: a bet aligns to bets, and names key results under krs",
-    );
-  });
-
-  it("bet.krs (department): refuses a key result that isn't there, and one both primary and also", () => {
-    const co = companyRepo();
-    const dept = departmentRepo(co);
-    newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31" }, dept);
-    newBet({ id: "faster", owner: "Payments", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, dept);
-    const h = hash(readText(dept, "planning/bets/faster.md"));
-    expect(() => runOp(dept, { op: "bet.krs", target: { bet: "faster" }, args: { primary: "nope" }, expect: h })).toThrow(
-      "No key result called 'nope' (planning/krs/nope.yaml)",
-    );
-    expect(() => runOp(dept, { op: "bet.krs", target: { bet: "faster" }, args: { primary: "pay-1", also: ["pay-1"] }, expect: h })).toThrow("pay-1 is both primary and also");
-    runOp(dept, { op: "bet.krs", target: { bet: "faster" }, args: { primary: "pay-1" }, expect: h });
-    expect(loadBet(dept, "faster").meta.krs.primary).toBe("pay-1");
-  });
-
   it("bet.krs is allowed at company level: the RFC's company row lists which key results a bet aims at", () => {
-    const co = companyRepo();
+    const co = area();
     newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
-    runOp(co, { op: "bet.krs", target: { bet: "faster" }, args: { primary: "kr-1" }, expect: hash(readText(co, "planning/bets/faster.md")) });
+    runOp(co, { op: "bet.krs", target: { bet: "faster" }, args: { primary: "kr-1" }, expect: hash(readText(co, "bets/faster.md")) });
     expect(loadBet(co, "faster").meta.krs.primary).toBe("kr-1");
   });
 
   it("bet.edit: refuses outcome (only a review sets it); a review writes the review", () => {
-    const co = companyRepo();
+    const co = area();
     newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
-    const h = hash(readText(co, "planning/bets/faster.md"));
+    const h = hash(readText(co, "bets/faster.md"));
     expect(() => runOp(co, { op: "bet.edit", target: { bet: "faster" }, args: { outcome: "won" }, expect: h })).toThrow("'outcome' can't be edited here");
     expect(() => runOp(co, { op: "bet.review", target: { bet: "faster" }, args: { decision: "complete", reason: "Done" }, expect: h })).toThrow(
       "Completing a bet needs its outcome from the key result evidence: --outcome won or --outcome lost",
     );
     const r = runOp(co, { op: "bet.review", target: { bet: "faster" }, args: { decision: "continue", reason: "On track" }, expect: h });
-    expect(r.changed).toEqual(["planning/bets/faster.md"]);
+    expect(r.changed).toEqual(["planning/company/bets/faster.md"]);
     expect(loadBet(co, "faster").meta.reviews.at(-1)).toMatchObject({ decision: "continue", reason: "On track" });
   });
 
-  it("bet.align (department): aligns a bet to a bet above", () => {
-    const co = companyRepo();
-    newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
-    commitAll(co, "bet");
-    const dept = departmentRepo(co);
-    newBet({ id: "one-tap", owner: "Payments", hypothesis: "One tap lifts conversion", reviewOn: "2027-02-14" }, dept);
-    runOp(dept, { op: "bet.align", target: { bet: "one-tap" }, args: { aligns_to: ["acme/company-plan#faster"] }, expect: hash(readText(dept, "planning/bets/one-tap.md")) });
-    expect(loadBet(dept, "one-tap").meta.aligns_to).toBe("acme/company-plan#faster");
-  });
 });
 
 describe("story, activity, step and release ops", () => {
@@ -226,13 +169,13 @@ describe("map ops", () => {
     const g = groupRepo("PAY");
     expect(() => newMap({ bet: "faster-checkout" }, g)).toThrow("nikos map new needs --key <KEY>");
     expect(() => newMap({ bet: "Bad Bet", key: "X" }, g)).toThrow("'Bad Bet' is not a bet id");
-    expect(() => newMap({ bet: "nope", key: "ZZ" }, g)).toThrow("no planning/bets/nope.md: create it with nikos planning bet new");
+    expect(() => newMap({ bet: "acme/payments#faster", key: "ZZ" }, g)).toThrow("a map names one bet by its id, not another repo's bet");
     expect(() => newMap({ bet: "faster-checkout", key: "zz" }, g)).toThrow("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
     expect(() => newMap({ bet: "faster-checkout", key: "CHK" }, g)).toThrow("map key CHK is already used by maps/chk");
   });
 
   it("map.new works in a company plan too: no group plan is needed", () => {
-    const co = companyRepo();
+    const co = area();
     newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
     expect(newMap({ bet: "faster", key: "ZZ" }, co).id).toBe("zz");
   });
@@ -240,36 +183,18 @@ describe("map ops", () => {
   it("the command line prints the same line as before", () => {
     const g = groupRepo("PAY");
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    expect(runMapNew(["--bet", "faster-checkout", "--key", "PAY", "--dir", g])).toBe(0);
+    expect(runMapNew(["--bet", "faster-checkout", "--key", "PAY", "--owner", "PAY", "--dir", g])).toBe(0);
     expect(log.mock.calls).toEqual([["Created maps/pay for bet faster-checkout, story ids PAY-PAY-n"]]);
     expect(existsSync(join(g, "maps/pay/storymap.yaml"))).toBe(true);
   });
 });
 
-describe("settings and downstream ops", () => {
-  it("setting.set refuses a key a plan above locked", () => {
-    const co = companyRepo();
-    write(join(co, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\nlocked: [approval.policy]\n");
-    commitAll(co, "settings");
-    const dept = departmentRepo(co);
-    expect(() => runOp(dept, { op: "setting.set", args: { key: "approval.policy", value: "off" } })).toThrow(
-      "approval.policy is locked by acme/company-plan, so it can't be changed here",
-    );
-  });
-
-  it("downstream.add lists a department below the plan", () => {
-    const co = companyRepo();
-    const r = runOp(co, { op: "downstream.add", args: { name: "Checkout", repo: "acme/checkout-web" } });
-    expect(r.message).toBe("Added Checkout");
-    expect(readText(co, "planning/downstream.yaml")).toContain("acme/checkout-web");
-  });
-});
-
 describe("cleanup", () => {
-  it("leaves no scratch folder behind after a dry run", () => {
-    const co = companyRepo();
+  it("leaves the files as they were after a dry run", () => {
+    const co = area();
+    const before = kr1(co);
     runOps(co, [{ op: "kr.edit", target: { kr: "kr-1" }, args: { title: "x" }, expect: kr1(co) }]);
-    expect(existsSync(join(co, ".nikos", "downstream"))).toBe(false);
+    expect(kr1(co)).toBe(before);
     rmSync(co, { recursive: true, force: true });
   });
 
@@ -290,23 +215,4 @@ describe("cleanup", () => {
     expect(() => runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay", titel: "Oops" } })).toThrow("'titel' isn't an argument of story.rename");
   });
 
-  it("a downstream.add in a dry run changes nothing on disk, and its change set lists downstream.yaml", () => {
-    const co = companyRepo();
-    const before = existsSync(join(co, "planning", "downstream.yaml")) ? readText(co, "planning/downstream.yaml") : undefined;
-    const dry = runOps(co, [{ op: "downstream.add", args: { name: "Payments" } }]);
-    expect(dry.results[0].ok).toBe(true);
-    expect(dry.changes.get("planning/downstream.yaml")).toContain("Payments");
-    expect(existsSync(join(co, "planning", "downstream.yaml")) ? readText(co, "planning/downstream.yaml") : undefined).toBe(before);
-  });
-});
-
-describe("nikos planning keeps the lists it had", () => {
-  it("refuses bet.krs at a legacy group, and a team at all, as before", () => {
-    const g = groupRepo();
-    expect(() => runOp(g, { op: "bet.krs", target: { bet: "faster-checkout" }, args: { primary: "pay-1" } }, { strict: true })).toThrow("bet.krs isn't a change the group plan makes here");
-    const team = mkdtempSync(join(tmpdir(), "nikos-legacy-team-"));
-    write(join(team, "planning/plan.yaml"), "name: Web\nkey: WEB\nperiod: Q1 2027\nlevel: team\npillars: []\n");
-    write(join(team, "planning/bets/web-copy.md"), "---\nid: web-copy\n---\n");
-    expect(() => runOp(team, { op: "bet.new", target: { bet: "web-copy" }, args: {} }, { strict: true })).toThrow("bet.new isn't a change the team plan makes here");
-  });
 });

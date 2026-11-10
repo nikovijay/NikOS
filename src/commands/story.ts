@@ -14,7 +14,7 @@ const PRIORITIES = ["must", "should", "could"] as const;
 export interface StoryInput {
   title: string;
   activity: string;
-  /** The map, in a group repo with several: maps/<map>. */
+  /** The map, when a code repo has several: maps/<map>. */
   map?: string;
   /** A step of that activity. */
   step?: string;
@@ -155,7 +155,7 @@ export function runStory(args: string[]): number {
 export const mapLabel = (ref: StoryMapRef) => `maps/${ref.id}`;
 
 /** The feature file of a story in a map, or undefined when no feature in it has that id. */
-export function featureOf(ref: StoryMapRef, id: string): string | undefined {
+function featureOf(ref: StoryMapRef, id: string): string | undefined {
   return walk(join(ref.dir, "features"), ".feature").find((f) => featureStoryIds(read(f))[0] === id);
 }
 

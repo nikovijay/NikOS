@@ -5,7 +5,7 @@ import { parse } from "yaml";
 import { setState } from "../src/commands/state";
 import { copyExample } from "./helpers";
 
-const playbook = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
+const playbook = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
 
 describe("claimed_by", () => {
   it("records claimed_by when the build-a-story playbook moves a story to in_progress", () => {

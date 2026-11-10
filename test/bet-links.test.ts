@@ -24,16 +24,16 @@ describe("bet links", () => {
     expect(errors(dir)).toEqual([]);
   });
 
-  it("a missing same-repo bet fails naming the map", () => {
+  it("a bet is checked for its form only: its card in planning/ is not looked up", () => {
     const dir = copyExample();
     setBet(dir, "bet: fewer-missed-tasks", "bet: faster-checkout");
-    expect(errors(dir)).toContain("storymap.yaml: maps/ht names bet faster-checkout, which has no planning/bets/faster-checkout.md");
+    expect(errors(dir).filter((e) => e.includes("faster-checkout"))).toEqual([]);
   });
 
-  it("a cross-repo bet must come from a plan this repo joins, and its form is checked", () => {
+  it("a map names one bet by its id: another repo's bet, as repo#id, is refused", () => {
     const dir = copyExample();
     setBet(dir, "bet: fewer-missed-tasks", "bet: acme/company-plan#focus-mode");
-    expect(errors(dir)).toContain("storymap.yaml: maps/ht names bet acme/company-plan#focus-mode, but this repo doesn't join acme/company-plan");
+    expect(errors(dir)).toContain("storymap.yaml: maps/ht names bet acme/company-plan#focus-mode, which is not a bet id");
     setBet(dir, "bet: acme/company-plan#focus-mode", "bet: acme#focus-mode");
     expect(errors(dir)).toContain("storymap.yaml: maps/ht names bet acme#focus-mode, which is not a bet id");
   });
@@ -52,8 +52,8 @@ describe("bet links", () => {
 describe("nikos show", () => {
   it("lists the map's bet for each story", () => {
     const dir = copyExample();
-    expect(show("HT-1", dir)).toContain("Bets: fewer-missed-tasks (planning/bets/fewer-missed-tasks.md) — from the story map");
-    expect(show("HT-3", dir)).toContain("Bets: fewer-missed-tasks (planning/bets/fewer-missed-tasks.md) — from the story map");
+    expect(show("HT-1", dir)).toContain("Bets: fewer-missed-tasks — from the story map");
+    expect(show("HT-3", dir)).toContain("Bets: fewer-missed-tasks — from the story map");
   });
 
   it("names no bets when the map names none", () => {

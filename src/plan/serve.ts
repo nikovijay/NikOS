@@ -1,7 +1,7 @@
 // nikos plan serve: the planning dashboard for the company's planning repo, on 127.0.0.1. Each page shows
 // one area (?at=), read from the area's files and the delivery copies. The copies are refreshed on start
 // unless --offline, and a refresh that fails is a notice on every page, never a reason not to start.
-// The server is the planning dashboard's own (planning/server.ts), given these pages in place of its own.
+// The server is planning/server.ts, given these pages.
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { startServer, type PageSource, type RunningServer, type SaveTarget } from "../planning/server.js";
@@ -19,7 +19,7 @@ export interface PlanServeOptions {
   port?: number;
   /** Skip the refresh of the code repos' copies on start. */
   offline?: boolean;
-  /** The area the first page shows, named as --in names it (--at is the same). Unknown names are an error. */
+  /** The area the first page shows, named as --in names it (--at is an older alias, not in the help). Unknown names are an error. */
   at?: string;
   /** Runs git for the save buttons. Tests pass a runner that records the calls. */
   run?: Runner;

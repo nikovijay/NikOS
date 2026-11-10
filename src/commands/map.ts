@@ -1,13 +1,15 @@
 // The story map: activities as columns, releases as numbered bands, stories as cards tinted
 // by state.yaml. Read-only and script-free: the page has nothing to edit and runs no code, so
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
-// Served live by the planning dashboard, it also gets a filter bar (see FILTER_JS).
+// Served live by nikos serve, it also gets a filter bar (see FILTER_JS).
 import { loadStates } from "../lib/state-files.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { store } from "../lib/store.js";
+import { oldLayoutProblem } from "../plan/repo.js";
+import { isPlanRepo } from "../planning/model.js";
 import { featureStoryIds, featureTags, isDone, read, specHash, walk } from "../lib/project.js";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { OWNER, mapDirs, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
@@ -190,7 +192,7 @@ const statusOf = (s: MapStory) =>
 const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The whole story map as one standalone HTML page. live adds the dashboard's filter bar and its script. */
+/** The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve. */
 export function renderMap(dir: string, opts: { live?: boolean; map?: string } = {}): string {
   const m = storyMapOf(dir, opts.map);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
@@ -287,7 +289,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string } = 
 <style>${CSS}</style>
 </head>
 <body>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.live ? `<a class="back" href="/">← Planning</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title"><h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
 ${filters}<main id="board" tabindex="-1">
 ${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
@@ -421,8 +423,6 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; backgrou
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .skip { position: absolute; left: 12px; top: -48px; z-index: 20; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: 600; }
 .skip:focus { top: 12px; }
-.back { display: inline-flex; align-items: center; min-height: 28px; font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none; margin-right: 6px; }
-.back:hover { color: var(--ink); text-decoration: underline; }
 .title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .blank { margin: 32px 0; max-width: 560px; padding: 24px; border: 1px dashed var(--line-2); border-radius: 12px; background: var(--surface); font-size: 14px; }
 .blank h2 { margin: 0 0 6px; font-size: 16px; }
@@ -537,22 +537,24 @@ const MAP_KEY = KEY;
 
 /**
  * A story map, as maps/<key lowercased>/: its storymap, state, approvals and features. Its story ids
- * take the owner (--owner, e.g. WEB), else the repo's key from planning/plan.yaml, else just the key.
- * A bet (--bet) is optional; it's checked against planning/bets/ only when the repo has planning/.
+ * take the owner (--owner, e.g. WEB), else just the key. A bet (--bet) is optional and must be a bet
+ * id: its card isn't looked up, since a code repo can't read a planning repo.
  * Refuses with the same messages the command line gives.
  */
 export function newMap(input: { bet?: string; key?: string; owner?: string }, dir: string): { id: string; key: string; ids: string; dir: string } {
+  if (isPlanRepo(dir)) throw new Error("This is the company's planning repo. Story maps live in code repos: run nikos map new in one of those.");
+  const old = oldLayoutProblem(dir);
+  if (old) throw new Error(old);
   const bet = input.bet;
   const key = input.key;
   const owner = input.owner;
   if (!key) throw new Error("nikos map new needs --key <KEY>");
-  if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (store().isDir(join(dir, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   if (bet !== undefined) {
     if (!BET_ID.test(bet)) {
-      if (CROSS_REF.test(bet)) throw new Error("a map specs one of this group's bets, not another repo's");
+      if (CROSS_REF.test(bet)) throw new Error("a map names one bet by its id, not another repo's bet");
       throw new Error(`'${bet}' is not a bet id`);
     }
-    if (store().isDir(join(dir, "planning")) && !store().exists(join(dir, "planning", "bets", `${bet}.md`))) throw new Error(`no planning/bets/${bet}.md: create it with nikos planning bet new`);
   }
   if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");
   if (owner !== undefined && !OWNER.test(owner)) throw new Error("owner must be uppercase letters and digits, up to 10 (e.g. WEB)");
@@ -590,7 +592,7 @@ export function runMapNew(args: string[]): number {
   }
 }
 
-/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in a group repo. */
+/** `nikos map`: write the story map as a standalone page. `nikos map new` makes a map in this repo. */
 export function runMap(args: string[]): number {
   if (args[0] === "new") return runMapNew(args.slice(1));
   if (args[0] === "status") return runMapStatus(args.slice(1));

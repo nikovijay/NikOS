@@ -1,19 +1,29 @@
 // nikOS Plan, PR 3 of docs/rfcs/plan-and-spec.md, stage B: nikos join to a planning repo. A code repo
 // lists itself in planning/repos.yaml on a nikos/join branch for review. The plan is cloned to a temp
-// folder (or --plan-dir is used), and nothing is written to the code repo. An old-kind plan still joins
-// the old way, through joinPlan. Local bare repos stand in for the forge.
+// folder (or --plan-dir is used), and nothing is written to the code repo. A plan of the old kind is
+// refused. Local bare repos stand in for the forge.
 import { describe, it, expect, vi } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describeJoin, describeRepoJoin, joinPlan, joinPlanRepo, runJoin } from "../src/commands/join";
+import { describeRepoJoin, joinPlanRepo, runJoin } from "../src/commands/join";
 import { fetchCopy } from "../src/lib/fetch-copy";
 import { nextBranchName, realRun } from "../src/lib/git";
 import { hostNameOf } from "../src/lib/forge";
 import { initPlanRepo } from "../src/plan/repo";
 import { loadRepos } from "../src/plan/repos";
 import { bareOrigin, companyRepo } from "./planning-fixture";
-import { codeRepo, git, write } from "./repo-fixture";
+import { codeRepo, commitAll, git, write } from "./repo-fixture";
+
+/** A plan of the old kind on origin: planning/plan.yaml, and no planning/company/. */
+function oldPlan(): string {
+  const co = mkdtempSync(join(tmpdir(), "nikos-oldplan-"));
+  git(co, "init", "-q", "-b", "main");
+  git(co, "remote", "add", "origin", "https://github.com/acme/company-plan.git");
+  write(join(co, "planning/plan.yaml"), "name: Acme\nlevel: company\nperiod: Q1 2027\npillars: []\n");
+  commitAll(co, "old plan");
+  return co;
+}
 
 /** A new-layout planning repo (planning/company/) on a bare origin, with its main branch pushed. */
 function planOnOrigin(): string {
@@ -78,64 +88,46 @@ describe("nikos join to a planning repo", () => {
     expect(git(checkout, "branch", "--list", "nikos/*").split("\n").filter(Boolean)).toHaveLength(1);
   });
 
-  it("a plan that can't be read is left to the old join, as it always was, and --push refuses it and writes nothing", () => {
+  it("a plan that can't be read is refused, with --push or without, and nothing is written", () => {
     const code = codeRepo();
     const bad = join(tmpdir(), "no-such-plan-nikos-join");
     const before = tempJoins();
-    // The layout is unknown, so joinPlan decides: it lists the plan in planning/upstream.yaml for a later sync.
-    expect(joinPlanRepo(code, { plan: "acme/company-plan", url: bad })).toBeUndefined();
-    expect(tempJoins()).toEqual(before);
+    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: bad })).toThrow(/^Couldn't read acme\/company-plan: .+ Nothing was written\.$/);
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: bad, push: true })).toThrow(/^Couldn't read acme\/company-plan: .+ Nothing was written\.$/);
     expect(tempJoins()).toEqual(before);
     expect(existsSync(join(code, "planning"))).toBe(false);
     expect(git(code, "status", "--porcelain")).toBe("");
   });
-
   it("a code repo with no origin can't be listed in a new-layout plan", () => {
     const code = mkdtempSync(join(tmpdir(), "nikos-noorigin-"));
     git(code, "init", "-q", "-b", "main");
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() })).toThrow("has no origin");
   });
 
-  it("a code repo with no origin still joins an old-kind plan the old way", () => {
-    const code = codeRepo();
-    git(code, "remote", "remove", "origin");
-    expect(joinPlanRepo(code, { plan: "acme/company-plan", url: companyRepo() })).toBeUndefined();
-    const r = joinPlan(code, { repo: "acme/company-plan", url: companyRepo() });
-    expect(r.added).toBe(true);
-    expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
-  });
-
-  it("nikos join from the command line still joins an old-kind plan when the code repo has no origin or a local-path origin", () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("nikos join refuses a plan of the old kind, and writes nothing", () => {
+    const err: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a) => void err.push(a.join(" ")));
     try {
-      const noOrigin = codeRepo();
-      git(noOrigin, "remote", "remove", "origin");
-      expect(runJoin(["--dir", noOrigin, "--url", companyRepo(), "acme/company-plan"])).toBe(0);
-      expect(readFileSync(join(noOrigin, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
-
-      const localOrigin = codeRepo();
-      git(localOrigin, "remote", "set-url", "origin", bareOrigin());
-      expect(runJoin(["--dir", localOrigin, "--url", companyRepo(), "acme/company-plan"])).toBe(0);
-      expect(readFileSync(join(localOrigin, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+      const code = codeRepo();
+      expect(runJoin(["--dir", code, "--url", oldPlan(), "acme/company-plan"])).toBe(1);
+      expect(err.join("\n")).toContain("a plan of the old kind");
+      expect(existsSync(join(code, "planning"))).toBe(false);
     } finally {
-      log.mockRestore();
+      spy.mockRestore();
     }
   });
-
-  it("nikos join to an old-kind plan that can't be reached still lists it in planning/upstream.yaml, and exits 1", () => {
+  it("nikos join to a planning repo that can't be reached writes nothing, and exits 1", () => {
     const code = codeRepo();
     const out: string[] = [];
     const err = vi.spyOn(console, "error").mockImplementation((...a) => void out.push(a.join(" ")));
     try {
-      expect(runJoin(["--dir", code, "--url", join(tmpdir(), "no-such-old-plan-nikos-join"), "acme/company-plan"])).toBe(1);
+      expect(runJoin(["--dir", code, "--url", join(tmpdir(), "no-such-plan-nikos-join"), "acme/company-plan"])).toBe(1);
     } finally {
       err.mockRestore();
     }
-    expect(out.join("\n")).toContain("listed in planning/upstream.yaml");
-    expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
+    expect(out.join("\n")).toContain("Couldn't read acme/company-plan");
+    expect(existsSync(join(code, "planning"))).toBe(false);
   });
-
   it("a second --push of a repo already proposed is refused: it's named as proposed on its branch, and nothing is written", () => {
     const origin = planOnOrigin();
     const code = codeRepo();
@@ -196,20 +188,15 @@ describe("nikos join to a planning repo", () => {
     expect(() => joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout })).toThrow("has changes in planning/");
   });
 
-  it("an old-kind plan is not listed here: the temp clone goes, and joinPlan joins it as before", () => {
-    const co = companyRepo();
+  it("a plan of the old kind is refused with the nikos plan init message: the temp clone goes, and nothing is listed", () => {
+    const co = oldPlan();
     const code = codeRepo();
     const before = tempJoins();
-    expect(joinPlanRepo(code, { plan: "acme/company-plan", url: co })).toBeUndefined();
+    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co })).toThrow("a plan of the old kind");
+    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co, push: true })).toThrow("a plan of the old kind");
     expect(tempJoins()).toEqual(before);
-    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: co, push: true })).toThrow("old kind of plan");
-    const r = joinPlan(code, { repo: "acme/company-plan", url: co });
-    expect(r.added).toBe(true);
-    expect(readFileSync(join(code, "planning/upstream.yaml"), "utf8")).toContain("acme/company-plan");
-    expect(existsSync(join(code, "planning/repos.yaml"))).toBe(false);
-    expect(describeJoin(r)).toContain("Joined acme/company-plan.");
+    expect(existsSync(join(code, "planning"))).toBe(false);
   });
-
   it("nikos join takes --push and the repo path after it, and reports where the branch is", () => {
     const origin = planOnOrigin();
     const code = codeRepo();

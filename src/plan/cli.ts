@@ -6,12 +6,12 @@ import { closest } from "../lib/closest.js";
 import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
-import { parseArgs } from "../planning/cli.js";
+import { parseArgs } from "../lib/args.js";
 import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
 import { alignsList, planningIssues } from "../planning/levels.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
-import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, parentOf, repoIssues } from "./repo.js";
+import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, oldLayoutProblem, parentOf, repoIssues } from "./repo.js";
 import { loadRepos, reposIssues, type RepoEntry } from "./repos.js";
 import { hostOfEntry, refreshDelivery } from "./refresh.js";
 import { exportPlanPage, runPlanServe } from "./serve.js";
@@ -209,6 +209,12 @@ export async function runPlanRepo(args: string[]): Promise<number> {
     return a;
   };
   const show = (path: string) => relative(repoOrNone ?? cwd, path);
+  // A repo with the old planning/plan.yaml is refused by every command but init, which says why too.
+  const old = oldLayoutProblem(repoOrNone ?? cwd);
+  if (old && cmd !== undefined && cmd !== "help" && cmd !== "init") {
+    console.error(`✗ ${old}`);
+    return 1;
+  }
   try {
     switch (cmd) {
       case undefined:

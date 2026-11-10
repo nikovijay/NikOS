@@ -1,6 +1,6 @@
 // Story maps. Every map lives in the repo's maps/<key>/ folder: one per bet, or one for a repo that
-// has a single product. A plan's key (planning/plan.yaml) and the map's owner (its storymap.yaml)
-// can prefix its story ids. Each map's delivery.yaml says how its stories are doing.
+// has a single product. The map's owner (its storymap.yaml) can prefix its story ids. Each map's
+// delivery.yaml says how its stories are doing.
 import { basename, dirname, join } from "node:path";
 import { parse } from "yaml";
 import { store } from "./store.js";
@@ -24,18 +24,6 @@ export function mapDirs(root: string): string[] {
     .map((f) => join(maps, f))
     .filter((p) => store().isDir(p) && store().exists(join(p, "storymap.yaml")))
     .sort();
-}
-
-/** The group or department key in planning/plan.yaml, e.g. PAY. */
-export function groupKeyOf(root: string): string | undefined {
-  const path = join(root, "planning", "plan.yaml");
-  if (!store().exists(path)) return undefined;
-  try {
-    const key = (parse(store().read(path)) as { key?: unknown } | null)?.key;
-    return typeof key === "string" ? key : undefined;
-  } catch {
-    return undefined; // planning/plan.yaml that doesn't parse is reported by its own checks
-  }
 }
 
 /** A map folder: maps/<id>. */
@@ -80,7 +68,7 @@ export function resolveStoryMap(start: string, opts: { map?: string; story?: str
   if (isMapFolder(start) && store().exists(join(start, "storymap.yaml"))) {
     return { root: repoRootOf(start), dir: start, id: basename(start) };
   }
-  if (store().isDir(join(start, "intent"))) throw new Error("this repo has intent/: run nikos migrate maps");
+  if (store().isDir(join(start, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const maps = mapDirs(start);
   if (!maps.length) throw new Error("no story map here: run nikos init, or nikos map new --key K");
   const ids = maps.map((d) => basename(d));
@@ -116,21 +104,18 @@ export function mapOwnerOf(dir: string): string | undefined {
   }
 }
 
-/**
- * The prefix on a map's story ids: the map's owner, else the repo's group key from planning/plan.yaml,
- * else nothing. So a story id is WEB-CHK-1, PAY-CHK-1 or CHK-1.
- */
+/** The prefix on a map's story ids: the map's owner, else nothing. So a story id is WEB-CHK-1 or CHK-1. */
 export function prefixOf(ref: StoryMapRef): string | undefined {
-  return mapOwnerOf(ref.dir) ?? groupKeyOf(ref.root);
+  return mapOwnerOf(ref.dir);
 }
 
-/** The prefix on a story's id, given the map's key: e.g. WEB-CHK, PAY-CHK, or CHK. */
+/** The prefix on a story's id, given the map's key: e.g. WEB-CHK or CHK. */
 export function storyPrefix(ref: StoryMapRef, key: string): string {
   const prefix = prefixOf(ref);
   return prefix ? `${prefix}-${key}` : key;
 }
 
-/** The map's label as its stories carry it, e.g. WEB-CHK, PAY-CHK or CHK. */
+/** The map's label as its stories carry it, e.g. WEB-CHK or CHK. */
 export function labelOf(ref: StoryMapRef): string {
   return storyPrefix(ref, keyOfMap(ref.dir) ?? ref.id);
 }

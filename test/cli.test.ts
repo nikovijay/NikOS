@@ -24,11 +24,11 @@ describe("cli", () => {
   });
 
   it("prints a command's help for --help and -h, and writes nothing", () => {
-    for (const args of [["map", "new", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["planning", "downstream", "add", "D", "--help"]]) {
+    for (const args of [["map", "new", "--help"], ["init", "-h"], ["join", "acme/plan", "--help"], ["plan", "kr", "--help"]]) {
       const dir = mkdtempSync(join(tmpdir(), "nikos-help-"));
       const r = cliIn(dir, ...args);
       expect(r.status).toBe(0);
-      expect(r.stdout).toContain(args[0] === "planning" ? "nikos planning" : `nikos ${args[0]}`);
+      expect(r.stdout).toContain(`nikos ${args[0]}`);
       expect(readdirSync(dir)).toEqual([]);
     }
   });

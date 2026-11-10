@@ -1,4 +1,4 @@
-// Fixtures for the tests: a group repo with one map (PAY-CHK, three stories in two releases), and a
+// Fixtures for the tests: a map repo with one map (PAY-CHK, three stories in two releases), and a
 // plain code repo with an origin. Both are real git repos, so sync and ls-remote run for real.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -30,19 +30,18 @@ export function feature(id: string, activity: string, release: number, title: st
 }
 
 /**
- * A group repo: planning/plan.yaml (level group, key), a bet, and maps/chk with three stories:
+ * A map repo: maps/chk with three stories, owned by <KEY> (so the ids are <KEY>-CHK-n):
  * <KEY>-CHK-1 and -2 in release 1 (activity pay), <KEY>-CHK-3 in release 2 (activity confirm).
  */
 export function groupRepo(key = "PAY", dir = mkdtempSync(join(tmpdir(), "nikos-group-"))): string {
   const id = (n: number) => `${key}-CHK-${n}`;
-  write(join(dir, "planning/plan.yaml"), `name: Checkout ${key}\nkey: ${key}\nperiod: Q1 2027\nlevel: group\npillars: []\n`);
-  write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
   write(
     join(dir, "maps/chk/storymap.yaml"),
     [
       "format_version: 1",
       "project: chk",
       "key: CHK",
+      `owner: ${key}`,
       "bet: faster-checkout",
       "activities:",
       "  - id: pay",

@@ -38,7 +38,7 @@ describe("suggest", () => {
 
   it("offers to set up nikOS where there's no story map", () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-empty-"));
-    expect(labels(dir)).toEqual(["Set up nikOS here", "Map what this repo already does", "Join our company plan"]);
+    expect(labels(dir)).toEqual(["Set up nikOS here", "Map what this repo already does", "Link this repo to a company plan"]);
     expect(capture(["--brief", "--dir", dir])).toBe("");
   });
 
@@ -73,17 +73,16 @@ describe("suggest", () => {
     expect(labels(rootOf(intent))).toEqual(["Fix the 1 problem in maps/ht/", "Review what changed in HT-1 since it was done", "Unblock HT-3 (HT-2 waits on it)", "Add a story"]);
   });
 
-  it("offers a bet review when one is due, and a check-in when a key result is stale", () => {
+  it("a code repo's menu has no bet reviews or check-ins: the plan's menu has those, in the planning repo", () => {
     const intent = copyExample();
     edit(join(intent, "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     const hash = (f: string) => specHash(readFileSync(join(intent, "features/tasks", f), "utf8"));
     approve(intent, "HT-1", hash("add-a-task.feature"));
     approve(intent, "HT-2", hash("see-todays-top-three.feature"));
-    vi.setSystemTime(new Date("2026-11-20T12:00:00Z"));
-    expect(labels(rootOf(intent))).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", 'Check in on "Testers who missed an important task last week"', "Add a story"]);
     vi.setSystemTime(new Date("2026-12-02T12:00:00Z"));
-    expect(labels(rootOf(intent))).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Review the fewer-missed-tasks bet (due 2026-12-01)", 'Check in on "Testers who missed an important task last week"']);
-    expect(suggest(rootOf(intent)).options[2].do).toContain("review playbook");
+    const all = labels(rootOf(intent));
+    expect(all).toEqual(["Build HT-3: Reorder tasks", "Check release 1 is ready to ship", "Add a story", "Look at the story map"]);
+    expect(JSON.stringify(suggest(rootOf(intent)))).not.toMatch(/nikos plan|bet review|Check in on/);
   });
 
   it("skips cancelled stories", () => {
@@ -94,8 +93,8 @@ describe("suggest", () => {
 });
 
 describe("conversation rules", () => {
-  const skill = readFileSync(join(__dirname, "../skills/nikos-mode/SKILL.md"), "utf8");
-  const build = readFileSync(join(__dirname, "../skills/nikos-mode/playbooks/build-a-story.md"), "utf8");
+  const skill = readFileSync(join(__dirname, "../skills/nikos-spec/SKILL.md"), "utf8");
+  const build = readFileSync(join(__dirname, "../skills/nikos-spec/playbooks/build-a-story.md"), "utf8");
 
   it("ends every request with nikos suggest as a short menu, and never hands over commands", () => {
     expect(skill).toContain("## 6. Ask what's next");

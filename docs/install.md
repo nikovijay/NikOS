@@ -10,8 +10,9 @@ copied per tool.
 | Codex | `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json` | `codex plugin marketplace add nikovijay/NikOS` |
 | Cursor | `.cursor-plugin/plugin.json` | Add the repo as a marketplace (below) |
 
-After installing, ask the agent to plan, build or check a story. The
-`nikos-mode` skill picks the playbook.
+After installing, ask the agent to plan, build or check a story. The two skills
+ship together: `nikos-spec` covers a code repo's story map, and `nikos-plan`
+covers the company's plan in its planning repo. Each picks its playbook.
 
 ## Claude Code
 
@@ -70,13 +71,13 @@ nikos) it can land after your first message. It doesn't run in cloud agents.
 ## Packs
 
 Packs are extra tools that install on their own, next to nikOS or without it.
+The planning skill is not a pack: it ships with nikOS as `nikos-plan`.
 Each lives in `tools/<pack>/` with its own manifests and skills, and both
 marketplaces list it.
 
 | Pack | Folder | Claude Code |
 | --- | --- | --- |
 | Video | `tools/video/` | `/plugin install nikos-video@nikos` |
-| Planning | `tools/planning/` | `/plugin install nikos-planning@nikos` |
 | UX | `tools/ux/` | `/plugin install nikos-ux@nikos` |
 
 In Codex and Cursor, install the pack from the same marketplace as nikOS.

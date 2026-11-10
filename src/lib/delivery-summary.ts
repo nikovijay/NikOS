@@ -1,6 +1,6 @@
 // The delivery summary a map's owner commits: maps/<key>/delivery.yaml, worked out from the map's
 // own files (see lib/map-summary.ts) and written by nikos map status, state set, approve and map new.
-// The plans above read it, so no rollout reads a map's live state.
+// The plan above reads it, so no plan reads a map's live state.
 // An approval here is the name it was given, not a verified identity (the amendment, rule 11).
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
@@ -22,7 +22,7 @@ export interface SummaryStory {
 export interface DeliverySummary {
   version: 1;
   map: string;
-  /** The map's owner (its storymap owner, else the repo's group key). Absent when neither names one. */
+  /** The map's owner (its storymap owner). Absent when it names none. */
   owner?: string;
   read_at: string;
   stories: SummaryStory[];
@@ -89,7 +89,7 @@ export function readDeliverySummary(mapDir: string, side: "planning" | "code"): 
   return undefined;
 }
 
-/** How old a summary is, as the rollouts say it: "read 3 days ago (2026-11-05)". */
+/** How old a summary is, as the plan says it: "read 3 days ago (2026-11-05)". */
 export function summaryAge(summary: Pick<DeliverySummary, "read_at">, now: Date = new Date()): string {
   const read = new Date(summary.read_at);
   const date = summary.read_at.slice(0, 10);

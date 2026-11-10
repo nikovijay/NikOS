@@ -18,7 +18,5 @@ describe("story ids", () => {
     for (const file of ["state.schema.json", "approvals.schema.json", "storymap.schema.json"]) {
       expect(schema(file)).toContain(STORY_ID_PATTERN);
     }
-    // The group key in plan.yaml is the same shape as a map's key.
-    expect(schema("planning/plan.schema.json")).toContain('"pattern": "^[A-Z][A-Z0-9]{0,9}$"');
   });
 });

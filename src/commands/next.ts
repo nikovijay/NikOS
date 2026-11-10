@@ -26,7 +26,7 @@ export function dependencies(mapDir: string): Map<string, string[]> {
 }
 
 /** The first todo story in run.queue, then in story map order, whose dependencies are all done. */
-/** states: each story's status, in place of the map's own (a rollout passes the owner's delivery summary). */
+/** states: each story's status, in place of the map's own (the plan passes the owner's delivery summary). */
 export function next(dir: string, mapId?: string, opts: { states?: Record<string, { status?: string }> } = {}): NextResult {
   const ref = resolveStoryMap(dir, { map: mapId });
   const mapDir = ref.dir;

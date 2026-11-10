@@ -11,7 +11,7 @@ const templateDir = [join(here, "../../templates"), join(here, "../templates")].
 
 export interface NewPlanOptions {
   dir?: string;
-  /** The map, in a group repo with several. */
+  /** The map, when a code repo has several. */
   map?: string;
   summary?: string;
   date?: string;

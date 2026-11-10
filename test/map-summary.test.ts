@@ -25,10 +25,9 @@ function ownMap(): string {
   const dir = mkdtempSync(join(tmpdir(), "nikos-summary-own-"));
   write(join(dir, "package.json"), '{"name":"web","private":true}\n');
   git(dir, "init", "-q", "-b", "main");
-  write(join(dir, "planning/plan.yaml"), "name: Checkout\nkey: PAY\nperiod: Q1 2027\nlevel: group\npillars: []\n");
   write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
   commitAll(dir, "group");
-  newMap({ bet: "faster-checkout", key: "INB" }, dir);
+  newMap({ bet: "faster-checkout", key: "INB", owner: "PAY" }, dir);
   newStory({ title: "Pay by card", activity: "getting-started" }, dir);
   newStory({ title: "Pay by wallet", activity: "getting-started" }, dir);
   commitAll(dir, "map");
@@ -119,9 +118,9 @@ describe("the summary a map's files say", () => {
     expect(summaryBody(two, join(two, "maps/chk"))).toEqual(summaryBody(one, join(one, "maps/chk")));
   });
 
-  it("a map with no owner and no group key gets a summary with no owner field", () => {
+  it("a map with no owner gets a summary with no owner field", () => {
     const g = groupRepo("PAY");
-    write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
+    write(join(g, "maps/chk/storymap.yaml"), readFileSync(join(g, "maps/chk/storymap.yaml"), "utf8").replace("owner: PAY\n", ""));
     const body = summaryBody(g, join(g, "maps/chk"));
     expect(body).not.toHaveProperty("owner");
     expect(body.map).toBe("chk");

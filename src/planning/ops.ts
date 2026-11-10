@@ -1,6 +1,5 @@
-// The one write path. Every change the dashboard, the change file (nikos apply) and the chat
-// makes goes through runOp: it checks the op's name, the level of the plan, and the ids, then calls
-// the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
+// The one write path. Every change the dashboard and the chat makes goes through runOp: it checks
+// the op's name, the level of the plan, and the ids, then calls the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
 // planning and story map files, so nothing is written until a person says so.
 import { join, relative, resolve, sep } from "node:path";
 import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
@@ -9,15 +8,14 @@ import { newStory, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
 import { resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
-import { addDownstream } from "./rollout.js";
 import { setSetting } from "../lib/settings.js";
 import { checkIn, editKr, newKr, reviseTarget } from "./krs.js";
 import { editBet, newBet, reviewBet } from "./bets.js";
 import { setAligns, setBetKrs } from "./aligns.js";
-import { krLevelProblem, levelOf, planningIssues } from "./levels.js";
+import { levelOf, planningIssues } from "./levels.js";
 import { idProblem, betFieldProblems, decisionProblem, numberProblem, reasonProblem } from "./rules.js";
 import { areaOf, hash, labelRoot, StaleError, checkHash } from "./model.js";
-import { validate, validateGroup } from "../commands/validate.js";
+import { validateGroup } from "../commands/validate.js";
 import { krAreaProblem, repoIssues } from "../plan/repo.js";
 
 export type OpName =
@@ -44,8 +42,7 @@ export type OpName =
   | "release.remove"
   | "release.reorder"
   | "map.new"
-  | "setting.set"
-  | "downstream.add";
+  | "setting.set";
 
 export type Level = "company" | "department" | "group" | "team";
 
@@ -56,7 +53,7 @@ export interface Op {
   expect?: string;
 }
 
-const COMPANY: OpName[] = ["checkin", "kr.new", "kr.edit", "kr.target", "bet.new", "bet.edit", "bet.review", "bet.krs", "setting.set", "downstream.add"];
+const COMPANY: OpName[] = ["checkin", "kr.new", "kr.edit", "kr.target", "bet.new", "bet.edit", "bet.review", "bet.krs", "setting.set"];
 const DEPARTMENT: OpName[] = [...COMPANY, "kr.align", "bet.align"];
 const GROUP: OpName[] = [
   "bet.new",
@@ -77,14 +74,13 @@ const GROUP: OpName[] = [
   "release.reorder",
   "map.new",
 ];
-// A planning area's group and team make bets that aim at key results above them (bet.krs), so they are
-// listed here. A legacy planning repo keeps the lists it had: a group's bet.krs and a team are refused there.
+// A group makes bets that aim at key results above it (bet.krs), so it is listed here.
 const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 // A team makes bets only: it has no key results, and its bets aim at the key results above it.
 const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
 
 /** Ops that edit a story map or the settings of a code repo. A planning area never makes them: maps stay in the code repos. */
-const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set", "downstream.add"]);
+const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
 const NAMES: Record<OpName, true> = {
@@ -112,7 +108,6 @@ const NAMES: Record<OpName, true> = {
   "release.reorder": true,
   "map.new": true,
   "setting.set": true,
-  "downstream.add": true,
 };
 
 export const OP_NAMES = Object.keys(NAMES) as OpName[];
@@ -128,8 +123,6 @@ const levelsOf = (group: OpName[], team: OpName[]): Record<OpName, Level[]> =>
 
 /** The levels each op is made at in a planning area (a folder of nikos plan). */
 export const OP_LEVELS = levelsOf(AREA_GROUP, TEAM);
-/** The levels each op is made at in a legacy planning repo (nikos planning). It has no team, and a group has no bet.krs. */
-const LEGACY_OP_LEVELS = levelsOf(GROUP, []);
 
 /**
  * The argument names each op reads. Any other name is refused, so a misspelt one is never dropped
@@ -158,7 +151,6 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "release.reorder": ["to", "map"],
   "map.new": ["bet", "key", "map"],
   "setting.set": ["key", "value"],
-  "downstream.add": ["name", "repo", "home"],
 };
 
 /**
@@ -209,9 +201,7 @@ function precheck(root: string, op: Op): void {
   if (area && AREA_REFUSED.has(op.op)) throw new Error(`${op.op} isn't a change a planning area makes: story maps and settings stay in the code repos`);
   const keys = op.op.startsWith("kr.") || op.op === "checkin";
   if (area && keys && krAreaProblem(area)) throw new Error(krAreaProblem(area)!);
-  if (level === "group" && keys) throw new Error(krLevelProblem(level)!);
-  const levels = area ? OP_LEVELS : LEGACY_OP_LEVELS;
-  if (level && !levels[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
+  if (level && !OP_LEVELS[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
   for (const [kind, id] of Object.entries(op.target ?? {})) {
     const k = TARGET_KINDS[kind];
     const problem = k ? idProblem(k, id) : `'${kind}' isn't a kind of target nikOS knows`;
@@ -368,16 +358,12 @@ function apply(root: string, op: Op): string {
       setSetting(root, key, a.value);
       return `Set ${key}`;
     }
-    case "downstream.add": {
-      const r = addDownstream(root, { name: String(a.name ?? ""), repo: str(a.repo), home: str(a.home) });
-      return `${r.added ? "Added" : "Updated"} ${r.name}`;
-    }
   }
   throw new Error(`'${String(op.op)}' isn't a change nikOS knows`);
 }
 
-/** The text of the files a dry run needs: planning, the story maps, settings, and the copies of other plans. */
-const SNAPSHOT = ["planning", "maps", "nikos.settings.yaml", ".nikos/upstream"];
+/** The text of the files a dry run needs: planning, the story maps and settings. */
+const SNAPSHOT = ["planning", "maps", "nikos.settings.yaml"];
 /** A planning area's dry run needs the whole planning/ folder: the checks compare areas with each other. */
 const SNAPSHOT_AREA = ["planning"];
 
