@@ -117,7 +117,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos start` | Set this folder up: `--plan` makes the company's planning repo, `--map` (with `--name` and `--key`, and `--join <planning repo>`) makes a story map for this code with a scenario runner for its stack and CI for its host. In a terminal with no flags, it asks which |
 | `nikos plan init` | Make the company's planning repo: `planning/company/`, with a folder for each department, group and team under `planning/` |
 | `nikos plan add department\|group\|team <id>` | Add an area to the company's plan |
-| `nikos plan kr new`, `plan checkin`, `plan bet new`, `plan bet review` | Key results, check-ins and bets, in the area named with `--in` (`nikos plan help` lists them all) |
+| `nikos plan kr new`, `plan kr step`, `plan checkin`, `plan bet new`, `plan bet review`, `plan ladder` | Key results (figures that go up or down, or milestones of steps), check-ins, bets, and links for what has only text so far, in the area named with `--in` (`nikos plan help` lists them all) |
 | `nikos serve` | Open this repo's story map in the browser. `--export <file>` writes it as one offline page. In a planning repo, use `nikos plan serve` |
 | `nikos init` | Create `maps/<key>/`, with `constitution.md` and `decisions.md` at the root, in this repo |
 | `nikos activity add "<title>"` | Add an activity to the story map |

@@ -2,11 +2,12 @@
 // ones due, the key results gone stale, and any delivery warnings. The same shape as a story map's
 // suggestion, so every agent offers the same menu for the same situation.
 import type { Option, Suggestion } from "../commands/suggest.js";
-import { isStale } from "../planning/krs.js";
+import { isStale, kindOf } from "../planning/krs.js";
 import { count } from "../lib/project.js";
 import { betIds, krIds, loadBet, loadKr, today, type Area } from "../planning/model.js";
 import { planDeliveries } from "./delivery.js";
 import { deliveryIssues } from "./cli.js";
+import { unlinkedItems } from "../planning/ladder.js";
 import { areaFile, companyYear } from "./repo.js";
 
 const MAX = 4;
@@ -16,10 +17,19 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
   const file = areaFile(area) ?? {};
   const krs = krIds(area.dir);
   const bets = betIds(area.dir);
+  // A milestone is marked by its steps, not checked in, so its staleness is asked about apart from the figures.
   const stale = krs.flatMap((id) => {
     try {
       const k = loadKr(area.dir, id).data;
-      return isStale(k) ? [String(k.title ?? id)] : [];
+      return isStale(k) && kindOf(k) === "number" ? [String(k.title ?? id)] : [];
+    } catch {
+      return [];
+    }
+  });
+  const staleSteps = krs.flatMap((id) => {
+    try {
+      const k = loadKr(area.dir, id).data;
+      return isStale(k) && kindOf(k) === "milestone" ? [String(k.title ?? id)] : [];
     } catch {
       return [];
     }
@@ -32,6 +42,13 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
       return [];
     }
   });
+  // Text with no link behind it: a file that won't load is left out here, and plan validate reports it.
+  let unlinked: { id: string }[] = [];
+  try {
+    unlinked = unlinkedItems(repo).filter((u) => u.rel === area.rel);
+  } catch {
+    unlinked = [];
+  }
   const warnings = deliveryIssues(repo, planDeliveries(repo)).filter((i) => i.warning).length;
 
   const options: Option[] = [];
@@ -47,6 +64,18 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
       do: "Ask for each key result's latest value, then record it with nikos plan checkin <kr-id> <value> --note \"<where it stands>\".",
     });
   }
+  if (staleSteps.length) {
+    options.push({
+      label: staleSteps.length === 1 ? `Ask about the steps of "${staleSteps[0]}"` : `Ask about the steps of ${staleSteps.length} milestones`,
+      do: "Ask which steps are done, and on what date, then mark each with nikos plan kr step <kr-id> \"<step>\" --date <date>.",
+    });
+  }
+  if (unlinked.length) {
+    options.push({
+      label: unlinked.length === 1 ? `Link "${unlinked[0].id}" to what it ladders up to` : `Link ${unlinked.length} items to what they ladder up to`,
+      do: "For each item, run nikos plan ladder <id> and show the person its candidates. Ask which one it links to, or whether to keep the text. Link only on their yes: nikos plan ladder accept <id> <candidate>. If none fits, clear the text with nikos plan ladder clear <id>.",
+    });
+  }
   if (warnings) {
     options.push({
       label: warnings === 1 ? "Look at the plan's one delivery warning" : `Look at the plan's ${warnings} delivery warnings`,
@@ -60,8 +89,10 @@ export function suggestPlan(repo: string, area: Area): Suggestion {
     });
   }
   options.push({ label: "Look at the plan", do: `Run nikos plan status --in ${area.rel}, or open the dashboard with nikos plan serve, and show the person.` });
+  // When there are too many, the last option (Look at the plan) is kept, and the one before it is dropped.
+  const kept = options.length > MAX ? [...options.slice(0, MAX - 1), options[options.length - 1]] : options;
 
   const label = area.level === "company" ? file.name ?? "The company" : `${file.name ?? area.id} (${area.rel})`;
   const period = area.level === "company" ? companyYear(repo) : undefined;
-  return { summary: `${label}${period ? ` (${period})` : ""}: ${count(krs.length, "key result")}, ${count(bets.length, "bet")}`, options: options.slice(0, MAX) };
+  return { summary: `${label}${period ? ` (${period})` : ""}: ${count(krs.length, "key result")}, ${count(bets.length, "bet")}`, options: kept };
 }
