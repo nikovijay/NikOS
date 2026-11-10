@@ -197,12 +197,10 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
         m.bets.filter((b) => CROSS_REF.test(b) && !b.startsWith(`${repo}#`)).map((bet) => ({ map: m.map, bet, ...mapCounts(m) })),
       );
       const titles = new Map(maps.flatMap((m) => [...m.releases.flatMap((r) => r.stories), ...m.unreleased]).map((s) => [s.id, s.title]));
-      // The next story of the first map with a queue: next can't pick among several maps without one. A team's own map is
-      // skipped: its status is the team's live file, which a rollout never reads (rule 9). Its summary says the delivery.
+      // The next story of the first map with a queue: next can't pick among several maps without one.
       for (const ref of refs) {
-        if (ref.team) continue;
         try {
-          // A map with a summary: each story's status is the summary's, not the group's state (a team holds it). A proof that
+          // A map with a summary: each story's status is the summary's, which says what its proof shows. A proof that
           // isn't current is work to redo, so it isn't next.
           const summary = readDeliverySummary(ref.dir);
           const states = summary && Object.fromEntries(summary.stories.map((s) => [s.id, { status: s.proof && isDone(s.status) ? "needs_rework" : s.status }]));
@@ -214,14 +212,14 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
           // no state.yaml or queue in this map: delivery and blockers still show
         }
       }
-      // Blockers are read from a group's own map state only: a team's blockers live in its live status/, which a rollout never reads.
-      for (const ref of storyMapsOf(dir).filter((r) => !r.team)) {
+      // Blockers are read from each map's state in the copy.
+      for (const ref of storyMapsOf(dir)) {
         for (const [story, st] of Object.entries(loadStates(ref.dir))) {
           if (st?.blockers?.length && st.status !== "cancelled" && !isDone(st.status)) blockers.push({ story, title: titles.get(story) ?? story, blockers: st.blockers.map(String) });
         }
       }
     } catch {
-      // A story map that doesn't read is the team's to fix; the rest of the rollout still shows.
+      // A story map that doesn't read is the repo's to fix; the rest of the rollout still shows.
     }
   }
   const krs = krIds(dir).flatMap((id) => {
@@ -238,7 +236,7 @@ function read(root: string, dir: string, repo: string, self?: string): Omit<Down
       const m = loadBet(dir, id).meta;
       const up = alignsList(m.aligns_to);
       // A copy's bet counts the owner's delivery summary; a story with none yet says so, and the owner's nikos map status fixes it.
-      const d = delivery(dir, id, { groupState: true });
+      const d = delivery(dir, id);
       const missing = d.stories.filter((s) => s.freshness === "no-summary").length;
       const note = missing ? `; ${missing} with no summary yet: run nikos map status in ${repo}` : "";
       // The age of the summary the count reads, as the plan line says it.
@@ -432,7 +430,7 @@ export function deliveryBelow(root: string, self: string | undefined, bet: strin
   for (const b of bets) {
     if (!targets.has(b.ref)) continue;
     try {
-      const d = delivery(b.dir, b.id, { groupState: true });
+      const d = delivery(b.dir, b.id);
       if (d.stories.length) out.push(`bet ${b.id} in ${b.repo}, ${describeDelivery(d)}${d.summaryAsOf ? `, ${summaryAge({ read_at: d.summaryAsOf })}` : ""}`);
     } catch {
       // a copy whose map doesn't read shows nothing here; its own line in the rollout says so

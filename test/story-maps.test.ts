@@ -223,13 +223,13 @@ describe("bets in a map", () => {
     expect(betsFor(map, "ACME-CHK-1")).toEqual({ bets: ["faster-checkout"], from: "map" });
   });
 
-  it("names a missing bet, a bet with no card, and bets on releases or stories", () => {
+  it("a map with no bet is valid, a bet with no card is named, and bets on releases or stories are named", () => {
     const root = oneMap();
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8").replace("bet: faster-checkout", "bet: no-card"));
     expect(validate(root, "chk").errors.map((e) => e.message)).toContain("maps/chk names bet no-card, which has no planning/bets/no-card.md");
 
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8").replace(/^bet: .*\n/m, ""));
-    expect(validate(root, "chk").errors.map((e) => e.message)).toContain("maps/chk/storymap.yaml has no bet: add bet: <bet-id>, the group bet this map specs");
+    expect(validate(root, "chk").errors.map((e) => e.message).filter((m) => m.includes("bet"))).toEqual([]);
 
     write(mapFile(root, "chk"), "format_version: 1\nproject: chk\nkey: CHK\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: Release 1\n    bets: [faster-checkout]\n    stories: []\n  - number: 2\n    title: Two\n    story_bets: {}\n    stories: []\n");
     const messages = validate(root, "chk").errors.map((e) => e.message);

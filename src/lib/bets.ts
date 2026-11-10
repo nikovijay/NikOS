@@ -46,7 +46,7 @@ export function canonicalBet(value: string, ownerRepo: string): string {
 
 /**
  * Every story that delivers a bet, after story overrides. With ownerRepo (the repo the map sits in), a bare
- * bet id and a <repo>#<id> name are compared in canonical form, so a team's map that names the company's bet matches.
+ * bet id and a <repo>#<id> name are compared in canonical form, so a map that names the company's bet matches.
  */
 export function storiesFor(map: any, bet: string, ownerRepo?: string): string[] {
   const all: string[] = (map?.releases ?? []).flatMap((r: any) => r?.stories ?? []);

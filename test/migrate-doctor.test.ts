@@ -1,11 +1,11 @@
-// nikos doctor's migration hints: a 0.2.x intent/ repo is never failed, a team plan is flagged,
-// a runner that doesn't run the story folder is warned, and a healthy group repo gets nothing new.
+// nikos doctor's migration hints: a 0.2.x intent/ repo is never failed, a runner that doesn't run the
+// story folder is warned, and a healthy group repo gets nothing new.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doctor } from "../src/commands/doctor";
 import { copyExample } from "./helpers";
-import { groupRepo, teamRepo, write } from "./team-fixture";
+import { groupRepo, write } from "./repo-fixture";
 
 describe("doctor on a 0.2.x intent/ repo", () => {
   it("a repo with a team plan that still has key results: the story map hints at both moves, and nothing fails", () => {
@@ -54,34 +54,6 @@ describe("doctor on a 0.2.x intent/ repo", () => {
     expect(doctor(root, { offline: true }).find((c) => c.name === "scenario runner")).toMatchObject({ status: "warn", found: "cucumber.mjs doesn't list the story's features folder" });
     writeFileSync(join(root, "cucumber.mjs"), "export default {};\n");
     expect(doctor(root, { offline: true }).find((c) => c.name === "scenario runner")).toMatchObject({ status: "ok" });
-  });
-});
-
-describe("doctor on a team repo's runner", () => {
-  it("warns when the runner has no folder of step definitions, and passes when it has one", () => {
-    const t = teamRepo();
-    write(join(t, "behave.ini"), "[behave]\npaths = .nikos/assigned\n");
-    expect(doctor(t, { offline: true }).find((c) => c.name === "scenario runner")).toMatchObject({ status: "warn", found: "behave.ini has no steps/ folder of step definitions" });
-    mkdirSync(join(t, "steps"));
-    expect(doctor(t, { offline: true }).find((c) => c.name === "scenario runner")).toMatchObject({ status: "ok", found: "behave.ini" });
-  });
-});
-
-describe("doctor on a team repo with a team plan", () => {
-  it("flags the plan with the same suggestion", () => {
-    const team = teamRepo();
-    write(join(team, "planning/plan.yaml"), "name: Checkout web\nperiod: Q4 2026\nlevel: team\npillars: []\n");
-    const plan = doctor(team, { offline: true }).find((c) => c.name === "plan");
-    expect(plan).toMatchObject({ status: "warn", found: "team plan in planning/plan.yaml" });
-    expect(plan!.next).toContain("Move each key result to the department's plan");
-  });
-
-  it("says where a team repo's old story map goes", () => {
-    const team = teamRepo();
-    mkdirSync(join(team, "intent"));
-    const clash = doctor(team, { offline: true }).find((c) => c.name === "team");
-    expect(clash).toMatchObject({ status: "fail", found: "this repo has intent/ or maps/ and nikos.team.yaml: keep one" });
-    expect(clash!.next).toBe("Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>.");
   });
 });
 

@@ -3,15 +3,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { assign, unassign } from "../src/commands/assign";
 import { runMapNew, newMap } from "../src/commands/map";
+import { setState } from "../src/commands/state";
+import { validate } from "../src/commands/validate";
 import { runOp, runOps } from "../src/planning/ops";
 import { newBet } from "../src/planning/bets";
 import { newKr, checkIn } from "../src/planning/krs";
 import { hash, loadBet, loadKr } from "../src/planning/model";
 import { sync } from "../src/planning/upstream";
 import { specHash } from "../src/lib/project";
-import { commitAll, companyRepo, departmentRepo, git, groupRepo, readText, teamRepo, write } from "./planning-fixture";
+import { commitAll, companyRepo, departmentRepo, git, groupRepo, readText, write } from "./planning-fixture";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -43,10 +44,6 @@ describe("runOp: names, levels and ids", () => {
     expect(() => runOp(g, { op: "story.rename", target: { story: "pay-chk-1" }, args: { title: "x", map: "chk" } })).toThrow("'pay-chk-1' is not a story id");
   });
 
-  it("refuses every op in a team repo with the group-repo message", () => {
-    const t = teamRepo();
-    expect(() => runOp(t, { op: "checkin", target: { kr: "kr-1" }, args: { value: 1 } })).toThrow("this is a team repo: changes are made in the group repo");
-  });
 });
 
 describe("kr ops", () => {
@@ -160,19 +157,29 @@ describe("story, activity, step and release ops", () => {
     expect(after).toContain("Feature: Pay by debit card");
     expect(after.split("\n")[0]).toBe(before.split("\n")[0]);
     expect(specHash(after)).not.toBe(specHash(before));
-    expect(r.message).toContain("Team copies may show it as changed or behind");
+    expect(r.message).toBe("Renamed PAY-CHK-1");
     expect(() => runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: " " } })).toThrow("A story needs a title");
   });
 
-  it("story.remove: refuses an assigned story, and removes an unassigned one from the map", () => {
+  it("story.remove: refuses a story with work done, and removes one that hasn't started", () => {
     const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", stories: ["PAY-CHK-1"] });
-    commitAll(g, "assign");
-    expect(() => runOp(g, { op: "story.remove", target: { story: "PAY-CHK-1" }, args: { map: "chk" } })).toThrow("PAY-CHK-1 is assigned to Checkout web: unassign it first");
+    write(join(g, "maps/chk/state.yaml"), readFileSync(join(g, "maps/chk/state.yaml"), "utf8").replace("PAY-CHK-1: { status: todo }", "PAY-CHK-1: { status: done }"));
+    expect(() => runOp(g, { op: "story.remove", target: { story: "PAY-CHK-1" }, args: { map: "chk" } })).toThrow("PAY-CHK-1 has work done");
     runOp(g, { op: "story.remove", target: { story: "PAY-CHK-3" }, args: { map: "chk" } });
     expect(existsSync(join(g, "maps/chk/features/confirm/see-receipt.feature"))).toBe(false);
     expect(readText(g, "maps/chk/storymap.yaml")).not.toContain("PAY-CHK-3");
     expect(readText(g, "maps/chk/state.yaml")).not.toContain("PAY-CHK-3");
+  });
+
+  it("story.rename and story.remove keep delivery.yaml current, so validate passes straight after them", () => {
+    const g = groupRepo("PAY");
+    const deliveryErrors = () => validate(g, "chk").errors.filter((e) => e.file === "delivery.yaml");
+    // A story in progress has a proof, which a rename makes behind.
+    setState("PAY-CHK-1", "in_progress", { dir: g });
+    runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay by debit card" } });
+    expect(deliveryErrors()).toEqual([]);
+    runOp(g, { op: "story.remove", target: { story: "PAY-CHK-3" }, args: { map: "chk" } });
+    expect(deliveryErrors()).toEqual([]);
   });
 
   it("activity.rename and step.rename: refuse an unknown id, and rename a known one", () => {
@@ -210,26 +217,6 @@ describe("story, activity, step and release ops", () => {
     expect(dry.results[0].ok).toBe(true);
     expect(dry.changes.has("maps/chk/storymap.yaml")).toBe(true);
     expect(readText(g, "maps/chk/storymap.yaml")).toBe(before);
-  });
-});
-
-describe("assign ops", () => {
-  it("unassign: refuses a story the team doesn't hold, and refuses a done one", () => {
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", stories: ["PAY-CHK-1"] });
-    expect(() => runOp(g, { op: "unassign", target: { team: "acme/checkout-web" }, args: { map: "chk", stories: ["PAY-CHK-3"] } })).toThrow("PAY-CHK-3 is not assigned to Checkout web");
-    assign(g, "Group", { repo: "." });
-    write(join(g, "maps/chk/state.yaml"), readFileSync(join(g, "maps/chk/state.yaml"), "utf8").replace("PAY-CHK-1: { status: todo }", "PAY-CHK-1: { status: done }"));
-    expect(() => unassign(g, { team: ".", stories: ["PAY-CHK-1"] })).toThrow("PAY-CHK-1 is done and held by Group: assign won't move a done story");
-  });
-
-  it("unassign: takes an unfinished story back and keeps the rest of the part", () => {
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", stories: ["PAY-CHK-1", "PAY-CHK-2"] });
-    const r = runOp(g, { op: "unassign", target: { team: "acme/checkout-web" }, args: { map: "chk", stories: ["PAY-CHK-2"] } });
-    expect(r.message).toBe("Took 1 story from Checkout web");
-    expect(readText(g, "maps/chk/assignments.yaml")).toContain("PAY-CHK-1");
-    expect(readText(g, "maps/chk/assignments.yaml")).not.toContain("PAY-CHK-2");
   });
 });
 
@@ -301,21 +288,6 @@ describe("cleanup", () => {
   it("an argument the op doesn't read is refused, not dropped", () => {
     const g = groupRepo("PAY");
     expect(() => runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay", titel: "Oops" } })).toThrow("'titel' isn't an argument of story.rename");
-  });
-
-  it("an empty selector list means the whole part, as the form's blank field says", () => {
-    const g = groupRepo("PAY");
-    const r = runOp(g, { op: "assign", target: { team: "acme/checkout-web" }, args: { name: "Checkout web", map: "chk", releases: [] } });
-    expect(r.message).toMatch(/now has [1-9]\d* stor/);
-  });
-
-  it("renaming a story that its team has finished needs a confirm, even when the team's copy isn't fetched", () => {
-    const g = groupRepo("PAY");
-    assign(g, "Checkout web", { repo: "acme/checkout-web", stories: ["PAY-CHK-1"] });
-    write(join(g, "maps/chk/state.yaml"), readFileSync(join(g, "maps/chk/state.yaml"), "utf8").replace("PAY-CHK-1: { status: todo }", "PAY-CHK-1: { status: done }"));
-    expect(() => runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay" } })).toThrow("is done in its team's copy");
-    runOp(g, { op: "story.rename", target: { story: "PAY-CHK-1" }, args: { map: "chk", title: "Pay", confirm: true } });
-    expect(readText(g, "maps/chk/storymap.yaml")).toContain("Pay");
   });
 
   it("a downstream.add in a dry run changes nothing on disk, and its change set lists downstream.yaml", () => {

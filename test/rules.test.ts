@@ -13,8 +13,6 @@ const table: [string, unknown[]][] = [
   ["idProblem", ["story", "PAY-CHK-12"]],
   ["idProblem", ["story", "pay-chk-12"]],
   ["idProblem", ["activity", "Pay"]],
-  ["idProblem", ["team", "../x"]],
-  ["idProblem", ["team", "acme/checkout-web"]],
   ["idProblem", ["release", "one"]],
   ["titleProblem", ["kr", "   "]],
   ["titleProblem", ["story", ""]],

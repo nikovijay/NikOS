@@ -10,7 +10,7 @@ const schemaDir = [join(here, "../../schemas"), join(here, "../schemas")].find((
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const compiled = new Map<string, ValidateFunction>();
 
-/** The validator for one schema file in schemas/, e.g. "team.schema.json". */
+/** The validator for one schema file in schemas/, e.g. "storymap.schema.json". */
 export function checkerFor(name: string): ValidateFunction {
   const cached = compiled.get(name);
   if (cached) return cached;

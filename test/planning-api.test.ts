@@ -11,7 +11,7 @@ import { newKr } from "../src/planning/krs";
 import { hash, loadBet, loadKr } from "../src/planning/model";
 import { startServer, type RunningServer } from "../src/planning/server";
 import type { Runner } from "../src/lib/git";
-import { groupRepo, readText, teamRepo } from "./planning-fixture";
+import { groupRepo, readText } from "./planning-fixture";
 
 let running: RunningServer[] = [];
 afterEach(async () => {
@@ -146,20 +146,6 @@ describe("POST /api/op", () => {
     }
     const pending = await raw(srv, "GET", "/api/pending", { host: `127.0.0.1:${srv.port}` });
     expect(pending.status).toBe(403);
-  });
-});
-
-describe("the legacy saves go through the same checks", () => {
-  it("a legacy checkin or bet save on a team repo is refused, and writes nothing", async () => {
-    const team = teamRepo();
-    mkdirSync(join(team, "planning", "bets"), { recursive: true });
-    writeFileSync(join(team, "planning", "bets", "faster-checkout.md"), "---\nid: faster-checkout\nowner: Team\nhypothesis: Faster checkout pays\n---\n");
-    const srv = await start(team);
-    const before = readFileSync(join(team, "planning", "bets", "faster-checkout.md"), "utf8");
-    const res = await raw(srv, "POST", "/api/bet", { host: `127.0.0.1:${srv.port}`, "content-type": "application/json", "x-nikos-token": srv.token }, { id: "faster-checkout", expect: "0000000000000000", fields: { owner: "Other" } });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe("this is a team repo: changes are made in the group repo");
-    expect(readFileSync(join(team, "planning", "bets", "faster-checkout.md"), "utf8")).toBe(before);
   });
 });
 

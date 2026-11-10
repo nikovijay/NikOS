@@ -9,7 +9,6 @@ import { resolveSettings } from "../lib/settings.js";
 import { join, resolve } from "node:path";
 import { findIntentDir, isDone } from "../lib/project.js";
 import { mapDirs, resolveStoryMap, mapFlag } from "../lib/maps.js";
-import { isTeamRepo } from "../lib/team.js";
 import { storyMapOf, type MapStory } from "./map.js";
 import { next } from "./next.js";
 import { validate, validateGroup } from "./validate.js";
@@ -92,14 +91,14 @@ function groupSuggestion(dir: string, maps: string[]): Suggestion {
   const options = planningOptions(dir);
   const problems = validateGroup(dir).errors.length;
   if (problems) options.unshift({ label: `Fix the ${problems} ${problems === 1 ? "problem" : "problems"} in maps/`, do: "Run nikos validate and fix each error it lists." });
-  options.push({ label: "See each team's status on the maps", do: "Run nikos map status for each map and summarise who has what, and what's done and approved." });
+  options.push({ label: "See each map's status", do: "Run nikos map status for each map and summarise what's done and approved, and what needs attention." });
   options.push({ label: `Pick a story map to work on (${list(ids)})`, do: "Ask which map, then run nikos suggest --map <id> for that map's options." });
   return { summary: `${ids.length} story maps: ${parts.join(" · ")}`, options: options.slice(0, MAX) };
 }
 
 export function suggest(dir: string, mapId?: string): Suggestion {
   const maps = mapDirs(dir);
-  if (!mapId && maps.length > 1 && !isTeamRepo(dir)) return groupSuggestion(dir, maps);
+  if (!mapId && maps.length > 1) return groupSuggestion(dir, maps);
   const intentDir = resolveStoryMap(dir, mapId).dir;
   if (!store().exists(join(intentDir, "storymap.yaml"))) {
     if (store().exists(join(dir, "planning", "plan.yaml"))) return planSuggestion(dir);

@@ -16,12 +16,9 @@ import { loadPlan } from "../planning/model.js";
 import { downstreamEntries } from "../planning/rollout.js";
 import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
-import { validate, validateGroup, validateTeam } from "./validate.js";
-import { mapDirs, ownMapsOf } from "../lib/maps.js";
-import { copyDirOf, isTeamRepo, openTeam, storyMapClash, TEAM_FILE, teamOptedIn, type TeamFile } from "../lib/team.js";
+import { validate, validateGroup } from "./validate.js";
+import { mapDirs } from "../lib/maps.js";
 
-/** What a team plan's check says, in every repo it shows up in. */
-const TEAM_PLAN_FOUND = "team plan in planning/plan.yaml";
 const TEAM_PLAN_NEXT = "Team plans are going away. Move each key result to the department's plan, or rewrite it as a bet aimed at a department key result (krs: <department repo>#<kr-id>). Nothing is deleted.";
 /** The migrate hint, with this repo's own ids: the map's key, and the group key migrate suggests (from the folder name). */
 const migrateNext = (root: string, intent: string) => {
@@ -35,7 +32,7 @@ const migrateNext = (root: string, intent: string) => {
   return `nikos migrate maps moves it under a group plan. Story ids without the group key stop it unless you pass --rename-ids (${key}-1 becomes ${keyFor(basename(resolve(root)))}-${key}-1). Nothing moves until you confirm.`;
 };
 /** The plan's level, or undefined when planning/plan.yaml doesn't parse: the file's own checks say so, and the rest of doctor still runs. */
-// The level in planning/plan.yaml only: a team repo with no plan.yaml has no plan level (levelOf says team for it).
+// The level in planning/plan.yaml only.
 const planLevel = (root: string) => {
   try {
     return loadPlan(root)?.level;
@@ -44,10 +41,6 @@ const planLevel = (root: string) => {
   }
 };
 import { read } from "../lib/project.js";
-import { storyFiles } from "../lib/state-files.js";
-import { groupStatus } from "../team/sync.js";
-import { groupMaps, readTeamIndex, short } from "../team/status.js";
-import { resolveSettingsDetailed } from "../lib/settings.js";
 
 export interface Check {
   name: string;
@@ -66,21 +59,16 @@ const codeowners = (root: string) => ["CODEOWNERS", ".github/CODEOWNERS", ".gitl
 export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
-  if (isTeamRepo(root)) {
-    teamChecks(root, add, opts);
-    return checks;
-  }
   const intent = findIntentDir(root);
   const planOnly = isPlanOnly(root);
   const maps = mapDirs(root).length;
   if (planOnly) planChecks(root, add);
   else if (maps) {
     planChecks(root, add);
-    teamStatusChecks(root, add);
     const v = validateGroup(root);
     const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
     if (runner && !runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "warn", found: `${runner} doesn't list the story's features folder`, next: "Your runner config does not list the story's features folder. Add it, or run nikos verify setup on a fresh config." });
-    // A group that is its own team (or just runs validate in CI) keeps the runner and CI lines it had as an intent/ repo.
+    // A group keeps the runner and CI lines it had as an intent/ repo.
     if (runner && runsFolder(root, runner, "maps/")) add({ name: "scenario runner", status: "ok", found: runner });
     const ci = CI_FILES.find((f) => existsSync(join(root, f)));
     add(ci ? { name: "CI", status: "ok", found: ci } : { name: "CI", status: "warn", found: "validate and scenarios don't run on pull or merge requests", next: "Run nikos ci setup, so every pull or merge request runs the checks" });
@@ -195,131 +183,6 @@ const runsFolder = (root: string, file: string, folder: string) => {
     .join("\n");
   return !/\bpaths\b/.test(live) || live.includes(folder);
 };
-
-/**
- * A group with assignments: each assigned team's status fetch. A team never fetched, or whose last
- * fetch failed, is a warning; a group with no assignments gets no lines here.
- */
-function teamStatusChecks(root: string, add: (c: Check) => void) {
-  let teams = new Map<string, string>();
-  try {
-    for (const m of groupMaps(root)) for (const a of m.list) if (a.repo !== ".") teams.set(a.repo, a.team);
-  } catch {
-    return; // validate reports an assignments file that doesn't read
-  }
-  if (!teams.size) return;
-  const index = readTeamIndex(root);
-  for (const [repo, team] of teams) {
-    const c = index.teams[repo];
-    if (!c?.commit && !c?.attempted) add({ name: `team ${team}`, status: "warn", found: `${team} has never been fetched`, next: "Run nikos map status" });
-    else if (!c.ok) add({ name: `team ${team}`, status: "warn", found: `${team}'s last fetch failed: ${c.error ?? "unknown error"}`, next: "Check the team's repo is reachable, then run nikos map status" });
-    else add({ name: `team ${team}`, status: "ok", found: `team status last fetched ${c.fetched} at ${short(c.commit)}` });
-  }
-}
-
-/**
- * A team repo: its team file, each group it takes work from (synced, moved on, or not yet), the
- * runner's glob for the assigned copies, the ignore rule, and a CODEOWNERS suggestion for the lead.
- */
-function teamChecks(root: string, add: (c: Check) => void, opts: { offline?: boolean }) {
-  let team: TeamFile | undefined;
-  try {
-    team = openTeam(root);
-  } catch (err) {
-    add({ name: "team", status: "fail", found: (err as Error).message.replace(`${TEAM_FILE}: `, ""), next: `Fix ${TEAM_FILE}` });
-  }
-  const clash = storyMapClash(root);
-  if (clash) add({ name: "team", status: "fail", found: clash, next: "Move intent/ into this team's maps/<key>/ with nikos migrate maps --team-key <KEY> --home <repo>." });
-  if (planLevel(root) === "team") add({ name: "plan", status: "warn", found: TEAM_PLAN_FOUND, next: TEAM_PLAN_NEXT });
-  if (team && !clash) add({ name: "team", status: "ok", found: `"${team.name}", ${count(team.members.length, "member")}, ${count(team.groups.length, "group")}` });
-  // The team's own maps (maps/<key>/) are checked as one: their stories, bets, key and folder, and the team's status.
-  const own = ownMapsOf(root);
-  if (own.length && !clash) {
-    const v = validateTeam(root, {});
-    const mine = v.errors.filter((e) => e.file.startsWith("maps/"));
-    add({ name: "maps", status: mine.length ? "fail" : "ok", found: `${count(own.length, "own map")}${mine.length ? `, ${mine.length} problem${mine.length === 1 ? "" : "s"}` : ""}`, next: mine.length ? "Fix the problems nikos validate lists" : undefined });
-  }
-  // A team's own maps' assignments are the lead's to review: a suggestion for CODEOWNERS, never written (rule 7, D4).
-  if (own.length && !clash) {
-    const owners = codeowners(root);
-    const guarded = !!owners && /assignments\.yaml/.test(read(owners));
-    const lead = homeLead(root, team?.home) ?? "@<home-lead>";
-    const rules = own.map((m) => `maps/${m.id}/assignments.yaml`).join(" ");
-    add({ name: "assignments", status: "ok", found: `${count(own.length, "own map")} with its assignments in maps/<key>/assignments.yaml`, ...(!guarded ? { next: `Suggest: add "${rules} ${lead}" to CODEOWNERS, so the home group's lead reviews every change to a share` } : {}) });
-  }
-  // A team that joins a plan needs a key and exactly one home among the plans it joined (amendment, rule 1).
-  // The home checks are for a team that has opted in: a 0.3.0 team with a joined plan and no home reads as it did.
-  if (team && teamOptedIn(root)) {
-    const joined = (() => {
-      try {
-        return upstreamEntries(root).map((u) => u.repo);
-      } catch {
-        return [];
-      }
-    })();
-    if (joined.length && !team.home) add({ name: "home", status: "warn", found: "joins a plan but has no home", next: "Make one of the plans it joined its home: nikos join <plan> --home" });
-    if (team.home && !team.key) add({ name: "key", status: "warn", found: "has a home but no key", next: `Add key: <KEY> to ${TEAM_FILE}` });
-    if (team.home && !joined.includes(team.home) && !team.groups.some((g) => g.repo === team.home)) add({ name: "home", status: "warn", found: `${team.home} is not a plan the team joined`, next: `Join it with nikos join ${team.home} --home` });
-  }
-  if (team) {
-    // A team that owns its maps needn't take work from anyone.
-    if (!team.groups.length && !ownMapsOf(root).length) add({ name: "groups", status: "warn", found: "takes work from no group yet", next: "Join one with nikos team join <group repo>" });
-    for (const g of team.groups) {
-      const st = groupStatus(root, g, { remote: !opts.offline });
-      if (!st.synced) {
-        add({ name: `group ${g.repo}`, status: "warn", found: "not synced yet", next: "Run nikos sync" });
-        continue;
-      }
-      if (st.moved) add({ name: `group ${g.repo}`, status: "warn", found: `moved on since ${st.entry!.commit.slice(0, 7)} (synced ${st.entry!.synced})`, next: "Run nikos sync" });
-      else add({ name: `group ${g.repo}`, status: "ok", found: `synced ${st.entry!.commit.slice(0, 7)} on ${st.entry!.synced}` });
-    }
-  }
-
-  const runner = RUNNER_FILES.find((f) => existsSync(join(root, f)));
-  if (!runner) add({ name: "scenario runner", status: "warn", found: "no runner config yet", next: "Set one up with nikos verify setup" });
-  else if (runner !== "behave.ini" && !read(join(root, runner)).includes(".nikos/assigned")) {
-    // behave takes its folders from nikos verify, which passes .nikos/assigned when it's there.
-    add({ name: "scenario runner", status: "warn", found: `${runner} doesn't run the assigned stories`, next: `Add ".nikos/assigned/**/features/**/*.feature" to paths in ${runner}` });
-  } else {
-    // A team keeps its own step definitions: python's in steps/, cucumber's in test/steps (the template's import).
-    const steps = runner === "behave.ini" ? "steps" : "test/steps";
-    add(
-      existsSync(join(root, steps))
-        ? { name: "scenario runner", status: "ok", found: runner }
-        : { name: "scenario runner", status: "warn", found: `${runner} has no ${steps}/ folder of step definitions`, next: `Add the step definitions in ${steps}/: a team keeps its own, and the runner reads them there` },
-    );
-  }
-
-  const ignore = existsSync(join(root, ".gitignore")) && /^\/?\.nikos\/?$/m.test(read(join(root, ".gitignore")));
-  add(ignore ? { name: "copies", status: "ok", found: ".nikos/ is gitignored" } : { name: "copies", status: "warn", found: ".nikos/ isn't gitignored", next: "Run nikos sync to add it" });
-
-  const approvals = storyFiles(join(root, "approvals")).length;
-  const lead = (team?.members ?? []).find((m) => /lead/i.test(m.role ?? "") && m.handle);
-  const owners = codeowners(root);
-  const guarded = !!owners && /approvals(\/|\.yaml|$)/m.test(read(owners));
-  add({ name: "approvals", status: "ok", found: `${count(approvals, "delivery approval")} in approvals/`, ...(lead && !guarded ? { next: `Suggest: add "/approvals/ @${lead.handle}" to CODEOWNERS, so a delivery approval needs the lead's review` } : {}) });
-
-  // Locks from the group and company copies that the team's settings take (see lib/settings.ts).
-  for (const problem of resolveSettingsDetailed(root).problems) add({ name: "settings", status: "warn", found: problem, next: "Run nikos sync, or fix the group's nikos.settings.yaml" });
-
-  const stale = staleCliWarning();
-  if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
-}
-
-/**
- * The lead handle of a team's home plan, from the plan's copy the team reads (a group it takes work
- * from, or a plan it joined). Undefined when the copy has none, so doctor shows a placeholder.
- */
-function homeLead(root: string, home: string | undefined): string | undefined {
-  if (!home) return undefined;
-  for (const dir of [copyDirOf(root, home), join(root, ".nikos", "upstream", ...home.split("/"))]) {
-    const p = join(dir, "planning", "plan.yaml");
-    if (!existsSync(p)) continue;
-    const lead = (parse(read(p)) as { lead?: unknown } | null)?.lead;
-    if (typeof lead === "string" && lead) return lead.startsWith("@") ? lead : `@${lead}`;
-  }
-  return undefined;
-}
 
 /** A company or department plan: its plan, key results and bets, and its decisions. No story map is expected. */
 function planChecks(root: string, add: (c: Check) => void) {

@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { companyInit } from "../src/commands/start";
 import { formatRollout, rollout } from "../src/planning/rollout";
 import { writeDeliverySummary, type DeliverySummary } from "../src/lib/delivery-summary";
-import { groupRepo, git, write, commitAll } from "./team-fixture";
-import { assign } from "../src/commands/assign";
+import { groupRepo, git, write, commitAll } from "./repo-fixture";
 
 const NOW = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
@@ -22,7 +21,8 @@ function setup(summary: DeliverySummary["stories"]) {
   git(grp, "remote", "add", "origin", "https://github.com/acme/payments-group.git");
   write(join(grp, "maps/hr/storymap.yaml"), "format_version: 1\nproject: hr\nkey: HR\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [PAY-HR-1]\n");
   write(join(grp, "maps/hr/state.yaml"), "format_version: 1\nstories:\n  PAY-HR-1: { status: done }\n");
-  writeDeliverySummary(join(grp, "maps/chk"), { format_version: 1, map: "chk", owner: "acme/payments-group", read_at: NOW, stories: summary });
+  writeDeliverySummary(join(grp, "maps/hr"), { format_version: 1, map: "hr", owner: "PAY", read_at: NOW, stories: [{ id: "PAY-HR-1", status: "done", approval: "none", read_at: NOW }] });
+  writeDeliverySummary(join(grp, "maps/chk"), { format_version: 1, map: "chk", owner: "PAY", read_at: NOW, stories: summary });
   commitAll(grp, "map and summary");
 
   write(join(co, "planning/downstream.yaml"), `- name: Payments\n  repo: acme/payments-group\n  url: ${grp}\n`);
@@ -32,7 +32,6 @@ function setup(summary: DeliverySummary["stories"]) {
 
 const story = (id: string, status: string, approval: "none" | "approved" = "none") => ({
   id,
-  team: "acme/checkout-web",
   status,
   approval,
   ...(approval === "approved" ? { approved_by: "Ana Example" } : {}),
@@ -65,32 +64,4 @@ describe("a rollout's delivery from the owner's summaries", () => {
     expect(bet.delivery).toMatch(/Building, 2 of 4 done, read today \(\d{4}-\d{2}-\d{2}\); 1 with no summary yet: run nikos map status in acme\/payments-group/);
   });
 
-  it("a rollout never reads a team's live status/: a team's own map shows no next story and no blocker from it", () => {
-    const { co, grp } = setup([story("PAY-CHK-1", "done", "approved")]);
-    // A team that owns a map (WEB-INB) with its own status at its root: in progress, and blocked.
-    const team = mkdtempSync(join(tmpdir(), "nikos-team-live-"));
-    git(team, "init", "-q", "-b", "main");
-    write(join(team, "nikos.team.yaml"), "format_version: 2\nname: Web team\nrepo: acme/web-team\nkey: WEB\nhome: acme/payments-group\ngroups: []\nmembers: []\n");
-    write(join(team, "maps/inb/storymap.yaml"), "format_version: 1\nproject: inb\nkey: INB\nbet: faster-checkout\nactivities: []\nreleases:\n  - number: 1\n    title: First\n    stories: [WEB-INB-1, WEB-INB-2]\n");
-    write(join(team, "status/WEB-INB-1.yaml"), "status: in_progress\nblockers: [waiting on design]\n");
-    write(join(team, "status/WEB-INB-2.yaml"), "status: todo\n");
-    commitAll(team, "team");
-    write(join(co, "planning/downstream.yaml"), `- name: Payments\n  repo: acme/payments-group\n  url: ${grp}\n- name: Web team\n  repo: acme/web-team\n  url: ${team}\n`);
-    commitAll(co, "downstream with team");
-    const teamPlan = rollout(co).plans.find((p) => p.repo === "acme/web-team")!;
-    expect(teamPlan.next).toBeUndefined();
-    expect(teamPlan.blockers).toEqual([]);
-    expect(formatRollout(rollout(co))).not.toMatch(/waiting on design|next: WEB-INB/);
-  });
-
-  it("a team that was never fetched changes nothing above, and nothing is fetched for it", () => {
-    const { co, grp } = setup([story("PAY-CHK-1", "done", "approved"), story("PAY-CHK-2", "in_progress"), story("PAY-CHK-3", "todo")]);
-    // The group assigns chk to a team whose repo was never created: the owner's summary still says the delivery.
-    assign(grp, "Checkout web", { repo: "acme/no-such-team", releases: [1], map: "chk" });
-    commitAll(grp, "assign");
-    const r = rollout(co);
-    const payments = r.plans.find((p) => p.name === "Payments")!;
-    expect(payments.delivery).toMatchObject({ stories: 4, done: 2, approved: 1, inProgress: 1 });
-    expect(JSON.stringify(r)).not.toMatch(/no-such-team/);
-  });
 });

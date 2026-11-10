@@ -1,9 +1,10 @@
-// Fixtures for team tests: a group repo with one map (PAY-CHK, three stories in two releases), and
-// a team repo that takes work from it. Both are real git repos, so sync and ls-remote run for real.
+// Fixtures for the tests: a group repo with one map (PAY-CHK, three stories in two releases), and a
+// plain code repo with an origin. Both are real git repos, so sync and ls-remote run for real.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { writeMapSummary } from "../src/lib/map-summary";
 
 // Commands under test commit with the person's own git identity. CI machines have none.
 process.env.GIT_AUTHOR_NAME ??= "Ada Lovelace";
@@ -62,21 +63,22 @@ export function groupRepo(key = "PAY", dir = mkdtempSync(join(tmpdir(), "nikos-g
   write(join(dir, "maps/chk/features/pay/pay-by-wallet.feature"), feature(id(2), "pay", 1, "Pay by wallet"));
   write(join(dir, "maps/chk/features/confirm/see-receipt.feature"), feature(id(3), "confirm", 2, "See the receipt"));
   write(join(dir, "maps/chk/state.yaml"), `format_version: 1\nstories:\n  ${id(1)}: { status: todo }\n  ${id(2)}: { status: todo }\n  ${id(3)}: { status: todo }\n`);
+  // The map's delivery.yaml, as nikos map status writes it, so validate finds it current.
+  writeMapSummary(dir, join(dir, "maps/chk"));
   git(dir, "init", "-q", "-b", "main");
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "group");
   return dir;
 }
 
-/** A team repo: a git repo with an origin, and nikos.team.yaml naming the team (not yet joined to anything). */
-export function teamRepo(repo = "acme/checkout-web", name = "Checkout web"): string {
-  const dir = mkdtempSync(join(tmpdir(), "nikos-team-"));
+/** A code repo: a git repo with an origin, and no planning or story map. */
+export function codeRepo(repo = "acme/checkout-web"): string {
+  const dir = mkdtempSync(join(tmpdir(), "nikos-code-"));
   write(join(dir, "package.json"), '{"name":"checkout-web","private":true}\n');
-  write(join(dir, "nikos.team.yaml"), `format_version: 1\nname: ${name}\nrepo: ${repo}\ngroups: []\nmembers: []\n`);
   git(dir, "init", "-q", "-b", "main");
   git(dir, "remote", "add", "origin", `https://github.com/${repo}.git`);
   git(dir, "add", ".");
-  git(dir, "commit", "-q", "-m", "team");
+  git(dir, "commit", "-q", "-m", "code");
   return dir;
 }
 

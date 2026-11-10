@@ -1,12 +1,11 @@
-// Keys across the chain (amendment D5). A group's or team's key names its story ids, so two repos in
+// Keys across the chain (amendment D5). A group's or department's key names its story ids, so two repos in
 // one chain can't share one. Joining refuses a clash it can see, and the rollout reports the ones
-// among the copies below it. A key is read from a copy's planning/plan.yaml, else its nikos.team.yaml.
+// among the copies below it. A key is read from a copy's planning/plan.yaml.
 import { dirname, join, relative, sep } from "node:path";
 import { keyOf } from "./maps.js";
 import { walk } from "./project.js";
-import { TEAM_FILE } from "./team.js";
 
-/** A key for a group, team or map (D6): capital letters and digits, starting with a letter, up to 10. */
+/** A key for a group, plan or map (D6): capital letters and digits, starting with a letter, up to 10. */
 export const KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 
 export interface CopyKey {
@@ -17,7 +16,7 @@ export interface CopyKey {
 
 /** Each copy under a .nikos/ folder that names a key, with its repo path. Scratch folders (.fetch) are skipped. */
 export function copyKeys(cacheDir: string): CopyKey[] {
-  const roots = [...walk(cacheDir, join("planning", "plan.yaml")).map((p) => dirname(dirname(p))), ...walk(cacheDir, TEAM_FILE).map((p) => dirname(p))];
+  const roots = walk(cacheDir, join("planning", "plan.yaml")).map((p) => dirname(dirname(p)));
   const out: CopyKey[] = [];
   for (const dir of new Set(roots)) {
     if (dir.includes(`${sep}.fetch`)) continue;
@@ -29,10 +28,10 @@ export function copyKeys(cacheDir: string): CopyKey[] {
 
 /**
  * Why a repo's key can't be used in this chain, or undefined. self is the joining repo: its own key
- * (named as label: "team" or "plan") and each copy in cacheDirs, other than the repo's own copy, must differ.
+ * and each copy in cacheDirs, other than the repo's own copy, must differ.
  */
-export function keyClash(self: string, label: "team" | "plan", repo: string, key: string, cacheDirs: string[]): string | undefined {
-  if (keyOf(self) === key) return `${repo} uses key ${key}, which this ${label} uses: give one of them another key`;
+export function keyClash(self: string, repo: string, key: string, cacheDirs: string[]): string | undefined {
+  if (keyOf(self) === key) return `${repo} uses key ${key}, which this plan uses: give one of them another key`;
   const other = cacheDirs.flatMap(copyKeys).find((c) => c.key === key && c.repo !== repo);
   if (other) return `${repo} uses key ${key}, which ${other.repo} already uses: give one of them another key`;
   return undefined;

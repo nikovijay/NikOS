@@ -6,6 +6,17 @@
 
 - **nikOS Plan: the company's plan in one repo.** `nikos plan init` makes a planning repo with a folder for each level: `planning/company/`, `planning/departments/<id>/`, `planning/groups/<id>/` and `planning/teams/<KEY>/`. Add them with `nikos plan add department|group|team`. Key results, bets, check-ins, target changes and reviews work as `nikos planning` does, in the area named with `--in` or the area folder you're in. The company plans by year and departments by quarter: a department's key result needs `--period 2027-Q1` inside the company's year, and is due at the quarter's end. Ids are unique within the company, so links inside the repo are just ids. A link goes up a level, never down. Settings come down the folders: each area's `settings.yaml` changes what nobody above it locked. `nikos plan status` and `nikos plan validate` cover the whole company. See `docs/plan.md`. This is the first of the changes in `docs/rfcs/plan-and-spec.md`. The dashboard, and delivery from code repos, come in later releases.
 
+### Changed
+
+- **This release changes the layout.** Each story map lives in the repo that builds it, under `maps/<key>/`, and its `storymap.yaml` can name an `owner` (a team key such as `WEB`). Its story ids are then `WEB-CHK-3`: `nikos map new --owner <KEY>` sets it, and a map with no owner takes the group key as before. A map's `bet:` is optional. A map's state and approvals are kept in its own folder.
+- `nikos map status` is local: it reads the map's own files, with no fetch, no `--offline` and no team section. It writes `maps/<key>/delivery.yaml` for each map, and the plans above read that committed file. `nikos state set`, `approve`, `map new`, `story new` and `nikos migrate maps` keep `delivery.yaml` current too.
+- `nikos validate` fails when a map's `delivery.yaml` is missing or no longer matches its files, such as after a hand edit. Run `nikos map status` and commit the result.
+- In a group's repo, approval now checks the code it was tested at, as a team's repo did: `nikos approve` refuses a story whose code changed since it was tested, or with uncommitted code, and `validate` warns about it. Approval lapses on a code change in group repos from this release. A story done before this release has no recorded test commit, so approve refuses it until its scenarios run again: `nikos state set <id> needs_rework`, then `in_progress`, `done`, and `approve`.
+
+### Removed
+
+- `nikos assign`, `nikos sync`, `nikos team` (`init`, `join`, `member`, `show`), `nikos.team.yaml`, `assignments.yaml`, `.nikos/assigned/` and `.nikos/teams/`, and the team `status/` and `approvals/` folders, are gone. Nothing migrates them, and nikOS ignores those files from this release. To keep a team's story map, move it by hand into `maps/<key>/` in the repo that builds it, as `intent/` moves. The company plan's team level (`nikos plan add team`) is unchanged.
+
 ## 0.4.3 (2026-11-09)
 
 ### Changed

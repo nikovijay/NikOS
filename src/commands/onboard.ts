@@ -1,5 +1,5 @@
 // The first-run wizard: `nikos start` in a terminal, with no --name. It asks what's being set up
-// (a company, department or group plan, a team repo that joins a group, or a product's own repo,
+// (a company, department or group plan, or a product's own repo,
 // with or without a company plan), where, and what to call it, one question at a time with a
 // suggested answer, then runs the matching setup. Agents never see it: they pass flags, and the
 // onboard playbook asks the same questions in chat.
@@ -9,16 +9,13 @@ import { homedir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 import { keyFor, slugify } from "./init.js";
 import { companyInit, start } from "./start.js";
-import { teamInit, teamJoin } from "./team.js";
 import { cliCommand, staleCliWarning } from "../lib/cli-version.js";
-import { ownRepo } from "../lib/git.js";
-import { TEAM_FILE } from "../lib/team.js";
 import { KEY } from "../lib/keys.js";
 
 /** Ask one question; an empty answer takes the suggestion. */
 export type Ask = (question: string, suggestion?: string) => Promise<string>;
-/** company, department and group are plans; team is a team repo that joins a group; product is one repo with its own story map; both is a company plan beside a product. */
-export type Kind = "company" | "department" | "group" | "team" | "product" | "both";
+/** company, department and group are plans; product is one repo with its own story map; both is a company plan beside a product. */
+export type Kind = "company" | "department" | "group" | "product" | "both";
 
 export interface OnboardAnswers {
   kind: Kind;
@@ -30,14 +27,10 @@ export interface OnboardAnswers {
   departments?: string[];
   /** A company with groups listed directly, when no departments sit between it and the groups. */
   groupsDirect?: boolean;
-  /** A group that is its own team: assigned with --repo . */
-  sameTeam?: boolean;
-  /** A team repo's group repo, to join now. */
-  group?: string;
   gitInit: boolean;
 }
 
-/** The answers the menu takes: 1 to 6, the word for each, and the older names. `team` is the old name of a product. */
+/** The answers the menu takes: 1 to 5, and the word for each. */
 const KINDS: Record<string, Kind> = {
   "1": "company",
   company: "company",
@@ -45,13 +38,9 @@ const KINDS: Record<string, Kind> = {
   department: "department",
   "3": "group",
   group: "group",
-  "4": "team",
-  repo: "team",
-  "team repo": "team",
-  "5": "product",
+  "4": "product",
   product: "product",
-  team: "product",
-  "6": "both",
+  "5": "both",
   both: "both",
 };
 
@@ -107,11 +96,10 @@ const MENU = [
   "What are you setting up?",
   "  1  A company plan: the company's goals for a period. Departments or groups plan under it.",
   "  2  A department plan: a department's goals, under a company plan.",
-  "  3  A group: bets, and the story maps that deliver them. It can be its own team.",
-  "  4  A team repo that takes its work from a group.",
-  "  5  One product in one repo, with its own story map. Pick this if you're not sure.",
-  "  6  A company plan and a product, in the same repo.",
-  "Type a number from 1 to 6",
+  "  3  A group: bets, and the story maps that deliver them.",
+  "  4  One product in one repo, with its own story map. Pick this if you're not sure.",
+  "  5  A company plan and a product, in the same repo.",
+  "Type a number from 1 to 5",
 ].join("\n");
 
 /** What each choice makes, for the summary before anything is written. */
@@ -119,23 +107,17 @@ const WHAT: Record<Kind, string> = {
   company: "A company plan",
   department: "A department plan",
   group: "A group plan",
-  team: "A team repo",
   product: "A product with its own story map",
   both: "A company plan and a product story map",
 };
 
 export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Promise<OnboardAnswers> {
-  const kind = KINDS[(await askUntil(ask, MENU, "5", (a) => (KINDS[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type a number from 1 to 6.`))).toLowerCase()];
-  // A team repo that already keeps a story map can't also be a team; checked before any other question.
-  if (kind === "team" && (existsSync(join(cwd, "intent")) || existsSync(join(cwd, "maps")))) {
-    throw new Error("this folder already has a story map (intent/ or maps/), and a team repo can't hold one. Pick another option, or move the map to a group repo with nikos migrate maps");
-  }
+  const kind = KINDS[(await askUntil(ask, MENU, "4", (a) => (KINDS[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type a number from 1 to 5.`))).toLowerCase()];
   const atHome = resolve(cwd) === resolve(home);
   const label = {
     company: "What's the company called?",
     department: "What's the department called?",
     group: "What's the group called?",
-    team: "What's the team called?",
     product: "What's the product called?",
     both: "What's the company called?",
   }[kind];
@@ -168,7 +150,7 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
       : kind === "group"
         ? (await askUntil(ask, "Group key: a short code that starts every story id in the group's maps, like PAY-HT-1. It's hard to change later.", keyFor(name), badKey)).toUpperCase()
         : undefined;
-  const period = kind === "team" || kind === "product" ? undefined : await askUntil(ask, "Which period are you planning? For example Q1 2027, or 2027", currentQuarter(), (a) => (a ? undefined : "It needs a period."));
+  const period = kind === "product" ? undefined : await askUntil(ask, "Which period are you planning? For example Q1 2027, or 2027", currentQuarter(), (a) => (a ? undefined : "It needs a period."));
 
   let departments: string[] | undefined;
   let groupsDirect = false;
@@ -179,8 +161,6 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
       departments = listOf(await ask("Name the groups that plan under it, separated by commas. Press Enter to skip", ""));
     }
   }
-  const sameTeam = kind === "group" ? await confirm(ask, "Will the group's own team build its stories, in this repo?", "y") : undefined;
-  const group = kind === "team" ? listOf(await ask("Which group repo does this team take work from? For example acme/checkout-group. Press Enter to skip", ""))[0] : undefined;
   const gitInit = isRepo(dir) ? false : await confirm(ask, "Make it a git repo? Git keeps the history of every change.", "y");
 
   // Say exactly what will happen, with the full path, before anything is written.
@@ -202,8 +182,6 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
     ...(period ? { period } : {}),
     ...(departments?.length ? { departments } : {}),
     ...(groupsDirect ? { groupsDirect } : {}),
-    ...(sameTeam !== undefined ? { sameTeam } : {}),
-    ...(group ? { group } : {}),
   };
 }
 
@@ -227,49 +205,33 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     const r = start(a.dir, { name: a.name, key: a.key });
     out.push(...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`));
   }
-  if (a.kind === "team") {
-    const own = ownRepo(a.dir);
-    const repo = own ?? `local/${slugify(basename(a.dir))}`;
-    teamInit(a.dir, { name: a.name, repo });
-    out.push(`✓ Made ${a.name} a team repo (${TEAM_FILE})`);
-    if (!own) next.push(`Put this repo on GitHub or GitLab. Then tell nikOS its path with ${cli} team init --repo and the path, like ${cli} team init --repo acme/${slugify(basename(a.dir))}`);
-    if (a.group) {
-      const j = teamJoin(a.dir, a.group);
-      out.push(j.unresolved ? `! Couldn't reach ${a.group} yet (${j.unresolved}). It's saved, and ${cli} sync fetches its work once it can.` : `✓ Takes work from ${a.group}`);
-    } else next.push(`Link it to its group: ${cli} team join and the group repo's path, like ${cli} team join acme/checkout-group`);
-  }
-  if (a.kind !== "product" && a.kind !== "team") {
+  if (a.kind !== "product") {
     const level = a.kind === "both" ? "company" : a.kind;
     const r = companyInit(a.dir, { name: a.name, key: a.kind === "group" ? a.key : undefined, period: a.period, departments: a.departments, level, groupsDirect: a.groupsDirect });
     const files = r.created.join(", ") || "it was already there";
     out.push(a.kind === "both" ? `✓ Wrote the company plan next to the story map (${files})` : `✓ Wrote the ${a.kind} plan (${files})`);
-    const below = a.kind === "group" ? "Teams" : a.groupsDirect ? "Groups" : "Departments";
+    const below = a.groupsDirect ? "Groups" : "Departments";
     if (a.kind === "company" || a.kind === "both") {
       next.push(r.join ? `${below} join it with: ${r.join}` : `${isRepo(a.dir) ? "Put this repo" : "Make it a git repo and put it"} on GitHub or GitLab. ${below} then join it with ${cli} join and this repo's path.`);
     }
     if (a.kind === "department") next.push(`Link it to the company plan: ${cli} join and the company plan's repo path, like ${cli} join acme/company-plan`);
     if (a.kind === "group") {
-      if (a.sameTeam) {
-        next.push(
-          `Make a bet, a story map for it, and give the map to this repo's team. Use your own names in place of faster-checkout and CHK:`,
-          `     ${cli} planning bet new faster-checkout`,
-          `     ${cli} map new --bet faster-checkout --key CHK`,
-          `     ${cli} assign "${a.name}" --repo .`,
-        );
-      } else next.push(`Teams join later: each team runs ${cli} team init in its own repo, then ${cli} team join with this repo's path.`);
+      next.push(
+        `Make a bet, and a story map for it. Use your own names in place of faster-checkout and CHK:`,
+        `     ${cli} planning bet new faster-checkout`,
+        `     ${cli} map new --bet faster-checkout --key CHK`,
+      );
       next.push(`Link it to the plan above: ${cli} join and that plan's repo path, like ${cli} join acme/payments-plan`);
     }
   }
   next.push(
     a.kind === "product" || a.kind === "both"
       ? 'Ask your coding agent to "build the first story", or to plan the product with you.'
-      : a.kind === "team"
-        ? 'Ask your coding agent to "build the next assigned story".'
-        : a.kind === "group"
+      : a.kind === "group"
           ? 'Ask your coding agent to "plan this period\'s bets for the group".'
           : 'Ask your coding agent to "plan this period\'s objectives and key results".',
   );
-  if (a.kind === "product" || a.kind === "both") next.push(`Later, if teams across several repos share story maps, ${cli} migrate maps moves this story map into a group.`);
+  if (a.kind === "product" || a.kind === "both") next.push(`Later, if several repos should share this story map, ${cli} migrate maps moves it into a group.`);
   out.push("", "Next steps:");
   let n = 0;
   for (const line of next) out.push(line.startsWith("     ") ? line : `  ${++n}. ${line}`);

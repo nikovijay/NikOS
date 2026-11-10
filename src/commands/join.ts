@@ -1,6 +1,6 @@
 // `nikos join` and `nikos settings`: link this repo to the plan above it, and see or change the
 // settings it inherits. Joining is one line in planning/upstream.yaml plus a sync; nothing in
-// the repo moves, so a team that started on its own keeps everything it has.
+// the repo moves, so a repo that started on its own keeps everything it has.
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse, parseDocument, stringify } from "yaml";
@@ -8,7 +8,6 @@ import { REPO_PATH } from "../lib/bets.js";
 import { formatSettings, resolveSettings, resolveSettingsDetailed, setSetting, type Resolved } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { keyClash } from "../lib/keys.js";
-import { isTeamRepo, openTeam, saveTeam, teamDocument, TEAM_FILE, type TeamFile } from "../lib/team.js";
 import { paths } from "../planning/model.js";
 import { readLock, sync, upstreamEntries, type SyncReport } from "../planning/upstream.js";
 
@@ -21,7 +20,7 @@ export interface JoinResult {
   settings: Resolved;
 }
 
-/** The plan a team or group is homed in, or the one it'd need to be: the entry marked home: true in its planning/upstream.yaml. */
+/** The plan a group is homed in, or the one it'd need to be: the entry marked home: true in its planning/upstream.yaml. */
 function homeIn(path: string): string | undefined {
   if (!store().exists(path)) return undefined;
   const list = parseDocument(store().read(path)).toJSON();
@@ -29,26 +28,14 @@ function homeIn(path: string): string | undefined {
   return typeof home?.repo === "string" ? home.repo : undefined;
 }
 
-/** Joining a plan from a team repo: the team has a key and no more than one home, and its first join makes its home. */
-function teamJoinProblem(team: TeamFile, repo: string, home: boolean): string | undefined {
-  if (!team.key) return `this team has no key: nikos team init --key <KEY> gives it one, before it joins a plan (capital letters and digits, e.g. WEB)`;
-  if (home && team.home && team.home !== repo) return `${team.home} is already this team's home: a team has one home`;
-  if (!team.home && !home) return "this team has no home yet: nikos join <plan> --home makes that plan its home, where its settings and locks come from";
-  return undefined;
-}
-
 /**
  * Add an upstream plan to planning/upstream.yaml (if it isn't there), sync, and resolve the settings.
- * home: this plan is the repo's home. A group marks it in planning/upstream.yaml; a team names it in nikos.team.yaml.
+ * home: this plan is the repo's home, marked in planning/upstream.yaml.
  */
 export function joinPlan(root: string, input: { repo: string; host?: string; url?: string; ref?: string; home?: boolean }): JoinResult {
   if (!REPO_PATH.test(input.repo)) throw new Error(`'${input.repo}' is not a repo path (owner/repo, or group/subgroup/project on GitLab)`);
   const path = join(root, "planning", "upstream.yaml");
-  const team = isTeamRepo(root) ? openTeam(root) : undefined;
-  if (team) {
-    const problem = teamJoinProblem(team, input.repo, !!input.home);
-    if (problem) throw new Error(problem);
-  } else if (input.home) {
+  if (input.home) {
     const other = homeIn(path);
     if (other && other !== input.repo) throw new Error(`${other} is already this plan's home: a group has one home`);
   }
@@ -68,8 +55,8 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
       throw err;
     }
   }
-  // A group's home is marked on its entry; a team's home is named in nikos.team.yaml once the plan checks out.
-  if (input.home && !team) {
+  // The home is marked on the plan's entry in planning/upstream.yaml.
+  if (input.home) {
     const doc = parseDocument(store().read(path));
     const item = (doc.contents as any).items.find((it: any) => it?.toJSON?.()?.repo === input.repo);
     if (item) item.set("home", true);
@@ -89,27 +76,11 @@ export function joinPlan(root: string, input: { repo: string; host?: string; url
   const fetched = !report.unresolved.some((u) => u.repo === input.repo);
   // Its key must be its own across the chain: this repo's, and the copies already here (amendment D5).
   const fetchedKey = fetched && store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml")))?.key : undefined;
-  // A team's copies are its own chain (.nikos/upstream) and the groups it takes work from (.nikos/assigned).
-  const copies = team ? [paths(root).cache, join(root, ".nikos", "assigned")] : [paths(root).cache];
-  const clash = typeof fetchedKey === "string" ? keyClash(root, team ? "team" : "plan", input.repo, fetchedKey, copies) : undefined;
+  const copies = [paths(root).cache];
+  const clash = typeof fetchedKey === "string" ? keyClash(root, input.repo, fetchedKey, copies) : undefined;
   if (clash) {
     undo();
     throw new Error(clash);
-  }
-  // A team's home is checked once its copy is here: a group, department or company plan, with a key that isn't the team's own.
-  if (team && input.home && fetched) {
-    const plan = store().exists(join(copy, "planning", "plan.yaml")) ? parse(store().read(join(copy, "planning", "plan.yaml"))) : undefined;
-    const problem = !["group", "department", "company"].includes(plan?.level)
-      ? `${input.repo} is not a group, department or company plan, so it can't be a team's home`
-      : plan.key === team.key ? `${input.repo} uses key ${plan.key}, which is this team's key: give one of them another key` : undefined;
-    if (problem) {
-      undo();
-      throw new Error(problem);
-    }
-    const doc = teamDocument(root);
-    doc.set("home", input.repo);
-    doc.set("format_version", 2);
-    saveTeam(root, doc);
   }
   return { repo: input.repo, added, fetched, sync: report, settings: resolveSettings(root) };
 }

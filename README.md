@@ -113,26 +113,23 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos init` | Create `intent/` in this repo |
 | `nikos company init` | Write a company plan repo that departments and teams join ([docs/settings.md](docs/settings.md)) |
 | `nikos activity add "<title>"` | Add an activity to the story map |
-| `nikos validate` | Check `intent/` (or each `maps/<id>` in a group repo) is well formed |
+| `nikos validate` | Check `intent/` (or each `maps/<id>` in a group repo) is well formed, and each map's `delivery.yaml` is current |
 | `nikos story add "<title>"` | Add a story to the map, state and a starter feature. In a group repo with several story maps, pass `--map <id>` |
-| `nikos map new --bet <bet-id> --key <KEY>` | In a group repo, make a story map for one of its bets, in `maps/<key>/`. Its stories get ids like `PAY-CHK-12` |
+| `nikos map new --bet <bet-id> --key <KEY> [--owner <KEY>]` | In a group repo, make a story map for one of its bets, in `maps/<key>/`. Its stories get ids like `PAY-CHK-12`, or `WEB-CHK-12` with `--owner WEB` |
 | `nikos step add "<title>"` | Add a step under an activity |
 | `nikos release add\|rename\|move\|reorder\|remove` | Define releases and move stories between them, keeping feature tags in step |
 | `nikos release check <n>` | Say whether a release is ready to ship, and what's in the way |
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan new <id>` | Start the next version of a story's plan |
-| `nikos team init\|join\|member\|show` | Make a code repo a team repo, take work from a group, manage its members ([docs/planning.md](docs/planning.md#teams)) |
-| `nikos assign "<team>" --repo <path>` | In a group repo, or a team repo for a map it owns (`--repo .` for its own share), give a team all or part of a story map |
-| `nikos map status [--map <id>] [--offline] [--json]` | In a group repo, or a team repo for a map it owns, each assigned team's status on each story: fresh or not, its delivery approval, and the owner's intent approval. Writes `maps/<key>/delivery.yaml` for the plans above |
-| `nikos sync` | In a team repo, fetch the stories assigned to it, read-only |
+| `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
 | `nikos verify [id]` | Run a story's scenarios, or all of them |
 | `nikos state set <id> <status>` | Move a story; done only if its scenarios pass; cancelled needs a reason |
-| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes `intent/approvals.yaml`) |
+| `nikos approve <id>...` | Sign off done stories, in your terminal or (`--via chat`) by answering your agent (writes the story's file under `maps/<key>/approvals/`, or `intent/approvals.yaml` in a repo with `intent/`) |
 | `nikos next` | Print the next story to build |
 | `nikos migrate per-story` | Give each story its own state and approval file, so parallel branches never conflict |
-| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/`: of a group repo (which is its own team), or of a team repo (`--team-key`, `--home`). Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
+| `nikos migrate maps` | Move a repo's `intent/` story map to `maps/<key>/` in a group repo. Shows the plan first (`--dry-run`); writes on `nikos/migrate-maps`, uncommitted unless `--commit` |
 | `nikos suggest` | Where things stand, and a short menu of what to do next |
 | `nikos join <repo>` | Plan against a company or department plan and inherit its settings ([docs/settings.md](docs/settings.md)) |
 | `nikos settings` | The settings that apply here, and where each comes from |

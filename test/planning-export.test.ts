@@ -144,17 +144,14 @@ describe("the editable file", () => {
     expect(embedded(readFileSync(out2, "utf8")).snapshot.source.commit).toBeNull();
   });
 
-  it("leaves the team status out of the data, and keeps the story map's parts and stories", () => {
+  it("keeps each story and its status from the map's delivery.yaml, with no team state in the data", () => {
     const root = groupRepo("PAY");
-    const data = planningData(root, undefined, { ownOnly: true, teamStatus: false });
+    const data = planningData(root, undefined, { ownOnly: true });
     expect(data.maps.length).toBe(1);
     const stories = data.maps[0].stories;
-    expect(stories.length).toBeGreaterThan(0);
-    for (const s of stories) {
-      expect(s.status).toBe("not in this snapshot");
-      expect(s.fetched).toBeNull();
-    }
-    expect(data.teamIndex.fetched).toBeNull();
+    expect(stories.length).toBe(3);
+    for (const s of stories) expect(s.status).toBe("todo");
+    expect(data).not.toHaveProperty("teamIndex");
     expect(data).not.toHaveProperty("upstream");
   });
 

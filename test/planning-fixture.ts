@@ -7,11 +7,11 @@ import { companyInit } from "../src/commands/start";
 import { joinPlan } from "../src/commands/join";
 import { newKr } from "../src/planning/krs";
 import { sync } from "../src/planning/upstream";
-import { commitAll, git, write } from "./team-fixture";
+import { commitAll, git, write } from "./repo-fixture";
 
-export { git, write, commitAll, groupRepo, teamRepo } from "./team-fixture";
+export { git, write, commitAll, groupRepo, codeRepo } from "./repo-fixture";
 
-// The git identity the dashboard and nikos apply commit with is set in team-fixture.
+// The git identity the dashboard and nikos apply commit with is set in repo-fixture.
 
 /** A company plan on origin acme/company-plan, with one key result: kr-1. */
 export function companyRepo(): string {
