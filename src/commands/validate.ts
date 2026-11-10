@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { lintFeature } from "../lint/gherkin.js";
 import { lintConstitution } from "../lint/constitution.js";
 import { BET_ID, CROSS_REF, planningDirOf } from "../lib/bets.js";
-import { groupKeyOf, mapDirs, mapOwnerOf, NO_OWNER, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { mapDirs, NO_OWNER, repoRootOf, resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
 import { hasSummary, summaryBody, summaryDrift } from "../lib/map-summary.js";
 import { DELIVERY_SUMMARY } from "../lib/delivery-summary.js";
 import { approvalLapse, type Approval } from "../lib/approvals.js";
@@ -106,8 +106,6 @@ export function validateGroup(root: string): ValidationResult {
   if (store().exists(join(root, "intent", "storymap.yaml"))) {
     errors.push({ file: "intent/storymap.yaml", message: "this repo has both intent/ and maps/: keep one", hint: "move intent/ into maps/<id>/, or remove maps/" });
   }
-  // The group key only names the ids of a map with no owner of its own.
-  if (!groupKeyOf(root) && mapDirs(root).some((d) => !mapOwnerOf(d))) errors.push({ file: "planning/plan.yaml", message: "has no key", hint: "add key: <KEY> to it, then retry" });
   const owner = new Map<string, string>();
   const featureOwner = new Map<string, string>();
   let stories = 0;
@@ -241,7 +239,8 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     }
   }
 
-  const constitutionPath = join(dir, "constitution.md");
+  // A map in maps/ reads the repo's one constitution.md; an intent/ map still reads its own until it is migrated.
+  const constitutionPath = join(ref.inRepo ? ref.root : dir, "constitution.md");
   if (store().exists(constitutionPath)) {
     for (const issue of lintConstitution(read(constitutionPath))) {
       (issue.level === "error" ? errors : warnings).push({ file: "constitution.md", message: issue.message, hint: issue.hint });

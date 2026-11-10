@@ -3,7 +3,7 @@
   "$id": "https://nikos.tools/schemas/delivery-summary.schema.json",
   "title": "nikOS delivery summary",
   "type": "object",
-  "required": ["format_version", "map", "owner", "read_at", "stories"],
+  "required": ["format_version", "map", "read_at", "stories"],
   "additionalProperties": false,
   "properties": {
     "format_version": { "const": 1 },

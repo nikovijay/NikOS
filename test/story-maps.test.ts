@@ -11,7 +11,6 @@ import { parse } from "yaml";
 import { newActivity } from "../src/commands/step";
 import { newStory } from "../src/commands/story";
 import { setState } from "../src/commands/state";
-import { migrate } from "../src/commands/migrate";
 import { validate, validateGroup } from "../src/commands/validate";
 import { doctor } from "../src/commands/doctor";
 import { delivery } from "../src/planning/delivery";
@@ -251,10 +250,10 @@ describe("group validation", () => {
     expect(validateGroup(dup).errors.map((e) => e.message)).toContain("maps/chk and maps/ret both use key 'CHK'");
   });
 
-  it("flags a group with no key", () => {
+  it("accepts a group with no key: its maps need no owner or key of their own", () => {
     const root = oneMap();
     write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
-    expect(validateGroup(root).errors.map((e) => e.message)).toContain("has no key");
+    expect(validateGroup(root).errors.map((e) => e.message)).not.toContain("has no key");
   });
 
   it("doctor reads a group with maps, and counts stories and maps", () => {
@@ -320,11 +319,11 @@ describe("review fixes for group maps", () => {
     expect(validate(join(root, "intent")).errors).toEqual([]);
   });
 
-  it("reports a group with no key once, with no false prefix errors", () => {
+  it("a group with no key reports no key error, and no false prefix errors", () => {
     const root = oneMap();
     write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
     const messages = validateGroup(root).errors.map((e) => e.message);
-    expect(messages.filter((m) => m === "has no key")).toHaveLength(1);
+    expect(messages.filter((m) => m === "has no key")).toHaveLength(0);
     expect(messages.some((m) => m.includes("must start with"))).toBe(false);
   });
 
@@ -367,13 +366,5 @@ describe("review fixes for group maps", () => {
     }
     expect(message).toContain("stays in_progress: its scenarios couldn't run");
     expect(message).not.toContain("several story maps");
-  });
-
-  it("carries a CODEOWNERS rule for a group map's approvals", () => {
-    const root = oneMap();
-    write(join(root, "CODEOWNERS"), "maps/chk/approvals.yaml @acme/payments\n");
-    const r = migrate(root, "per-story", "chk");
-    expect(r.codeowners).toBe(join(root, "CODEOWNERS"));
-    expect(readFileSync(join(root, "CODEOWNERS"), "utf8")).toContain("maps/chk/approvals/ @acme/payments");
   });
 });

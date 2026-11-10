@@ -75,11 +75,11 @@ describe("the owner field in storymap.yaml", () => {
     expect(messages(validate(g, "chk")).filter((m) => m.includes("must start with"))).toEqual([]);
   });
 
-  it("a map with neither an owner nor a group key says how to fix it", () => {
+  it("a map with neither an owner nor a group key says how to fix it, and its delivery summary has no owner", () => {
     const g = groupRepo("PAY");
     write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
     expect(() => storyPrefix(chk(g), "CHK")).toThrow(NO_OWNER);
-    expect(messages(validate(g, "chk"))).toContain(NO_OWNER);
+    expect(messages(validate(g, "chk"))).not.toContain(NO_OWNER);
     expect(NO_OWNER).toMatch(/owner: <KEY>/);
     expect(NO_OWNER).toMatch(/planning\/plan\.yaml/);
   });

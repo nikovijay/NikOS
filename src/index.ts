@@ -22,4 +22,3 @@ export { decide } from "./commands/decide.js";
 export { decisionEntries, findDecisions } from "./commands/decisions.js";
 export { storyMapOf, renderMap, type StoryMap, type MapStory, type MapRelease } from "./commands/map.js";
 export { exportMap, FORMATS, type Format } from "./commands/export.js";
-export { migrate, type Layout, type MigrateResult } from "./commands/migrate.js";

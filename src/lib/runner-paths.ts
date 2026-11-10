@@ -12,7 +12,7 @@ export interface RunnerRewrite {
   hint?: string;
 }
 
-const INTENT_GLOB = "intent/features/**/*.feature";
+const LEGACY_FEATURES_GLOB = "intent/features/**/*.feature";
 
 export function rewriteRunnerPaths(file: string, text: string, key: string): RunnerRewrite {
   const folder = `maps/${key}/features`;
@@ -27,11 +27,11 @@ export function rewriteRunnerPaths(file: string, text: string, key: string): Run
     return { text: lines.join("\n") };
   }
   // cucumber.mjs and cucumber.js: one paths array.
-  if (!text.includes(INTENT_GLOB)) return {};
+  if (!text.includes(LEGACY_FEATURES_GLOB)) return {};
   const line = text.split("\n").find((l) => /^\s*paths:\s*\[/.test(l));
   const next = `maps/${key}/features/**/*.feature`;
   if (!line) return { hint: `Runner config ${file} lists paths the migration doesn't know: add "${next}" by hand.` };
-  const entry = `"${INTENT_GLOB}"`;
+  const entry = `"${LEGACY_FEATURES_GLOB}"`;
   const hasMaps = line.includes(`"${next}"`) || line.includes(`"maps/*/features/**/*.feature"`);
   let swapped: string;
   if (!hasMaps) swapped = line.replace(entry, `"${next}"`);

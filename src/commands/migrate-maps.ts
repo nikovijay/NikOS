@@ -1,7 +1,9 @@
-// `nikos migrate maps`: a 0.2.x repo's intent/ story map moves to maps/<key>/, and the repo becomes a
-// group. Nothing moves until the plan is shown and
-// confirmed. The new layout is checked on a copy of the repo first, so a failed check writes nothing.
-// The changes are left uncommitted on nikos/migrate-maps, or committed with --commit. Nothing is pushed.
+// `nikos migrate maps`: a 0.2.x repo's intent/ story map moves to maps/<key>/. It is a move plus a
+// conversion: state/<ID>.yaml folds into state.yaml, approvals.yaml splits into one file per approval,
+// and the constitution and decisions go to the repo root. A story id takes the key in
+// planning/plan.yaml when the plan has one. Nothing moves until the plan is shown and confirmed. The
+// new layout is checked on a copy of the repo first, so a failed check writes nothing. The changes
+// are left uncommitted on nikos/migrate-maps, or committed with --commit. Nothing is pushed.
 // If the repo changes and then fails (a write, or the check), the repo is put back as it was.
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
@@ -10,8 +12,6 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { isMap, isSeq, parse, parseDocument, stringify } from "yaml";
 import { BET_ID, CROSS_REF } from "../lib/bets.js";
 import { betText, checkBet, paths as planPaths } from "../planning/model.js";
-import { planningIssues } from "../planning/levels.js";
-import { planYaml } from "../lib/group-plan.js";
 import { store } from "../lib/store.js";
 import { count, read, walk } from "../lib/project.js";
 import { mapDirs } from "../lib/maps.js";
@@ -20,23 +20,23 @@ import { branchExists, commitPaths, currentBranch, gitIn, isGit, pathOf, statusO
 import { codeownersFile, moveCodeowners } from "../lib/codeowners.js";
 import { rewriteRunnerPaths } from "../lib/runner-paths.js";
 import { newIdFor, renameDecisionHeadings, renameIds, retagFeature, type IdTable } from "../lib/id-rename.js";
-import { keyFor } from "./init.js";
-import { currentQuarter, type Ask } from "./onboard.js";
+import { type Ask } from "./onboard.js";
 import { interactive } from "./start.js";
 import { KEY } from "../lib/keys.js";
-import { validateMap, validateGroup } from "./validate.js";
+import { validateMap } from "./validate.js";
 
 const MIGRATE_BRANCH = "nikos/migrate-maps";
 const commitMessage = (folder: string) => `Migrate intent/ to maps/${folder}/ (nikos migrate maps)`;
-/** What intent/ may hold. Each of these moves; anything else stops the migration. */
+/** What intent/ may hold. Each of these moves or folds into the map; anything else stops the migration. */
 const MOVED = ["storymap.yaml", "features", "state.yaml", "state", "approvals.yaml", "approvals", "plans", "constitution.md", "decisions.md"];
 /** Files migrate removes rather than moves: a placeholder, or a Finder or Explorer file that isn't part of the map. */
 const JUNK = [".DS_Store", "Thumbs.db"];
 const KNOWN = [...MOVED, ".gitkeep", ...JUNK];
 const RUNNERS = ["cucumber.mjs", "cucumber.js", "behave.ini"];
-
-/** The validate error for a release or story that names a bet with no card yet. The bet choice writes it, or refuses. */
-const MISSING_CARD = /, which has no planning\/bets\/[^\s]+\.md$/;
+/** Files that sit at the repo root once migrated, one of each for the repo. */
+const ROOT_FILES = ["constitution.md", "decisions.md"];
+/** A state.yaml with no stories, for a map that has none yet. */
+const NEW_STATE = "format_version: 1\nstories: {}\n";
 
 /** A refusal (exit 1) or a usage error (exit 2). The message is shown as it is. */
 export class MigrateError extends Error {
@@ -50,13 +50,8 @@ export class MigrateError extends Error {
 
 export interface MapsOptions {
   key?: string;
-  groupKey?: string;
-  name?: string;
-  period?: string;
-  bet?: string;
+  /** --new-bet: the bet the map specs, with a stub card when planning/ has none. */
   newBet?: string;
-  renameIds?: boolean;
-  team?: string;
   commit?: boolean;
   dryRun?: boolean;
   yes?: boolean;
@@ -66,45 +61,38 @@ export interface MapsOptions {
 
 export interface Answers {
   key: string;
-  /** The group key: the prefix of its story ids. */
-  group: string;
-  bet: string;
-  /** --new-bet: write a stub bet card with the migration. */
+  /** The bet the map specs, named in bet:. Undefined: the map names none, and the links to bets are listed as dropped. */
+  bet?: string;
+  /** Write a stub card for bet, since planning/bets/ has none. */
   stub: boolean;
-  renameIds: boolean;
-  period: string;
-  name: string;
-  team: string;
 }
 
 export interface MapsPlan {
   root: string;
   key: string;
   folder: string;
-  group: string;
-  name: string;
-  period: string;
-  team: string;
-  bet: string;
-  /** Files moved from intent/, as repo-relative paths. */
+  /** The plan's key, which story ids take as their prefix (KEY-n becomes PLAN-KEY-n). Undefined when the plan names none. */
+  prefix?: string;
+  /** The bet the map names in bet:, if any. */
+  bet?: string;
+  /** Whether the releases or stories named bets at all (their lines are dropped from the file). */
+  hadBets: boolean;
+  /** Files moved from intent/ to a new path, repo-relative. Each one's text is in files. */
   moves: { from: string; to: string }[];
+  /** Files folded into another: a story's state into state.yaml, approvals.yaml into one file per approval. Removed after the write. */
+  folds: { from: string; into: string }[];
   /** Files under intent/ that are removed, not moved: placeholders and Finder or Explorer files. */
   removes: string[];
   /** Every file the migration writes, moved or new or changed, with the text it ends with. */
   files: Map<string, string>;
   /** Paths the migration creates (not moved, not rewritten). */
   creates: string[];
-  plan: "create" | "keep" | "team-to-group" | "group-key";
-  /** For group-key: the plan fields the migration fills in, e.g. "key PAY, period Q1 2027". */
-  planNote?: string;
   /** Renamed story ids, old and new. */
   renames: [string, string][];
   edits: number;
   editedFiles: number;
   /** Bet links that were dropped, and the links the person re-adds by hand. */
   dropped: string[];
-  /** Whether the releases or stories named bets at all (their lines are dropped from the file). */
-  hadBets: boolean;
   /** What the migration did not change, for the person to check by hand. */
   notChanged: string[];
   runner: string[];
@@ -119,9 +107,6 @@ const yamlOf = (path: string): any => {
     return undefined;
   }
 };
-
-/** A plan field as text, or undefined when the plan doesn't have it. */
-const text = (v: unknown): string | undefined => (v === undefined || v === null ? undefined : String(v));
 
 /** Rename ids on each line except ticket values, which are external keys and are never renamed. */
 function renameLines(textIn: string, table: IdTable): { text: string; count: number } {
@@ -153,41 +138,46 @@ function betRefs(storymap: any): { where: string; ref: string }[] {
 /** The local bet ids the releases name, in the order they appear, each once. */
 const namedBets = (storymap: any): string[] => [...new Set(betRefs(storymap).map((b) => b.ref).filter((r) => BET_ID.test(r)))];
 
-/** The story ids in the releases, and the id each gets under the group: KEY-n becomes GROUP-KEY-n. */
-function idTable(storymap: any, group: string, key: string): { table: IdTable; needs: string[]; stray: string[] } {
+/** The plan's key, which story ids take as their prefix. Undefined when planning/plan.yaml names none. */
+const planKeyOf = (root: string): string | undefined => {
+  const key = yamlOf(join(root, "planning", "plan.yaml"))?.key;
+  return typeof key === "string" ? key : undefined;
+};
+
+/**
+ * The story ids in the releases that take the plan's key: KEY-n becomes PREFIX-KEY-n. An id that already
+ * starts with the prefix keeps it. An id that isn't KEY-n can't be renamed, so it is reported as stray.
+ */
+function idTable(storymap: any, prefix: string, key: string): { table: IdTable; stray: string[] } {
   const table: IdTable = new Map();
-  const needs: string[] = [];
   const stray: string[] = [];
   for (const r of storymap.releases ?? []) {
     for (const id of Array.isArray(r?.stories) ? r.stories : []) {
-      const next = newIdFor(id, storymap.key, group, key);
+      if (String(id).startsWith(`${prefix}-`)) continue;
+      const next = newIdFor(id, storymap.key, prefix, key);
       if (!next) stray.push(id);
-      else if (next !== id) {
-        table.set(id, next);
-        needs.push(id);
-      }
+      else table.set(id, next);
     }
   }
-  return { table, needs, stray };
+  return { table, stray };
 }
 
-/** The plan.yaml state: absent, a legacy team plan (rewritten), a group plan (kept), or a plan above the group (refused). */
-function planState(root: string): { exists: boolean; level?: string; obj?: any } {
-  const path = join(root, "planning", "plan.yaml");
-  if (!store().exists(path)) return { exists: false };
-  const obj = yamlOf(path);
-  return { exists: true, level: typeof obj?.level === "string" ? obj.level : undefined, obj };
-}
-
-/** Whether a file under intent/ (by its path there) is one a move picks up. */
-const isMoved = (rel: string) =>
-  ["storymap.yaml", "state.yaml", "approvals.yaml", "constitution.md", "decisions.md"].includes(rel) ||
-  (rel.startsWith("features/") && rel.endsWith(".feature")) ||
-  (rel.startsWith("state/") && rel.endsWith(".yaml")) ||
-  (rel.startsWith("approvals/") && rel.endsWith(".yaml")) ||
-  (rel.startsWith("plans/") && rel.endsWith(".md"));
+/** Whether a file under intent/ (by its path there) is one a move picks up. State and approvals are one file per story, flat. */
+const isMoved = (rel: string) => {
+  const flat = (dir: string) => rel.startsWith(`${dir}/`) && rel.endsWith(".yaml") && !rel.slice(dir.length + 1).includes("/");
+  return (
+    ["storymap.yaml", "state.yaml", "approvals.yaml", "constitution.md", "decisions.md"].includes(rel) ||
+    (rel.startsWith("features/") && rel.endsWith(".feature")) ||
+    flat("state") ||
+    flat("approvals") ||
+    (rel.startsWith("plans/") && rel.endsWith(".md"))
+  );
+};
 
 const isJunk = (rel: string) => basename(rel) === ".gitkeep" || JUNK.includes(basename(rel));
+
+/** The .yaml files directly in a folder, by name. A folder that isn't there is empty. */
+const yamlNames = (dir: string): string[] => (store().isDir(dir) ? store().list(dir) : []).filter((f) => f.endsWith(".yaml")).sort();
 
 /** Every file and folder under a folder of the repo, as repo-relative paths. A folder that isn't there is empty. */
 function entriesUnder(root: string, rel: string): { files: string[]; dirs: string[] } {
@@ -219,8 +209,8 @@ function sortIntent(root: string): { removes: string[]; stray: string[] } {
   return { removes, stray };
 }
 
-/** Refusals that need no answer: the repo's shape, its git state, and its intent/ folder. */
-function preflight(root: string, opts: MapsOptions, git: boolean): void {
+/** Refusals that need no answer: the repo's shape, its git state, its intent/ folder, and the root files it would overwrite. */
+function preflight(root: string, git: boolean, opts: MapsOptions): void {
   const intent = join(root, "intent");
   if (store().isDir(join(root, "maps")) || mapDirs(root).length) throw new MigrateError("This repo already has maps/. Migrate needs a repo with intent/ and no maps/.");
   if (!store().exists(join(intent, "storymap.yaml"))) throw new MigrateError("Nothing to migrate: there is no intent/storymap.yaml here.");
@@ -236,27 +226,12 @@ function preflight(root: string, opts: MapsOptions, git: boolean): void {
   // A file the moves don't pick up would be lost with intent/, so it stops the migration here, before any write.
   const stray = sortIntent(root).stray;
   if (stray.length) throw new MigrateError(`${stray[0]} isn't a story file, so migrate doesn't move it. Move or remove it first.`);
-  if (store().exists(join(root, "planning", "decisions.md")) && store().exists(join(intent, "decisions.md"))) {
-    throw new MigrateError("planning/decisions.md and intent/decisions.md both exist. Merge them by hand, then retry.");
-  }
-  // A missing bet card is the bet choice's to write (as a stub) or refuse, not the source check's.
-  // The map is checked as the intent/ map it is, before anything moves.
-  const errors = validateMap({ root, dir: intent, inRepo: false }).errors.filter((e) => !(e.file === "storymap.yaml" && MISSING_CARD.test(e.message)));
-  if (errors.length) {
-    throw new MigrateError(`Fix intent/ first: nikos validate lists ${count(errors.length, "problem")}. Nothing has been moved.\n${errors.map((e) => `  ${e.file}: ${e.message}`).join("\n")}`);
-  }
-  const plan = planState(root);
-  if (plan.level === "company" || plan.level === "department") {
-    throw new MigrateError(`planning/plan.yaml is a ${plan.level} plan. A repo holds one plan: put the group in its own repo.`);
-  }
-  if (plan.level === "team") {
-    const krs = walk(join(root, "planning", "krs"), ".yaml").length;
-    const objectives = Array.isArray(plan.obj?.objectives) ? plan.obj.objectives.length : 0;
-    if (krs || objectives) {
-      const what = krs ? count(krs, "key result") : count(objectives, "objective");
-      throw new MigrateError(
-        `planning/plan.yaml is a team plan with ${what}. A group plan has none. Move each to the department's plan, or rewrite it as a bet aimed at a department key result (krs: <department repo>#<kr-id>), then retry.`,
-      );
+  // The constitution and the decisions go to the root. A file already there that differs is not merged.
+  for (const f of ROOT_FILES) {
+    const here = join(root, f);
+    const there = join(intent, f);
+    if (store().exists(here) && store().exists(there) && read(here) !== read(there)) {
+      throw new MigrateError(`${f} at the repo root and intent/${f} both exist, and they differ. Merge them by hand, then retry.`);
     }
   }
 }
@@ -285,18 +260,18 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
   const target = `maps/${folder}`;
   const storyText = read(join(intent, "storymap.yaml"));
   const storymap: any = parse(storyText);
-  const { table, needs, stray } = idTable(storymap, a.group, a.key);
-  if (stray.length) throw new MigrateError(`Story ${stray.join(", ")} doesn't start with ${storymap.key}-, so it can't be renamed. Rename it by hand, then retry.`);
-  if (needs.length && !a.renameIds) {
-    throw new MigrateError(
-      `${count(needs.length, "story id")} don't carry the group key (${a.group}): ${needs.join(", ")}.\nRerun with --rename-ids to rename them (${storymap.key}-n becomes ${a.group}-${a.key}-n), or add the group key by hand. Nothing has been moved.`,
-    );
+  const prefix = planKeyOf(root);
+  const table: IdTable = new Map();
+  if (prefix) {
+    const found = idTable(storymap, prefix, a.key);
+    if (found.stray.length) throw new MigrateError(`Story ${found.stray.join(", ")} doesn't start with ${storymap.key}-, so it can't take the plan's key ${prefix}. Rename it by hand, then retry.`);
+    for (const [from, to] of found.table) table.set(from, to);
   }
-  const renames = a.renameIds ? [...table.entries()] : [];
-  const useTable: IdTable = a.renameIds ? table : new Map();
+  const renames = [...table.entries()];
 
   const files = new Map<string, string>();
   const moves: MapsPlan["moves"] = [];
+  const folds: MapsPlan["folds"] = [];
   const creates: string[] = [];
   const edited = new Map<string, number>();
   let edits = 0;
@@ -311,15 +286,16 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
   /** A path under a folder of intent/, with slashes, as the move records it. */
   const under = (dir: string, f: string) => relative(dir, f).split(sep).join("/");
 
-  // storymap.yaml: ids renamed, key set to the map's, bet: added; bets: and story_bets: dropped (validate refuses them in a group).
+  // storymap.yaml: ids renamed, key set to the map's, bet: added when the map names one; bets: and story_bets: dropped.
+  const bet = a.bet;
   const dropped: string[] = [];
   for (const { where, ref } of betRefs(storymap)) {
-    if (ref === a.bet) continue; // the map's bet, named in bet: now
+    if (bet && ref === bet) continue; // the map's bet, named in bet: now
     if (CROSS_REF.test(ref)) dropped.push(`${where} ${ref}: a bet in another repo can't be named here, so it's dropped`);
-    else dropped.push(`${where} ${ref}: add it to planning/bets/${a.bet}.md by hand`);
+    else dropped.push(`${where} ${ref}: a map names one bet, in bet:, so this link is dropped: name it by hand once its card is in planning/bets/`);
   }
-  const renamed = renameIds(storyText, useTable);
-  const withKey = renamed.text.replace(/^key:.*$/m, (line) => `${line.replace(/^key:.*$/, `key: ${a.key}`)}\nbet: ${a.bet}`);
+  const renamed = renameIds(storyText, table);
+  const withKey = renamed.text.replace(/^key:.*$/m, (line) => `${line.replace(/^key:.*$/, `key: ${a.key}`)}${bet ? `\nbet: ${bet}` : ""}`);
   const doc = parseDocument(withKey);
   doc.delete("story_bets");
   const releases = doc.get("releases");
@@ -329,75 +305,72 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
   // Features: the tags above Feature: only. The spec hash covers the rest, so approvals hold.
   for (const path of walk(join(intent, "features"), ".feature")) {
     const rel = under(intent, path);
-    const r = retagFeature(read(path), useTable);
+    const r = retagFeature(read(path), table);
     place(`intent/${rel}`, `${target}/${rel}`, r.text, r.count);
   }
 
-  // State and approvals: keys and the file names. Ticket values stay. Nested files keep their folder.
-  // State and approvals: keys and the file names. Ticket values stay. Nested files keep their folder.
-  const stateTexts: string[] = [];
-  if (store().exists(join(intent, "state.yaml"))) {
-    const t = read(join(intent, "state.yaml"));
-    stateTexts.push(t);
-    const r = renameLines(t, useTable);
-    place("intent/state.yaml", `${target}/state.yaml`, r.text, r.count);
+  // State: state.yaml's stories, with each state/<ID>.yaml folded in under its id. Ticket values stay.
+  const stateTo = `${target}/state.yaml`;
+  const stateIn = join(intent, "state.yaml");
+  const stateBase = renameLines(store().exists(stateIn) ? read(stateIn) : NEW_STATE, table);
+  const stateDoc = parseDocument(stateBase.text);
+  const haveStory = new Set<string>(Object.keys(stateDoc.toJS()?.stories ?? {}));
+  for (const f of yamlNames(join(intent, "state"))) {
+    const id0 = f.slice(0, -".yaml".length);
+    const id = table.get(id0) ?? id0;
+    if (haveStory.has(id)) throw new MigrateError(`${id} is in both state.yaml and state/${f}: keep one, then retry.`);
+    haveStory.add(id);
+    stateDoc.setIn(["stories", id], stateDoc.createNode(parse(read(join(intent, "state", f)))));
+    folds.push({ from: `intent/state/${f}`, into: stateTo });
   }
-  for (const f of walk(join(intent, "state"), ".yaml")) {
-    const t = read(f);
-    stateTexts.push(t);
-    const rel = under(join(intent, "state"), f);
-    const r = renameIds(rel, useTable);
-    place(`intent/state/${rel}`, `${target}/state/${r.text}`, t, r.count);
+  const stateOut = stateDoc.toString({ flowCollectionPadding: false });
+  if (store().exists(stateIn)) place("intent/state.yaml", stateTo, stateOut, stateBase.count);
+  else {
+    files.set(stateTo, stateOut);
+    creates.push(stateTo);
   }
+
+  // Approvals: approvals.yaml splits into one file per approval. approvals/<ID>.yaml moves as it is.
+  const split = new Map<string, string>();
   if (store().exists(join(intent, "approvals.yaml"))) {
-    const r = renameLines(read(join(intent, "approvals.yaml")), useTable);
-    place("intent/approvals.yaml", `${target}/approvals.yaml`, r.text, r.count);
+    const entries: Record<string, unknown> = parse(read(join(intent, "approvals.yaml")))?.approvals ?? {};
+    for (const [id0, entry] of Object.entries(entries)) split.set(table.get(id0) ?? id0, stringify(entry));
+    folds.push({ from: "intent/approvals.yaml", into: `${target}/approvals/` });
   }
-  for (const f of walk(join(intent, "approvals"), ".yaml")) {
-    const rel = under(join(intent, "approvals"), f);
-    const r = renameIds(rel, useTable);
-    place(`intent/approvals/${rel}`, `${target}/approvals/${r.text}`, read(f), r.count);
+  for (const f of yamlNames(join(intent, "approvals"))) {
+    const id0 = f.slice(0, -".yaml".length);
+    const id = table.get(id0) ?? id0;
+    if (split.has(id)) throw new MigrateError(`${id} is in both approvals.yaml and approvals/${f}: keep one, then retry.`);
+    place(`intent/approvals/${f}`, `${target}/approvals/${id}.yaml`, read(join(intent, "approvals", f)), id0 === id ? 0 : 1);
+  }
+  for (const [id, text] of split) {
+    const to = `${target}/approvals/${id}.yaml`;
+    files.set(to, text);
+    creates.push(to);
   }
 
   // Plans: their names and bodies. Plans aren't hashed, so their text can change.
   for (const f of walk(join(intent, "plans"), ".md")) {
     const rel = under(join(intent, "plans"), f);
-    const body = renameIds(read(f), useTable);
-    const name = renameIds(rel, useTable);
+    const body = renameIds(read(f), table);
+    const name = renameIds(rel, table);
     place(`intent/plans/${rel}`, `${target}/plans/${name.text}`, body.text, body.count + name.count);
   }
 
-  if (store().exists(join(intent, "constitution.md"))) place("intent/constitution.md", `${target}/constitution.md`, read(join(intent, "constitution.md")));
+  // The constitution and the decisions sit at the repo root.
+  if (store().exists(join(intent, "constitution.md"))) place("intent/constitution.md", "constitution.md", read(join(intent, "constitution.md")));
   if (store().exists(join(intent, "decisions.md"))) {
-    const d = renameDecisionHeadings(read(join(intent, "decisions.md")), useTable);
-    place("intent/decisions.md", "planning/decisions.md", d.text, d.count);
-    creates.push("planning/decisions.md");
+    const d = renameDecisionHeadings(read(join(intent, "decisions.md")), table);
+    place("intent/decisions.md", "decisions.md", d.text, d.count);
   }
 
-  // The plan and the stub bet.
-  const plan = planState(root);
-  let action: MapsPlan["plan"] = "create";
-  let planNote: string | undefined;
-  if (!plan.exists) {
-    files.set("planning/plan.yaml", planYaml({ name: a.name, key: a.group, period: a.period, level: "group", pillars: [] }));
-    creates.push("planning/plan.yaml");
-  } else if (plan.level === "team") {
-    action = "team-to-group";
-    files.set("planning/plan.yaml", planYaml({ name: plan.obj?.name ?? a.name, key: a.group, period: text(plan.obj?.period) ?? a.period, level: "group", pillars: plan.obj?.pillars ?? [] }));
-  } else if (plan.level === "group") {
-    action = "keep";
-    if (plan.obj?.key !== undefined && plan.obj.key !== a.group) throw new MigrateError(`planning/plan.yaml's key is ${plan.obj.key}, not ${a.group}: pass --group-key ${plan.obj.key}`, 2);
-    // A group plan keeps what it has; a missing key, period or name is filled in from the answers.
-    const added = [plan.obj?.key === undefined ? `key ${a.group}` : "", plan.obj?.period === undefined ? `period ${a.period}` : "", plan.obj?.name === undefined ? `name ${a.name}` : ""].filter(Boolean);
-    if (added.length) {
-      action = "group-key";
-      planNote = added.join(", ");
-      files.set("planning/plan.yaml", stringify({ ...plan.obj, key: a.group, period: text(plan.obj?.period) ?? a.period, name: plan.obj?.name ?? a.name }));
-    }
-  }
+  // The stub bet, when asked: it needs a planning/ folder to live in.
+  const planning = store().isDir(join(root, "planning"));
   if (a.stub) {
-    files.set(`planning/bets/${a.bet}.md`, stubBetText(a.bet, a.team));
-    creates.push(`planning/bets/${a.bet}.md`);
+    if (!bet) throw new MigrateError("--new-bet needs a bet id", 2);
+    if (!planning) throw new MigrateError("--new-bet needs a planning/ folder: the bet card goes in planning/bets/. There is no planning/ here.", 2);
+    files.set(`planning/bets/${bet}.md`, stubBetText(bet, basename(root)));
+    creates.push(`planning/bets/${bet}.md`);
   }
 
   // Runner config, CODEOWNERS and .gitignore: rewritten only when the line is one of the known forms.
@@ -441,12 +414,11 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
     }
     if (rewritten.join("\n") !== lines.join("\n")) files.set(".gitignore", rewritten.join("\n"));
   }
-  if (a.renameIds) {
-    const kept = ticketsIn(stateTexts);
+  if (renames.length) {
+    const kept = ticketsIn([stateBase.text, ...yamlNames(join(intent, "state")).map((f) => read(join(intent, "state", f)))]);
     if (kept.length) notChanged.push(`ticket values kept: ${kept.join(", ")}`);
+    notChanged.push(...otherMentions(root, renames.map(([old]) => old)));
   }
-  const grepped = a.renameIds ? otherMentions(root, renames.map(([old]) => old)) : [];
-  notChanged.push(...grepped);
 
   // Two moves onto one path would overwrite each other: refused, not written.
   const dest = new Set<string>();
@@ -454,28 +426,22 @@ export function planMapsMigration(root: string, a: Answers): MapsPlan {
     if (dest.has(m.to)) throw new MigrateError(`Two files would both move to ${m.to}. Rename one by hand, then retry.`);
     dest.add(m.to);
   }
-  const { removes: junk } = sortIntent(root);
-  const removes = [...junk];
   return {
     root,
     key: a.key,
     folder,
-    group: a.group,
-    name: a.name,
-    period: a.period,
-    team: a.team,
-    bet: a.bet,
+    ...(prefix ? { prefix } : {}),
+    ...(bet ? { bet } : {}),
+    hadBets: betRefs(storymap).length > 0,
     moves,
-    removes,
+    folds,
+    removes: sortIntent(root).removes,
     files,
     creates,
-    plan: action,
-    ...(planNote ? { planNote } : {}),
     renames,
     edits,
     editedFiles: edited.size,
     dropped,
-    hadBets: betRefs(storymap).length > 0,
     notChanged,
     runner,
     codeowners,
@@ -499,18 +465,18 @@ function otherMentions(root: string, olds: string[]): string[] {
   return out;
 }
 
-/** What the group's checks say about the repo as it is: planning and maps, with warnings left out. A check that throws is a problem too. */
-function groupErrors(root: string): string[] {
-  try {
-    return [
-      ...validateGroup(root).errors.map((e) => `${e.file}: ${e.message}`),
-      ...planningIssues(root)
-        .filter((i) => !i.warning)
-        .map((i) => `${i.file}: ${i.message}`),
-    ];
-  } catch (err) {
-    return [(err as Error).message];
+/** What the checks say about each map the migration wrote: each map validates on its own. A check that throws is a problem too. */
+function mapErrors(root: string): string[] {
+  const out: string[] = [];
+  for (const dir of mapDirs(root)) {
+    const id = basename(dir);
+    try {
+      for (const e of validateMap({ root, dir, id, inRepo: true }).errors) out.push(`maps/${id}/${e.file}: ${e.message}`);
+    } catch (err) {
+      out.push(`maps/${id}: ${(err as Error).message}`);
+    }
   }
+  return out;
 }
 
 /** The temp-tree check: the new layout, built in a copy of planning/, intent/ and the upstream cache, must pass validate. */
@@ -520,8 +486,9 @@ export function targetProblems(root: string, plan: MapsPlan): string[] {
     for (const rel of ["planning", "intent", join(".nikos", "upstream")]) {
       if (store().exists(join(root, rel))) cpSync(join(root, rel), join(tmp, rel), { recursive: true });
     }
-    // The copy ends as the real apply does: moved files gone from intent/, the rest removed with it.
+    // The copy ends as the real apply does: moved and folded files gone from intent/, the rest removed with it.
     for (const m of plan.moves) rmSync(join(tmp, m.from), { force: true });
+    for (const f of plan.folds) rmSync(join(tmp, f.from), { force: true });
     rmSync(join(tmp, "intent"), { recursive: true, force: true });
     for (const [rel, body] of plan.files) store().write(join(tmp, rel), body);
     // Each new map's delivery.yaml, as the real apply writes it: a map that can't be summarised is reported by the checks.
@@ -532,15 +499,15 @@ export function targetProblems(root: string, plan: MapsPlan): string[] {
         // the checks below say what is wrong with the map
       }
     }
-    return groupErrors(tmp);
+    return mapErrors(tmp);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-/** The plan as the person reads it: each move, each removal, each created file, the ids, and what to check by hand. */
+/** The plan as the person reads it: each move, each fold, each removal, the ids, and what to check by hand. */
 export function renderPlan(p: MapsPlan, dry: boolean): string[] {
-  const out: string[] = [`nikos migrate maps: intent/ -> maps/${p.folder}/ under group ${p.group}${dry ? " (dry run: nothing written)" : ""}`, "", "Moves"];
+  const out: string[] = [`nikos migrate maps: intent/ -> maps/${p.folder}/${dry ? " (dry run: nothing written)" : ""}`, "", "Moves"];
   const byItem = new Map<string, { n: number; from: string; to: string }>();
   for (const m of p.moves) {
     const item = m.from.split("/")[1];
@@ -552,17 +519,23 @@ export function renderPlan(p: MapsPlan, dry: boolean): string[] {
     const single = g.n === 1 && g.from === `intent/${item}`;
     const from = single ? `intent/${item}` : `intent/${item}/ (${count(g.n, "file")})`;
     const to = single ? g.to : `${g.to.slice(0, g.to.indexOf(item) + item.length)}/`;
-    const note = item === "storymap.yaml" ? ` (bet: ${p.bet}${p.hadBets ? "; bets: and story_bets: dropped" : ""})` : item === "decisions.md" ? " (created)" : "";
+    const note = item === "storymap.yaml" ? ` (${[p.bet ? `bet: ${p.bet}` : "no bet", p.hadBets ? "bets: and story_bets: dropped" : ""].filter(Boolean).join("; ")})` : "";
     out.push(`  ${from.padEnd(30)} -> ${to}${note}`);
+  }
+  for (const f of p.folds) {
+    const what = f.from.endsWith("approvals.yaml") ? "one file per approval" : "merged into stories";
+    out.push(`  ${f.from.padEnd(30)} -> ${f.into} (${what})`);
   }
   for (const r of p.removes) {
     const why = basename(r) === ".gitkeep" ? "an empty folder's placeholder" : "a Finder or Explorer file, not part of the map";
     out.push(`  ${r.padEnd(30)} removed (${why})`);
   }
-  out.push("Creates", `  ${"planning/plan.yaml".padEnd(30)} ${planLine(p)}`);
-  for (const f of p.creates) if (f.startsWith("planning/bets/")) out.push(`  ${f.padEnd(30)} (stub, from --new-bet)`);
+  if (p.creates.length) {
+    out.push("Creates");
+    for (const f of p.creates) out.push(`  ${f.padEnd(30)} ${f.startsWith("planning/bets/") ? "(stub, from --new-bet)" : "(new)"}`);
+  }
   if (p.renames.length) {
-    out.push(`Ids (--rename-ids): ${count(p.renames.length, "id")}, ${count(p.edits, "edit")} in ${count(p.editedFiles, "file")}`, `  ${p.renames.map(([o, n]) => `${o} -> ${n}`).join(", ")}`);
+    out.push(`Ids (the plan's key ${p.prefix}): ${count(p.renames.length, "id")}, ${count(p.edits, "edit")} in ${count(p.editedFiles, "file")}`, `  ${p.renames.map(([o, n]) => `${o} -> ${n}`).join(", ")}`);
   }
   if (p.notChanged.length || p.dropped.length) {
     out.push("Not changed, check by hand");
@@ -573,13 +546,6 @@ export function renderPlan(p: MapsPlan, dry: boolean): string[] {
   for (const c of p.codeowners) out.push(`CODEOWNERS: ${c.slice(c.indexOf(": ") + 2)}`);
   return out;
 }
-
-const planLine = (p: MapsPlan) => {
-  if (p.plan === "create") return `level group, key ${p.group}, period ${p.period}`;
-  if (p.plan === "team-to-group") return `level team -> group, key ${p.group} (name and pillars kept, period ${p.period})`;
-  if (p.plan === "group-key") return `${p.planNote} added`;
-  return "kept";
-};
 
 /** Remove the empty folders under a folder, bottom up, and the folder itself when that leaves it empty. */
 function removeEmptyDirs(dir: string): void {
@@ -621,7 +587,7 @@ function restore(root: string, p: MapsPlan, snap: Snapshot): void {
 }
 
 /**
- * Write the plan into the repo: branch, moves, removals, writes, then the check. Anything left under
+ * Write the plan into the repo: branch, moves, folds, removals, writes, then the check. Anything left under
  * intent/, or a failed check, puts the repo back as it was (and the branch, when this made it).
  */
 export function applyMapsPlan(root: string, p: MapsPlan, opts: { git: boolean; branch?: string }): void {
@@ -636,6 +602,7 @@ export function applyMapsPlan(root: string, p: MapsPlan, opts: { git: boolean; b
       mkdirSync(dirname(join(root, m.to)), { recursive: true });
       renameSync(join(root, m.from), join(root, m.to));
     }
+    for (const f of p.folds) rmSync(join(root, f.from), { force: true });
     for (const rel of p.removes) rmSync(join(root, rel), { force: true });
     for (const [rel, body] of p.files) store().write(join(root, rel), body);
     for (const dir of mapDirs(root)) writeMapSummary(root, dir);
@@ -643,7 +610,7 @@ export function applyMapsPlan(root: string, p: MapsPlan, opts: { git: boolean; b
     if (existsSync(join(root, "intent"))) {
       throw new MigrateError(`Something is left under intent/, so the migration stopped: ${entriesUnder(root, "intent").files.slice(0, 5).join(", ")}`);
     }
-    const errors = groupErrors(root);
+    const errors = mapErrors(root);
     if (errors.length) throw new MigrateError(`The migration left problems. Check them with nikos validate:\n${errors.map((e) => `  ${e}`).join("\n")}`);
   } catch (err) {
     try {
@@ -671,7 +638,7 @@ export interface MapsOutcome {
 }
 
 /**
- * `nikos migrate maps`. With a terminal and no --yes, asks each question with its suggestion, then
+ * `nikos migrate maps`. With a terminal and no --yes, asks the map key with its suggestion, then
  * confirms. Without one, every answer must come from a flag: a missing one is a usage error. The plan
  * goes to show() before anything is written, when there is one.
  */
@@ -682,7 +649,7 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
   }
   const git = isGit(dir);
   if (opts.commit && !git) throw new MigrateError("--commit needs a git repo here.", 2);
-  preflight(dir, opts, git);
+  preflight(dir, git, opts);
   const storymap: any = parse(read(join(dir, "intent", "storymap.yaml")));
   const interactiveAsk = tty && !!ask && !opts.yes;
   const q = async (question: string, suggestion: string, check: (a: string) => string | undefined): Promise<string> => {
@@ -695,71 +662,30 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
     }
     throw new MigrateError("No usable answer, so nothing was written.", 2);
   };
-  const planPlan = planState(dir);
   const key = (
-    await q(`Map key: every story id in it starts with ${storymap.key}-, and the folder is named for it`, (opts.key ?? storymap.key).toUpperCase(), (a) => (KEY.test(a.toUpperCase()) ? undefined : "Letters and digits, starting with a letter, up to 10."))
+    await q(`Map key: the folder is maps/<key>/, named for it`, (opts.key ?? storymap.key).toUpperCase(), (a) => (KEY.test(a.toUpperCase()) ? undefined : "Letters and digits, starting with a letter, up to 10."))
   ).toUpperCase();
   if (!KEY.test(key)) throw new MigrateError(`'${key}' isn't a valid map key (letters and digits, starting with a letter, up to 10)`, 2);
-  const groupSuggestion = (planPlan.level === "group" && typeof planPlan.obj?.key === "string" ? planPlan.obj.key : undefined) ?? keyFor(basename(dir));
-  const groupAnswer = (opts.groupKey ?? (await q(`Group key: the prefix of every story id (${groupSuggestion}-${key}-1). Letters and digits, starting with a letter.`, groupSuggestion, (a) => (KEY.test(a.toUpperCase()) ? undefined : "Letters and digits, starting with a letter, up to 10."))));
-  const group = groupAnswer.toUpperCase();
-  if (!KEY.test(group)) throw new MigrateError(`'${groupAnswer}' isn't a valid group key (letters and digits, starting with a letter, up to 10)`, 2);
-  // A flag can't change what the plan already says: that's a refusal, not a silent drop.
-  const clash = (label: "period" | "name", flag: string | undefined, have: unknown) => {
-    if (flag !== undefined && have !== undefined && String(have) !== flag) {
-      throw new MigrateError(`planning/plan.yaml's ${label} is "${String(have)}", not "${flag}". Change the plan, or drop --${label}.`, 2);
-    }
-  };
-  clash("period", opts.period, planPlan.obj?.period);
-  clash("name", opts.name, planPlan.obj?.name);
-  const period = planPlan.exists && planPlan.obj?.period ? String(planPlan.obj.period) : (opts.period ?? (await q("Planning period", currentQuarter(), (a) => (a ? undefined : "It needs a period."))));
-  const name = planPlan.exists && planPlan.obj?.name ? String(planPlan.obj.name) : (opts.name ?? (await q("Group name", storymap.project ?? basename(dir), (a) => (a ? undefined : "It needs a name."))));
-  const team = opts.team ?? basename(dir);
 
-  // The bet: the one the releases name, or the flag, or the question.
+  // The bet: the one local bet the releases name, when planning/ has its card. --new-bet names the bet
+  // and writes a stub card for it. Without planning/, no bet can be named in the map, so its links are listed.
+  const planning = store().isDir(join(dir, "planning"));
   const named = namedBets(storymap);
   let bet: string | undefined;
   let stub = false;
-  if (opts.bet && opts.newBet) throw new MigrateError("Pass --bet or --new-bet, not both.", 2);
-  if (opts.bet && CROSS_REF.test(opts.bet)) {
-    throw new MigrateError(`'${opts.bet}' names another repo's bet: a group's map specs one of its own (planning/bets/)`, 2);
-  } else if (opts.bet) {
-    if (!BET_ID.test(opts.bet)) throw new MigrateError(`'${opts.bet}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`, 2);
-    if (!store().exists(join(planPaths(dir).bets, `${opts.bet}.md`))) throw new MigrateError(`planning/bets/${opts.bet}.md doesn't exist: create it, or pass --new-bet ${opts.bet} to make a stub.`);
-    bet = opts.bet;
-  } else if (opts.newBet) {
+  if (opts.newBet) {
     if (!BET_ID.test(opts.newBet)) throw new MigrateError(`'${opts.newBet}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`, 2);
-    if (store().exists(join(planPaths(dir).bets, `${opts.newBet}.md`))) throw new MigrateError(`planning/bets/${opts.newBet}.md already exists: pass --bet ${opts.newBet} to use it.`);
+    if (!planning) throw new MigrateError("--new-bet needs a planning/ folder: the bet card goes in planning/bets/. There is no planning/ here.", 2);
     bet = opts.newBet;
-    stub = true;
-  } else if (named.length === 1) {
+    stub = !store().exists(join(planPaths(dir).bets, `${bet}.md`));
+  } else if (named.length === 1 && planning) {
     bet = named[0];
     if (!store().exists(join(planPaths(dir).bets, `${bet}.md`))) {
-      const missing = `planning/bets/${bet}.md doesn't exist: pass --new-bet ${bet} to make a stub, or --bet <id> for an existing card.`;
-      if (!interactiveAsk) throw new MigrateError(missing, 2);
-      stub = /^y/i.test(await q(`planning/bets/${bet}.md doesn't exist. Write a stub card for it? (y/N)`, "y", () => undefined));
-      if (!stub) throw new MigrateError(missing, 2);
+      throw new MigrateError(`planning/bets/${bet}.md doesn't exist: pass --new-bet ${bet} to make a stub, or write the card by hand, then retry.`, 2);
     }
-  } else if (!interactiveAsk) {
-    throw new MigrateError(
-      named.length > 1 ? `Several bets are named (${named.join(", ")}): pass --bet <id> to choose the one this map specs.` : "No bet is named in the releases: pass --bet <id> for an existing bet, or --new-bet <id> to make a stub.",
-      2,
-    );
-  } else {
-    bet = await q(named.length > 1 ? `Which bet does this map spec? One of ${named.join(", ")}` : "Which bet does this map spec? An existing id, or a new one (a stub is written)", named[0] ?? "", (a) => (BET_ID.test(a) ? undefined : "Lowercase words joined by hyphens, e.g. faster-checkout."));
-    if (!store().exists(join(planPaths(dir).bets, `${bet}.md`))) stub = true;
   }
 
-  // Renaming the ids is asked only when some need it, with the full list shown first.
-  const { needs } = idTable(storymap, group, key);
-  let renameIds = !!opts.renameIds;
-  if (needs.length && !renameIds && interactiveAsk) {
-    const shown = needs.map((id) => `${id} -> ${group}-${key}-${id.slice(id.lastIndexOf("-") + 1)}`).join(", ");
-    const yes = await q(`Rename ${count(needs.length, "story id")} to ${group}-${key}-n? ${shown}. (y/N)`, "n", () => undefined);
-    renameIds = /^y/i.test(yes);
-  }
-
-  const answers: Answers = { key, group, bet: bet!, stub, renameIds, period, name, team };
+  const answers: Answers = { key, ...(bet ? { bet } : {}), stub };
   const plan = planMapsMigration(dir, answers);
   const problems = targetProblems(dir, plan);
   if (problems.length) {
@@ -793,7 +719,7 @@ export async function migrateMaps(root: string, opts: MapsOptions, ask?: Ask, tt
 
 /**
  * Commit the migration alone, with commitPaths: only the paths the migration wrote, and intent/ for the
- * removals. Anything staged by someone else is left out of the commit.
+ * removals and folds. Anything staged by someone else is left out of the commit.
  */
 function commitMigration(root: string, plan: MapsPlan): { ok: boolean; error?: string } {
   const intentTracked = gitIn(root, ["ls-files", "--", "intent"]).stdout.trim() !== "";
@@ -803,8 +729,8 @@ function commitMigration(root: string, plan: MapsPlan): { ok: boolean; error?: s
   return r.ok ? { ok: true } : { ok: false, error: r.error ?? "git commit failed" };
 }
 
-const FLAGS = ["key", "group-key", "name", "period", "bet", "new-bet", "team", "branch-name", "dir"];
-const SWITCHES = ["rename-ids", "commit", "dry-run", "yes", "no-branch"];
+const FLAGS = ["key", "new-bet", "branch-name", "dir"];
+const SWITCHES = ["commit", "dry-run", "yes", "no-branch"];
 
 /** The --options in args that migrate maps doesn't know, so a typo is refused rather than ignored. */
 export const unknownFlags = (args: string[]): string[] => args.filter((a) => a.startsWith("--") && ![...FLAGS, ...SWITCHES].includes(a.slice(2)));
@@ -827,13 +753,7 @@ export async function runMigrateMaps(args: string[]): Promise<number> {
   const has = (n: string) => args.includes(`--${n}`);
   const opts: MapsOptions = {
     key: flag("key"),
-    groupKey: flag("group-key"),
-    name: flag("name"),
-    period: flag("period"),
-    bet: flag("bet"),
     newBet: flag("new-bet"),
-    renameIds: has("rename-ids"),
-    team: flag("team"),
     commit: has("commit"),
     dryRun: has("dry-run"),
     yes: has("yes"),
@@ -860,4 +780,4 @@ export async function runMigrateMaps(args: string[]): Promise<number> {
   }
 }
 
-export const MIGRATE_MAPS_USAGE = "Usage: nikos migrate maps [--dir PATH] [--dry-run] [--yes] [--key KEY] [--group-key GROUP] [--bet <id> | <repo>#<id> | --new-bet <id>] [--rename-ids] [--name TEXT] [--period TEXT] [--team NAME] [--commit] [--no-branch] [--branch-name NAME]";
+export const MIGRATE_MAPS_USAGE = "Usage: nikos migrate maps [--dir PATH] [--dry-run] [--yes] [--key KEY] [--new-bet <id>] [--commit] [--no-branch] [--branch-name NAME]";

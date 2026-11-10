@@ -20,7 +20,7 @@ export interface StoryRow {
 export interface MapStatus {
   map: string;
   key: string;
-  owner: string;
+  owner?: string;
   stories: StoryRow[];
   counts: { stories: number; done: number; approved: number; notCurrent: number };
   /** The summary the files say now, which is what gets written. Not in --json. */
@@ -82,7 +82,7 @@ export const statusJson = (rs: MapStatus[]) => {
 export function formatMapStatus(r: MapStatus): string {
   const out: string[] = [];
   const n = r.counts.stories;
-  out.push(`Map ${r.map} owned by ${r.owner} (${n} ${n === 1 ? "story" : "stories"}, ${r.counts.done} done, ${r.counts.approved} approved)`);
+  out.push(`Map ${r.map}${r.owner ? ` owned by ${r.owner}` : ""} (${n} ${n === 1 ? "story" : "stories"}, ${r.counts.done} done, ${r.counts.approved} approved)`);
   out.push("");
   const rows = r.stories.map((s) => [s.id, s.status + (s.proof ? ` (${s.proof})` : ""), s.approved_by ? `approved by ${s.approved_by}` : "-"]);
   const head = ["STORY", "STATUS", "APPROVAL"];
