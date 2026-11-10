@@ -1,5 +1,5 @@
 // Bet links: releases (and, as an override, single stories) in storymap.yaml name
-// the bets they deliver. The bets themselves live in planning/, outside intent/.
+// the bets they deliver. The bets themselves live in planning/, outside maps/.
 import { join } from "node:path";
 
 /** A bet in this repo: lowercase words joined by hyphens. */
@@ -16,7 +16,7 @@ export const CROSS_REF = new RegExp(`^${SEGMENT}(?:/${SEGMENT})+#[a-z0-9]+(-[a-z
 
 export const isBetRef = (ref: string) => BET_ID.test(ref) || CROSS_REF.test(ref);
 
-/** The repo's planning/ folder, next to intent/. */
+/** The repo's planning/ folder, next to maps/. */
 export const planningDirOf = (root: string) => join(root, "planning");
 
 export interface StoryBets {

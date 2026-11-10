@@ -97,7 +97,7 @@ Plans: objectives, key results and bets
                    from, or change one this repo is allowed to change
 
 Story maps and stories
-  init             Make an intent/ folder in this repo for its story map (--name, --key)
+  init             Make maps/<key>/ in this repo for its story map (--name, --key)
   story add "<title>"  Add a story to the story map, with a starter feature file
                    (--activity, --step, --release, --priority, --map in a group repo)
   activity add "<title>"  Add an activity: a big thing people do with the product (--id)
@@ -114,7 +114,7 @@ Story maps and stories
                    --key <KEY>, --owner <KEY> for the story ids, e.g. WEB-CHK-1)
   map status       How each story in this repo's maps is doing, and save it to
                    maps/<key>/delivery.yaml to commit (--map, --json saves nothing)
-  validate [dir]   Check the story map is well formed (intent/, or each map in maps/), and that
+  validate [dir]   Check the story map is well formed (each map in maps/), and that
                    each map's delivery.yaml is current
   show <id>        Sum up a story: its feature, status, plan, bets and decisions
   next             Show the next story to build
@@ -141,10 +141,9 @@ Decisions, exports and tools
   mcp              Let Claude Desktop, Cursor, Codex and other apps use nikOS (--dir <repo>)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)
-  migrate per-story  Give each story its own status file, so branches never clash
-                   (migrate single-file goes back)
-  migrate maps     Move an intent/ story map from nikOS 0.2 into maps/<key>/. Shows the plan
-                   first: --dry-run, --yes and --help for every option
+  migrate maps     Move an intent/ story map from nikOS 0.2 into maps/<key>/, converting its
+                   files to the current format. Shows the plan first: --dry-run, --yes and
+                   --help for every option
 
   --version        Show which version of nikOS this is
   help             Show this list

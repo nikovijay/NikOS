@@ -1,3 +1,4 @@
+import { relative } from "node:path";
 import { store } from "../lib/store.js";
 import { STORY_ID, decisionsPath, isPlanOnly, read } from "../lib/project.js";
 import { formatResult, validate, validateGroup } from "./validate.js";
@@ -29,7 +30,7 @@ export function decide(input: DecisionInput, dir: string): string {
   if (!CATEGORIES.includes(category)) throw new Error(`Category must be one of ${CATEGORIES.join(", ")}`);
   const path = decisionsPath(dir);
   if (!store().exists(path)) {
-    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No intent/decisions.md. Run `nikos init` first, or `nikos company init` for a company or department plan.");
+    if (!isPlanOnly(dir) && !mapDirs(dir).length) throw new Error("No decisions.md. Run `nikos init` first.");
     store().write(path, PLAN_DECISIONS, { create: true });
   }
 
@@ -61,12 +62,12 @@ export function runDecide(args: string[]): number {
   const dir = opt("dir") ?? process.cwd();
   try {
     decide({ title, why: opt("why") ?? "", story: opt("story"), category: opt("category"), supersedes: opt("supersedes") }, dir);
-    console.log(`Added to ${isPlanOnly(dir) || mapDirs(dir).length ? "planning" : "intent"}/decisions.md: ${title}`);
+    console.log(`Added to ${relative(dir, decisionsPath(dir))}: ${title}`);
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
     return 1;
   }
-  if (isPlanOnly(dir)) return 0; // no story map to check
+  if (isPlanOnly(dir) || !mapDirs(dir).length) return 0; // no story map to check
   const v = mapDirs(dir).length ? validateGroup(dir) : validate(dir);
   if (v.errors.length) {
     console.error(formatResult(v));

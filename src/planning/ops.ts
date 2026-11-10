@@ -206,7 +206,7 @@ function checkFile(abs: string, label: string, expect: string | undefined): void
 
 /** The story map's storymap.yaml, checked against the expect of an op that edits its structure. */
 function checkStoryMap(root: string, map: string | undefined, expect: string | undefined): void {
-  const ref = resolveStoryMap(root, map);
+  const ref = resolveStoryMap(root, { map: map });
   checkFile(join(ref.dir, "storymap.yaml"), `maps/${ref.id}/storymap.yaml`, expect);
 }
 
@@ -354,7 +354,7 @@ function apply(root: string, op: Op): string {
 }
 
 /** The text of the files a dry run needs: planning, the story maps, settings, and the copies of other plans. */
-const SNAPSHOT = ["planning", "maps", "intent", "nikos.settings.yaml", ".nikos/upstream"];
+const SNAPSHOT = ["planning", "maps", "nikos.settings.yaml", ".nikos/upstream"];
 
 function snapshotFiles(root: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -378,10 +378,9 @@ export function checkRepo(root: string): Problems {
   const errors: string[] = [];
   const warnings: string[] = [];
   for (const i of planningIssues(root)) (i.warning ? warnings : errors).push(`${i.file}: ${i.message}`);
-  if (mapDirs(root).length) {
+  // intent/ with no maps/ still gets validateGroup's migrate hint.
+  if (mapDirs(root).length || store().isDir(join(root, "intent"))) {
     for (const i of validateGroup(root).errors) errors.push(`${i.file}: ${i.message}`);
-  } else if (store().exists(join(root, "intent", "storymap.yaml"))) {
-    for (const i of validate(join(root, "intent")).errors) errors.push(`${i.file}: ${i.message}`);
   }
   return { errors, warnings };
 }

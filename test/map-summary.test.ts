@@ -6,7 +6,7 @@ import { parse } from "yaml";
 import { readFileSync } from "node:fs";
 import { setState } from "../src/commands/state";
 import { approve } from "../src/commands/approve";
-import { summaryBody, summaryDrift, summaryWith, hasSummary, type SummaryBody } from "../src/lib/map-summary";
+import { summaryBody, summaryDrift, summaryWith, type SummaryBody } from "../src/lib/map-summary";
 import { newMap } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
 import { mkdtempSync } from "node:fs";
@@ -119,17 +119,15 @@ describe("the summary a map's files say", () => {
     expect(summaryBody(two, join(two, "maps/chk"))).toEqual(summaryBody(one, join(one, "maps/chk")));
   });
 
-  it("a group with a map but no owner or key has no owner to write, and says so", () => {
+  it("a map with no owner and no group key gets a summary with no owner field", () => {
     const g = groupRepo("PAY");
     write(join(g, "planning/plan.yaml"), "name: Checkout\nperiod: Q1 2027\nlevel: group\npillars: []\n");
-    expect(() => summaryBody(g, join(g, "maps/chk"))).toThrow("this map has no owner");
+    const body = summaryBody(g, join(g, "maps/chk"));
+    expect(body).not.toHaveProperty("owner");
+    expect(body.map).toBe("chk");
+    expect(summaryDrift(body, { format_version: 1, map: "chk", stories: body.stories })).toBeUndefined();
   });
 
-  it("a map gets a summary only in a repo's maps/ folder: intent/ gets none", () => {
-    expect(hasSummary({ root: "/r", dir: "/r/intent", inRepo: false })).toBe(false);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/chk", id: "chk", inRepo: true })).toBe(true);
-    expect(hasSummary({ root: "/r", dir: "/r/maps/inb", id: "inb", inRepo: true })).toBe(true);
-  });
 });
 
 describe("the drift check against a committed delivery.yaml", () => {

@@ -7,4 +7,4 @@ activities:
 releases:
   - number: 1
     title: MVP
-    stories: [{{key}}-1]
+    stories: [{{first_id}}]

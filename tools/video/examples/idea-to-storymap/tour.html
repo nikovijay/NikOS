@@ -117,7 +117,7 @@ window.TOTAL = 54;
 const LABELS = [
   [0.6, 5.4, "01", "Install nikOS in your agent"],
   [5.6, 12.2, "02", "Tell it your idea"],
-  [12.4, 17.0, "03", "nikOS sets up intent/ in your repo"],
+  [12.4, 17.0, "03", "nikOS sets up maps/sp/ in your repo"],
   [17.2, 27.5, "04", "Five questions shape the constitution"],
   [27.7, 34.0, "05", "Activities and releases become the story map"],
   [34.2, 41.0, "06", "Every story gets criteria you can test"],
@@ -139,8 +139,8 @@ const TERM = [
   ["ag", 10.1, "What's the product called?"],
   ["you", 10.8, "Sprout"],
   ["cmd", P.init, 'npx -y nikos init --name "Sprout" --key SP'],
-  ["out", P.initOut, "Created intent/ (6 files)"],
-  ["out", P.initOut + 0.15, `<span class="ok">✓ intent/ is valid — 1 story, 1 release</span>`],
+  ["out", P.initOut, "Created maps/sp/ (7 files)"],
+  ["out", P.initOut + 0.15, `<span class="ok">✓ maps/sp/ is valid — 1 story, 1 release</span>`],
   ["ag", 17.4, "Who is it for?"],
   ["you", 17.9, "People with three to ten houseplants who keep forgetting which one needs water.", { cps: 46 }],
   ["ag", 21.0, "What hurts today, in their words?"],
@@ -155,14 +155,14 @@ const TERM = [
   ["you", 28.4, "Yes"],
   ...ADDS.flatMap(([args, out], i) => [["cmd", ADD[i], `npx -y nikos story add ${args}`], ["out", ADD[i] + 0.3, out]]),
   ["cmd", P.clear, "npx -y nikos clear SP-1"],
-  ["out", P.clear + 0.4, `CLEAR SP-1 (intent/features/plants/add-a-plant.feature)`],
+  ["out", P.clear + 0.4, `CLEAR SP-1 (maps/sp/features/plants/add-a-plant.feature)`],
   ["out", P.clear + 0.5, `<span class="dim">? Clear       needs a reader: one reading, no ambiguity</span>`],
   ["out", P.clear + 0.6, `<span class="ok">✓ Lean        no implementation detail found</span>`],
   ["out", P.clear + 0.7, `<span class="ok">✓ Executable  1 scenario, each with When and Then</span>`],
   ["out", P.clear + 0.8, `<span class="dim">? Accurate    needs a reader: matches constitution.md and decisions.md</span>`],
   ["out", P.clear + 0.9, `<span class="dim">? Responsible needs a reader: privacy, safety and accessibility considered</span>`],
   ["cmd", P.validate, "npx -y nikos validate"],
-  ["out", P.valid, `<span class="ok">✓ intent/ is valid — 4 stories, 2 releases</span>`],
+  ["out", P.valid, `<span class="ok">✓ maps/sp/ is valid — 4 stories, 2 releases</span>`],
   ["cmd", P.next, "npx -y nikos next"],
   ["out", P.next + 0.4, `<span class="st">SP-1</span>`],
 ];
@@ -202,7 +202,7 @@ const OPEN = [[P.open, "constitution.md", CONSTITUTION], [P.map, "storymap.yaml"
 // The file tree: [name, depth, from, to?, file it opens].
 const I = P.initOut;
 const TREE = [
-  ["intent/", 0, I], ["constitution.md", 1, I + 0.1, 99, "constitution.md"], ["decisions.md", 1, I + 0.15], ["features/", 1, I + 0.2],
+  ["constitution.md", 0, I + 0.1, 99, "constitution.md"], ["decisions.md", 0, I + 0.15], ["maps/sp/", 0, I + 0.2], ["features/", 1, I + 0.2],
   ["getting-started/", 2, I + 0.25, M0], ["first-story.feature", 3, I + 0.3, M0],
   ["plants/", 2, A[0]], ["add-a-plant.feature", 3, A[0], 99, "add-a-plant.feature"], ["see-which-plants-are-thirsty-this-week.feature", 3, A[3]],
   ["reminders/", 2, A[1]], ["get-a-reminder-on-watering-day.feature", 3, A[1]], ["mark-a-plant-as-watered.feature", 3, A[2]],

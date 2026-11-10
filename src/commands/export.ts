@@ -1,10 +1,11 @@
 // `nikos export`: the story map in a shape another tool reads. A PRD in Markdown for people;
 // JSON for Linear (one issue per story, fields named as in Linear's IssueCreateInput) and Jira
-// (the body of POST /rest/api/2/issue/bulk). intent/ stays the source: these are copies.
+// (the body of POST /rest/api/2/issue/bulk). The story map stays the source: these are copies.
 import { writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { isDone } from "../lib/project.js";
-import { storyMapOf, type MapRelease, type MapStory, type StoryMap } from "./map.js";
+import { resolveStoryMap } from "../lib/maps.js";
+import { storyMapOfRef, type MapRelease, type MapStory, type StoryMap } from "./map.js";
 
 export const FORMATS = ["prd", "linear", "jira"] as const;
 export type Format = (typeof FORMATS)[number];
@@ -42,7 +43,7 @@ function facts(m: StoryMap, s: MapStory): string[] {
 }
 
 export function toPrd(m: StoryMap): string {
-  const out = [`# ${m.project || "Product"}: product requirements`, "", "Exported from the nikOS story map (intent/storymap.yaml). Edit the story map, not this file.", ""];
+  const out = [`# ${m.project || "Product"}: product requirements`, "", "Exported from the nikOS story map (maps/<key>/storymap.yaml). Edit the story map, not this file.", ""];
   if (m.personas.length) {
     out.push("## Who it's for", "");
     for (const p of m.personas) out.push(`- **${p.title}**${p.description ? `: ${p.description}` : ""}`);
@@ -135,7 +136,8 @@ export function toJira(m: StoryMap, projectKey: string) {
 
 export function exportMap(dir: string, format: Format, opts: { release?: number; projectKey?: string; map?: string } = {}): string {
   if (!FORMATS.includes(format)) throw new Error(`'${format}' is not a format (${FORMATS.join(", ")})`);
-  const full = storyMapOf(dir, opts.map);
+  // Several maps need a pick: exporting none of them would print an empty story map.
+  const full = storyMapOfRef(resolveStoryMap(dir, { map: opts.map }));
   if (opts.release !== undefined && !full.releases.some((r) => r.number === opts.release)) {
     throw new Error(`There is no release ${opts.release}. Releases: ${full.releases.map((r) => r.number).join(", ")}`);
   }

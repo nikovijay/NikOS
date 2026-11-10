@@ -19,7 +19,7 @@ If you can hand work to another model or a fresh agent with no memory of this
 conversation, give it only:
 
 - the story's `.feature` file,
-- `intent/constitution.md`,
+- `constitution.md` at the root,
 - the entries from `nikos decisions "<story-id>"`,
 
 and this brief: "You are a sceptical reviewer. Find what's ambiguous,

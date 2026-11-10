@@ -1,9 +1,9 @@
 import { store } from "../lib/store.js";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { featureStoryIds, isDone, read, setFeatureTag, walk } from "../lib/project.js";
-import { authoringMap, homeOf, resolveStoryMap } from "../lib/maps.js";
-import { storyMapOf } from "./map.js";
+import { resolveStoryMap } from "../lib/maps.js";
+import { storyMapOfRef } from "./map.js";
 import { resolveSettings } from "../lib/settings.js";
 import { loadApprovals } from "../lib/approvals.js";
 import { failingScenarios } from "./state.js";
@@ -13,20 +13,21 @@ import { validate, type ValidationResult } from "./validate.js";
 const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
 
 interface Opened {
-  intentDir: string;
+  mapDir: string;
   mapPath: string;
   map: Document;
   releases: YAMLSeq<YAMLMap>;
 }
 
-function open(dir: string, mapId?: string): Opened {
-  const intentDir = authoringMap(dir, mapId).dir;
-  const mapPath = join(intentDir, "storymap.yaml");
+/** The release list of the map that holds a story (by id) or the one named (or the only one). */
+function open(dir: string, mapId?: string, story?: string): Opened {
+  const mapDir = resolveStoryMap(dir, { map: mapId, story }).dir;
+  const mapPath = join(mapDir, "storymap.yaml");
   // A Document keeps comments and the order of everything we don't touch.
   const map = parseDocument(read(mapPath));
   const releases = map.get("releases", true);
   if (!isSeq(releases)) throw new Error("storymap.yaml has no releases list");
-  return { intentDir, mapPath, map, releases: releases as YAMLSeq<YAMLMap> };
+  return { mapDir, mapPath, map, releases: releases as YAMLSeq<YAMLMap> };
 }
 
 const numberOf = (r: YAMLMap) => Number(r.get("number"));
@@ -42,9 +43,9 @@ function find(o: Opened, n: number): YAMLMap {
 }
 
 /** Rewrite the @release-<n> tag on each moved story's feature file. */
-function retag(intentDir: string, moved: Map<string, number>) {
+function retag(mapDir: string, moved: Map<string, number>) {
   if (!moved.size) return;
-  for (const file of walk(join(intentDir, "features"), ".feature")) {
+  for (const file of walk(join(mapDir, "features"), ".feature")) {
     const text = read(file);
     const id = featureStoryIds(text)[0];
     if (id && moved.has(id)) store().write(file, setFeatureTag(text, "release", String(moved.get(id)), id));
@@ -59,12 +60,12 @@ function renumber(o: Opened) {
     item.set("number", i + 1);
     for (const id of storiesOf(item)) moved.set(id, i + 1);
   });
-  retag(o.intentDir, moved);
+  retag(o.mapDir, moved);
 }
 
 function save(o: Opened): ValidationResult {
   store().write(o.mapPath, o.map.toString(yamlOpts));
-  return validate(o.intentDir);
+  return validate(o.mapDir);
 }
 
 const cleanTitle = (title: string | undefined) => {
@@ -112,7 +113,7 @@ export function renameRelease(input: { map?: string; number: number; title?: str
 
 /** Move a story to another release (to the end of its build order), keeping its feature tag in step. */
 export function moveStory(input: { map?: string; id: string; to: number }, dir: string) {
-  const o = open(dir, input.map);
+  const o = open(dir, input.map, input.id);
   const target = find(o, input.to);
   const from = o.releases.items.find((r) => storiesOf(r).includes(input.id));
   if (!from) throw new Error(`${input.id} is not in any release in storymap.yaml`);
@@ -123,7 +124,7 @@ export function moveStory(input: { map?: string; id: string; to: number }, dir: 
   const dest = target.get("stories", true);
   if (isSeq(dest)) dest.add(input.id);
   else target.set("stories", o.map.createNode([input.id], { flow: true }));
-  retag(o.intentDir, new Map([[input.id, input.to]]));
+  retag(o.mapDir, new Map([[input.id, input.to]]));
   return { id: input.id, from: fromNumber, to: input.to, validation: save(o) };
 }
 
@@ -173,16 +174,17 @@ const STATUS_WORD: Record<string, string> = { todo: "to do", in_progress: "in pr
  * outside the release must be done too. With run, each done story's scenarios run again.
  */
 export function checkRelease(input: { map?: string; number: number; run?: boolean }, dir: string): ReleaseCheck {
-  const map = storyMapOf(dir, input.map);
+  // The map is picked first, so several maps with no --map say so, rather than reading as an empty map.
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const map = storyMapOfRef(ref);
   const release = map.releases.find((r) => r.number === input.number);
   if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
   const inRelease = new Set(release.stories.map((s) => s.id));
   // approval.policy: required-for-release makes a done story without a sign-off a gap.
-  const ref = resolveStoryMap(dir, input.map);
   const needApproval = resolveSettings(ref.root)["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   // A done story with an approval on file that no longer holds: say so, as validate does.
-  const signedOff = loadApprovals(homeOf(ref));
+  const signedOff = loadApprovals(ref.dir);
   const lapsed = (s: (typeof live)[number]) => s.status === "done" && !!signedOff[s.id];
   const gaps: string[] = [];
   for (const s of live) {
@@ -230,7 +232,7 @@ const USAGE = `Usage:
   nikos release check <n> [--run]   (--run reruns each done story's scenarios)`;
 
 function report(v: ValidationResult) {
-  if (v.errors.length) console.log(`\n! intent/ now has ${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"}; run nikos validate to see them.`);
+  if (v.errors.length) console.log(`\n! maps/${basename(v.dir)}/ now has ${v.errors.length} ${v.errors.length === 1 ? "problem" : "problems"}; run nikos validate to see them.`);
 }
 
 export function runRelease(args: string[]): number {

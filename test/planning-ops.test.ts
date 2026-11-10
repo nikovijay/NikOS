@@ -223,7 +223,6 @@ describe("story, activity, step and release ops", () => {
 describe("map ops", () => {
   it("map.new refuses in the order the command line checks, with the same messages", () => {
     const g = groupRepo("PAY");
-    expect(() => newMap({ key: "X" }, g)).toThrow("nikos map new needs --bet <bet-id>");
     expect(() => newMap({ bet: "faster-checkout" }, g)).toThrow("nikos map new needs --key <KEY>");
     expect(() => newMap({ bet: "Bad Bet", key: "X" }, g)).toThrow("'Bad Bet' is not a bet id");
     expect(() => newMap({ bet: "nope", key: "ZZ" }, g)).toThrow("no planning/bets/nope.md: create it with nikos planning bet new");
@@ -231,10 +230,10 @@ describe("map ops", () => {
     expect(() => newMap({ bet: "faster-checkout", key: "CHK" }, g)).toThrow("map key CHK is already used by maps/chk");
   });
 
-  it("map.new refuses a repo that isn't a group plan", () => {
+  it("map.new works in a company plan too: no group plan is needed", () => {
     const co = companyRepo();
     newBet({ id: "faster", owner: "Board", hypothesis: "Faster checkout pays", reviewOn: "2027-02-01" }, co);
-    expect(() => newMap({ bet: "faster", key: "ZZ" }, co)).toThrow("planning/plan.yaml is not a group plan");
+    expect(newMap({ bet: "faster", key: "ZZ" }, co).id).toBe("zz");
   });
 
   it("the command line prints the same line as before", () => {

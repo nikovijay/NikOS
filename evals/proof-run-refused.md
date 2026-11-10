@@ -1,5 +1,7 @@
 # Proof run: done refused, then recovered
 
+> Note: this run predates the maps/ layout (PR 2b). Paths that say `intent/` are the 0.2 layout, which `nikos migrate maps` moves to `maps/<key>/`. The run was not repeated.
+
 **Story:** NO-31. Show that an agent handles a refused `done` correctly, not
 just that the command refuses.
 **Date:** 2026-11-04

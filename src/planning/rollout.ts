@@ -92,7 +92,7 @@ export interface Decision {
 /** How many of a plan's decisions rollout shows. The rest stay in its decisions.md. */
 export const LATEST_DECISIONS = 3;
 
-/** A repo's latest decisions, from intent/decisions.md, or planning/decisions.md in a plan-only repo. */
+/** A repo's latest decisions, from decisions.md at the root, or planning/decisions.md in a plan-only repo. */
 export function latestDecisions(dir: string): Decision[] {
   try {
     return decisionEntries(dir).slice(-LATEST_DECISIONS).reverse().map((e) => ({ title: e.title }));

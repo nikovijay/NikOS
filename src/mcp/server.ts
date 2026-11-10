@@ -14,7 +14,7 @@ import { decide } from "../commands/decide.js";
 import { findDecisions, formatDecisions } from "../commands/decisions.js";
 import { exportMap, FORMATS } from "../commands/export.js";
 import { init } from "../commands/init.js";
-import { storyMapOf } from "../commands/map.js";
+import { storyMapOf, storyMapOfRef } from "../commands/map.js";
 import { next } from "../commands/next.js";
 import { newPlan } from "../commands/plan.js";
 import { addRelease, checkRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
@@ -24,16 +24,16 @@ import { newActivity, newStep } from "../commands/step.js";
 import { companyInit, start as startRepo } from "../commands/start.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
-import { formatResult, validate } from "../commands/validate.js";
+import { formatResult, validate, validateGroup } from "../commands/validate.js";
 import { verify } from "../commands/verify.js";
 import { count, read } from "../lib/project.js";
+import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import { formatSettings, resolveSettings, setSetting } from "../lib/settings.js";
 import { doctor } from "../commands/doctor.js";
 import { describeJoin, joinPlan } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
 import { addDownstream, formatRollout, rollout } from "../planning/rollout.js";
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
-import { migrate } from "../commands/migrate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const playbookDir = [join(here, "../../skills/nikos-mode/playbooks"), join(here, "../skills/nikos-mode/playbooks")].find((d) => existsSync(d));
@@ -87,12 +87,13 @@ export function createServer(repo: string): McpServer {
     const s = suggest(root, a.map);
     return text(`${s.summary}\n${s.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`, s as unknown as Record<string, unknown>);
   }, true);
-  tool("validate", "Check the story map is well formed: intent/, or each maps/<id> in a group repo (map picks one): the story map, state, features and approvals.", { map: z.string().optional() }, (a) => {
-    const v = validate(root, a.map);
+  tool("validate", "Check the story maps are well formed: each maps/<key> (map picks one), with its story map, state, features and approvals, and the constitution.md at the root.", { map: z.string().optional() }, (a) => {
+    const v = mapDirs(root).length > 1 && !a.map ? validateGroup(root) : validate(root, a.map);
     return text(formatResult(v), { errors: v.errors, warnings: v.warnings });
   }, true);
   tool("story_map", "The story map as data: activities and steps, releases with goals and bets, and every story's status.", { map: z.string().optional() }, (a) => {
-    const m = storyMapOf(root, a.map);
+    // Several maps and no map named: say so, rather than an empty map.
+    const m = !a.map && mapDirs(root).length > 1 ? storyMapOfRef(resolveStoryMap(root)) : storyMapOf(root, a.map);
     return text(m.releases.map((r) => `Release ${r.number} · ${r.title}: ${r.stories.map((s) => `${s.id} ${s.title} (${s.status})`).join(", ") || "no stories"}`).join("\n"), m as unknown as Record<string, unknown>);
   }, true);
   tool("show_story", "Everything about one story: feature, status, approval, dependencies, plan, bets and decisions.", { id: z.string(), map: z.string().optional() }, (a) => text(show(a.id, root, a.map)), true);
@@ -150,7 +151,7 @@ export function createServer(repo: string): McpServer {
     const r = importTickets(a.tickets, root, { release: a.release, map: a.map });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
   });
-  tool("start", "Set this repo up in one go as a product's repo: intent/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A group repo with maps/ isn't set up this way: its story maps are made with nikos map new in the terminal. Companies and departments use company_init.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("start", "Set this repo up in one go as a product's repo: its first story map in maps/<key>/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A repo with maps/ already isn't set up this way: its story maps are added with nikos map new in the terminal. Companies and departments use company_init.",{ name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = startRepo(root, a);
     return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
   });
@@ -160,10 +161,6 @@ export function createServer(repo: string): McpServer {
   }, (a) => {
     const r = companyInit(root, a);
     return text(`Created ${r.created.join(", ") || "nothing new"}.\nEach department or team joins with: ${r.join}`);
-  });
-  tool("migrate", "Move every story's state and approval to its own file (per-story), so parallel branches never conflict, or back (single-file). Ask the person first; commit it on its own.", { to: z.enum(["per-story", "single-file"]) }, (a) => {
-    const r = migrate(root, a.to);
-    return text(`Moved ${count(r.states, "story", "stories")}${r.approvals ? ` and ${count(r.approvals, "approval")}` : ""} to the ${r.layout} layout${r.codeowners ? `, and added a matching approvals rule to ${r.codeowners}` : ""}.`);
   });
   tool("rollout", "How the plans below this one are doing: which departments and teams have joined, when they last synced this plan, their delivery, and the key results and bets that point here. Delivery is read from each map's committed delivery.yaml, with its age. offline: read the copies already fetched.", { offline: z.boolean().optional() }, (a) => {
     const r = rollout(root, { offline: a.offline });
@@ -179,9 +176,9 @@ export function createServer(repo: string): McpServer {
     const r = addDownstream(root, a);
     return text(`${r.added ? "Added" : "Updated"} ${r.name}${r.repo ? ` (${r.repo})` : ""} in planning/downstream.yaml`);
   });
-  tool("init", "Set up nikOS in this repo as a product's single repo: intent/ with a starter story. In a group repo, story maps live in maps/ (one per bet), and a repo with intent/ moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
+  tool("init", "Set up nikOS in this repo: a story map in maps/<key>/ with a starter story, and constitution.md and decisions.md at the root. Each story map is one folder under maps/ (one per bet in a group). A repo with intent/ is refused: it moves to maps/ with nikos migrate maps in the terminal.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = init(root, { name: a.name, key: a.key });
-    return text(`Created ${r.created.length} files in intent/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
+    return text(`Created ${r.created.length} files for maps/${basename(r.mapDir)}/${r.skipped.length ? `; ${r.skipped.length} were already there` : ""}.\n${formatResult(r.validation)}`);
   });
   tool("add_story", "Add a story to the map and state, with a starter feature file to write its scenarios in.", {
     title: z.string(), activity: z.string(), step: z.string().optional(), release: z.number().int().optional(), priority: z.enum(["must", "should", "could"]).optional(), map: z.string().optional(),

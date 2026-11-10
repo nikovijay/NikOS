@@ -48,7 +48,7 @@ describe("release commands", () => {
     expect(r.order).toEqual([{ number: 1, title: "Enhancements" }, { number: 2, title: "MVP" }]);
     expect(r.validation.errors).toEqual([]);
     expect(r.validation.warnings).toEqual([]);
-    expect(mapOf(dir).releases[1]).toMatchObject({ number: 2, title: "MVP", bets: ["fewer-missed-tasks"], stories: ["HT-1", "HT-2"] });
+    expect(mapOf(dir).releases[1]).toMatchObject({ number: 2, title: "MVP", stories: ["HT-1", "HT-2"] });
     expect(tagLine(dir, "reorder-tasks.feature")).toMatch(/^@HT-3 @release-1 /);
     expect(tagLine(dir, "add-a-task.feature")).toMatch(/^@HT-1 @release-2 /);
     expect(() => reorderRelease({ number: 1, to: 5 }, dir)).toThrow("Position must be from 1 to 2");
@@ -78,11 +78,12 @@ describe("release commands", () => {
     expect(() => removeRelease({ number: 9 }, dir)).toThrow("There is no release 9");
   });
 
-  it("won't remove a release that still delivers bets", () => {
+  it("removes an empty release: a map's bet covers the map, not one release, so no release is held back by it", () => {
     const dir = copyExample();
     moveStory({ id: "HT-1", to: 2 }, dir);
     moveStory({ id: "HT-2", to: 2 }, dir);
-    expect(() => removeRelease({ number: 1 }, dir)).toThrow("Release 1 delivers bets (fewer-missed-tasks)");
+    expect(() => removeRelease({ number: 1 }, dir)).not.toThrow();
+    expect(mapOf(dir).releases.map((r) => r.number)).toEqual([1]);
   });
 
   it("checks whether a release is ready to ship", () => {

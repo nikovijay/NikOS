@@ -8,7 +8,7 @@ import { checkStale, crossRefs, loadUpstream, resolveRef, sync, upstreamEntries 
 import { CROSS_REF } from "../src/lib/bets";
 import { newKr } from "../src/planning/krs";
 import { runPlanning } from "../src/planning/cli";
-import { copyExample } from "./helpers";
+import { copyExample, rootOf } from "./helpers";
 
 // A company plan in its own git repo, and a team repo that plans against it.
 const git = (cwd: string, ...args: string[]) => {
@@ -25,7 +25,7 @@ function companyPlan(): string {
   return dir;
 }
 function team(upstream: { repo: string; url: string }[]): string {
-  const root = dirname(copyExample());
+  const root = rootOf(copyExample());
   git(root, "init", "-q", "-b", "main");
   mkdirSync(join(root, "planning"), { recursive: true });
   writeFileSync(join(root, "planning/upstream.yaml"), upstream.map((u) => `- repo: ${u.repo}\n  ref: main\n  url: ${u.url}\n`).join(""));
@@ -63,7 +63,7 @@ describe("upstream", () => {
   });
 
   it("builds the url from host, defaulting to GitHub, and refuses paths that leave the copy folder", () => {
-    const root = dirname(copyExample());
+    const root = rootOf(copyExample());
     mkdirSync(join(root, "planning"), { recursive: true });
     const entries = (yaml: string) => {
       writeFileSync(join(root, "planning/upstream.yaml"), yaml);

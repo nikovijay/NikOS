@@ -86,14 +86,14 @@ export async function applyChanges(file: string, opts: ApplyOptions = {}): Promi
   if (doc.plan.level !== level) return refuse(`This file is for a ${doc.plan.level} plan; this repo is ${level ? `a ${level} plan` : "not a plan (no planning/plan.yaml)"}`);
   if (!isGit(root, run)) return refuse("nikos apply needs a git repo: the changes go on a branch");
   const own = nikosPaths(root);
-  if (own.length && statusOf(root, own, run).length) return refuse("Commit or stash changes in planning/, maps/ or intent/ first");
+  if (own.length && statusOf(root, own, run).length) return refuse("Commit or stash changes in planning/ or maps/ first");
 
   const head = headOf(root);
   if (doc.source.commit && head && doc.source.commit !== head) {
     out(`Exported from ${doc.source.commit.slice(0, 7)}; this repo is at ${head.slice(0, 7)}. Each operation is checked against the current files.`);
   }
   const unrelated = unrelatedDirty(root, run);
-  if (unrelated.length) out(`! ${unrelated.length} changed ${unrelated.length === 1 ? "file" : "files"} outside planning/, maps/ and intent/ are left alone.`);
+  if (unrelated.length) out(`! ${unrelated.length} changed ${unrelated.length === 1 ? "file" : "files"} outside planning/ and maps/ are left alone.`);
   if (doc.made_by) out(`Made by ${doc.made_by} (typed in the export; not checked).`);
 
   const ops: Op[] = doc.operations.map((o: any) => ({

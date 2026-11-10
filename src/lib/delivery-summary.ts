@@ -22,8 +22,8 @@ export interface SummaryStory {
 export interface DeliverySummary {
   format_version: 1;
   map: string;
-  /** The map's owner (its storymap owner, else the repo's group key). */
-  owner: string;
+  /** The map's owner (its storymap owner, else the repo's group key). Absent when neither names one. */
+  owner?: string;
   read_at: string;
   stories: SummaryStory[];
 }

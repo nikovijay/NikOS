@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { copyExample, edit as editFile, exampleDir } from "./helpers";
-import { mapDirs, repoRootOf, resolveStoryMap, storyMapsOf } from "../src/lib/maps";
+import { copyExample, edit as editFile, exampleDir, rootOf } from "./helpers";
+import { mapDirs, repoRootOf, resolveStoryMap, storyMapsOf, storyPrefix } from "../src/lib/maps";
 import { isPlanOnly } from "../src/lib/project";
 import { runGroup } from "../src/commands/start";
 import { runMapNew, runMap } from "../src/commands/map";
@@ -11,7 +11,6 @@ import { parse } from "yaml";
 import { newActivity } from "../src/commands/step";
 import { newStory } from "../src/commands/story";
 import { setState } from "../src/commands/state";
-import { migrate } from "../src/commands/migrate";
 import { validate, validateGroup } from "../src/commands/validate";
 import { doctor } from "../src/commands/doctor";
 import { delivery } from "../src/planning/delivery";
@@ -32,35 +31,43 @@ function groupRepo(maps: string[]): string {
 }
 
 describe("story map resolver", () => {
-  it("resolves an intent/ repo to its own map, as before", () => {
-    const intent = copyExample();
-    const ref = resolveStoryMap(join(intent, ".."));
-    expect(ref.dir).toBe(intent);
-    expect(ref.root).toBe(join(intent, ".."));
-    expect(ref.id).toBeUndefined();
+  it("refuses a repo with intent/, and says to migrate it", () => {
+    const mapDir = copyExample();
+    const root = join(mapDir, "../..");
+    mkdirSync(join(root, "intent"));
+    expect(() => resolveStoryMap(root)).toThrow("this repo has intent/: run nikos migrate maps");
   });
 
-  it("refuses --map on a repo with intent/", () => {
-    const intent = copyExample();
-    expect(() => resolveStoryMap(join(intent, ".."), "chk")).toThrow("--map needs a group repo with maps/ (this repo has intent/)");
+  it("a repo with no maps/ says to init or map new", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-nomap-"));
+    expect(() => resolveStoryMap(root)).toThrow("no story map here: run nikos init, or nikos map new --key K");
   });
 
-  it("uses the one map of a group, and needs --map for several", () => {
+  it("uses the one map of a repo, and needs --map for several", () => {
     const one = groupRepo(["chk"]);
     expect(resolveStoryMap(one).id).toBe("chk");
-    expect(resolveStoryMap(one, "chk").dir).toBe(join(one, "maps", "chk"));
+    expect(resolveStoryMap(one, { map: "chk" }).dir).toBe(join(one, "maps", "chk"));
 
     const two = groupRepo(["chk", "pay"]);
-    expect(() => resolveStoryMap(two)).toThrow("several story maps in maps/ (chk, pay): pass --map <id>");
-    expect(resolveStoryMap(two, "pay").id).toBe("pay");
-    expect(() => resolveStoryMap(two, "ret")).toThrow('no story map "ret" in maps/ (have: chk, pay)');
+    expect(() => resolveStoryMap(two)).toThrow("several story maps (chk, pay): pass --map <id>");
+    expect(resolveStoryMap(two, { map: "pay" }).id).toBe("pay");
+    expect(() => resolveStoryMap(two, { map: "ret" })).toThrow('no story map "ret" in maps/ (have: chk, pay)');
   });
 
   it("takes --map case-insensitively, the key map new prints (HR finds maps/hr)", () => {
     const two = groupRepo(["am", "hr"]);
-    expect(resolveStoryMap(two, "HR").dir).toBe(join(two, "maps", "hr"));
-    expect(resolveStoryMap(two, "HR").id).toBe("hr");
-    expect(() => resolveStoryMap(two, "ret")).toThrow('no story map "ret" in maps/ (have: am, hr)');
+    expect(resolveStoryMap(two, { map: "HR" }).dir).toBe(join(two, "maps", "hr"));
+    expect(resolveStoryMap(two, { map: "HR" }).id).toBe("hr");
+    expect(() => resolveStoryMap(two, { map: "ret" })).toThrow('no story map "ret" in maps/ (have: am, hr)');
+  });
+
+  it("finds the map a story id is in, and names the id when no map has it", () => {
+    const two = groupRepo(["chk", "pay"]);
+    write(join(two, "maps/pay/features/a.feature"), "@ACME-PAY-1 @release-1\nFeature: Pay\n");
+    write(join(two, "maps/pay/storymap.yaml"), "key: PAY\nactivities: []\nreleases:\n  - number: 1\n    title: One\n    stories: [ACME-PAY-1]\n");
+    expect(resolveStoryMap(two, { story: "ACME-PAY-1" }).id).toBe("pay");
+    expect(() => resolveStoryMap(two, { story: "ACME-XX-9" })).toThrow("no story map has ACME-XX-9");
+    expect(() => resolveStoryMap(two, { story: "ACME-PAY-1", map: "chk" })).toThrow("ACME-PAY-1 is not in maps/chk");
   });
 
   it("takes a map folder passed directly", () => {
@@ -69,12 +76,6 @@ describe("story map resolver", () => {
     expect(ref.id).toBe("pay");
     expect(ref.root).toBe(two);
     expect(repoRootOf(ref.dir)).toBe(two);
-  });
-
-  it("refuses a repo with both intent/ and maps/", () => {
-    const root = groupRepo(["chk"]);
-    write(join(root, "intent", "storymap.yaml"), "key: HT\nactivities: []\nreleases: []\n");
-    expect(() => resolveStoryMap(root)).toThrow("this repo has both intent/ and maps/: keep one");
   });
 
   it("lists maps, and tells a plan-only group from one with maps", () => {
@@ -123,7 +124,6 @@ describe("nikos map new", () => {
   it("refuses each bad input with its message", () => {
     const root = newGroup(["faster-checkout"]);
     const ok = ["--bet", "faster-checkout", "--key", "CHK", "--dir", root];
-    expect(mapNew(["--key", "CHK", "--dir", root]).errors).toContain("nikos map new needs --bet <bet-id>");
     expect(mapNew(["--bet", "faster-checkout", "--dir", root]).errors).toContain("nikos map new needs --key <KEY>");
     expect(mapNew(["--bet", "Bad Bet", "--key", "CHK", "--dir", root]).errors).toContain("'Bad Bet' is not a bet id");
     expect(mapNew(["--bet", "acme/payments#faster", "--key", "CHK", "--dir", root]).errors).toContain("a map specs one of this group's bets, not another repo's");
@@ -135,18 +135,12 @@ describe("nikos map new", () => {
     expect(mapNew(["--bet", "faster-checkout", "--key", "RET", "--dir", root]).code).toBe(0);
   });
 
-  it("refuses a company plan and a group with no key", () => {
-    const root = newGroup();
-    const dir = mkdtempSync(join(tmpdir(), "nikos-company-"));
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    runGroup(["init", "--name", "Checkout", "--key", "ACME", "--dir", dir]);
-    vi.restoreAllMocks();
-    write(join(dir, "planning/bets/faster-checkout.md"), "---\nid: faster-checkout\n---\n");
-    // A company plan: same bet card, level company.
-    writeFileSync(join(dir, "planning/plan.yaml"), "name: Acme\nlevel: company\nperiod: Q1\npillars: []\n");
-    expect(mapNew(["--bet", "faster-checkout", "--key", "CHK", "--dir", dir]).errors).toContain("planning/plan.yaml is not a group plan");
-    writeFileSync(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
-    expect(mapNew(["--bet", "faster-checkout", "--key", "CHK", "--dir", root]).errors).toContain("planning/plan.yaml has no key: add key: <KEY> to it, then retry");
+  it("needs no group plan: a repo with no key still gets a map, with ids of its own", () => {
+    const root = mkdtempSync(join(tmpdir(), "nikos-nokey-"));
+    write(join(root, "planning/plan.yaml"), "name: Acme\nlevel: company\nperiod: Q1\npillars: []\n");
+    expect(mapNew(["--key", "CHK", "--dir", root]).code).toBe(0);
+    expect(parse(readFileSync(join(root, "maps/chk/storymap.yaml"), "utf8"))).not.toHaveProperty("owner");
+    expect(storyPrefix({ root, dir: join(root, "maps/chk"), id: "chk" }, "CHK")).toBe("CHK");
   });
 
   it("refuses a folder that already exists", () => {
@@ -191,14 +185,15 @@ describe("story ids in a group map", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     newActivity({ title: "Pay", map: "pay" }, root);
     vi.restoreAllMocks();
-    expect(() => newStory({ title: "Add a task", activity: "tasks" }, root)).toThrow("several story maps in maps/ (chk, pay): pass --map <id>");
+    expect(() => newStory({ title: "Add a task", activity: "tasks" }, root)).toThrow("several story maps (chk, pay): pass --map <id>");
     expect(newStory({ title: "Add a task", activity: "tasks", map: "chk" }, root).id).toBe("ACME-CHK-1");
     expect(newStory({ title: "Pay now", activity: "pay", map: "pay" }, root).id).toBe("ACME-PAY-1");
   });
 
-  it("refuses --map on a legacy repo", () => {
-    const intent = copyExample();
-    expect(() => newStory({ title: "Anything", activity: "getting-started", map: "chk" }, join(intent, ".."))).toThrow("--map needs a group repo with maps/ (this repo has intent/)");
+  it("refuses a repo still on intent/", () => {
+    const root = rootOf(copyExample());
+    mkdirSync(join(root, "intent"));
+    expect(() => newStory({ title: "Anything", activity: "getting-started", map: "chk" }, root)).toThrow("this repo has intent/: run nikos migrate maps");
   });
 
   it("refuses a story whose id uses the wrong prefix", () => {
@@ -251,10 +246,10 @@ describe("group validation", () => {
     expect(validateGroup(dup).errors.map((e) => e.message)).toContain("maps/chk and maps/ret both use key 'CHK'");
   });
 
-  it("flags a group with no key", () => {
+  it("accepts a group with no key: its maps need no owner or key of their own", () => {
     const root = oneMap();
     write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
-    expect(validateGroup(root).errors.map((e) => e.message)).toContain("has no key");
+    expect(validateGroup(root).errors.map((e) => e.message)).not.toContain("has no key");
   });
 
   it("doctor reads a group with maps, and counts stories and maps", () => {
@@ -292,11 +287,11 @@ describe("nikos map in a group", () => {
 });
 
 describe("decisions in a group", () => {
-  it("writes them to planning/decisions.md", () => {
+  it("writes them to decisions.md at the root", () => {
     const root = oneMap();
     decide({ title: "Keep one page", why: "Simpler to read" }, root);
-    expect(readFileSync(join(root, "planning/decisions.md"), "utf8")).toContain("Keep one page");
-    expect(existsSync(join(root, "intent"))).toBe(false);
+    expect(readFileSync(join(root, "decisions.md"), "utf8")).toContain("Keep one page");
+    expect(existsSync(join(root, "maps", "ht"))).toBe(false);
   });
 });
 
@@ -306,25 +301,13 @@ describe("review fixes for group maps", () => {
     write(mapFile(root, "chk"), readFileSync(mapFile(root, "chk"), "utf8") + "story_bets:\n  ACME-CHK-1: [faster-checkout]\n");
     expect(validate(root, "chk").errors.map((e) => e.message)).toContain("maps/chk names its bet in bet:, so releases and stories don't name bets: remove story_bets from ACME-CHK-1");
 
-    const intent = copyExample();
-    editFile(join(intent, "storymap.yaml"), (text) => `bet: faster-checkout\n${text}`);
-    expect(validate(intent).errors.map((e) => e.message)).toContain("intent/ names bets in releases: bet: is only for maps/<id>");
   });
 
-  it("reads a repo folder named maps/ as an intent/ repo", () => {
-    const base = mkdtempSync(join(tmpdir(), "nikos-named-"));
-    const root = join(base, "maps");
-    cpSync(exampleDir, root, { recursive: true });
-    expect(resolveStoryMap(join(root, "intent")).id).toBeUndefined();
-    expect(resolveStoryMap(join(root, "intent")).root).toBe(root);
-    expect(validate(join(root, "intent")).errors).toEqual([]);
-  });
-
-  it("reports a group with no key once, with no false prefix errors", () => {
+  it("a group with no key reports no key error, and no false prefix errors", () => {
     const root = oneMap();
     write(join(root, "planning/plan.yaml"), "name: Checkout\nlevel: group\nperiod: Q1\npillars: []\n");
     const messages = validateGroup(root).errors.map((e) => e.message);
-    expect(messages.filter((m) => m === "has no key")).toHaveLength(1);
+    expect(messages.filter((m) => m === "has no key")).toHaveLength(0);
     expect(messages.some((m) => m.includes("must start with"))).toBe(false);
   });
 
@@ -367,13 +350,5 @@ describe("review fixes for group maps", () => {
     }
     expect(message).toContain("stays in_progress: its scenarios couldn't run");
     expect(message).not.toContain("several story maps");
-  });
-
-  it("carries a CODEOWNERS rule for a group map's approvals", () => {
-    const root = oneMap();
-    write(join(root, "CODEOWNERS"), "maps/chk/approvals.yaml @acme/payments\n");
-    const r = migrate(root, "per-story", "chk");
-    expect(r.codeowners).toBe(join(root, "CODEOWNERS"));
-    expect(readFileSync(join(root, "CODEOWNERS"), "utf8")).toContain("maps/chk/approvals/ @acme/payments");
   });
 });

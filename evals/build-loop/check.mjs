@@ -38,8 +38,8 @@ const isChecklist = (text, min = 5) => (text.match(/^\s*- \[[ xX~-]\]/gm) ?? [])
  */
 function steps(event) {
   if (event.kind === "edit") {
-    if (/\/intent\/plans\/[^/]+\.v\d+\.md$/.test(event.path)) return [{ step: 3.2 }];
-    if (/\/intent\//.test(event.path)) return [];
+    if (/\/maps\/[^/]+\/plans\/[^/]+\.v\d+\.md$/.test(event.path)) return [{ step: 3.2 }];
+    if (/\/maps\//.test(event.path)) return [];
     return [{ step: 5 }];
   }
   const out = [];

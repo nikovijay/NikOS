@@ -231,7 +231,7 @@ export function crossRefs(root: string): { ref: string; file: string; resolved: 
     for (const r of [meta?.krs?.primary, ...(meta?.krs?.also ?? []), ...[meta?.aligns_to ?? []].flat()]) if (typeof r === "string" && r.includes("#")) refs.push({ ref: r, file: `planning/bets/${basename(p)}` });
   }
   for (const ref of storyMapsOf(root)) {
-    const file = ref.id ? `maps/${ref.id}/storymap.yaml` : "intent/storymap.yaml";
+    const file = `maps/${ref.id}/storymap.yaml`;
     const map = parse(readFileSync(join(ref.dir, "storymap.yaml"), "utf8"));
     for (const r of map?.releases ?? []) for (const b of r?.bets ?? []) if (CROSS_REF.test(b)) refs.push({ ref: b, file });
     for (const list of Object.values(map?.story_bets ?? {})) for (const b of list as string[]) if (CROSS_REF.test(b)) refs.push({ ref: b, file });

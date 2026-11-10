@@ -1,6 +1,6 @@
 // Delivery status of a bet, worked out from the story maps that spec it. A story's status is the
 // status its map's delivery summary says (maps/<key>/delivery.yaml, written by nikos map status,
-// state set and approve, and checked by nikos validate). A repo's own intent/ map counts its state.
+// state set and approve, and checked by nikos validate). A repo's own map counts its state.
 // Never stored, never the outcome.
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -20,7 +20,7 @@ export interface Delivery {
   /** Each story with its status; a map's story also says how far its proof can be trusted (its freshness). */
   stories: { id: string; status: string; freshness?: string }[];
   releases: number[];
-  /** The maps that contributed stories: each map's id, or intent for the repo's own map. */
+  /** The maps that contributed stories: each map's id. */
   maps: string[];
   /** Done, but approval is required here and no delivery approval holds for it yet. */
   awaiting: number;
@@ -70,7 +70,7 @@ export function delivery(root: string, bet: string): Delivery {
     const map = yamlAt(join(ref.dir, "storymap.yaml"));
     const ids = map ? storiesFor(map, bet, self()) : [];
     if (!ids.length) continue;
-    maps.push(ref.id ?? "intent");
+    maps.push(ref.id);
 
     if (ref.id) {
       // A map in maps/: the summary its owner committed says each story's status. A story it doesn't list has none yet.
@@ -92,7 +92,7 @@ export function delivery(root: string, bet: string): Delivery {
         }
       }
     } else {
-      // The repo's intent/ map: its own state.
+      // A map with no summary yet: its own state.
       const states = loadStates(ref.dir);
       for (const id of ids) {
         const status = states[id]?.status ?? "todo";
@@ -120,7 +120,7 @@ export function delivery(root: string, bet: string): Delivery {
 
 /**
  * Every map in a repo, summed: each story's status from its delivery summary. A story with no
- * summary yet is counted in noSummary. A repo's intent/ map counts its own state.
+ * summary yet is counted in noSummary.
  */
 export interface MapDelivery {
   /** The map's folder name, e.g. inb. */
@@ -142,9 +142,9 @@ export function mapDeliveryIn(dir: string): { stories: MapDelivery["stories"]; n
     const map = yamlAt(join(ref.dir, "storymap.yaml")) ?? {};
     const ids: string[] = (map.releases ?? []).flatMap((r: { stories?: string[] }) => r.stories ?? []);
     releases += (map.releases ?? []).length;
-    const one: MapDelivery = { map: ref.id ?? "intent", bets: [map.bet].flat().filter((b): b is string => typeof b === "string"), stories: [], noSummary: [] };
+    const one: MapDelivery = { map: ref.id, bets: [map.bet].flat().filter((b): b is string => typeof b === "string"), stories: [], noSummary: [] };
     if (!ref.id) {
-      // The repo's intent/ map: its own state.
+      // A map with no summary yet: its own state.
       const states = loadStates(ref.dir);
       for (const id of ids) {
         const status = states[id]?.status ?? "todo";

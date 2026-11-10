@@ -1,5 +1,5 @@
 // `nikos start` and `nikos company init`: the first run, for a repo and for a company.
-// start sets a repo up with sensible defaults: intent/ (name and key from the folder), a
+// start sets a repo up with sensible defaults: maps/<key>/ (name and key from the folder), a
 // Cucumber runner for its stack, and CI for its host, each only when it's missing.
 // company init writes a company plan repo that departments and groups join.
 import { existsSync } from "node:fs";
@@ -29,15 +29,12 @@ export interface StartResult {
 }
 
 export function start(root: string, opts: { name?: string; key?: string } = {}): StartResult {
-  if (store().isDir(join(root, "maps"))) throw new Error("This repo has maps/ (group story maps). Add a product's story map with nikos map new, not start.");
+  if (store().isDir(join(root, "intent"))) throw new Error("This repo keeps its story map in intent/. Move it with nikos migrate maps first, then start.");
+  if (store().isDir(join(root, "maps"))) throw new Error("This repo has maps/ (story maps). Add another story map with nikos map new, not start.");
   const done: string[] = [];
   const ask: string[] = [];
-  if (store().exists(join(root, "intent", "storymap.yaml"))) done.push("intent/ is already set up");
-  else {
-    const r = init(root, opts);
-    const map = r.validation;
-    done.push(`Created intent/ for ${opts.name ?? basename(resolve(root))} (${map.stories} starter story)`);
-  }
+  const r = init(root, opts);
+  done.push(`Created maps/${basename(r.mapDir)}/ for ${opts.name ?? basename(resolve(root))} (${r.validation.stories} starter story)`);
   const stack = detectStack(root);
   if (!stack) ask.push("Which language is this project in? There's no package.json, pyproject.toml or requirements.txt yet, so there's no scenario runner.");
   else {

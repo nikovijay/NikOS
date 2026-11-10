@@ -101,13 +101,13 @@ describe("verify", () => {
 
   it("skips the example step stubs once the example story is gone", () => {
     const root = fixture({ "package.json": "{}" });
-    rmSync(join(root, "intent/features/getting-started"), { recursive: true });
+    rmSync(join(root, "maps/fx/features/getting-started"), { recursive: true });
     expect(setupVerify(root).created).toEqual(["cucumber.mjs"]);
   });
 
   it("skips the example step stubs once the example story is rewritten into a real one", () => {
     const root = fixture({ "package.json": "{}" });
-    const path = join(root, "intent/features/getting-started/first-story.feature");
+    const path = join(root, "maps/fx/features/getting-started/first-story.feature");
     writeFileSync(path, readFileSync(path, "utf8").replace(/Scenario:[\s\S]*$/, "Scenario: AC1 — A tip\n    Given a bill of 50\n    When I add a 20% tip\n    Then the total is 60.00\n"));
     expect(setupVerify(root).created).toEqual(["cucumber.mjs"]);
   });
@@ -123,7 +123,7 @@ describe("verify", () => {
     const root = fixture({ "package.json": "{}" });
     expect(() => verify(root, "FX-1")).toThrow(/Run `nikos verify setup` first/);
     setupVerify(root);
-    expect(() => verify(root, "FX-9")).toThrow("No feature file is tagged @FX-9");
+    expect(() => verify(root, "FX-9")).toThrow("no story map has FX-9");
   });
 });
 

@@ -3,11 +3,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { validate } from "../src/commands/validate";
 
-const intent = join(__dirname, "../evals/validate/outputs/01-nudge/intent");
+const root = join(__dirname, "../evals/validate/outputs/01-nudge");
+const intent = join(root, "maps/nud");
 const read = (f: string) => readFileSync(join(intent, f), "utf8");
 
 describe("validate eval output (Nudge)", () => {
-  it("is still a valid intent folder", () => {
+  it("is still a valid story map", () => {
     expect(validate(intent).errors).toEqual([]);
   });
 
@@ -23,12 +24,12 @@ describe("validate eval output (Nudge)", () => {
   });
 
   it("recorded the round under ## Validation at the end of the constitution", () => {
-    const validation = read("constitution.md").split("\n## Validation\n")[1];
+    const validation = readFileSync(join(root, "constitution.md"), "utf8").split("\n## Validation\n")[1];
     expect(validation).toBeDefined();
     expect(validation).not.toContain("\n## ");
     for (const part of ["Reached:** 20", "Replied:** 9", "missed", "\"I'd pay for this tomorrow"]) {
       expect(validation, part).toContain(part);
     }
-    expect(read("decisions.md")).toContain("never send without the freelancer's approval");
+    expect(readFileSync(join(root, "decisions.md"), "utf8")).toContain("never send without the freelancer's approval");
   });
 });

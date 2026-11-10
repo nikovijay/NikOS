@@ -29,11 +29,14 @@ _Record trade-offs and why._
 
 ## Key files
 
-- `intent/` (one product's story map, in a repo with no levels) and `maps/<key>/` (a group's maps, one per bet)
-  are the two layouts. `src/commands/migrate-maps.ts` (`nikos migrate maps`) is the only move between them.
-- `src/lib/maps.ts`: which story map a command works on (`resolveStoryMap`), and a map's owner and story id
-  prefix (`mapOwnerOf`, `storyPrefix`). A map with no owner takes the group key in `planning/plan.yaml`.
-- `src/lib/state-files.ts`: where a story's state and approvals live: `intent/`, or `maps/<key>/`.
+- `maps/<key>/` is the one layout for a story map, whether a repo has one map or one per bet.
+  `constitution.md` and `decisions.md` sit at the root. `src/commands/migrate-maps.ts`
+  (`nikos migrate maps`) moves a 0.2.x `intent/` into it, converting the file format on the way.
+- `src/lib/maps.ts`: which story map a command works on (`resolveStoryMap`: by `--map`, or by the story id
+  when a command takes one), and a map's owner and story id prefix (`mapOwnerOf`, `storyPrefix`). A map with
+  no owner takes the group key in `planning/plan.yaml`.
+- `src/lib/state-files.ts`: where a story's state and approval live, in its map's folder: `state.yaml`, and
+  `approvals/<id>.yaml`.
 - `src/lib/map-data.ts`: a map's files as data (`loadMapData`, `mapStoryIds`).
 - `src/lib/map-summary.ts`: a map's delivery summary, worked out from its own files, and the drift check
   that `nikos validate` runs. Pure reads: no git, no network.

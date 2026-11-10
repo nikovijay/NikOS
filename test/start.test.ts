@@ -20,15 +20,15 @@ const repo = (files: Record<string, string> = {}, origin?: string) => {
 };
 
 describe("start", () => {
-  it("sets up intent/, the runner and CI in one go, and offers what's next", () => {
+  it("sets up maps/tc/, the runner and CI in one go, and offers what's next", () => {
     const root = repo({ "package.json": '{"name":"tip-calc"}' }, "git@github.com:acme/tip-calc.git");
     const r = start(root, { name: "Tip Calc", key: "TC" });
-    expect(r.done[0]).toBe("Created intent/ for Tip Calc (1 starter story)");
+    expect(r.done[0]).toBe("Created maps/tc/ for Tip Calc (1 starter story)");
     expect(r.done[1]).toMatch(/^Set up a Cucumber runner for js \(.*cucumber\.mjs.*\)\. Install it with: npm install --save-dev @cucumber\/cucumber/);
     expect(r.done[2]).toBe("Added CI for github (.github/workflows/nikos.yml, .github/workflows/nikos-release.yml)");
     expect(r.ask).toEqual([]);
     expect(r.next.options[0].label).toBe("Build TC-1: First story");
-    expect(start(root).done).toEqual(["intent/ is already set up", "The js scenario runner is already set up", "CI for github is already set up"]);
+    expect(() => start(root)).toThrow("This repo has maps/");
   });
 
   it("asks what it can't tell from the repo", () => {

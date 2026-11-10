@@ -14,7 +14,7 @@ import { checkRelease } from "../src/commands/release";
 import { suggest } from "../src/commands/suggest";
 import { approve } from "../src/commands/approve";
 import { resolveSettings, setSetting } from "../src/lib/settings";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 const git = (cwd: string, ...args: string[]) => {
   const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
@@ -35,7 +35,7 @@ function level(settings: string, upstream?: { repo: string; url: string }): stri
   return dir;
 }
 const plainRepo = () => {
-  const root = dirname(copyExample());
+  const root = rootOf(copyExample());
   git(root, "init", "-q", "-b", "main");
   return root;
 };
@@ -78,7 +78,7 @@ describe("settings", () => {
 describe("approval policy", () => {
   const withSettings = (yaml: string) => {
     const intent = copyExample();
-    writeFileSync(join(dirname(intent), "nikos.settings.yaml"), `format_version: 1\n${yaml}`);
+    writeFileSync(join(rootOf(intent), "nikos.settings.yaml"), `format_version: 1\n${yaml}`);
     return intent;
   };
 
@@ -98,32 +98,33 @@ describe("approval policy", () => {
     const intent = withSettings("approval:\n  policy: required-for-release\n");
     edit(join(intent, "state.yaml"), (s) => s.replace("status: in_progress", "status: done"));
     expect(checkRelease({ number: 1 }, intent).gaps).toEqual(["HT-1 isn't approved", "HT-2 isn't approved"]);
-    writeFileSync(join(dirname(intent), "nikos.settings.yaml"), "format_version: 1\n");
+    writeFileSync(join(rootOf(intent), "nikos.settings.yaml"), "format_version: 1\n");
     expect(checkRelease({ number: 1 }, intent).ready).toBe(true);
   });
 });
 
 describe("doctor", () => {
   it("says what's set up and what to do next", () => {
-    const root = dirname(copyExample());
+    const root = rootOf(copyExample());
     const names = (cs: ReturnType<typeof doctor>) => cs.map((c) => `${c.status} ${c.name}`);
-    expect(names(doctor(root, { offline: true }))).toEqual(["ok story map", "fail scenario runner", "warn CI", "ok approvals"]);
-    expect(doctor(root, { offline: true })[0].found).toBe("3 stories in 2 releases");
+    // The example has a planning/ folder, so its plan checks come first; then the runner, CI and the story map.
+    expect(names(doctor(root, { offline: true }))).toEqual(["warn plan", "ok decisions", "fail scenario runner", "warn CI", "ok story map", "ok approvals"]);
+    expect(doctor(root, { offline: true }).find((c) => c.name === "story map")!.found).toBe("3 stories in 1 map");
     const one = mkdtempSync(join(tmpdir(), "nikos-one-"));
     init(one, { name: "One", key: "ON" });
-    expect(doctor(one, { offline: true })[0].found).toBe("1 story in 1 release");
+    expect(doctor(one, { offline: true }).find((c) => c.name === "story map")!.found).toBe("1 story in 1 map");
     writeFileSync(join(root, "package.json"), "{}");
     writeFileSync(join(root, "cucumber.mjs"), "export default {};\n");
     mkdirSync(join(root, ".github/workflows"), { recursive: true });
     writeFileSync(join(root, ".github/workflows/nikos.yml"), "name: nikos\n");
     writeFileSync(join(root, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: required-for-release\ntracker:\n  system: linear\n");
     const checks = doctor(root, { offline: true });
-    expect(names(checks)).toEqual(["ok story map", "ok scenario runner", "ok CI", "warn approvals", "warn tracker"]);
-    expect(checks[3].next).toContain("CODEOWNERS");
-    writeFileSync(join(root, "CODEOWNERS"), "/intent/approvals.yaml @acme/product\n");
-    expect(doctor(root, { offline: true })[3]).toMatchObject({ status: "ok", found: "required-for-release (this repo); intent/approvals.yaml needs a CODEOWNERS review" });
-    expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no intent/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does. For a company or department plan, nikos company init" }]);
-    expect(existsSync(join(root, "intent"))).toBe(true);
+    expect(names(checks)).toEqual(["warn plan", "ok decisions", "ok scenario runner", "ok CI", "ok story map", "warn approvals", "warn tracker"]);
+    expect(checks[5].next).toContain("CODEOWNERS");
+    writeFileSync(join(root, "CODEOWNERS"), "/maps/*/approvals/ @acme/product\n");
+    expect(doctor(root, { offline: true })[5]).toMatchObject({ status: "ok", found: "required-for-release (this repo); maps/<key>/approvals/ needs a CODEOWNERS review" });
+    expect(doctor(mkdtempSync(join(tmpdir(), "nikos-none-")))).toEqual([{ name: "story map", status: "fail", found: "no maps/ folder", next: "Set up nikOS here (nikos init), or map what the repo already does" }]);
+    expect(existsSync(join(root, "maps", "ht"))).toBe(true);
   });
 });
 
@@ -135,7 +136,7 @@ describe("a plan-only repo", () => {
     const text = readFileSync(join(root, "planning/decisions.md"), "utf8");
     expect(text).toMatch(/^# Decisions\n/);
     expect(text).toContain("## 2027-01-05 — Revenue is the one company key result");
-    expect(existsSync(join(root, "intent"))).toBe(false);
+    expect(existsSync(join(root, "maps", "ht"))).toBe(false);
     expect(formatDecisions("revenue", findDecisions("revenue", root), root)).toMatch(/^planning\/decisions\.md:\d+-\d+\n## 2027-01-05/);
     // A repo with neither a story map nor a plan still needs nikos init.
     expect(() => decide({ title: "x", why: "y" }, mkdtempSync(join(tmpdir(), "nikos-none-")))).toThrow(/Run `nikos init` first/);

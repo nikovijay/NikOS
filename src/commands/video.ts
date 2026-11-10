@@ -22,9 +22,9 @@ export interface Storyboard {
 const INTRO = 4.5, BEAT = 2.6, PER_STORY = 1.8, CLOSE = 6;
 
 /** The constitution's front matter and its "## Section" bodies. */
-function constitution(intentDir: string) {
-  const path = join(intentDir, "constitution.md");
-  if (!existsSync(path)) throw new Error("No intent/constitution.md: run the idea-to-blueprint playbook first");
+function constitution(root: string) {
+  const path = join(root, "constitution.md");
+  if (!existsSync(path)) throw new Error("No constitution.md: run the idea-to-blueprint playbook first");
   const text = read(path);
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
   const meta = (fm ? parse(fm[1]) : {}) as { name?: string; idea?: string };
@@ -33,14 +33,15 @@ function constitution(intentDir: string) {
   return { name: meta.name ?? "", idea: meta.idea ?? "", users: sections.Users ?? "", problem: sections.Problem ?? "" };
 }
 
-/** Draft a video storyboard from intent/: only stories marked done, one beat per activity. */
+/** Draft a video storyboard from a map: only stories marked done, one beat per activity. */
 export function storyboard(dir: string, mapId?: string): Storyboard {
-  const intentDir = resolveStoryMap(dir, mapId).dir;
-  const c = constitution(intentDir);
-  const map = parse(read(join(intentDir, "storymap.yaml"))) as { activities?: { id: string; title?: string }[] };
-  const state = { stories: loadStates(intentDir) };
+  const ref = resolveStoryMap(dir, { map: mapId });
+  const mapDir = ref.dir;
+  const c = constitution(ref.root);
+  const map = parse(read(join(mapDir, "storymap.yaml"))) as { activities?: { id: string; title?: string }[] };
+  const state = { stories: loadStates(mapDir) };
 
-  const stories = walk(join(intentDir, "features"), ".feature").flatMap((path) => {
+  const stories = walk(join(mapDir, "features"), ".feature").flatMap((path) => {
     const text = read(path);
     const id = featureStoryIds(text)[0];
     const feature = parseFeature(text);
@@ -82,7 +83,7 @@ export function briefOf(sb: Storyboard): string {
   return [
     `# Brief: ${sb.product.name}`,
     "",
-    "Drafted by `nikos video` from intent/. Approve the beats before rendering; change anything here first.",
+    "Drafted by `nikos video` from the story map. Approve the beats before rendering; change anything here first.",
     "",
     `- **Product:** ${sb.product.name}. ${sb.product.idea}`,
     `- **For:** ${sb.users}`,
@@ -110,7 +111,7 @@ export function writeVideo(dir: string, out: string, mapId?: string) {
   const sb = storyboard(dir, mapId);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "brief.md"), briefOf(sb));
-  writeFileSync(join(out, "storyboard.js"), `// Drafted by nikos video from intent/. The storyboard template reads it.\nwindow.STORYBOARD = ${JSON.stringify(sb, null, 2)};\n`);
+  writeFileSync(join(out, "storyboard.js"), `// Drafted by nikos video from the story map. The storyboard template reads it.\nwindow.STORYBOARD = ${JSON.stringify(sb, null, 2)};\n`);
   return sb;
 }
 

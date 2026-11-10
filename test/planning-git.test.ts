@@ -93,7 +93,7 @@ describe("the nikos branch", () => {
     const srv = await start(co);
     await post(srv, "/api/op", op(co, 1.5));
     const p = await pending(srv);
-    expect(p.warning).toContain("uncommitted changes outside planning/, maps/ and intent/");
+    expect(p.warning).toContain("uncommitted changes outside planning/ and maps/");
     expect(p.unrelated.join("\n")).toContain("notes.txt");
     const commit = await post(srv, "/api/git/commit", {});
     expect(commit.status).toBe(200);

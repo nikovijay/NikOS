@@ -50,7 +50,7 @@ It refuses if a level above locked it.
 `approval.routes` says which ways of approving count: through the app (`nikos
 mcp` asks you directly), in chat (you answered your agent), or in a terminal.
 To make approvals need the right reviewer, protect the main branch and add a
-`CODEOWNERS` rule for `intent/approvals.yaml`. `nikos doctor` checks for it.
+`CODEOWNERS` rule for `maps/*/approvals/`. `nikos doctor` checks for it.
 
 ## Starting a company plan
 

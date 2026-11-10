@@ -3,6 +3,7 @@
 // under the name people try first.
 import { join, resolve } from "node:path";
 import { store } from "../lib/store.js";
+import { mapDirs } from "../lib/maps.js";
 import { runServe } from "../planning/server.js";
 
 export function runServeCommand(args: string[]): Promise<number> | number {
@@ -11,8 +12,8 @@ export function runServeCommand(args: string[]): Promise<number> | number {
     return i >= 0 ? args[i + 1] : undefined;
   };
   const root = resolve(opt("dir") ?? process.cwd());
-  if (!store().exists(join(root, "intent", "storymap.yaml")) && !store().isDir(join(root, "planning"))) {
-    console.error(`✗ There's nothing to show in ${root} yet: it has no story map (intent/) and no plan (planning/).\n  To set it up, run: nikos start`);
+  if (!mapDirs(root).length && !store().isDir(join(root, "planning"))) {
+    console.error(`✗ There's nothing to show in ${root} yet: it has no story map (maps/) and no plan (planning/).\n  To set it up, run: nikos start`);
     return 1;
   }
   const exportTo = opt("export");

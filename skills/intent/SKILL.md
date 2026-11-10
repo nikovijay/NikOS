@@ -10,7 +10,7 @@ Say what the spec says, not what the code happens to do.
 ## 1. Find the story
 
 If you have a story id, use it. If you only have a topic, search the
-`Feature:` lines under `intent/features/` and pick the story that matches.
+`Feature:` lines under `maps/<key>/features/` and pick the story that matches.
 If more than one could match, list them and ask which one.
 
 ## 2. Read everything recorded about it
@@ -20,7 +20,7 @@ nikos show <story-id>
 ```
 
 It prints the feature (user story and scenarios), its status from
-`intent/state.yaml`, its release, the latest plan, any bets it's linked to,
+the map's `state.yaml`, its release, the latest plan, any bets it's linked to,
 and decisions tagged with its id. Open the feature file and the plan it
 names when you need more than the summary.
 

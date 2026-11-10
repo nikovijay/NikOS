@@ -6,7 +6,7 @@ import { basename } from "node:path";
 import { approvalLapse, loadApprovals } from "./approvals.js";
 import { loadMapData, mapStoryIds } from "./map-data.js";
 import { DELIVERY_SUMMARY, writeDeliverySummary, type DeliverySummary } from "./delivery-summary.js";
-import { keyOf, mapOwnerOf, NO_OWNER, type StoryMapRef } from "./maps.js";
+import { prefixOf } from "./maps.js";
 import { isDone, specHash } from "./project.js";
 import { loadStates } from "./state-files.js";
 
@@ -26,18 +26,14 @@ export interface SummaryBodyStory {
 export interface SummaryBody {
   format_version: 1;
   map: string;
-  owner: string;
+  /** The map's owner; absent when the map names none and the repo has no key. */
+  owner?: string;
   stories: SummaryBodyStory[];
 }
 
-/** Whether a story map gets a delivery.yaml: a map in this repo's maps/ (not intent/). */
-export const hasSummary = (ref: StoryMapRef): boolean => ref.inRepo;
-
-/** The owner a map's story ids and summary carry: its storymap owner, else the repo's group key. */
-export function ownerFor(root: string, dir: string): string {
-  const owner = mapOwnerOf(dir) ?? keyOf(root);
-  if (!owner) throw new Error(NO_OWNER);
-  return owner;
+/** The owner a map's summary carries: its storymap owner, else the repo's group key. Undefined when neither is set. */
+export function ownerFor(root: string, dir: string): string | undefined {
+  return prefixOf({ root, dir, id: basename(dir) });
 }
 
 /**
@@ -79,7 +75,7 @@ export function summaryBody(root: string, dir: string): SummaryBody {
       ...(proof ? { proof } : {}),
     };
   });
-  return { format_version: 1, map: basename(dir), owner, stories };
+  return { format_version: 1, map: basename(dir), ...(owner ? { owner } : {}), stories };
 }
 
 /** The summary with read_at set on the file and on each story: what gets written. */
@@ -98,7 +94,7 @@ export function summaryDrift(body: SummaryBody, onDisk: unknown): { file: string
   const disk = onDisk as Partial<SummaryBody> | undefined;
   if (!disk || typeof disk !== "object") return { file: DELIVERY_SUMMARY, message: "is not a delivery summary" };
   for (const field of ["format_version", "map", "owner"] as const) {
-    if (disk[field] !== body[field]) return { file: DELIVERY_SUMMARY, message: `${field} is '${disk[field]}' in ${DELIVERY_SUMMARY}, but '${body[field]}' now` };
+    if (disk[field] !== body[field]) return { file: DELIVERY_SUMMARY, message: `${field} is '${disk[field] ?? "none"}' in ${DELIVERY_SUMMARY}, but '${body[field] ?? "none"}' now` };
   }
   const byId = new Map((Array.isArray(disk.stories) ? disk.stories : []).map((s: any) => [s?.id, s]));
   for (const want of body.stories) {

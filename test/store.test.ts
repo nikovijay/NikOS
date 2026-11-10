@@ -28,35 +28,36 @@ describe("memory store", () => {
       return repo.changes();
     });
     expect(changes.map((c) => c.path)).toEqual([
-      "intent/constitution.md",
-      "intent/decisions.md",
-      "intent/features/getting-started/first-story.feature",
-      "intent/features/getting-started/split-evenly.feature",
-      "intent/plans/.gitkeep",
-      "intent/plans/TC-2.v1.md",
-      "intent/state.yaml",
-      "intent/storymap.yaml",
+      "constitution.md",
+      "decisions.md",
+      "maps/tc/delivery.yaml",
+      "maps/tc/features/getting-started/first-story.feature",
+      "maps/tc/features/getting-started/split-evenly.feature",
+      "maps/tc/plans/.gitkeep",
+      "maps/tc/plans/TC-2.v1.md",
+      "maps/tc/state.yaml",
+      "maps/tc/storymap.yaml",
     ]);
-    expect(changes.find((c) => c.path === "intent/features/getting-started/split-evenly.feature")!.text).toMatch(/^@TC-2 @release-2 /);
-    expect(existsSync(join(repo.root, "intent"))).toBe(false);
+    expect(changes.find((c) => c.path === "maps/tc/features/getting-started/split-evenly.feature")!.text).toMatch(/^@TC-2 @release-2 /);
+    expect(existsSync(join(repo.root, "maps", "tc"))).toBe(false);
   });
 
   it("reads a repo handed over as files, and writes only what changed", () => {
     const repo = new MemoryStore(exampleFiles());
     withStore(repo, () => {
-      const intent = join(repo.root, "intent");
+      const intent = join(repo.root, "maps", "ht");
       expect(storyMapOf(intent).releases.map((r) => r.title)).toEqual(["MVP", "Enhancements"]);
       setState("HT-3", "cancelled", { dir: intent, reason: "Not this year", date: "2026-11-06" });
       expect(exportMap(intent, "prd")).toContain("## Cancelled\n\n- HT-3: Reorder tasks. Not this year");
     });
-    expect(repo.changes().map((c) => c.path)).toEqual(["intent/state.yaml"]);
-    expect(store().read(join(exampleDir, "intent/state.yaml"))).toContain("status: todo"); // the disk is untouched
+    expect(repo.changes().map((c) => c.path)).toEqual(["maps/ht/delivery.yaml", "maps/ht/state.yaml"]);
+    expect(store().read(join(exampleDir, "maps/ht/state.yaml"))).toContain("status: todo"); // the disk is untouched
   });
 
   it("refuses to replace a file written with create, like the disk does", () => {
-    const repo = new MemoryStore({ "intent/plans/HT-1.v1.md": "x" });
-    expect(() => repo.write(join(repo.root, "intent/plans/HT-1.v1.md"), "y", { create: true })).toThrow("EEXIST");
+    const repo = new MemoryStore({ "maps/ht/plans/HT-1.v1.md": "x" });
+    expect(() => repo.write(join(repo.root, "maps/ht/plans/HT-1.v1.md"), "y", { create: true })).toThrow("EEXIST");
     expect(() => repo.read(join(repo.root, "nope"))).toThrow("ENOENT");
-    expect(repo.list(join(repo.root, "intent"))).toEqual(["plans"]);
+    expect(repo.list(join(repo.root, "maps", "ht"))).toEqual(["plans"]);
   });
 });

@@ -11,7 +11,7 @@ import { newBet } from "../src/planning/bets";
 import { addDownstream, formatRollout, ownRepo, rollout } from "../src/planning/rollout";
 import { planningData } from "../src/planning/server";
 import { decide } from "../src/commands/decide";
-import { copyExample, edit } from "./helpers";
+import { copyExample, edit, rootOf } from "./helpers";
 
 const git = (cwd: string, ...args: string[]) => {
   const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
@@ -43,7 +43,7 @@ function company() {
   newKr({ id: "pay-1", title: "Checkout conversion", owner: "Payments", baseline: 50, target: 60, by: "2027-03-31", unit: "%", alignsTo: "acme/company-plan#kr-1" }, dept);
   commit(dept);
 
-  const team = dirname(copyExample());
+  const team = rootOf(copyExample());
   git(team, "init", "-q", "-b", "main");
   mkdirSync(join(team, "planning"), { recursive: true });
   writeFileSync(join(team, "planning/upstream.yaml"), `- repo: acme/payments-plan\n  url: ${dept}\n`);
@@ -132,7 +132,7 @@ describe("rollout", () => {
 
   it("shows what each plan does next, what's blocking it, and its latest decisions", () => {
     const { co, dept, team } = company();
-    edit(join(team, "intent/state.yaml"), (s) => s.replace("blockers: []", "blockers: [Waiting on the card provider's sandbox]"));
+    edit(join(team, "maps/ht/state.yaml"), (s) => s.replace("blockers: []", "blockers: [Waiting on the card provider's sandbox]"));
     decide({ title: "Store reminders in UTC", why: "Times move with daylight saving otherwise." }, team);
     commit(team, "blocked");
     for (const t of ["Cards only at launch", "No wallets until Q2", "Refunds stay manual", "One checkout page"]) decide({ title: t, why: "Keeps the first release small.", date: "2027-01-12" }, dept);

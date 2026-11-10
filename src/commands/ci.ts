@@ -72,7 +72,7 @@ ${python}${releaseSteps(stack, root, nikos, "RELEASE").map((s) => `      - run: 
 export function githubWorkflow(stack: Stack, root: string): string {
   const nikos = `nikos@${version()}`;
   const python = stack === "python" ? `      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.12"\n` : "";
-  return `# Written by nikos ci setup: checks the specs in intent/ or maps/ and runs every story's scenarios.
+  return `# Written by nikos ci setup: checks the specs in maps/ and runs every story's scenarios.
 name: nikos
 on:
   pull_request:
@@ -95,7 +95,7 @@ export function gitlabJob(stack: Stack, root: string): string {
   // Python stories need node for nikos itself, so that image installs it.
   const image = stack === "python" ? "python:3.12" : "node:22";
   const setup = stack === "python" ? ["apt-get update -qq && apt-get install -y -qq nodejs npm"] : [];
-  return `# Written by nikos ci setup: checks the specs in intent/ or maps/ and runs every story's scenarios.
+  return `# Written by nikos ci setup: checks the specs in maps/ and runs every story's scenarios.
 nikos:
   image: ${image}
   rules:

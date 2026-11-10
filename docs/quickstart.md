@@ -14,7 +14,7 @@ npm init -y
 npm pkg set type=module
 ```
 
-## 2. Create the intent/ folder (1 minute)
+## 2. Create the story map (1 minute)
 
 ```bash
 npx -y nikos@latest init --name "Tip Calculator" --key TC
@@ -23,19 +23,20 @@ npx -y nikos@latest init --name "Tip Calculator" --key TC
 You should see:
 
 ```text
-Created intent/ (6 files)
-✓ intent/ is valid — 1 story, 1 release
+Created maps/tc/ (7 files)
+✓ maps/tc/ is valid — 1 story, 1 release
 
-Next: fill in intent/constitution.md, then write your first story in intent/features/.
+Next: fill in constitution.md, then write your first story in maps/tc/features/.
 ```
 
-`intent/` now holds your story map, a state file, a decision log and one
-starter story, TC-1. [docs/format.md](format.md) explains each file.
+`maps/tc/` now holds your story map, a state file, a delivery summary and one
+starter story, TC-1. `constitution.md` and `decisions.md` sit at the root.
+[docs/format.md](format.md) explains each file.
 
 ## 3. Write the story (2 minutes)
 
 Replace the starter story with a real one. Save this as
-**`intent/features/getting-started/first-story.feature`**:
+**`maps/tc/features/getting-started/first-story.feature`**:
 
 ```gherkin
 @TC-1 @release-1 @must @activity-getting-started
@@ -61,7 +62,7 @@ npx -y nikos@latest state set TC-1 in_progress
 ```
 
 ```text
-✓ intent/ is valid — 1 story, 1 release
+✓ maps/tc/ is valid — 1 story, 1 release
 TC-1: todo → in_progress
 ```
 
@@ -73,7 +74,7 @@ npm install --save-dev @cucumber/cucumber@^12
 ```
 
 `verify setup` notices this is a JavaScript repo and adds `cucumber.mjs`,
-which runs every story in `intent/` as a test. Now run TC-1:
+which runs every story in `maps/` as a test. Now run TC-1:
 
 ```bash
 npx -y nikos@latest verify TC-1

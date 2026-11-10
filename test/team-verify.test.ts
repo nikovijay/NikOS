@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readdirSync } from "node:fs";
-import { printUndefined, setupVerify, undefinedSteps, verify } from "../src/commands/verify";
+import { behavePaths, printUndefined, setupVerify, undefinedSteps, verify } from "../src/commands/verify";
 import { groupRepo, write } from "./repo-fixture";
 
 const ROOT = join(__dirname, "..");
@@ -28,13 +28,29 @@ function teamWithRunner(steps = STEPS_JS): string {
 }
 
 describe("runner templates and setup", () => {
-  it("js and ts runners read every map's features, and python's behave.ini names intent/features", () => {
+  it("js and ts runners read every map's features, and python's behave.ini names the map placeholder", () => {
     for (const stack of ["js", "ts"]) {
       const text = readFileSync(join(ROOT, "templates/verify", stack, "cucumber.mjs"), "utf8");
-      expect(text).toContain("maps/*/features/**/*.feature");
-      expect(text).toContain("intent/features/**/*.feature");
+      expect(text).toContain('paths: ["maps/*/features/**/*.feature"]');
+      expect(text).not.toContain("intent/");
     }
-    expect(readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8")).toContain("[behave]");
+    const ini = readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8");
+    expect(ini).toContain("[behave]");
+    expect(ini).toContain("paths = maps/<key>/features");
+    expect(ini).not.toContain("intent/");
+  });
+
+  it("behave.ini lists one indented folder per map that has features, and keeps the placeholder when none does", () => {
+    const t = groupRepo("PAY");
+    mkdirSync(join(t, "maps/ota/features"), { recursive: true });
+    write(join(t, "maps/ota/storymap.yaml"), "format_version: 1\nproject: ota\nkey: OTA\nactivities: []\nreleases: []\n");
+    const template = readFileSync(join(ROOT, "templates/verify/python/behave.ini"), "utf8");
+    const ini = behavePaths(t, template);
+    expect(ini).toContain("paths =\n    maps/chk/features\n    maps/ota/features\n");
+    expect(ini).not.toContain("maps/<key>");
+    const bare = groupRepo("PAY");
+    rmSync(join(bare, "maps/chk/features"), { recursive: true, force: true });
+    expect(behavePaths(bare, template)).toBe(template);
   });
 
   it("setup leaves an existing runner config alone", () => {
@@ -64,6 +80,21 @@ describe("running the repo's stories", () => {
     expect(r.stack).toBe("python");
     expect(r.status).toBe(0);
     expect(r.output).toMatch(/1 feature passed/);
+  });
+});
+
+describe("behave.ini with several maps", () => {
+  it.skipIf(!hasBehave)("behave run with no folder reads every map's features from behave.ini", () => {
+    const t = groupRepo("PAY");
+    rmSync(join(t, "package.json"), { force: true });
+    write(join(t, "requirements.txt"), "behave\n");
+    write(join(t, "steps/steps.py"), "from behave import given, when, then\n\n@given('a basket with one item')\ndef a(c): pass\n\n@when('I pay for it')\ndef b(c): pass\n\n@then('I see a receipt')\ndef d(c): pass\n");
+    write(join(t, "maps/ota/storymap.yaml"), "format_version: 1\nproject: ota\nkey: OTA\nactivities: []\nreleases: []\n");
+    write(join(t, "maps/ota/features/second.feature"), "@OTA-1\nFeature: Second\n  Scenario: again\n    Given a basket with one item\n    When I pay for it\n    Then I see a receipt\n");
+    setupVerify(t);
+    const r = spawnSync(PYTHON, ["-m", "behave"], { cwd: t, encoding: "utf8" });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("maps/ota/features/second.feature");
   });
 });
 

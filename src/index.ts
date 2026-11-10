@@ -3,9 +3,9 @@
 // store.changes(). Running scenarios (done, approve, verify) needs a real checkout, so tools
 // without one leave that to CI.
 export { MemoryStore, diskStore, store, withStore, type Store } from "./lib/store.js";
-export { STORY_ID, DONE, isDone, specHash, findIntentDir } from "./lib/project.js";
+export { STORY_ID, DONE, isDone, specHash } from "./lib/project.js";
 export { loadApprovals, approvalLapse, type Approval } from "./lib/approvals.js";
-export { loadStates, storyState, perStory, type StoryState } from "./lib/state-files.js";
+export { loadStates, storyState, type StoryState } from "./lib/state-files.js";
 
 export { validate, formatResult, type Issue, type ValidationResult } from "./commands/validate.js";
 export { init, keyFor, slugify } from "./commands/init.js";
@@ -22,4 +22,3 @@ export { decide } from "./commands/decide.js";
 export { decisionEntries, findDecisions } from "./commands/decisions.js";
 export { storyMapOf, renderMap, type StoryMap, type MapStory, type MapRelease } from "./commands/map.js";
 export { exportMap, FORMATS, type Format } from "./commands/export.js";
-export { migrate, type Layout, type MigrateResult } from "./commands/migrate.js";

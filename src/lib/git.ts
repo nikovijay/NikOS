@@ -17,8 +17,9 @@ export function headOf(root: string): string | undefined {
 }
 
 /**
- * Paths nikOS writes about a map's own status and sign-offs (its state, approvals and delivery summary).
- * They change with each move and sign-off, not with the code, so they never lapse an approval.
+ * Paths nikOS writes about a map's own status and sign-offs (its state, approvals and delivery summary),
+ * and the repo's decisions and constitution. They change with each move, sign-off and decision, not with
+ * the code, so they never lapse an approval.
  */
 const BOOKKEEPING = [
   ":!.nikos",
@@ -27,6 +28,8 @@ const BOOKKEEPING = [
   ":(exclude,glob)maps/*/approvals.yaml",
   ":(exclude,glob)maps/*/approvals/**",
   ":(exclude,glob)maps/*/delivery.yaml",
+  ":(exclude)decisions.md",
+  ":(exclude)constitution.md",
 ];
 
 /**
@@ -109,7 +112,7 @@ export function remoteHas(root: string, name: string, run: Runner = realRun): bo
 
 /** The planning folders a save writes, that exist in the repo. */
 export function nikosPaths(root: string): string[] {
-  return ["planning", "maps", "intent"].filter((p) => existsSync(join(root, p)));
+  return ["planning", "maps"].filter((p) => existsSync(join(root, p)));
 }
 
 /** git status lines for paths (or all of them, when paths is undefined), as git prints them. No paths is no lines. */
@@ -124,18 +127,21 @@ export function statusOf(root: string, paths: string[] | undefined, run: Runner 
 export const pathOf = (line: string) => (line.slice(3).split(" -> ").pop() ?? "").replace(/^"|"$/g, "");
 
 /**
- * Changed files outside the planning folders: a save leaves them alone, and the pending bar warns about them.
+ * Changed files outside the planning and map folders (and the repo's decisions and constitution): a save leaves
+ * them alone, and the pending bar warns about them.
  * git prints paths from the top of the repo, so a plan in a subfolder of a larger repo looks at its own prefix.
  */
 export function unrelatedDirty(root: string, run: Runner = realRun): string[] {
-  const own = ["planning/", "maps/", "intent/"];
+  const own = ["planning/", "maps/"];
+  // The repo's own decisions and constitution are nikOS's files too (see BOOKKEEPING).
+  const ownFiles = ["decisions.md", "constitution.md"];
+  const mine = (inside: string) => own.some((p) => inside.startsWith(p)) || ownFiles.includes(inside);
   const prefix = gitIn(root, ["rev-parse", "--show-prefix"], run).stdout.trim();
   return statusOf(root, undefined, run).filter((l) => {
     const path = pathOf(l);
-    if (!prefix) return !own.some((p) => path.startsWith(p));
+    if (!prefix) return !mine(path);
     if (!path.startsWith(prefix)) return true; // outside this folder
-    const inside = path.slice(prefix.length);
-    return !own.some((p) => inside.startsWith(p));
+    return !mine(path.slice(prefix.length));
   });
 }
 
