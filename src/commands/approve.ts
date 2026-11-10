@@ -45,7 +45,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   if (!STORY_ID.test(story)) throw new StateError(`'${story}' is not a story id (expected e.g. HT-1 or PAY-CHK-12)`);
   const ref = resolveStoryMap(opts.dir ?? process.cwd(), { story, map: opts.map });
   const home = ref.dir;
-  const settings = resolveSettings(ref.root);
+  const settings = resolveSettings(ref.root, { map: ref.dir });
   const policy = settings["approval.policy"];
   if (policy.value === "off") throw new StateError(`Approvals are off here (approval.policy, set by ${policy.from})`);
   const via = opts.via ?? "terminal";

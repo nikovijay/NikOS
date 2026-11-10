@@ -181,7 +181,7 @@ export function checkRelease(input: { map?: string; number: number; run?: boolea
   if (!release) throw new Error(`There is no release ${input.number}. Releases: ${map.releases.map((r) => r.number).join(", ") || "none"}`);
   const inRelease = new Set(release.stories.map((s) => s.id));
   // approval.policy: required-for-release makes a done story without a sign-off a gap.
-  const needApproval = resolveSettings(ref.root)["approval.policy"].value === "required-for-release";
+  const needApproval = resolveSettings(ref.root, { map: ref.dir })["approval.policy"].value === "required-for-release";
   const live = release.stories.filter((s) => s.status !== "cancelled");
   // A done story with an approval on file that no longer holds: say so, as validate does.
   const signedOff = loadApprovals(ref.dir);

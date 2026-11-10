@@ -1,6 +1,7 @@
 // Settings in nikos.settings.yaml, at a repo's root. In a planning repo the company sets them once and
 // each area inherits them down the folders, changing any value the levels above haven't locked. A code
-// repo keeps its own file and inherits nothing. Each value remembers where it came from.
+// repo keeps its own file, and once it's linked to a plan it takes the plan's settings for each map's owner
+// from its nikos.plan.yaml. Each value remembers where it came from.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,8 @@ import { parse, parseDocument } from "yaml";
 import { store } from "./store.js";
 import { areaOf, type Area } from "../planning/model.js";
 import { chainOf } from "../plan/repo.js";
+import { readLink } from "../plan/settings-link.js";
+import { mapDirs, mapOwnerOf } from "./maps.js";
 
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -96,18 +99,42 @@ const formatIgnored = (i: IgnoredSetting) => `${i.key} from ${i.level} is ignore
 
 /**
  * The settings that apply to a repo. In a planning repo that's its area's chain (areaSettings). A code
- * repo's own nikos.settings.yaml layers over the defaults the same way.
+ * repo takes the company's and its map owner's levels from its nikos.plan.yaml snapshot (when it has one),
+ * then its own nikos.settings.yaml, and each level changes only what the levels above haven't locked.
  */
-export function resolveSettings(root: string): Resolved {
-  return resolveSettingsDetailed(root).resolved;
+export function resolveSettings(root: string, opts: { map?: string } = {}): Resolved {
+  return resolveSettingsDetailed(root, opts).resolved;
+}
+
+/**
+ * The owner whose chain a code repo's settings take: the map's own owner when a map is given. With no
+ * map, the owner the repo's maps agree on. When they differ, there's no one chain, so only the company's
+ * settings apply and a problem says so.
+ */
+function ownerOf(root: string, map: string | undefined): { owner?: string; problem?: string } {
+  if (map) return { owner: mapOwnerOf(map) };
+  const owners = new Set(mapDirs(root).map(mapOwnerOf));
+  if (owners.size <= 1) return { owner: [...owners][0] };
+  const names = [...owners].map((o) => o ?? "no owner").sort().join(", ");
+  return { problem: `the maps have different owners (${names}), so this shows the company's settings only: pass --map` };
 }
 
 /** resolveSettings, with the problems found in the levels (a settings file that doesn't read, or a value a level above locked). */
-export function resolveSettingsDetailed(root: string): { resolved: Resolved; problems: string[] } {
+export function resolveSettingsDetailed(root: string, opts: { map?: string } = {}): { resolved: Resolved; problems: string[] } {
   const area = areaOf(root);
   if (area) return areaSettings(area);
-  const path = join(root, SETTINGS_FILE);
+  const problems: string[] = [];
   const levels: SettingsLevel[] = [];
+  const link = readLink(root);
+  if (link) {
+    const { owner, problem } = ownerOf(root, opts.map);
+    if (problem) problems.push(problem);
+    const label = (rel: string) => `${link.plan.repo} ${rel}`;
+    for (const level of link.company) levels.push({ label: label(level.rel), data: level.data });
+    // An owner with no team in the plan has no entry here, so its maps take the company's settings only.
+    if (owner && link.owners[owner]) for (const level of link.owners[owner].levels) levels.push({ label: label(level.rel), data: level.data });
+  }
+  const path = join(root, SETTINGS_FILE);
   if (store().exists(path)) {
     const text = store().read(path);
     const bad = checkSettingsText(text);
@@ -115,7 +142,7 @@ export function resolveSettingsDetailed(root: string): { resolved: Resolved; pro
     levels.push({ label: "this repo", data: parse(text) ?? {} });
   }
   const { resolved, ignored } = layerSettings(levels);
-  return { resolved, problems: ignored.map(formatIgnored) };
+  return { resolved, problems: [...problems, ...ignored.map(formatIgnored)] };
 }
 
 /** An area's own settings file: the company's is nikos.settings.yaml at the root, any other area's is its settings.yaml. */

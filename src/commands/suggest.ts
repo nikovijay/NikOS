@@ -106,7 +106,7 @@ export function suggest(dir: string, mapId?: string, opts: { area?: string } = {
 
   // Done stories nobody has signed off (the map shows a story with an approval that holds as
   // approved): the agent asks "Do you want to approve …?"
-  const approvalsOn = resolveSettings(repoRootOf(mapDir))["approval.policy"].value !== "off";
+  const approvalsOn = resolveSettings(repoRootOf(mapDir), { map: mapDir })["approval.policy"].value !== "off";
   const unapproved = approvalsOn ? stories.filter((s) => s.status === "done" && !s.specChanged) : [];
   if (unapproved.length) {
     add({
