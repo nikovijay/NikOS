@@ -12,15 +12,20 @@ export function setAligns(root: string, kind: "kr" | "bet", id: string, refs: st
   if (kind === "kr") {
     const kr = loadKr(root, id);
     const data = structuredClone(kr.data);
-    if (list.length) data.aligns_to = alignsValue(list);
-    else delete data.aligns_to;
+    // A link written replaces the text: the text was only standing in for it.
+    if (list.length) {
+      data.aligns_to = alignsValue(list);
+      delete data.ladders_up;
+    } else delete data.aligns_to;
     if (!checkKr(data)) throw new Error(`Not a valid key result: ${describeErrors(checkKr.errors).join("; ")}`);
     return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(data), { expect: expect ?? kr.hash });
   }
   const bet = loadBet(root, id);
   const meta = structuredClone(bet.meta);
-  if (list.length) meta.aligns_to = alignsValue(list);
-  else delete meta.aligns_to;
+  if (list.length) {
+    meta.aligns_to = alignsValue(list);
+    delete meta.ladders_up;
+  } else delete meta.aligns_to;
   if (!checkBet(meta)) throw new Error(`Not a valid bet card: ${describeErrors(checkBet.errors).join("; ")}`);
   return writePlanning(root, join(paths(root).bets, `${id}.md`), betText(meta, bet.body), { expect: expect ?? bet.hash });
 }
@@ -39,6 +44,7 @@ export function setBetKrs(root: string, id: string, krs: { primary?: string; als
   const bet = loadBet(root, id);
   const meta = structuredClone(bet.meta);
   meta.krs = { ...(primary ? { primary } : {}), also };
+  if (primary || also.length) delete meta.ladders_up;
   if (!checkBet(meta)) throw new Error(`Not a valid bet card: ${describeErrors(checkBet.errors).join("; ")}`);
   return writePlanning(root, join(paths(root).bets, `${id}.md`), betText(meta, bet.body), { expect: expect ?? bet.hash });
 }

@@ -26,8 +26,12 @@ export interface KrInput {
   steps?: string[];
   /** The key results in the plan directly above that this one aligns to: one or several. */
   alignsTo?: string | string[];
+  /** Free text: what this ladders up to, until a link is written. Not with alignsTo. */
+  laddersUp?: string;
   staleAfterDays?: number;
 }
+
+const NO_ABOVE_KR = "A company key result has nothing above it to align to, so it has no ladders_up";
 
 function checked(data: any): any {
   if (!checkKr(data)) throw new Error(`Not a valid key result: ${describeErrors(checkKr.errors).join("; ")}`);
@@ -67,6 +71,11 @@ export function newKr(input: KrInput, root: string): string {
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
   const problem = alignmentProblems(root, aligns, "kr")[0];
   if (problem) throw new Error(problem);
+  const ladders = input.laddersUp?.trim() || undefined;
+  const laddersProblemText = krFieldProblems({ ladders_up: ladders }, "edit")[0];
+  if (laddersProblemText) throw new Error(laddersProblemText);
+  if (ladders && area?.level === "company") throw new Error(NO_ABOVE_KR);
+  if (ladders && aligns.length) throw new Error("Give a link (--aligns-to) or the text (--ladders-up), not both");
   const data = checked({
     id: input.id,
     title: input.title.trim(),
@@ -79,6 +88,7 @@ export function newKr(input: KrInput, root: string): string {
     by: input.by,
     ...(period ? { period } : {}),
     ...(aligns.length ? { aligns_to: alignsValue(aligns) } : {}),
+    ...(ladders ? { ladders_up: ladders } : {}),
     ...(input.staleAfterDays ? { stale_after_days: input.staleAfterDays } : {}),
     checkins: [],
   });
@@ -118,9 +128,11 @@ export function reviseTarget(root: string, id: string, target: number, expect?: 
 export function editKr(root: string, id: string, fields: Record<string, unknown>, expect?: string): string {
   const problem = krFieldProblems(fields, "edit")[0];
   if (problem) throw new Error(problem);
+  if (typeof fields.ladders_up === "string" && fields.ladders_up.trim() && areaOf(root)?.level === "company") throw new Error(NO_ABOVE_KR);
   const kr = loadKr(root, id);
   const data = structuredClone(kr.data);
-  for (const [k, v] of Object.entries(fields)) {
+  for (const [k, raw] of Object.entries(fields)) {
+    const v = k === "ladders_up" && typeof raw === "string" ? raw.trim() : raw;
     if (v === "" || v === null || v === undefined) delete data[k];
     else data[k] = typeof v === "string" && (k === "title" || k === "owner" || k === "unit" || k === "objective") ? v.trim() : v;
   }

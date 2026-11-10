@@ -35,13 +35,19 @@ const table: [string, unknown[]][] = [
   ["krFieldProblems", [{ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", kind: "sideways" }, "new"]],
   ["krFieldProblems", [{ kind: "milestone" }, "edit"]],
   ["betFieldProblems", [{ outcome: "won" }]],
+  ["laddersProblem", ["reconciliation revenue faster"]],
+  ["laddersProblem", ["   "]],
+  ["laddersProblem", ["two\nlines"]],
+  ["krFieldProblems", [{ ladders_up: "sales faster" }, "edit"]],
+  ["krFieldProblems", [{ ladders_up: 5 }, "edit"]],
+  ["betFieldProblems", [{ ladders_up: "a\nb" }]],
   ["betFieldProblems", [{ owner: "", review_on: "2026-01-02", confidence: "huge" }]],
 ];
 
 describe("shared rules", () => {
   it("has the fixture table the drift check runs on", () => {
     expect(table.length).toBeGreaterThanOrEqual(12);
-    expect(fns.map(([n]) => n).sort()).toEqual(["betFieldProblems", "dateProblem", "decisionProblem", "idProblem", "krFieldProblems", "numberProblem", "reasonProblem", "titleProblem"]);
+    expect(fns.map(([n]) => n).sort()).toEqual(["betFieldProblems", "dateProblem", "decisionProblem", "idProblem", "krFieldProblems", "laddersProblem", "numberProblem", "reasonProblem", "titleProblem"]);
   });
 
   it("the embedded copy gives the same answer as the command-line module, for every row", () => {
@@ -66,6 +72,9 @@ describe("shared rules", () => {
     expect(rules.krFieldProblems({ title: "A", owner: "Ana", baseline: 1, target: 2, by: "2027-01-01", kind: "sideways" }, "new")).toEqual(["kind is number or milestone"]);
     expect(rules.krFieldProblems({ kind: "milestone" }, "edit")).toEqual(["'kind' can't be edited here"]);
     expect(rules.betFieldProblems({ outcome: "won" })).toEqual(["'outcome' can't be edited here"]);
+    expect(rules.krFieldProblems({ ladders_up: 5 }, "edit")).toEqual(['ladders_up is words, such as "reconciliation revenue faster"']);
+    expect(rules.betFieldProblems({ ladders_up: "a\nb" })).toEqual(["ladders_up is one line (no line breaks)"]);
+    expect(rules.laddersProblem("   ")).toBeUndefined();
     expect(rules.dateProblem("2026-02-30")).toBeTruthy();
     expect(rules.dateProblem("2026-13-40")).toBeTruthy();
     expect(rules.dateProblem("2027-02-28")).toBeUndefined();

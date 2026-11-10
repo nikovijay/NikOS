@@ -57,6 +57,19 @@ planning/
   step form marks the next one. A milestone is stale only when a step was done
   and none has been since `stale_after_days` (default 14). With no step done
   it isn't stale.
+- **Text can stand in for a link.** `--ladders-up "reconciliation revenue
+  faster"` says what a key result or bet ladders up to, before anyone has
+  named the item above it. It's refused on a company key result, which has
+  nothing above it, and with a link in the same command. Text alone feeds no
+  figure, progress or delivery: status and the page say "not linked yet", and
+  validate warns. `nikos plan ladder` lists the unlinked ones. `nikos plan
+  ladder <id>` ranks what it could link to by the words it shares with the
+  text. A key result can link to key results above it, and a bet to key
+  results at its level or above, or to bets above it. `nikos plan ladder
+  accept <id> <candidate>` writes the link, once, through the same checks as
+  a hand-written one, and clears the text. `nikos plan ladder clear <id>`
+  drops the text when no link is wanted. Nothing is accepted without the
+  person's choice.
 - **Ids are unique within the company.** No two areas, key results or bets
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
