@@ -84,8 +84,8 @@ Plans: objectives, key results and bets
                    branch for review, and commits nikos.plan.yaml (the settings its maps take
                    from the plan) on a nikos/link branch here. --push sends both branches
   settings [set <key> <value> | pull]  Show the settings that apply here and where each one
-                   comes from, change one this repo is allowed to change, or (pull) refresh the
-                   plan's settings this repo is linked to from the plan
+                   comes from (--map <id> shows one story map's), change one this repo is allowed
+                   to change, or (pull) refresh the plan's settings this repo is linked to
 
 Story maps and stories
   init             Make maps/<key>/ in this repo for its story map (--name, --key)

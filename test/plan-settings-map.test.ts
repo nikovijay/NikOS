@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { join } from "node:path";
 import { resolveSettings, resolveSettingsDetailed, setSetting } from "../src/lib/settings";
-import { writeLink, type PlanLink } from "../src/plan/settings-link";
+import { mapBindings, writeLink, type PlanLink } from "../src/plan/settings-link";
 import { codeRepo, groupRepo, write } from "./repo-fixture";
 
 /** A code repo whose map (maps/chk) is owned by WEB, and a second map (maps/pay) owned by the given owner, if any. */
@@ -35,7 +35,7 @@ const acmeOwners: PlanLink["owners"] = {
 describe("a code repo's settings per map", () => {
   it("takes the company's levels then the map owner's chain, labelled with the plan and the area", () => {
     const code = twoMaps();
-    writeLink(code, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(code, { ...snapshot(acmeOwners), maps: mapBindings(code), sha256: "" });
     const r = resolveSettingsDetailed(code, { map: join(code, "maps/chk") });
     expect(r.resolved["tracker.system"]).toEqual({ value: "jira", from: "acme/company-plan departments/finance" });
     expect(r.resolved["tracker.project"]).toEqual({ value: "PAY-TEAM", from: "acme/company-plan teams/WEB" });
@@ -46,14 +46,14 @@ describe("a code repo's settings per map", () => {
 
   it("resolves each map by its own owner: two maps with two owners see two different teams", () => {
     const code = twoMaps();
-    writeLink(code, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(code, { ...snapshot(acmeOwners), maps: mapBindings(code), sha256: "" });
     expect(resolveSettings(code, { map: join(code, "maps/chk") })["tracker.project"].value).toBe("PAY-TEAM");
     expect(resolveSettings(code, { map: join(code, "maps/pay") })["tracker.project"]).toEqual({ value: "PAY-2", from: "acme/company-plan teams/PAY" });
   });
 
   it("the repo's own file can't change a key the company locked, and its value is reported", () => {
     const code = twoMaps();
-    writeLink(code, { ...snapshot({}), sha256: "" });
+    writeLink(code, { ...snapshot({}), maps: mapBindings(code), sha256: "" });
     write(join(code, "nikos.settings.yaml"), "format_version: 1\napproval:\n  policy: off\ntracker:\n  system: linear\n");
     const r = resolveSettingsDetailed(code, { map: join(code, "maps/chk") });
     expect(r.resolved["approval.policy"]).toEqual({ value: "required-for-release", from: "acme/company-plan company", lockedBy: "acme/company-plan company" });
@@ -64,26 +64,26 @@ describe("a code repo's settings per map", () => {
 
   it("a map with no owner, or an owner with no team in the plan, takes the company's settings only", () => {
     const code = twoMaps(null);
-    writeLink(code, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(code, { ...snapshot(acmeOwners), maps: mapBindings(code), sha256: "" });
     const none = resolveSettingsDetailed(code, { map: join(code, "maps/pay") });
     expect(none.resolved["tracker.project"]).toEqual({ value: "", from: "default" });
     expect(none.resolved["approval.policy"].from).toBe("acme/company-plan company");
     expect(none.problems).toEqual([]);
 
     const unknown = twoMaps("NOPE");
-    writeLink(unknown, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(unknown, { ...snapshot(acmeOwners), maps: mapBindings(unknown), sha256: "" });
     expect(resolveSettings(unknown, { map: join(unknown, "maps/pay") })["tracker.project"].value).toBe("");
   });
 
   it("with no map, the repo's maps agree on one owner or the company's settings apply and the repo says why", () => {
     const code = twoMaps();
-    writeLink(code, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(code, { ...snapshot(acmeOwners), maps: mapBindings(code), sha256: "" });
     const split = resolveSettingsDetailed(code);
     expect(split.resolved["tracker.project"].value).toBe("");
     expect(split.problems).toContain("the maps have different owners (PAY, WEB), so this shows the company's settings only. A command that works on one story (approve, release check) uses that map's owner");
 
     const agree = twoMaps("WEB");
-    writeLink(agree, { ...snapshot(acmeOwners), sha256: "" });
+    writeLink(agree, { ...snapshot(acmeOwners), maps: mapBindings(agree), sha256: "" });
     expect(resolveSettings(agree)["tracker.project"]).toEqual({ value: "PAY-TEAM", from: "acme/company-plan teams/WEB" });
   });
 });

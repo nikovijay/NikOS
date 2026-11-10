@@ -16,7 +16,7 @@ import { decisionEntries } from "./decisions.js";
 import { staleCliWarning } from "../lib/cli-version.js";
 import { validateGroup } from "./validate.js";
 import { mapDirs, mapOwnerOf } from "../lib/maps.js";
-import { LINK_FILE, planHead, readLink, SNAPSHOT_STALE_DAYS, linkProblem, type PlanLink } from "../plan/settings-link.js";
+import { LINK_BRANCH, LINK_FILE, linkBranchNote, planHead, readLink, SNAPSHOT_STALE_DAYS, linkProblem, type PlanLink } from "../plan/settings-link.js";
 
 import { read } from "../lib/project.js";
 
@@ -100,6 +100,10 @@ export function doctor(root: string, opts: { offline?: boolean } = {}): Check[] 
 
   const link = readLink(root);
   if (link) planLinkChecks(root, link, add, opts);
+  else {
+    const note = linkBranchNote(root);
+    if (note) add({ name: "plan settings", status: "warn", found: note, next: `Merge ${LINK_BRANCH} to main, so main takes the plan's settings` });
+  }
 
   const stale = staleCliWarning();
   if (stale) add({ name: "nikos command", status: "warn", found: stale.split(", so")[0], next: "Update it with npm install -g nikos@latest, or run npx -y nikos@latest" });
@@ -118,7 +122,7 @@ function planLinkChecks(root: string, link: PlanLink, add: (c: Check) => void, o
   const plan = link.plan.repo;
   const edited = linkProblem(root);
   if (edited) {
-    add({ name: "plan settings", status: "fail", found: `${LINK_FILE}'s settings were edited by hand`, next: "Run nikos settings pull to refresh them from the plan, then commit it" });
+    add({ name: "plan settings", status: "fail", found: `${LINK_FILE}: ${edited}`, next: "Run nikos settings pull to refresh them from the plan, then commit it" });
   } else {
     const days = Math.max(0, Math.floor((Date.now() - Date.parse(link.read.at)) / DAY_MS));
     const found = `from ${plan} at ${link.read.commit.slice(0, 7)}, read ${days === 0 ? "today" : `${count(days, "day")} ago`}`;
@@ -132,20 +136,24 @@ function planLinkChecks(root: string, link: PlanLink, add: (c: Check) => void, o
     else add({ name: "plan current", status: "ok", found: `${plan} hasn't moved on since the snapshot` });
   }
 
+  // The owner a map takes its settings from is the one the snapshot bound it to. An owner the snapshot has no entry for
+  // is either a team the plan doesn't have yet, or a team added since the snapshot: either way the snapshot needs a pull.
   const gaps = mapDirs(root).flatMap((dir) => {
     const id = basename(dir);
-    const owner = mapOwnerOf(dir);
-    if (!owner) return [`maps/${id} has no owner`];
-    return link.owners[owner] ? [] : [`${owner} (maps/${id}) has no team in ${plan}`];
+    const bound = id in link.maps ? link.maps[id] : mapOwnerOf(dir) ?? "";
+    if (!bound) return [`maps/${id} has no owner, so it takes the company's settings only`];
+    if (!mapOwnerOf(dir)) return [`maps/${id} has no owner in its storymap (the snapshot still takes ${bound}'s settings)`];
+    return link.owners[bound] ? [] : [`${bound} (maps/${id}) has no team in ${plan}, as of the last pull, so those maps take the company's settings only`];
   });
   add(
     gaps.length
-      ? { name: "map owners", status: "warn", found: `${gaps.join("; ")}, so those maps take the company's settings only`, next: "Set each map's owner in storymap.yaml to a team in the plan, or add the team to the plan, then run nikos settings pull" }
+      ? { name: "map owners", status: "warn", found: gaps.join("; "), next: "If the plan has that team, run nikos settings pull to take its settings. Otherwise set each map's owner in storymap.yaml to a team in the plan" }
       : { name: "map owners", status: "ok", found: "every map's owner has a team in the plan" },
   );
 
-  // A value here that a level above locks does nothing, so it's reported where it can be fixed.
-  const ignored = resolveSettingsDetailed(root).problems.filter((p) => p.includes(" from this repo is ignored: "));
+  // A value here that a level above locks does nothing, so it's reported where it can be fixed. Each map's chain is checked
+  // on its own, since a team's lock can cover one map and not the others.
+  const ignored = [...new Set([{}, ...mapDirs(root).map((map) => ({ map }))].flatMap((opts) => resolveSettingsDetailed(root, opts).problems))].filter((p) => p.includes(" from this repo is ignored: "));
   add(
     ignored.length
       ? { name: "own settings", status: "warn", found: ignored.join("; "), next: "Remove those keys from nikos.settings.yaml: the plan locks them" }

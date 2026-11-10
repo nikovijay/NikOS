@@ -6,9 +6,10 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { parse, stringify } from "yaml";
 import { errorLine, fetchCopy, urlProblem } from "../lib/fetch-copy.js";
+import { branchExists, currentBranch, gitIn } from "../lib/git.js";
 import { mapDirs, mapOwnerOf } from "../lib/maps.js";
 import { areaSettingsFile, checkSettingsText, SETTINGS_FILE } from "../lib/settings.js";
 import { contractVersion, NewerContractError, schemaProblems } from "../lib/schema.js";
@@ -17,6 +18,8 @@ import { isPlanRepo, type Area } from "../planning/model.js";
 import { chainOf, listAreas, oldLayoutProblem } from "./repo.js";
 
 export const LINK_FILE = "nikos.plan.yaml";
+/** The branch a code repo's link is committed on, the way the planning repo's listing is on nikos/join. */
+export const LINK_BRANCH = "nikos/link";
 const HEADER = "# nikOS: this repo's link to its planning repo, and the settings its maps take from it.\n# nikos settings pull refreshes it. Don't edit it by hand.\n";
 
 /** A settings file in the snapshot: the folder it came from (e.g. teams/WEB) and its data. */
@@ -39,6 +42,8 @@ export interface PlanLink {
   company: LinkLevel[];
   /** Each owning team's levels below the company, keyed by the team's key. */
   owners: Record<string, { levels: LinkLevel[] }>;
+  /** Each story map's bound owner when the snapshot was taken, keyed by the map's folder. "" is no owner. */
+  maps: Record<string, string>;
   sha256: string;
 }
 
@@ -46,13 +51,37 @@ export interface PlanLink {
 const sorted = (v: unknown): unknown =>
   Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])])) : v;
 
-/** The hash of a snapshot's settings. The link's time and plan details aren't in it. */
-export const snapshotHash = (s: Pick<PlanLink, "company" | "owners">) => createHash("sha256").update(JSON.stringify(sorted({ company: s.company, owners: s.owners }))).digest("hex");
+/** The hash of a snapshot's settings and the owners its maps are bound to. The link's time and plan details aren't in it. */
+export const snapshotHash = (s: Pick<PlanLink, "company" | "owners" | "maps">) =>
+  createHash("sha256").update(JSON.stringify(sorted({ company: s.company, owners: s.owners, maps: s.maps }))).digest("hex");
 
 /** The link, if this repo has one. A file that doesn't read throws, naming the problem. */
 export function readLink(root: string): PlanLink | undefined {
   const path = join(root, LINK_FILE);
   return store().exists(path) ? parseLink(store().read(path)) : undefined;
+}
+
+/** The link committed on nikos/link, when this repo has one there. A link that doesn't read is treated as none. */
+export function linkOnBranch(root: string): PlanLink | undefined {
+  if (!branchExists(root, LINK_BRANCH)) return undefined;
+  const shown = gitIn(root, ["show", `${LINK_BRANCH}:${LINK_FILE}`]);
+  if (shown.status !== 0) return undefined;
+  try {
+    return parseLink(shown.stdout);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A note for a branch that doesn't hold the link while nikos/link does: this branch takes the plan's settings
+ * only once nikos/link is merged to it. Undefined when the link is here, or nothing is on nikos/link.
+ */
+export function linkBranchNote(root: string): string | undefined {
+  if (store().exists(join(root, LINK_FILE)) || currentBranch(root) === LINK_BRANCH) return undefined;
+  const there = linkOnBranch(root);
+  if (!there) return undefined;
+  return `${there.plan.repo}'s settings are on ${LINK_BRANCH}, not on this branch, so this branch doesn't take them yet. They apply here once ${LINK_BRANCH} is merged`;
 }
 
 /** A link's text, read and checked. A file that doesn't read throws, naming the problem. */
@@ -73,11 +102,30 @@ export function parseLink(text: string): PlanLink {
 /** A snapshot older than this many days is stale: doctor warns, and the plan may have moved on. */
 export const SNAPSHOT_STALE_DAYS = 14;
 
-/** Why the link's settings can't be trusted (edited by hand), or undefined. Throws when the link doesn't read. */
+/**
+ * The map owners this repo's storymaps name that the snapshot doesn't match: a map the snapshot doesn't know,
+ * or one whose owner changed since the snapshot. Each names the map, so a fix can point at it.
+ */
+export function bindingProblems(root: string, link: PlanLink): string[] {
+  return mapDirs(root).flatMap((dir) => {
+    const id = basename(dir);
+    const owner = mapOwnerOf(dir) ?? "";
+    if (!(id in link.maps)) return [`maps/${id} isn't in ${LINK_FILE} yet`];
+    if (link.maps[id] !== owner) return [`maps/${id}'s owner is ${owner || "none"}, but ${LINK_FILE} takes its settings from ${link.maps[id] || "no owner"}`];
+    return [];
+  });
+}
+
+/**
+ * Why the link can't be trusted, or undefined: its settings were edited by hand, or a map's owner in its
+ * storymap no longer matches the snapshot. Throws when the link doesn't read. validate reports it, so CI catches it.
+ */
 export function linkProblem(root: string): string | undefined {
   const link = readLink(root);
-  if (link && link.sha256 !== snapshotHash(link)) return "its settings were edited by hand: run nikos settings pull to refresh them from the plan";
-  return undefined;
+  if (!link) return undefined;
+  if (link.sha256 !== snapshotHash(link)) return "its settings were edited by hand: run nikos settings pull to refresh them from the plan";
+  const gaps = bindingProblems(root, link);
+  return gaps.length ? `${gaps.join("; ")}: run nikos settings pull to take them from the plan, then commit it` : undefined;
 }
 
 /**
@@ -104,9 +152,9 @@ export function writeLink(root: string, link: PlanLink): string {
   return path;
 }
 
-/** The owners the code repo's maps name, from each storymap.yaml, sorted and without repeats. */
-export function mapOwners(root: string): string[] {
-  return [...new Set(mapDirs(root).map(mapOwnerOf).filter((o): o is string => !!o))].sort();
+/** Each story map's owner from its storymap.yaml, keyed by the map's folder. "" is no owner. */
+export function mapBindings(root: string): Record<string, string> {
+  return Object.fromEntries(mapDirs(root).map((dir) => [basename(dir), mapOwnerOf(dir) ?? ""]));
 }
 
 /**
@@ -149,12 +197,12 @@ export interface PullResult {
 }
 
 /**
- * The link for a copy of the plan: its snapshot for the owners, read at a commit. Used by join (the first
- * snapshot) and by pull (a refresh). Throws, naming the file, when a settings file doesn't read.
+ * The link for a copy of the plan: its snapshot for the owners the maps are bound to, read at a commit.
+ * Used by join (the first snapshot) and by pull (a refresh). Throws, naming the file, when a settings file doesn't read.
  */
-export function linkFromCopy(copy: string, plan: PlanRef, read: PlanLink["read"], owners: string[]): PullResult {
-  const snap = snapshotOf(copy, owners);
-  const link: PlanLink = { format_version: 1, plan, read, company: snap.company, owners: snap.owners, sha256: "" };
+export function linkFromCopy(copy: string, plan: PlanRef, read: PlanLink["read"], maps: Record<string, string>): PullResult {
+  const snap = snapshotOf(copy, [...new Set(Object.values(maps).filter(Boolean))]);
+  const link: PlanLink = { format_version: 1, plan, read, company: snap.company, owners: snap.owners, maps, sha256: "" };
   return { link: { ...link, sha256: snapshotHash(link) }, warnings: snap.warnings };
 }
 
@@ -165,7 +213,11 @@ export function linkFromCopy(copy: string, plan: PlanRef, read: PlanLink["read"]
  */
 export function pullPlanSettings(root: string): PullResult {
   const prior = readLink(root);
-  if (!prior) throw new Error("This repo isn't linked to a planning repo, so there are no settings to pull. Link it with nikos join <owner/repo>.");
+  if (!prior) {
+    const there = linkOnBranch(root);
+    if (there) throw new Error(`This repo's link to ${there.plan.repo} is on ${LINK_BRANCH}, not on this branch. Switch to it with git switch ${LINK_BRANCH}, then pull.`);
+    throw new Error("This repo isn't linked to a planning repo, so there are no settings to pull. Link it with nikos join <owner/repo>.");
+  }
   const { repo, host } = prior.plan;
   const url = prior.plan.url ?? `https://${host ?? "github.com"}/${repo}.git`;
   const tmp = mkdtempSync(join(tmpdir(), "nikos-pull-"));
@@ -180,7 +232,7 @@ export function pullPlanSettings(root: string): PullResult {
     const ref = prior.read.ref;
     let pulled: PullResult;
     try {
-      pulled = linkFromCopy(copy, prior.plan, { commit: got.commit, at: new Date().toISOString(), ...(ref ? { ref } : {}) }, mapOwners(root));
+      pulled = linkFromCopy(copy, prior.plan, { commit: got.commit, at: new Date().toISOString(), ...(ref ? { ref } : {}) }, mapBindings(root));
     } catch (err) {
       throw new Error(`${(err as Error).message}. Nothing was pulled, and the last snapshot is kept.`);
     }

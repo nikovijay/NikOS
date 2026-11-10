@@ -38,7 +38,7 @@ const codeWithMap = (owner: string) => groupRepo(owner, codeRepo());
 
 /** Link a code repo to a plan at url, with an empty snapshot to pull over. */
 function linkTo(code: string, url: string) {
-  writeLink(code, { format_version: 1, plan: { repo: "acme/company-plan", url }, read: { commit: "0".repeat(40), at: "2026-11-01T00:00:00.000Z" }, company: [], owners: {}, sha256: "" });
+  writeLink(code, { format_version: 1, plan: { repo: "acme/company-plan", url }, read: { commit: "0".repeat(40), at: "2026-11-01T00:00:00.000Z" }, company: [], owners: {}, maps: {}, sha256: "" });
 }
 
 describe("nikos.plan.yaml and settings pull", () => {

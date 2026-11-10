@@ -80,6 +80,9 @@ copy and never the network, so `nikos settings`, `nikos validate`,
 `nikos release check` and CI work offline.
 
 Each map's `owner` (in its `storymap.yaml`) picks the chain its stories take.
+The snapshot records the owner each map was bound to when it was pulled. A map
+whose `owner` has since changed fails `nikos validate` until you run
+`nikos settings pull`, so a typo in an owner can't drop a team's locks unnoticed.
 Lowest first, each level changes only what the levels above haven't locked:
 
 1. the defaults
@@ -91,10 +94,10 @@ A locked key stays as the level that locked it set it. So the repo's own file
 can set `tracker.project` (a value the team left open), but a value it sets on
 a key the company locked is ignored, and `nikos settings` and `nikos doctor` say so.
 
-Which chain `nikos settings` shows: the owner the repo's maps agree on. If the
-maps have different owners, it shows the company's settings only and says why.
-A command that works on one story (`nikos approve`, `nikos release check`) uses
-that story's map owner.
+`nikos settings` shows the settings for the repo as a whole. If the maps have
+different owners, that's the company's settings only, and it says why. To see
+the settings one map takes, use `nikos settings show --map <id>`. A command that
+works on one story (`nikos approve`, `nikos release check`) uses that story's map.
 
 - A map with no `owner`, or an owner with no team in the plan, takes the company's
   settings only. `nikos doctor` warns about it.
@@ -111,7 +114,9 @@ nikos settings pull        # reads the plan, using your own git access, and rewr
 
 `pull` uses the plan the link already names, and needs no `--url` or `--ref`.
 If a settings file in the plan doesn't read, `pull` stops, names the file, and
-keeps the last snapshot. Commit the refreshed file.
+keeps the last snapshot. Commit the refreshed file. Run `pull` on the branch that
+holds `nikos.plan.yaml` (`nikos/link` until it merges). On another branch, `pull`
+says which branch holds the link.
 
 `nikos.plan.yaml` is generated, so don't edit it by hand. Its `sha256` catches a
 hand edit: `nikos validate` fails on a mismatch, and says to run
@@ -141,14 +146,23 @@ nikos join acme/engineering/payments-plan --host gitlab.com   # on GitLab
 Nothing is pushed unless you add `--push`, which sends both branches to their
 origins.
 
-`join` refuses, and writes nothing, when:
+The link is made from `main`, not from the branch you're on, so a feature branch's
+unpushed commits stay out of its review. `main` takes the plan's settings only once
+`nikos/link` is merged to it. Until then, CI on `main` enforces none of them, and
+`nikos doctor` says so when you're on `main`.
+
+A first join refuses, and writes nothing, when:
 
 - this repo has uncommitted changes (untracked files count). Commit or stash them first.
+- the planning checkout (`--plan-dir`) is on a branch whose `planning/` settings differ
+  from its default branch. Check out the default branch there.
+- a `nikos.plan.yaml` is written here but not committed. Commit it, as the message says.
 - this repo is already linked to a different plan. One code repo takes its
   settings from one planning repo.
 
 Joining the same plan again writes nothing new. If the plan's settings have
-changed since the snapshot, it says to run `nikos settings pull`.
+changed since the snapshot, it says to run `nikos settings pull`. A repo whose
+link is already on origin's `nikos/link` says how to use that link here.
 
 A repo joined before this release has no `nikos.plan.yaml`. Run
 `nikos join <planning repo>` in it to write one.

@@ -36,7 +36,7 @@ const plainRepo = () => {
 };
 
 describe("settings", () => {
-  it("a code repo reads only its own nikos.settings.yaml: nothing is inherited into it", () => {
+  it("an unlinked code repo reads only its own nikos.settings.yaml: nothing is inherited into it", () => {
     const root = settingsRepo("approval:\n  policy: required-for-release\ntracker:\n  system: jira\n  site: acme.atlassian.net\nlocked: [approval.policy]\n");
     const s = resolveSettings(root);
     expect(s["approval.policy"]).toEqual({ value: "required-for-release", from: "this repo", lockedBy: "this repo" });

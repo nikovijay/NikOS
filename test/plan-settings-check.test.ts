@@ -36,7 +36,7 @@ function planWithSettings(): { plan: string; origin: string } {
 /** A code repo linked to the plan at url, its snapshot pulled from the plan. */
 function linkedCode(url: string, owner = "WEB"): string {
   const code = groupRepo(owner, codeRepo());
-  writeLink(code, { format_version: 1, plan: { repo: "acme/company-plan", url }, read: { commit: "0".repeat(40), at: new Date().toISOString() }, company: [], owners: {}, sha256: "" });
+  writeLink(code, { format_version: 1, plan: { repo: "acme/company-plan", url }, read: { commit: "0".repeat(40), at: new Date().toISOString() }, company: [], owners: {}, maps: {}, sha256: "" });
   pullPlanSettings(code);
   return code;
 }
