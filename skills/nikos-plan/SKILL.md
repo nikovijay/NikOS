@@ -6,6 +6,9 @@ description: Plan the company's objectives, key results and bets in its one plan
 # nikos-plan
 
 Planning sets direction; the nikOS story maps in each code repo handle delivery.
+A key result is a figure with a baseline and target (`--direction down` when it
+should fall), or a milestone of named steps (`--kind milestone --step`). A
+milestone is marked with `kr step`, never checked in with a value.
 The company keeps one planning repo. It has a folder for each level, and only
 the company and departments hold key results. Every level holds bets.
 
@@ -53,6 +56,7 @@ its own; the setup playbook walks through it). Never put company goals in `const
 | checkin | `playbooks/checkin.md` | The person wants to check in on key results, record progress, or asks how a key result is doing. |
 | review | `playbooks/review.md` | A bet is due for review, or the person wants to continue, change, stop or complete one and call its outcome. |
 | status | `playbooks/status.md` | The person wants to see how the plan is doing: who is behind, delivery across the code repos, and what needs attention. |
+| ladder | `playbooks/ladder.md` | A key result or bet has only `ladders_up` text and no link: list what it could link to, and link it or clear the text on the person's yes. |
 | dashboard | `playbooks/dashboard.md` | The person wants to see the plan, or open or share the plan dashboard. |
 
 3. Never write a planning file the person hasn't approved. Show what you will

@@ -23,6 +23,7 @@ import { setState, type Status } from "../commands/state.js";
 import { newActivity, newStep } from "../commands/step.js";
 import { start as startRepo } from "../commands/start.js";
 import { findPlanRepo, initPlanRepo } from "../plan/repo.js";
+import { ladderFor, unlinkedItems } from "../planning/ladder.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
 import { formatResult, validate, validateGroup } from "../commands/validate.js";
@@ -170,6 +171,12 @@ export function createServer(repo: string): McpServer {
     const files = initPlanRepo(root, { name: a.name, year: a.year, pillars: a.pillars, owner: a.owner });
     return text(`Made the company's planning repo: ${files.map((f) => f.slice(root.length + 1)).join(", ")}`);
   });
+  tool("plan_ladder", "What a key result or bet in the company's plan ladders up to, while it has only text and no link. With no id: the items whose text is not linked yet. With an id: the items it could link to, ranked by the words they share with its text, each with its kind. Read only. A link is written with nikos plan ladder accept, and only after the person says which one.", { id: z.string().optional() }, (a) => {
+    const repo = findPlanRepo(root);
+    if (!repo) throw new Error("This isn't a planning repo, so there are no ladders to read");
+    const r = a.id ? ladderFor(repo, a.id) : { items: unlinkedItems(repo) };
+    return text(JSON.stringify(r, null, 2), r as unknown as Record<string, unknown>);
+  }, true);
   tool("add_activity", "Add an activity to the story map.", { title: z.string(), id: z.string().optional(), map: z.string().optional() }, (a) => text(`Activity ${newActivity(a, root)}`));
   tool("map_status", "How each story in this repo's maps is doing, local and read from the maps' own files: its status, whether that status was proved against the current feature, and its approval.", { map: z.string().optional() }, (a) => {
     const r = mapStatus(root, { map: a.map });

@@ -54,6 +54,15 @@ export function titleProblem(label: string, v: unknown): string | undefined {
   return "A " + label + " needs a title";
 }
 
+/** Undefined for blank (which clears it) or a line of text. What a key result or bet ladders up to, until a link is written. */
+export function laddersProblem(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === "string" && v.trim() === "") return undefined;
+  if (typeof v !== "string") return "ladders_up is words, such as \"reconciliation revenue faster\"";
+  if (/[\r\n]/.test(v)) return "ladders_up is one line (no line breaks)";
+  return undefined;
+}
+
 /**
  * What's wrong with a key result's fields. new: all required fields must be there. edit: only the
  * fields given are checked, and an empty optional field deletes it. Baseline and target are fixed
@@ -61,7 +70,8 @@ export function titleProblem(label: string, v: unknown): string | undefined {
  */
 export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "edit"): string[] {
   const out: string[] = [];
-  const editable = ["title", "owner", "by", "unit", "objective", "stale_after_days"];
+  const editable = ["title", "owner", "by", "unit", "objective", "stale_after_days", "direction", "ladders_up"];
+  // kind and steps are not here: a key result's kind is fixed at creation, and only kr step marks a step.
   if (mode === "edit") {
     for (const k of Object.keys(fields)) if (editable.indexOf(k) < 0) out.push("'" + k + "' can't be edited here");
   }
@@ -73,13 +83,23 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
   if (mode === "new" || has("owner")) {
     if (typeof fields.owner !== "string" || fields.owner.trim() === "") out.push("A key result needs an owner (--owner)");
   }
-  if (mode === "new") {
+  // A milestone has steps, not a baseline and a target: only a number key result needs those.
+  const kind = fields.kind;
+  if (kind !== undefined && kind !== null && kind !== "" && kind !== "number" && kind !== "milestone") out.push("kind is number or milestone");
+  if (mode === "new" && kind !== "milestone") {
     if (typeof fields.baseline !== "number" || !isFinite(fields.baseline) || typeof fields.target !== "number" || !isFinite(fields.target)) {
       out.push("A key result needs a numeric --baseline and --target");
     }
   }
   if (has("by")) {
     if (dateProblem(fields.by)) out.push("A key result needs a date (--by YYYY-MM-DD)");
+  }
+  // Blank deletes the direction (edit), and absent means up (new), so only a value given must be up or down.
+  const dir = fields.direction;
+  if (dir !== undefined && dir !== null && dir !== "" && dir !== "up" && dir !== "down") out.push("direction is up or down");
+  if (has("ladders_up")) {
+    const ladders = laddersProblem(fields.ladders_up);
+    if (ladders) out.push(ladders);
   }
   return out;
 }
@@ -90,7 +110,7 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
  */
 export function betFieldProblems(fields: Record<string, unknown>): string[] {
   const out: string[] = [];
-  const editable = ["owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies"];
+  const editable = ["owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies", "ladders_up"];
   for (const k of Object.keys(fields)) if (editable.indexOf(k) < 0) out.push("'" + k + "' can't be edited here");
   const blank = (v: unknown) => v === "" || v === null || v === undefined;
   if (Object.prototype.hasOwnProperty.call(fields, "owner") && (typeof fields.owner !== "string" || fields.owner.trim() === "")) out.push("A bet needs an owner (--owner)");
@@ -98,6 +118,10 @@ export function betFieldProblems(fields: Record<string, unknown>): string[] {
   if (Object.prototype.hasOwnProperty.call(fields, "review_on") && (blank(fields.review_on) || dateProblem(fields.review_on))) out.push("A bet needs a review date (--review YYYY-MM-DD)");
   for (const k of ["starts", "deadline"]) {
     if (Object.prototype.hasOwnProperty.call(fields, k) && !blank(fields[k]) && dateProblem(fields[k])) out.push(k + " is not a date (YYYY-MM-DD)");
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, "ladders_up")) {
+    const ladders = laddersProblem(fields.ladders_up);
+    if (ladders) out.push(ladders);
   }
   if (Object.prototype.hasOwnProperty.call(fields, "confidence") && !blank(fields.confidence) && ["low", "medium", "high"].indexOf(fields.confidence as string) < 0) {
     out.push("confidence is one of low, medium, high");

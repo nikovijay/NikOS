@@ -43,11 +43,39 @@ planning/
   `--by`. A department's key result needs a quarter inside that year
   (`--period 2027-Q1`) and is due at the quarter's end. Groups and teams have
   no period. Their bets have review dates.
+- **A key result can go down.** `--direction down` marks a figure that should
+  fall, such as days to close (11 toward 7). Progress is worked out the same
+  way both ways, so at 9 it is half way. Past the baseline the page says the
+  figure "moved the wrong way" rather than showing a minus sign. A direction
+  that points against the target's side is a validate warning, not an error.
+  Change the direction with `nikos plan kr direction <id> up|down`.
+- **A key result can be a milestone.** `--kind milestone` makes a key result
+  of named steps instead of a figure: `--step "Map steps"`, repeated for each
+  step, fixed when it's made. Nothing else is set (no baseline, target or
+  check-ins). `nikos plan kr step close-process "Map steps" --date 2026-11-10`
+  marks one step done, once: its date stays as first written, and a step name
+  that doesn't exist is refused. The page shows "2 of 3 steps done", and the
+  step form marks the next one. A milestone is stale only when a step was done
+  and none has been since `stale_after_days` (default 14). With no step done,
+  or every step done, it isn't stale.
+- **Text can stand in for a link.** `--ladders-up "reconciliation revenue
+  faster"` says what a key result or bet ladders up to, before anyone has
+  named the item above it. It's refused on a company key result, which has
+  nothing above it, and with a link in the same command. Text alone feeds no
+  figure, progress or delivery: status and the page say "not linked yet", and
+  validate warns. `nikos plan ladder` lists the unlinked ones. `nikos plan
+  ladder <id>` ranks what it could link to by the words it shares with the
+  text. A key result can link to key results above it, and a bet to key
+  results in the company or a department, or to bets above it. `nikos plan ladder
+  accept <id> <candidate>` writes the link, once, through the same checks as
+  a hand-written one, and clears the text. `nikos plan ladder clear <id>`
+  drops the text when no link is wanted. Nothing is accepted without the
+  person's choice.
 - **Ids are unique within the company.** No two areas, key results or bets
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
 - **Links go up.** A key result aligns to key results above it, and a bet to
-  bets above it. A bet aims at key results at its own level or above. A team's
+  bets above it. A bet aims at any company or department key result, whatever its level. A team's
   bets may align to any department's or group's bet.
 - **Settings come down the folders.** The company's are in `nikos.settings.yaml` at the planning repo's root.
   Each department, group or team can change what nobody above it locked. A code
@@ -61,10 +89,15 @@ nikos plan add department finance --name "Finance" --owner Mira
 nikos plan add group payments --name "Payments" --department finance
 nikos plan add team WEB --name "Checkout web" --home payments
 nikos plan kr new revenue --in company --title "Annual recurring revenue" --owner Niko --baseline 0 --target 60000 --unit USD
-nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --aligns-to revenue
+nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --direction down --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
 nikos plan checkin close-days 10 --note "First week of auto-match"
+nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1
+nikos plan kr step close-process "Map steps" --date 2026-11-10
 nikos plan bet review faster-checkout continue --why "On track"
+nikos plan ladder                          # what is waiting for a link
+nikos plan ladder <id>                     # what it could link to
+nikos plan ladder accept <id> <candidate>  # link it, once the person has picked
 nikos plan status --in finance
 nikos plan status --json
 nikos plan validate
@@ -159,6 +192,10 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
 - **Drill down.** From a key result, the bets that aim at it, and the story maps
   that deliver them, with how old each copy is. From a bet, the chain it aligns
   to, the bets below it, and its maps.
+- **Not linked yet.** A key result or bet whose `ladders_up` text has no link
+  is listed under "Not linked yet" on its area's page, at every level and in the
+  offline export. It has no line in the ladder, and no figure counts it. Suggest
+  offers to link these, one at a time, with `nikos plan ladder`.
 - **Dates.** The timeline lists each bet's start, review and deadline, and each
   key result's due date.
 - **The place is in the link.** Every link carries the area, for example

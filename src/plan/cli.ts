@@ -7,8 +7,9 @@ import { summaryAge } from "../lib/delivery-summary.js";
 import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/settings.js";
 import { DECISIONS, newBet, reviewBet, type Decision } from "../planning/bets.js";
 import { parseArgs } from "../lib/args.js";
-import { checkIn, isStale, latest, newKr, reviseTarget } from "../planning/krs.js";
-import { alignsList, planningIssues } from "../planning/levels.js";
+import { checkIn, directionOf, editKr, isStale, kindOf, latest, markStep, newKr, progress, reviseTarget } from "../planning/krs.js";
+import { alignsList, laddersOf, linkedOf, planningIssues } from "../planning/levels.js";
+import { acceptLadder, clearLadder, findItem, ladderFor, unlinkedItems } from "../planning/ladder.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
 import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, oldLayoutProblem, parentOf, repoIssues } from "./repo.js";
@@ -31,12 +32,21 @@ Set it up
 
 Key results and bets
   plan kr new <id>     Add a key result (--in <area>, --title, --owner, --baseline, --target,
-                       --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to)
+                       --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to,
+                       --direction up|down for a figure that should go down, such as days to close)
+                       A milestone has steps instead: --kind milestone --step "<name>" (repeat --step)
+                       --ladders-up "<text>" says what it ladders up to until a link exists (not for a company key result)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
-  plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date)
+  plan kr direction <id> up|down   Change which way a key result should move
+  plan kr step <id> "<name>"    Mark one step of a milestone done (--date, default today)
+  plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date). Not for a milestone: use plan kr step
   plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
-                       --also, --aligns-to, --starts, --deadline, --confidence, --evidence)
+                       --also, --aligns-to, --starts, --deadline, --confidence, --evidence, --ladders-up)
   plan bet review <id> <continue|change|stop|complete>   Record a review (--why, --outcome)
+  plan ladder          The items whose ladders_up text has no link yet (--json)
+  plan ladder <id>     What an item could link to, ranked by the words it shares with its text (--json)
+  plan ladder accept <id> <candidate>   Link it: the link is written, and the text goes
+  plan ladder clear <id>                Clear the text, when no link is wanted
 
 See and check it
   plan status      Every area's key results and bets, or one area's (--in <area>). Each bet's
@@ -56,22 +66,47 @@ Without it, the area is the folder you're in.`;
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const num = (s: string | undefined) => (s === undefined || s.trim() === "" ? NaN : Number(s));
 
+/** A milestone's steps in words: "1 of 3 steps done: Map steps on 2026-11-10. To do: Pilot, Roll out". */
+function stepsText(k: any): string {
+  const steps: { name: string; done?: string }[] = k.steps ?? [];
+  const did = steps.filter((s) => s.done).map((s) => `${s.name} on ${s.done}`);
+  const todo = steps.filter((s) => !s.done).map((s) => s.name);
+  return `${steps.length - todo.length} of ${steps.length} steps done${did.length ? `: ${did.join(", ")}` : ""}${todo.length ? `. To do: ${todo.join(", ")}` : ""}`;
+}
+
+/** The words a person wrote, for an item no link backs yet: the status line says so. Nothing once linked. */
+const notLinkedYet = (data: any, kind: "kr" | "bet"): string => {
+  const text = laddersOf(data);
+  return text && !linkedOf(kind, data) ? ` · not linked yet: "${text}"` : "";
+};
+
+/** The ladders_up fields for --json: the text, and whether a link backs it. Nothing when there's no text. */
+const ladderJson = (data: any, kind: "kr" | "bet") => {
+  const text = laddersOf(data);
+  return text ? { laddersUp: text, linked: linkedOf(kind, data) } : {};
+};
+
 function krLine(area: Area, id: string): string {
   const k = loadKr(area.dir, id).data;
   const last = latest(k);
   const unit = k.unit ?? "";
   const u = unit === "" || unit === "%" || unit === "$" ? unit : ` ${unit}`;
   const aligns = alignsList(k.aligns_to);
+  if (kindOf(k) === "milestone") {
+    return `    ${id} — ${k.title}: ${stepsText(k)} (by ${k.by})${
+      area.level === "department" && k.period ? ` · ${k.period}` : ""
+    }${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(k, "kr")}${isStale(k) ? " · stale" : ""}`;
+  }
   return `    ${id} — ${k.title}: ${last ? `${last.value}${u} on ${last.date}` : "no check-ins"} (baseline ${k.baseline}${u}, target ${k.target}${u} by ${k.by})${
     area.level === "department" && k.period ? ` · ${k.period}` : ""
-  }${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${isStale(k) ? " · stale" : ""}`;
+  }${directionOf(k) === "down" ? " · should go down" : ""}${progress(k) < 0 ? " · moved the wrong way" : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(k, "kr")}${isStale(k) ? " · stale" : ""}`;
 }
 
 function betLine(area: Area, id: string): string {
   const b = loadBet(area.dir, id).meta;
   const krs = [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean);
   const aligns = alignsList(b.aligns_to);
-  return `    ${id} — outcome: ${b.outcome} · review on ${b.review_on}${krs.length ? ` · aims at ${krs.join(", ")}` : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}`;
+  return `    ${id} — outcome: ${b.outcome} · review on ${b.review_on}${krs.length ? ` · aims at ${krs.join(", ")}` : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(b, "bet")}`;
 }
 
 /** The repos planning/repos.yaml lists. A file that doesn't load lists none here: plan validate reports it. */
@@ -146,6 +181,19 @@ export function planStatus(repo: string, area?: Area, deliveries: PlanDeliveries
 function keyResultJson(area: Area, id: string) {
   const k = loadKr(area.dir, id).data;
   const last = latest(k);
+  if (kindOf(k) === "milestone") {
+    return {
+      id,
+      title: k.title,
+      kind: "milestone",
+      by: k.by,
+      ...(k.period ? { period: k.period } : {}),
+      steps: (k.steps ?? []).map((s: any) => ({ name: s.name, done: s.done ?? null })),
+      stale: isStale(k),
+      aligns_to: alignsList(k.aligns_to),
+      ...ladderJson(k, "kr"),
+    };
+  }
   return {
     id,
     title: k.title,
@@ -154,9 +202,11 @@ function keyResultJson(area: Area, id: string) {
     by: k.by,
     ...(k.unit ? { unit: k.unit } : {}),
     ...(k.period ? { period: k.period } : {}),
+    ...(k.direction ? { direction: k.direction } : {}),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(k),
     aligns_to: alignsList(k.aligns_to),
+    ...ladderJson(k, "kr"),
   };
 }
 
@@ -179,6 +229,7 @@ export function planStatusJson(repo: string, area?: Area, deliveries: PlanDelive
           reviewOn: b.review_on,
           aimsAt: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
           alignsTo: alignsList(b.aligns_to),
+          ...ladderJson(b, "bet"),
           delivery: deliveries.bets.get(id) ?? null,
         };
       }),
@@ -247,7 +298,11 @@ export async function runPlanRepo(args: string[]): Promise<number> {
               period: opt("period"),
               unit: opt("unit"),
               objective: opt("objective"),
+              direction: opt("direction") as "up" | "down" | undefined,
+              kind: opt("kind") as "number" | "milestone" | undefined,
+              steps: all("step"),
               alignsTo: all("aligns-to"),
+              laddersUp: opt("ladders-up"),
               staleAfterDays: opt("stale-after") ? Number(opt("stale-after")) : undefined,
             },
             where.dir,
@@ -257,6 +312,14 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         }
         if (sub === "target" && id && extra !== undefined) {
           console.log(`Wrote ${reviseTarget(areaHolding(need(), id, "key result").dir, id, num(extra))}`);
+          return 0;
+        }
+        if (sub === "direction" && id && extra) {
+          console.log(`Wrote ${editKr(areaHolding(need(), id, "key result").dir, id, { direction: extra })}`);
+          return 0;
+        }
+        if (sub === "step" && id && extra !== undefined) {
+          console.log(`Wrote ${markStep(areaHolding(need(), id, "key result").dir, id, extra, opt("date"))}`);
           return 0;
         }
         break;
@@ -282,6 +345,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
               primary: opt("kr"),
               also: all("also"),
               alignsTo: all("aligns-to"),
+              laddersUp: opt("ladders-up"),
               confidence: opt("confidence") as any,
               dependencies: all("dependency"),
               evidence: opt("evidence"),
@@ -303,6 +367,39 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         const where = areaFor(repo, opt("in"), cwd);
         const deliveries = planDeliveries(repo);
         console.log(opt("json") !== undefined ? planStatusJson(repo, where, deliveries) : planStatus(repo, where, deliveries));
+        return 0;
+      }
+      case "ladder": {
+        const repo = need();
+        // accept and clear take an item and, for accept, a candidate. Any other word is an item to show.
+        if (sub === "accept" && id !== undefined && extra !== undefined) {
+          const where = findItem(repo, id);
+          console.log(`Linked ${id} to ${extra}: wrote ${acceptLadder(where.area.dir, where.kind, id, extra)}`);
+          return 0;
+        }
+        if (sub === "clear" && id !== undefined) {
+          const where = findItem(repo, id);
+          console.log(`Wrote ${clearLadder(where.area.dir, where.kind, id)}`);
+          return 0;
+        }
+        if (sub === "accept" || sub === "clear") throw new Error(sub === "accept" ? "Name the link: nikos plan ladder accept <id> <candidate>" : "Name the item: nikos plan ladder clear <id>");
+        if (sub === undefined) {
+          const items = unlinkedItems(repo);
+          if (has("json")) console.log(JSON.stringify({ items }, null, 2));
+          else if (!items.length) console.log("No key result or bet is waiting for a link: every ladders_up text has one, or none is written.");
+          else console.log(`${items.map((i) => `${i.id} (${i.kind}, ${i.rel}): "${i.text}"`).join("\n")}\n\nSee what each could link to with: nikos plan ladder <id>`);
+          return 0;
+        }
+        const r = ladderFor(repo, sub);
+        if (has("json")) console.log(JSON.stringify(r, null, 2));
+        else {
+          const lines = [`${r.id} (${r.kind}, ${r.rel})${r.text ? ` ladders up to "${r.text}"` : ": no ladders_up text"}${r.linked ? " · already linked" : ""}`];
+          // No command links an existing item by hand, so with no candidate the text stays, or goes with ladder clear.
+          if (!r.candidates.length && r.text) lines.push(`  Nothing above it shares words with its text, so there's nothing to link to yet. Keep the text, or clear it with nikos plan ladder clear ${r.id}.`);
+          for (const c of r.candidates) lines.push(`  ${c.id} — ${c.kind} in ${c.rel}: ${c.title} (shares ${c.shared.join(", ")})`);
+          if (r.candidates.length) lines.push(`\nLink one with: nikos plan ladder accept ${r.id} <candidate>`);
+          console.log(lines.join("\n"));
+        }
         return 0;
       }
       case "refresh": {
@@ -366,7 +463,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         return 0;
       }
     }
-    const known = ["init", "add", "kr", "checkin", "bet", "status", "validate", "refresh", "serve", "settings", "help"];
+    const known = ["init", "add", "kr", "checkin", "bet", "ladder", "status", "validate", "refresh", "serve", "settings", "help"];
     if (!known.includes(cmd)) {
       const near = closest(cmd, [...known, "new"]);
       console.error(`Unknown plan command '${cmd}'.${near ? ` Did you mean: nikos plan ${near}?` : ""}\nSee every plan command: nikos plan help`);

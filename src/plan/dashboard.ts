@@ -2,8 +2,8 @@
 // period, its key results and bets with their delivery, and the drill-downs from a key result or bet.
 // Everything here is read from the planning repo and its delivery copies. Nothing is written, and no
 // network is used. The server and the export both build their pages from these functions.
-import { latest, isStale, progress } from "../planning/krs.js";
-import { alignsList } from "../planning/levels.js";
+import { directionOf, kindOf, latest, isStale, progress } from "../planning/krs.js";
+import { alignsList, laddersOf, linkedOf } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
 import { below, readCache, type BetDelivery, type DeliveryWarning, type PlanDeliveries, type RepoRead, type StoryRow } from "./delivery.js";
@@ -44,12 +44,20 @@ export interface KrRef {
   unit: string;
   by: string;
   period?: string;
-  /** Progress from baseline toward target, 0..1 (can pass 1). */
+  /** Progress from baseline toward target: 0..1, past 1 on overshoot, below 0 when it moved the wrong way. */
   progress: number;
+  /** Which way the figure should move. Up unless the key result says down. */
+  direction: "up" | "down";
+  /** number, or milestone: a list of steps, each done on a date or not yet. */
+  kind: "number" | "milestone";
+  /** A milestone's steps in order, with the date each was done (null while not). Empty for a number. */
+  steps: { name: string; done: string | null }[];
   latest: { value: number; date: string } | null;
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
   version: string;
+  /** Its ladders_up text, when no link backs it yet: the page says not linked yet, and it counts in no figure. */
+  laddersUp?: string;
 }
 
 /** A key result on an area's page: the ladder row, plus its objective, targets and what it aligns to. */
@@ -72,6 +80,8 @@ export interface BetRef {
   owner: string;
   delivery?: BetDelivery;
   stories: StoryRow[];
+  /** Its ladders_up text, when no link backs it yet: the page says not linked yet, and it counts in no figure. */
+  laddersUp?: string;
 }
 
 /** A bet on an area's page: its key results, what it aligns to, and its delivery. */
@@ -103,6 +113,14 @@ export interface DrillMap {
   age: string;
 }
 
+/** A key result or bet whose ladders_up text no link backs yet. It is listed as not linked yet, and counts in no figure. */
+export interface UnlinkedRef {
+  id: string;
+  rel: string;
+  kind: "key result" | "bet";
+  text: string;
+}
+
 export interface AreaPage {
   plan: { rel: string; level: AreaLevel; id: string; name: string; period?: string; reportsTo: string | null };
   today: string;
@@ -127,6 +145,8 @@ export interface AreaPage {
   /** What the page says before the rest: an unknown area, or a quarter with no key results. */
   notices: string[];
   warnings: DeliveryWarning[];
+  /** This area's key results and bets with ladders_up text and no link: listed as not linked yet, and in no figure. */
+  unlinked: UnlinkedRef[];
   /** Files that won't load. The page still shows the rest. */
   problems: string[];
 }
@@ -310,9 +330,13 @@ function krRef(area: Area, id: string, on: string): KrRef {
     by: d.by ?? "",
     ...(d.period !== undefined ? { period: String(d.period) } : {}),
     progress: progress(d),
+    direction: directionOf(d),
+    kind: kindOf(d),
+    steps: (d.steps ?? []).map((s: any) => ({ name: String(s.name), done: s.done ? String(s.done) : null })),
     latest: last ? { value: last.value, date: last.date } : null,
     stale: isStale(d, on),
     version: kr.hash,
+    ...(laddersOf(d) && !linkedOf("kr", d) ? { laddersUp: laddersOf(d)! } : {}),
   };
 }
 
@@ -331,6 +355,9 @@ interface BetRec {
   deadline: string;
   krs: { primary: string | null; also: string[] };
   aligns: string[];
+  /** The ladders_up text, when there is any, and whether a link backs it. */
+  laddersUp?: string;
+  linked: boolean;
 }
 
 /** Every bet in the company, read once. A bet that won't load is listed as a problem, and left out. */
@@ -353,6 +380,8 @@ function betRecords(repo: string): { bets: Map<string, BetRec>; problems: string
           deadline: dateOf(m.deadline),
           krs: { primary: m.krs?.primary ?? null, also: m.krs?.also ?? [] },
           aligns: alignsList(m.aligns_to),
+          ...(laddersOf(m) ? { laddersUp: laddersOf(m) } : {}),
+          linked: linkedOf("bet", m),
         });
       } catch (err) {
         problems.push((err as Error).message.split("\n")[0]);
@@ -402,6 +431,7 @@ function betRefOf(rec: BetRec, deliveries: PlanDeliveries): BetRef {
     owner: rec.owner,
     ...(delivery ? { delivery } : {}),
     stories: deliveries.stories.get(rec.id) ?? [],
+    ...(rec.laddersUp && !rec.linked ? { laddersUp: rec.laddersUp } : {}),
   };
 }
 
@@ -441,13 +471,16 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     }
   }
   const krs: DashKr[] = [];
+  const unlinked: UnlinkedRef[] = [];
   for (const { id, holder } of holders) {
     // A department's quarterly key results show for the quarter picked; the company's are for the year.
     try {
       const d = loadKr(holder.dir, id).data;
+      const row = krRef(holder, id, today);
+      // Listed whatever quarter the page shows, as plan status and the suggestion list it: the quarter only picks the figures.
+      if (row.laddersUp) unlinked.push({ id, rel: holder.rel, kind: "key result", text: row.laddersUp });
       const quarterly = holder.level === "department" && d.period !== undefined;
       if (quarterly && period !== undefined && String(d.period) !== period) continue;
-      const row = krRef(holder, id, today);
       const aligns = alignsList(d.aligns_to);
       krs.push({
         ...row,
@@ -470,6 +503,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   for (const k of krs) {
     for (const a of widen.up ? krAncestors(repo, k.aligns_to, today, problems) : k.above) if (!own.has(a.id)) aboveKrs.set(`${a.rel}/${a.id}`, a);
   }
+
+  unlinked.push(...ownBets.filter((b) => b.laddersUp && !b.linked).map((b) => ({ id: b.id, rel: b.area.rel, kind: "bet" as const, text: b.laddersUp! })));
 
   const bets: DashBet[] = ownBets.map((b) => {
     const aligns = b.aligns.flatMap((ref) => {
@@ -539,6 +574,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     aboveBets: [...aboveBets.values()],
     widen,
     belowBets,
+    unlinked,
     repos: opts.deliveries.repos,
     notices,
     warnings,

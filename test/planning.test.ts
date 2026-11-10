@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { newBet, reviewBet, type BetInput } from "../src/planning/bets";
-import { checkIn, isStale, newKr, reviseTarget } from "../src/planning/krs";
+import { checkIn, isStale, newKr, progress, reviseTarget } from "../src/planning/krs";
 import { checkBet, checkKr, loadBet, loadKr, validatePlanning } from "../src/planning/model";
 import { mkdirSync } from "node:fs";
 import { copyExample, edit, rootOf } from "./helpers";
@@ -172,5 +172,37 @@ describe("planning files", () => {
     const b = { id: "b", owner: "o", hypothesis: "h", krs: {}, review_on: "2027-01-01", confidence: "low", dependencies: [], outcome: "open", reviews: [] };
     expect(checkBet({ ...b, aligns_to: ["acme/company-plan#one-tap-pay"] })).toBe(true);
     expect(checkBet({ ...b, aligns_to: ["../escape#x"] })).toBe(false);
+  });
+});
+
+describe("progress", () => {
+  // A figure that should go down: 11 toward 7. The same formula works for both directions.
+  const kr = (extra: Record<string, unknown> = {}) => ({ baseline: 11, target: 7, checkins: [], ...extra });
+
+  it("is 0 at the baseline, 1 at the target, and past 1 on overshoot, for a figure that goes up", () => {
+    expect(progress({ baseline: 0, target: 60000, checkins: [] })).toBe(0);
+    expect(progress({ baseline: 0, target: 60000, checkins: [{ date: "2026-11-10", value: 30000 }] })).toBe(0.5);
+    expect(progress({ baseline: 0, target: 60000, checkins: [{ date: "2026-11-10", value: 75000 }] })).toBe(1.25);
+  });
+
+  it("works the same for a figure that should go down: 11 toward 7, at 9 is half way", () => {
+    expect(progress(kr())).toBe(0);
+    expect(progress(kr({ direction: "down", checkins: [{ date: "2026-11-10", value: 9 }] }))).toBe(0.5);
+    expect(progress(kr({ direction: "down", checkins: [{ date: "2026-11-10", value: 7 }] }))).toBe(1);
+    expect(progress(kr({ direction: "down", checkins: [{ date: "2026-11-10", value: 5 }] }))).toBe(1.5);
+  });
+
+  it("is negative when the figure has moved the wrong way, and is not clamped", () => {
+    expect(progress(kr({ direction: "down", checkins: [{ date: "2026-11-10", value: 12 }] }))).toBe(-0.25);
+    expect(progress({ baseline: 0, target: 60000, checkins: [{ date: "2026-11-10", value: -6000 }] })).toBeCloseTo(-0.1);
+  });
+
+  it("uses the latest check-in, and the baseline before any", () => {
+    expect(progress(kr({ direction: "down", checkins: [{ date: "2026-10-01", value: 12 }, { date: "2026-11-01", value: 8 }] }))).toBe(0.75);
+    expect(progress(kr({ direction: "down" }))).toBe(0);
+  });
+
+  it("is 1 when the target equals the baseline, as before", () => {
+    expect(progress({ baseline: 5, target: 5, checkins: [] })).toBe(1);
   });
 });
