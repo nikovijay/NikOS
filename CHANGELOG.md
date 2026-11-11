@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A department's OKRs and bets page lists the bets below it.** Group and team bets that aim at one of its key results show under that key result, with the area each is in. Before, they showed only in the Ladder view. The company's page does the same for department bets, and a group's page lists its teams' bets at the key results it shows.
+- **A back-dated check-in no longer becomes the latest.** `nikos plan checkin --date` and the dashboard put a check-in in date order, and the latest figure is the one with the newest date, so progress and staleness are right. The dashboard's check-in form has a date field, today unless you pick one.
+- **A story map page links back to the list.** In a code repo with several story maps, each map's page in `nikos serve` has an "All story maps" link, also when the server was started with `--map`.
+
 ## 0.5.0 (2026-11-10)
 
 nikOS is now two products in one package. **nikOS Plan** keeps a company's objectives, key results and bets in one planning repo, with a folder for each level: company, departments, groups and teams. **nikOS Spec** keeps each code repo's story map in `maps/<key>/`, next to the code that builds it. The two meet in small committed files. A map names the bet it delivers, and writes `delivery.yaml` for the plan to read. The plan lists its code repos in `planning/repos.yaml`. A code repo keeps a copy of the plan's settings in `nikos.plan.yaml`. The design is `docs/rfcs/plan-and-spec.md`.

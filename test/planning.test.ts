@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { newBet, reviewBet, type BetInput } from "../src/planning/bets";
-import { checkIn, isStale, newKr, progress, reviseTarget } from "../src/planning/krs";
+import { checkIn, isStale, latest, newKr, progress, reviseTarget } from "../src/planning/krs";
 import { checkBet, checkKr, loadBet, loadKr, validatePlanning } from "../src/planning/model";
 import { mkdirSync } from "node:fs";
 import { copyExample, edit, rootOf } from "./helpers";
@@ -100,6 +100,21 @@ describe("key results", () => {
     expect(after.slice(0, 1)).toEqual(before);
     expect(after[1]).toEqual({ date: "2027-01-17", value: 45, evidence: "https://example.com/d" });
     expect(() => checkIn(root, "completion", { value: NaN })).toThrow("numeric");
+  });
+
+  it("a back-dated check-in goes in date order and doesn't become the latest", () => {
+    const root = repo();
+    newKr(kr, root);
+    checkIn(root, "completion", { value: 45, date: "2027-01-17" });
+    checkIn(root, "completion", { value: 42, date: "2027-01-10" });
+    checkIn(root, "completion", { value: 46, date: "2027-01-17" });
+    const data = loadKr(root, "completion").data;
+    expect(data.checkins.map((c: any) => c.value)).toEqual([42, 45, 46]);
+    expect(latest(data)).toMatchObject({ value: 46, date: "2027-01-17" });
+    expect(progress(data)).toBeCloseTo(6 / 15);
+    // A hand-edited file out of order: the newest date still wins.
+    expect(latest({ checkins: [{ date: "2027-02-01", value: 50 }, { date: "2027-01-01", value: 41 }] })).toMatchObject({ value: 50 });
+    expect(isStale({ checkins: [{ date: "2027-01-20", value: 1 }, { date: "2027-01-01", value: 1 }] }, "2027-01-25")).toBe(false);
   });
 
   it("revising a target keeps the original", () => {

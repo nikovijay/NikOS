@@ -80,6 +80,17 @@ describe("a save from the plan dashboard", () => {
     expect(readFileSync(join(repo, CLOSE), "utf8")).toContain("value: 8");
   });
 
+  it("the check-in form takes a date, and a back-dated check-in from it doesn't become the latest", async () => {
+    const repo = gitPlan();
+    const plan = await start(repo);
+    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys`).then((r) => r.text());
+    expect(html).toMatch(/data-op="checkin"[^>]*>(?:(?!<\/form>)[\s\S])*<input name="date" type="date">/);
+    const r = await post(plan, "/api/op", { op: "checkin", target: { kr: "close-days" }, args: { value: 10, date: "2026-11-01" }, expect: versionOf(repo, CLOSE) });
+    expect(r.status).toBe(200);
+    const after = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys`).then((r) => r.text());
+    expect(after).toContain("9 on 2026-11-09");
+  });
+
   it("writes the area's own file, on a nikos branch named for the area", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
