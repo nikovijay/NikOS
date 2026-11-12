@@ -75,7 +75,8 @@ export function startMapServer(root: string, opts: { port?: number; map?: string
         const keys = mapKeys(root);
         const asked = query.get("map") ?? opts.map;
         if (asked === undefined || !keys.includes(asked)) return keys.length > 1 ? mapList(root, keys) : renderMap(root, { live: true });
-        return renderMap(root, { live: true, map: asked });
+        // ?map= with no key is the list, even when the server was started on one map.
+        return renderMap(root, { live: true, map: asked, ...(keys.length > 1 ? { back: "/?map=" } : {}) });
       },
     },
   });

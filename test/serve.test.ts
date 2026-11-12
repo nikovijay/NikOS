@@ -47,6 +47,13 @@ describe("nikos serve in a code repo", () => {
     const one = await (await fetch(`http://127.0.0.1:${srv.port}/?map=ht`)).text();
     expect(one).toContain("Story map");
     expect(one).not.toContain("No stories yet");
+    // Each map links back to the list, even on a server started on one map.
+    expect(one).toContain('<a class="back" href="/?map=">← All story maps</a>');
+    expect(await (await fetch(`http://127.0.0.1:${srv.port}/?map=`)).text()).toContain('href="/?map=pay"');
+    const picked = await startMapServer(root, { map: "pay" });
+    running.push(picked);
+    expect(await (await fetch(`http://127.0.0.1:${picked.port}/`)).text()).toContain("← All story maps");
+    expect(await (await fetch(`http://127.0.0.1:${picked.port}/?map=`)).text()).toContain('href="/?map=ht"');
     const r = serve(["--dir", root, "--export", join(root, "x.html")]);
     expect(r.code).toBe(1);
     expect(r.err).toContain("Say which one to save with --map");
@@ -61,6 +68,8 @@ describe("nikos serve in a code repo", () => {
     expect(html).toContain("Story map");
     expect(html).toContain('id="f-q"');
     expect(html).not.toContain("← Planning");
+    // One map: there's no list to go back to.
+    expect(html).not.toContain("All story maps");
     for (const path of ["/map", "/api/data", "/nikos-view.js", "/views/x"]) {
       expect((await fetch(`http://127.0.0.1:${srv.port}${path}`)).status, path).toBe(404);
     }

@@ -101,9 +101,10 @@ const krHref = (rel: string, id: string, period?: string) => hrefOf({ at: rel, k
 const betLink = (b: { rel: string; id: string }, period?: string) => `<a href="${esc(betHref(b.rel, b.id, period))}">${esc(b.id)}</a>`;
 
 /** A bet's line in a list: its id linked to its drill-down, its outcome, owner and delivery. */
-function betLine(b: BetRef | DashBet, period?: string): string {
+function betLine(b: BetRef | DashBet, period?: string, from?: string): string {
   const owner = b.owner ? `. Owner: ${esc(b.owner)}` : "";
-  return `<li>${betLink(b, period)} — ${esc(b.outcome)}${owner}. Delivery: ${esc(deliveryText(b.delivery))}</li>`;
+  const where = from ? ` <span class="id">${esc(from)}</span>` : "";
+  return `<li>${betLink(b, period)}${where} — ${esc(b.outcome)}${owner}. Delivery: ${esc(deliveryText(b.delivery))}</li>`;
 }
 
 export const STYLE = `:root{--bg:#fbfbf8;--fg:#1d1d1b;--muted:#6b6b66;--line:#dcdcd4;--card:#ffffff;--purple:#5b3fb0;--purple-bg:#efeafb;--green:#23663f;--green-bg:#e4f2e8;--grey:#5d5d58;--grey-bg:#eeeeea;--notice:#fff4d6;--notice-fg:#4a3800;--link:#2b59c3}
@@ -192,7 +193,7 @@ function quarters(page: AreaPage, state: PageState): string {
   return `<p class="quarters">Quarter: ${links.join(" · ")}</p>`;
 }
 
-/** The form that checks a key result in: the new value, and it saves on the area's nikos branch. Live page only. */
+/** The form that checks a key result in: the new value and its date, today unless one is given. It saves on the area's nikos branch. Live page only. */
 function checkinForm(k: KrRef, live: boolean): string {
   if (!live) return "";
   if (k.kind === "milestone") {
@@ -202,7 +203,7 @@ function checkinForm(k: KrRef, live: boolean): string {
     const options = todo.map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join("");
     return `<form class="save" data-op="kr.step" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>Step <select name="name" required>${options}</select></label><label>Done on <input name="date" type="date"></label><button type="submit">Mark step done</button><span class="save-msg" role="status"></span></form>`;
   }
-  return `<form class="save" data-op="checkin" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>New value <input name="value" type="number" step="any" required></label><button type="submit">Check in</button><span class="save-msg" role="status"></span></form>`;
+  return `<form class="save" data-op="checkin" data-area="${esc(k.rel)}" data-target="${esc(JSON.stringify({ kr: k.id }))}" data-expect="${esc(k.version)}"><label>New value <input name="value" type="number" step="any" required></label><label>On <input name="date" type="date"></label><button type="submit">Check in</button><span class="save-msg" role="status"></span></form>`;
 }
 
 /** The form that adds a bet in this area. Live page only. */
@@ -233,9 +234,12 @@ function renderOkrs(page: AreaPage, live: boolean): string {
     for (const k of krs) {
       const aimed = page.bets.filter((b) => b.krs.primary === k.id || b.krs.also.includes(k.id));
       for (const b of aimed) listed.add(b.id);
+      // Other areas' bets at it follow the area's own, each with the area it's in.
+      const elsewhere = page.aimingBets.filter((b) => b.of === k.id);
+      const lines = [...aimed.map((b) => betLine(b, page.period)), ...elsewhere.map((b) => betLine(b, page.period, b.rel))];
       parts.push(
         `<div class="card"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span><div class="meta">${esc(krMeta(k))}${k.aligns_to.length ? `. Aligns to ${esc(k.aligns_to.join(", "))}` : ""}</div>${checkinForm(k, live)}${
-          aimed.length ? `<ul>${aimed.map((b) => betLine(b, page.period)).join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'
+          lines.length ? `<ul>${lines.join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'
         }</div>`,
       );
     }

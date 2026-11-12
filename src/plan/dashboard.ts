@@ -141,6 +141,11 @@ export interface AreaPage {
   widen: { up: boolean; down: boolean };
   /** The bets below the area's bets and key results. Only when it widened down. */
   belowBets: BelowBet[];
+  /**
+   * Other areas' bets that aim straight at a key result in the column, for the OKRs and bets page: any area's,
+   * at a key result the area holds, else only the areas below it.
+   */
+  aimingBets: BelowBet[];
   repos: RepoRead[];
   /** What the page says before the rest: an unknown area, or a quarter with no key results. */
   notices: string[];
@@ -552,6 +557,19 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     }
   }
 
+  // The bets elsewhere that aim at the column's key results. A group or team shows only those below it, since
+  // the key results it shows are a department's or the company's, and other areas' bets at them aren't its own.
+  const aimingBets: BelowBet[] = [];
+  const holds = area.level === "company" || area.level === "department";
+  const under = (rel: string) => tree.find((n) => n.rel === rel)?.path.includes(area.rel) ?? false;
+  for (const k of krs) {
+    for (const b of records.values()) {
+      if (b.area.rel === area.rel || !(holds || under(b.area.rel))) continue;
+      const how = b.krs.primary === k.id ? "primary" : b.krs.also.includes(k.id) ? "also" : undefined;
+      if (how) aimingBets.push({ ...betRefOf(b, opts.deliveries), how, of: k.id });
+    }
+  }
+
   const warnings = opts.deliveries.warnings;
   const parent = parentOf(area);
   return {
@@ -574,6 +592,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     aboveBets: [...aboveBets.values()],
     widen,
     belowBets,
+    aimingBets,
     unlinked,
     repos: opts.deliveries.repos,
     notices,

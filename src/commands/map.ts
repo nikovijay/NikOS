@@ -193,7 +193,8 @@ const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "B
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve. */
-export function renderMap(dir: string, opts: { live?: boolean; map?: string } = {}): string {
+/** back: a link to the list of the repo's maps, for the live page of a repo with more than one. */
+export function renderMap(dir: string, opts: { live?: boolean; map?: string; back?: string } = {}): string {
   const m = storyMapOf(dir, opts.map);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
   const known = new Set(m.activities.map((a) => a.id));
@@ -289,7 +290,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string } = 
 <style>${CSS}</style>
 </head>
 <body>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title"><h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
 ${filters}<main id="board" tabindex="-1">
 ${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
@@ -433,6 +434,7 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; backgrou
 .warn { color: var(--warn); font-weight: 600; }
 .top { padding: 16px 24px 12px; display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--paper); }
 h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+.back { display: block; font-size: 14px; margin-bottom: 2px; }
 .jumps { display: flex; flex-wrap: wrap; gap: 6px; }
 .jump { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--ink); text-decoration: none; font-size: 12px; }
 .jump:hover { border-color: var(--line-2); }

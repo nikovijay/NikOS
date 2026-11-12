@@ -94,6 +94,7 @@ nikos plan kr new revenue --in company --title "Annual recurring revenue" --owne
 nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --direction down --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
 nikos plan checkin close-days 10 --note "First week of auto-match"
+nikos plan checkin close-days 10.5 --date 2027-01-03   # a back-dated check-in goes in date order
 nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1
 nikos plan kr step close-process "Map steps" --date 2026-11-10
 nikos plan bet review faster-checkout continue --why "On track"
@@ -190,6 +191,9 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
 - **One page per area.** The views are Key results (the company and departments
   only), OKRs and bets, Ladder, Bets and Timeline. Groups and teams have no key
   results of their own: their OKRs and bets show the key results their bets aim at.
+  Under each key result, OKRs and bets lists the area's own bets that aim at it, then
+  other areas' bets that do, each with its area. A company or department lists every
+  area's; a group or team lists only the areas below it.
 - **The ladder.** Four columns: the key results above the area, the area's key
   results grouped by objective, the area's bets, and the bets above them. Each
   bet shows whether it is its own bet or delivered through the bets below it.
@@ -206,7 +210,8 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
   key result's due date.
 - **The place is in the link.** Every link carries the area, for example
   `?at=departments/finance`, so a page can be bookmarked or shared.
-- **Saves are small and never pushed.** A key result has a check-in form, and the
+- **Saves are small and never pushed.** A key result has a check-in form, with a
+  date that is today unless you pick another, and the
   Bets page has a form to add a bet. Each save goes in the area's own folder, on
   a `nikos/plan-<area>-<date>` branch. A bar at the top lists the saved changes:
   Commit commits only those areas' files, and Push is the only thing that sends

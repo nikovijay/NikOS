@@ -106,10 +106,12 @@ export function checkIn(
   const kr = loadKr(root, id);
   if (kindOf(kr.data) === "milestone") throw new Error(`${id} is a milestone, so it has steps, not a value: mark one with nikos plan kr step ${id} "<step>"`);
   const data = structuredClone(kr.data);
-  data.checkins = [
-    ...(data.checkins ?? []),
-    { date: c.date ?? today(), value: c.value, ...(c.note?.trim() ? { note: c.note.trim() } : {}), ...(c.evidence?.trim() ? { evidence: c.evidence.trim() } : {}) },
-  ];
+  const entry = { date: c.date ?? today(), value: c.value, ...(c.note?.trim() ? { note: c.note.trim() } : {}), ...(c.evidence?.trim() ? { evidence: c.evidence.trim() } : {}) };
+  // A back-dated check-in goes in date order, after any on the same day, so the file reads oldest first.
+  const list = [...(data.checkins ?? [])];
+  const at = list.findIndex((x: any) => String(x.date) > entry.date);
+  list.splice(at === -1 ? list.length : at, 0, entry);
+  data.checkins = list;
   return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: c.expect ?? kr.hash });
 }
 
@@ -144,7 +146,9 @@ export function editKr(root: string, id: string, fields: Record<string, unknown>
   return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: expect ?? kr.hash });
 }
 
-export const latest = (kr: any) => (kr.checkins?.length ? kr.checkins[kr.checkins.length - 1] : undefined);
+/** The newest check-in by date; of two on the same day, the one written later. A hand-edited file may be out of order. */
+export const latest = (kr: any) =>
+  (kr.checkins ?? []).reduce((best: any, c: any) => (best === undefined || String(c.date) >= String(best.date) ? c : best), undefined);
 
 /** A key result's kind: number unless its file says milestone. */
 export const kindOf = (kr: any): "number" | "milestone" => (kr.kind === "milestone" ? "milestone" : "number");

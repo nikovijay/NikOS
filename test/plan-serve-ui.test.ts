@@ -108,6 +108,18 @@ describe("the views each level has", () => {
     expect(r).toContain("inbox-match");
   });
 
+  it("lists the bets below that aim at a department's key result on its OKRs and bets page, with their area", async () => {
+    const { srv } = await start(acmePlan());
+    const r = (await get(srv.port, `/?${FINANCE}`)).text;
+    expect(r).toContain('faster-checkout</a> <span class="id">groups/payments</span>');
+    expect(r).toContain('web-bet</a> <span class="id">teams/WEB</span>');
+    expect(r).not.toContain("Bets that aim at no key result shown here");
+    // A group shows only the bets below it: the team's, not its own twice.
+    const group = (await get(srv.port, "/?at=groups/payments")).text;
+    expect(group).toContain('web-bet</a> <span class="id">teams/WEB</span>');
+    expect(group).not.toContain('inbox-match</a> <span class="id">');
+  });
+
   it("shows the timeline's dated items in date order", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&view=timeline`)).text;
