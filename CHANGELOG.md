@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-13)
+
+The plan dashboard and the story map are now places to work, not only to read. From `nikos plan serve` you can add and edit key results and bets. From `nikos serve` you can add activities, steps, stories and releases, and edit a story and its acceptance criteria. Saves from either page go on a branch, and nothing is pushed until you press Push. Both pages share a new design in light and dark. `nikos start` now asks whether a new repo should be on GitHub, GitLab or only this computer. Nothing in this release breaks a 0.5 setup.
 
 ### Added
 
@@ -12,7 +14,6 @@
 - **Bet titles.** A bet can have a title, `--title` on `nikos plan bet new` and in the dashboard's form, and the title shows in place of the id. A key result or bet made with `--title` and no id gets its id from the title (`quick-win`, then `quick-win-2` if that is taken). `nikos plan kr new` takes the same. `nikos plan status` and `--json` show bet titles too.
 - **Choose where a new repo lives.** When `nikos start` makes a git repo, or finds one with no origin, it asks whether it should be on GitHub, GitLab or only this computer. For GitHub or GitLab it asks the repo's path (it suggests your own account) and whether it's private, shows the result in the summary, then makes the repo with `gh` or `glab` and sets it as the origin. It never pushes. Without `gh` or `glab` it gives the command to run. `nikos start` and `nikos plan init` take the same choice as flags: `--github <owner/name>` or `--gitlab <group/name>`, with `--public` for a public repo.
 - **Agents ask before making a hosted repo.** The onboarding and plan setup playbooks tell agents to ask where the repo should live, never to pick GitHub or an account themselves, to make it only through nikOS, and never to push without a yes.
-
 - **Organise releases on the story map.** Each release on the live map has ↑ and ↓ to change the order, Rename for its title and goal, and Remove. Remove is turned off, with the reason, while the release still has stories or delivers a bet. Drag a story into another release's row to move it, or use Move to in its panel. A moved story goes to the end of that release's build order, and its approval still holds.
 - **Add a story from a dialog.** It asks for the title, the activity and step, the release and the priority, and shows the `nikos story add` command it matches. The new story opens straight away, with a prompt to copy for your agent to write its scenarios.
 - **Share from either page.** A Share button says how to share without sending the private link: export a read-only page with `--export`, or publish that page on your company's internal site. A label in the top bar says whether you're on the live page on this computer or an exported file.
