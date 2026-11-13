@@ -4,6 +4,7 @@
 // place is in the URL. The live page adds save forms (check-ins, new bets) and a pending bar, which post to
 // /api/op and the git buttons with the server's token. The offline export has neither.
 import type { AreaLevel } from "../planning/model.js";
+import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
 import { figuresText, readsText, repoLabel } from "./words.js";
@@ -151,7 +152,9 @@ table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1p
 .card{border:1px solid var(--line);border-radius:.5rem;padding:.6rem .8rem;margin:.6rem 0;background:var(--card)}
 ul{padding-left:1.2rem}
 select{font:inherit;padding:.2rem .4rem;max-width:100%}
-@media (max-width:40rem){body{padding:.75rem}}`;
+@media (max-width:40rem){body{padding:.75rem}}
+.top-right{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+${THEME_CSS}`;
 
 /** The altitude switcher: each level's page is the one above this area, or the first area at that level. */
 function altitudes(page: AreaPage): string {
@@ -578,7 +581,7 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   const list = (items: string[]) => (items.length ? `<ul>${items.join("")}</ul>` : "<p>None yet.</p>");
   return `<header class="top">
 <nav class="altitudes" aria-label="Altitude">${altitudes(page)}</nav>
-<div>${picker(page, !!opts.offline)}</div>
+<div class="top-right">${picker(page, !!opts.offline)}${THEME_BUTTON}</div>
 </header>
 <nav class="crumbs" aria-label="Breadcrumb">${crumbs(page)}</nav>
 ${quarters(page, state)}
@@ -621,7 +624,7 @@ export function renderPlanPage(page: AreaPage, state: PageState, opts: { token: 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="nikos-token" content="${esc(opts.token)}">
-<title>${planTitle(page)}</title><style>${STYLE}</style></head>
+<title>${planTitle(page)}</title><style>${STYLE}</style>${THEME_HEAD}</head>
 <body>
 <div id="pending" class="pending" role="status" hidden></div>
 ${renderPlanBody(page, state, { live: true })}<script>

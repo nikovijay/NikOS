@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **A light/dark switch** on the plan dashboard (live and exported) and on the live story map. A page follows the browser's light or dark setting until you press the switch, then keeps your choice in that browser. The exported story map has no script, so it still follows the browser.
+
+### Fixed
+
+- **Story cards in dark mode** kept their light fill, so their titles were hard to read. They now take the dark colours.
+
 ## 0.5.0 (2026-11-10)
 
 nikOS is now two products in one package. **nikOS Plan** keeps a company's objectives, key results and bets in one planning repo, with a folder for each level: company, departments, groups and teams. **nikOS Spec** keeps each code repo's story map in `maps/<key>/`, next to the code that builds it. The two meet in small committed files. A map names the bet it delivers, and writes `delivery.yaml` for the plan to read. The plan lists its code repos in `planning/repos.yaml`. A code repo keeps a copy of the plan's settings in `nikos.plan.yaml`. The design is `docs/rfcs/plan-and-spec.md`.

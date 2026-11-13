@@ -208,6 +208,9 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
   offers to link these, one at a time, with `nikos plan ladder`.
 - **Dates.** The timeline lists each bet's start, review and deadline, and each
   key result's due date.
+- **Light or dark.** The page follows your browser's setting. The switch at the top
+  changes it, and this browser keeps the choice for that address (a dashboard on a
+  fixed `--port` keeps it between runs).
 - **The place is in the link.** Every link carries the area, for example
   `?at=departments/finance`, so a page can be bookmarked or shared.
 - **Saves are small and never pushed.** A key result has a check-in form, with a

@@ -3,6 +3,7 @@
 // it can be shared as a file. Selecting a story opens its panel with :target, in CSS alone.
 // Served live by nikos serve, it also gets a filter bar (see FILTER_JS).
 import { loadStates } from "../lib/state-files.js";
+import { darkRules, THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
@@ -288,9 +289,9 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
 <style>${CSS}</style>
-</head>
+${opts.live ? `${THEME_HEAD}\n` : ""}</head>
 <body>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav>${opts.live ? THEME_BUTTON : ""}</header>
 ${filters}<main id="board" tabindex="-1">
 ${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
@@ -407,7 +408,7 @@ const FILTER_JS = `
 
 const CSS = `
 :root { color-scheme: light dark; --paper: #F5F5F2; --surface: #FFFFFF; --elevated: #EFEFEB; --line: #E2E3DE; --line-2: #C9CBC5; --ink: #17191A; --ink-2: #3E4347; --muted: #5B6267; --brand: #1C5AA6; --brand-subtle: rgba(28,90,166,.08); --grid: rgba(23,25,26,.05); --stamp: #C42121; --warn: #8A5300; --focus: #1C5AA6; --col: 240px; --gap: 16px; }
-@media (prefers-color-scheme: dark) {
+${darkRules(`
   :root { --paper: #111315; --surface: #181B1E; --elevated: #212529; --line: #2A2F34; --line-2: #3B4147; --ink: #ECEEEF; --ink-2: #C9CED2; --muted: #9EA6AC; --brand: #8DB8F2; --brand-subtle: rgba(141,184,242,.1); --grid: rgba(236,238,239,.04); --stamp: #F28B82; --warn: #F0B657; --focus: #8DB8F2; }
   .card { --fill: #1C1F23; --edge: #2E3338; --word: #A9B0B6; }
   .doing { --fill: #15253A; --edge: #24405F; --word: #7FD9A6; }
@@ -418,7 +419,8 @@ const CSS = `
   .blocked { --fill: #351B16; --edge: #5A2B22; --word: #F29D8B; }
   .cancelled { --fill: transparent; --edge: #2E3338; --word: #9EA6AC; }
   .stamp { mix-blend-mode: normal; }
-}
+`)}
+${THEME_CSS}
 * { box-sizing: border-box; }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
