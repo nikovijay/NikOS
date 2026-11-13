@@ -5,10 +5,14 @@
 ### Added
 
 - **A light/dark switch** on the plan dashboard (live and exported) and on the live story map. A page follows the browser's light or dark setting until you press the switch, then keeps your choice in that browser. The exported story map has no script, so it still follows the browser.
+- **Add and edit from the plan dashboard.** The live dashboard has forms to add a key result (company and departments) and a bet (every level), and to edit a key result or bet, move a key result's target, record a bet's review, and set what a bet aims at or aligns to. Each form shows the fields a person needs, with dropdowns of what can be picked. Saves are small and never pushed, as before. The exported page has no forms.
+- **Bet titles.** A bet can have a title, `--title` on `nikos plan bet new` and in the dashboard's form, and the title shows in place of the id. A key result or bet made with `--title` and no id gets its id from the title (`quick-win`, then `quick-win-2` if that is taken). `nikos plan kr new` takes the same. `nikos plan status` and `--json` show bet titles too.
 
 ### Fixed
 
 - **Story cards in dark mode** kept their light fill, so their titles were hard to read. They now take the dark colours.
+- **The company's dashboard said "this quarter".** A company plans by year, so its empty key results page now says "No key results for 2027 yet", and its key results show progress toward target, not "this period".
+- **The dashboard showed area ids, such as `departments/001`.** It now shows each area's name, and bets show their title. The id stays available after the title.
 
 ## 0.5.0 (2026-11-10)
 

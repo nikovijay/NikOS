@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "title": { "type": "string", "minLength": 1, "description": "What the bet is, in a few words. Optional: the id names the bet without it." },
     "owner": { "type": "string", "minLength": 1 },
     "team": { "type": "string", "minLength": 1 },
     "hypothesis": { "type": "string", "minLength": 1 },

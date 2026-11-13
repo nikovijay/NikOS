@@ -17,12 +17,25 @@ export function idProblem(kind: "kr" | "bet" | "story" | "activity" | "step" | "
   return "'" + id + "' is not a kind of id nikOS knows";
 }
 
+/**
+ * The id a title makes, for a new bet or key result: lowercase words joined by hyphens, at most 40 characters
+ * (cut at a hyphen when there is one). Undefined when the title has no letters or numbers to make one from.
+ * The dashboard's id box runs this function too: the page embeds its source (src/plan/page.ts), so they can't drift.
+ */
+export function idFromTitle(title: string): string | undefined {
+  const slug = String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!slug) return undefined;
+  let cut = slug.slice(0, 40);
+  if (slug.length > 40 && slug.charAt(40) !== "-" && cut.indexOf("-") > 0) cut = cut.slice(0, cut.lastIndexOf("-"));
+  return cut;
+}
+
 /** Undefined for a YYYY-MM-DD date, or a message the caller can build its own sentence from. */
 export function dateProblem(v: unknown): string | undefined {
   if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "is not a date (YYYY-MM-DD)";
   // A real calendar date: 2026-02-30 and 2026-13-40 are refused, not just the shape.
   const d = new Date(v + "T00:00:00Z");
-  return isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? "is not a date (YYYY-MM-DD)" : undefined;
+  return isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v ? "is not a real date (YYYY-MM-DD)" : undefined;
 }
 
 /** Undefined for a finite number. */
@@ -38,7 +51,7 @@ export function decisionProblem(v: unknown): string | undefined {
 
 /** Undefined for a review reason with some text in it. */
 export function reasonProblem(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() !== "" ? undefined : "A review needs a reason (--why)";
+  return typeof v === "string" && v.trim() !== "" ? undefined : "A review needs a reason";
 }
 
 /** Undefined for a title with some text in it, with the message the kind of thing needs. */
@@ -46,7 +59,7 @@ export function titleProblem(label: string, v: unknown): string | undefined {
   // A title is one line: a line break would turn the rest of it into Gherkin or into a second line of the file.
   if (typeof v === "string" && v.trim() !== "" && !/[\r\n]/.test(v)) return undefined;
   if (typeof v === "string" && /[\r\n]/.test(v)) return "A title is one line (no line breaks)";
-  if (label === "kr") return "A key result needs a title (--title)";
+  if (label === "kr") return "A key result needs a title";
   if (label === "story") return "A story needs a title";
   if (label === "activity") return "An activity needs a title";
   if (label === "step") return "A step needs a title";
@@ -81,18 +94,18 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
     if (t) out.push(t);
   }
   if (mode === "new" || has("owner")) {
-    if (typeof fields.owner !== "string" || fields.owner.trim() === "") out.push("A key result needs an owner (--owner)");
+    if (typeof fields.owner !== "string" || fields.owner.trim() === "") out.push("A key result needs an owner");
   }
   // A milestone has steps, not a baseline and a target: only a number key result needs those.
   const kind = fields.kind;
   if (kind !== undefined && kind !== null && kind !== "" && kind !== "number" && kind !== "milestone") out.push("kind is number or milestone");
   if (mode === "new" && kind !== "milestone") {
     if (typeof fields.baseline !== "number" || !isFinite(fields.baseline) || typeof fields.target !== "number" || !isFinite(fields.target)) {
-      out.push("A key result needs a numeric --baseline and --target");
+      out.push("A key result needs a starting number and a target number");
     }
   }
   if (has("by")) {
-    if (dateProblem(fields.by)) out.push("A key result needs a date (--by YYYY-MM-DD)");
+    if (dateProblem(fields.by)) out.push(`The due date ${dateProblem(fields.by)}`);
   }
   // Blank deletes the direction (edit), and absent means up (new), so only a value given must be up or down.
   const dir = fields.direction;
@@ -110,12 +123,21 @@ export function krFieldProblems(fields: Record<string, unknown>, mode: "new" | "
  */
 export function betFieldProblems(fields: Record<string, unknown>): string[] {
   const out: string[] = [];
-  const editable = ["owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies", "ladders_up"];
+  const editable = ["title", "owner", "team", "hypothesis", "starts", "review_on", "deadline", "confidence", "dependencies", "ladders_up"];
   for (const k of Object.keys(fields)) if (editable.indexOf(k) < 0) out.push("'" + k + "' can't be edited here");
   const blank = (v: unknown) => v === "" || v === null || v === undefined;
-  if (Object.prototype.hasOwnProperty.call(fields, "owner") && (typeof fields.owner !== "string" || fields.owner.trim() === "")) out.push("A bet needs an owner (--owner)");
-  if (Object.prototype.hasOwnProperty.call(fields, "hypothesis") && (typeof fields.hypothesis !== "string" || fields.hypothesis.trim() === "")) out.push("A bet needs a hypothesis (--hypothesis)");
-  if (Object.prototype.hasOwnProperty.call(fields, "review_on") && (blank(fields.review_on) || dateProblem(fields.review_on))) out.push("A bet needs a review date (--review YYYY-MM-DD)");
+  // A title is optional: blank clears it, and the id still names the bet.
+  const titleBlank = blank(fields.title) || (typeof fields.title === "string" && fields.title.trim() === "");
+  if (Object.prototype.hasOwnProperty.call(fields, "title") && !titleBlank) {
+    const t = titleProblem("bet", fields.title);
+    if (t) out.push(t);
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, "owner") && (typeof fields.owner !== "string" || fields.owner.trim() === "")) out.push("A bet needs an owner");
+  if (Object.prototype.hasOwnProperty.call(fields, "hypothesis") && (typeof fields.hypothesis !== "string" || fields.hypothesis.trim() === "")) out.push("A bet needs a hypothesis");
+  if (Object.prototype.hasOwnProperty.call(fields, "review_on")) {
+    if (blank(fields.review_on)) out.push("A bet needs a review date (YYYY-MM-DD)");
+    else if (dateProblem(fields.review_on)) out.push(`The review date ${dateProblem(fields.review_on)}`);
+  }
   for (const k of ["starts", "deadline"]) {
     if (Object.prototype.hasOwnProperty.call(fields, k) && !blank(fields[k]) && dateProblem(fields[k])) out.push(k + " is not a date (YYYY-MM-DD)");
   }

@@ -164,7 +164,7 @@ describe("reviews", () => {
   it("complete asks for won or lost", () => {
     const root = repo();
     newBet(bet, root);
-    expect(() => reviewBet(root, "faster-checkout", { decision: "complete", reason: "Done." })).toThrow("--outcome won or --outcome lost");
+    expect(() => reviewBet(root, "faster-checkout", { decision: "complete", reason: "Done." })).toThrow("won or lost");
     reviewBet(root, "faster-checkout", { decision: "complete", reason: "Hit 56%.", outcome: "won", date: "2027-03-31" });
     expect(loadBet(root, "faster-checkout").meta).toMatchObject({ outcome: "won" });
   });

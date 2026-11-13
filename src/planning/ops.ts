@@ -16,7 +16,7 @@ import { levelOf, planningIssues } from "./levels.js";
 import { idProblem, betFieldProblems, decisionProblem, numberProblem, reasonProblem } from "./rules.js";
 import { areaOf, hash, labelRoot, StaleError, checkHash } from "./model.js";
 import { validateGroup } from "../commands/validate.js";
-import { krAreaProblem, repoIssues } from "../plan/repo.js";
+import { krAreaProblem, newIdFor, repoIssues } from "../plan/repo.js";
 
 export type OpName =
   | "checkin"
@@ -132,11 +132,11 @@ export const OP_LEVELS = levelsOf(AREA_GROUP, TEAM);
  */
 const ARGS: Partial<Record<OpName, string[]>> = {
   checkin: ["value", "note", "evidence", "date"],
-  "kr.new": ["title", "owner", "baseline", "target", "by", "unit", "objective", "direction", "kind", "steps", "aligns_to", "ladders_up", "stale_after_days"],
+  "kr.new": ["title", "owner", "baseline", "target", "period", "by", "unit", "objective", "direction", "kind", "steps", "aligns_to", "ladders_up", "stale_after_days"],
   "kr.target": ["target"],
   "kr.align": ["aligns_to"],
   "kr.step": ["name", "date"],
-  "bet.new": ["owner", "hypothesis", "review_on", "review", "team", "starts", "deadline", "primary", "also", "aligns_to", "ladders_up", "confidence", "dependencies", "evidence"],
+  "bet.new": ["title", "owner", "hypothesis", "review_on", "review", "team", "starts", "deadline", "primary", "also", "aligns_to", "ladders_up", "confidence", "dependencies", "evidence"],
   "bet.review": ["decision", "reason", "outcome"],
   "bet.align": ["aligns_to"],
   "bet.krs": ["primary", "also"],
@@ -204,9 +204,12 @@ function precheck(root: string, op: Op): void {
   const area = areaOf(root);
   if (area && AREA_REFUSED.has(op.op)) throw new Error(`${op.op} isn't a change a planning area makes: story maps and settings stay in the code repos`);
   const keys = op.op.startsWith("kr.") || op.op === "checkin";
+  const creates = op.op === "kr.new" || op.op === "bet.new";
   if (area && keys && krAreaProblem(area)) throw new Error(krAreaProblem(area)!);
   if (level && !OP_LEVELS[op.op].includes(level as Level)) throw new Error(`${op.op} isn't a change the ${level} plan makes here`);
   for (const [kind, id] of Object.entries(op.target ?? {})) {
+    // A new key result or bet may leave its id blank: its title makes it.
+    if (creates && !str(id)) continue;
     const k = TARGET_KINDS[kind];
     const problem = k ? idProblem(k, id) : `'${kind}' isn't a kind of target nikOS knows`;
     if (problem) throw new Error(problem);
@@ -240,14 +243,17 @@ function apply(root: string, op: Op): string {
       checkIn(root, t.kr, { value: a.value as number, note: str(a.note), evidence: str(a.evidence), date: str(a.date), expect });
       return `Checked in ${t.kr}: ${a.value}`;
     }
-    case "kr.new":
+    case "kr.new": {
+      // The id is the one given, else the title's (with -2 or -3 when taken). The message names the id made.
+      const id = str(t.kr) ?? newIdFor(areaOf(root)?.repo, str(a.title));
       newKr(
         {
-          id: t.kr,
+          id,
           title: String(a.title ?? ""),
           owner: String(a.owner ?? ""),
           baseline: num(a.baseline),
           target: num(a.target),
+          period: str(a.period),
           by: String(a.by ?? ""),
           unit: typeof a.unit === "string" ? a.unit : undefined,
           objective: str(a.objective),
@@ -260,7 +266,8 @@ function apply(root: string, op: Op): string {
         },
         root,
       );
-      return `Added key result ${t.kr}`;
+      return `Added key result ${id}`;
+    }
     case "kr.edit":
       editKr(root, t.kr, a, expect);
       return `Saved key result ${t.kr}`;
@@ -276,10 +283,12 @@ function apply(root: string, op: Op): string {
     case "kr.step":
       markStep(root, t.kr, String(a.name ?? ""), str(a.date), expect);
       return `Marked '${String(a.name ?? "").trim()}' done in ${t.kr}`;
-    case "bet.new":
+    case "bet.new": {
+      const id = str(t.bet) ?? newIdFor(areaOf(root)?.repo, str(a.title));
       newBet(
         {
-          id: t.bet,
+          id,
+          title: str(a.title),
           owner: String(a.owner ?? ""),
           hypothesis: String(a.hypothesis ?? ""),
           reviewOn: String(a.review_on ?? a.review ?? ""),
@@ -296,7 +305,8 @@ function apply(root: string, op: Op): string {
         },
         root,
       );
-      return `Added bet ${t.bet}`;
+      return `Added bet ${id}`;
+    }
     case "bet.edit": {
       if (Object.prototype.hasOwnProperty.call(a, "outcome")) throw new Error("'outcome' can't be edited here");
       const problem = betFieldProblems(a)[0];

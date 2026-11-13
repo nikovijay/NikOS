@@ -74,7 +74,7 @@ describe("a planning repo", () => {
     expect(company).toMatchObject({ period: "2027", by: "2027-12-31" });
     newKr(kr("close-days", { period: "2027-Q1", alignsTo: ["revenue"], direction: "down" }), at("finance"));
     expect(loadKr(at("finance"), "close-days").data).toMatchObject({ period: "2027-Q1", by: "2027-03-31", aligns_to: "revenue" });
-    expect(() => newKr(kr("no-quarter"), at("finance"))).toThrow("A department's key result needs a quarter: --period 2027-Q1");
+    expect(() => newKr(kr("no-quarter"), at("finance"))).toThrow("A department's key result needs a quarter, such as 2027-Q1");
     expect(() => newKr(kr("next-year", { period: "2028-Q2" }), at("finance"))).toThrow("2028-Q2 isn't in the company's year, 2027");
     expect(() => newKr(kr("q-company", { period: "2027-Q1" }), at("company"))).toThrow("A company key result is for the company's year, 2027, not 2027-Q1");
     expect(periodEnd("2027-Q2")).toBe("2027-06-30");

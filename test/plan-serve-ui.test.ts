@@ -53,8 +53,13 @@ describe("the altitude switcher and the area picker", () => {
     const r = (await get(srv.port, "/?at=groups/payments")).text;
     expect(r).toContain('<select onchange="location.href=this.value">');
     expect(r).toContain('<option value="?at=groups%2Fpayments&amp;period=2027-Q1" selected>Payments</option>');
-    expect(r).not.toContain("Finance</option>");
-    expect(r).not.toMatch(/<form[^>]*>(?:(?!<\/form>)[\s\S])*<select/);
+    // The picker's own options: the form options elsewhere on the page name areas too, so only this select is read.
+    const picker = /<select onchange="location.href=this.value">([\s\S]*?)<\/select>/.exec(r)![1];
+    expect(picker).not.toContain(">Finance</option>");
+    // The picker is not in a form: the last form opened before it is closed before it.
+    const at = r.indexOf('<select onchange="location.href=this.value">');
+    const openForm = r.lastIndexOf("<form", at);
+    expect(openForm === -1 || r.lastIndexOf("</form>", at) > openForm).toBe(true);
     expect(r).not.toContain("<script src");
   });
 
@@ -111,13 +116,15 @@ describe("the views each level has", () => {
   it("lists the bets below that aim at a department's key result on its OKRs and bets page, with their area", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}`)).text;
-    expect(r).toContain('faster-checkout</a> <span class="id">groups/payments</span>');
-    expect(r).toContain('web-bet</a> <span class="id">teams/WEB</span>');
+    // Each bet below names the area it is in, by its name and never by its rel.
+    expect(r).toContain('faster-checkout</a> <span class="where">Payments</span>');
+    expect(r).toContain('web-bet</a> <span class="where">Checkout web</span>');
+    expect(r).not.toContain("groups/payments");
     expect(r).not.toContain("Bets that aim at no key result shown here");
     // A group shows only the bets below it: the team's, not its own twice.
     const group = (await get(srv.port, "/?at=groups/payments")).text;
-    expect(group).toContain('web-bet</a> <span class="id">teams/WEB</span>');
-    expect(group).not.toContain('inbox-match</a> <span class="id">');
+    expect(group).toContain('web-bet</a> <span class="where">Checkout web</span>');
+    expect(group).not.toContain('inbox-match</a> <span class="where">');
   });
 
   it("shows the timeline's dated items in date order", async () => {
@@ -176,7 +183,7 @@ describe("the ladder", () => {
     expect(plain).toContain("Show everything below");
     const down = (await get(srv.port, "/?at=company&view=ladder&widen=down")).text;
     expect(down).toContain("<h2>Below this area</h2>");
-    expect(down).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout">faster-checkout</a> (groups/payments)');
+    expect(down).toContain('href="?at=groups%2Fpayments&amp;bet=faster-checkout">faster-checkout</a> (Payments)');
     expect(down).toContain("Below one-inbox");
     expect(down).toContain("Hide the levels below");
   });
@@ -200,9 +207,11 @@ describe("the drill-downs", () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&kr=close-days`)).text;
     expect(r).toContain("<h2>Key result: Close days</h2>");
-    expect(r).toContain("Finance <span class=\"id\">departments/finance</span>");
-    expect(r).toContain("Payments <span class=\"id\">groups/payments</span>");
-    expect(r).toContain("Checkout web <span class=\"id\">teams/WEB</span>");
+    // The areas are named, not shown by their rel.
+    expect(r).toContain("<h3>Finance</h3>");
+    expect(r).toContain("<h3>Payments</h3>");
+    expect(r).toContain("<h3>Checkout web</h3>");
+    expect(r).not.toContain("departments/finance</span>");
     expect(r).toContain("Aims at close-days");
     expect(r).toContain("no story map yet");
     expect(r).toContain("Back to Finance");
@@ -297,8 +306,8 @@ describe("the quarter, the labels and the forms", () => {
   it("has the bet form and the check-in forms on the live page, each with the area it saves to", async () => {
     const { srv } = await start(acmePlan());
     const bets = (await get(srv.port, "/?at=teams/WEB&view=bets")).text;
-    expect(bets).toContain('<form class="save" data-op="bet.new" data-area="teams/WEB"');
-    expect(bets).toContain('<input name="bet" required>');
+    expect(bets).toContain('<form class="save form" data-op="bet.new" data-area="teams/WEB"');
+    expect(bets).toContain('<input name="bet" data-to="target" data-id-from="title"');
     const finance = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
     expect(finance).toContain('data-op="checkin" data-area="departments/finance" data-target="{&quot;kr&quot;:&quot;close-days&quot;}"');
   });

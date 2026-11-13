@@ -3,12 +3,13 @@
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
 import { areaOf, checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
-import { companyYear, krAreaProblem, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
+import { companyYear, krAreaProblem, newIdFor, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
 import { dateProblem, krFieldProblems } from "./rules.js";
 import { alignmentProblems, alignsValue } from "./levels.js";
 
 export interface KrInput {
-  id: string;
+  /** The key result's id. Without it, the id is made from the title (see newIdFor). */
+  id?: string;
   title: string;
   owner: string;
   baseline: number;
@@ -38,10 +39,19 @@ function checked(data: any): any {
   return data;
 }
 
+/**
+ * Write planning/krs/<id>.yaml. With no id, the id is made from the title, with -2 or -3 when another key result
+ * or bet in the company has it. An id given is used as it is.
+ */
 export function newKr(input: KrInput, root: string): string {
-  if (!BET_ID.test(input.id)) throw new Error(`'${input.id}' is not a key result id (lowercase words joined by hyphens)`);
-  if (!input.title?.trim()) throw new Error("A key result needs a title (--title)");
-  if (!input.owner?.trim()) throw new Error("A key result needs an owner (--owner)");
+  const area = areaOf(root);
+  const given = input.id?.trim() || undefined;
+  if (!given && !input.title?.trim()) throw new Error("A key result needs a title");
+  const id = given ?? newIdFor(area?.repo, input.title.trim());
+  if (!id) throw new Error(`'${input.title.trim()}' has no letters or numbers to make an id from: use a title with some letters or numbers, or give an id`);
+  if (!BET_ID.test(id)) throw new Error(`'${id}' is not a key result id (lowercase words joined by hyphens)`);
+  if (!input.title?.trim()) throw new Error("A key result needs a title");
+  if (!input.owner?.trim()) throw new Error("A key result needs an owner");
   if (input.kind !== undefined && input.kind !== "number" && input.kind !== "milestone") throw new Error("kind is number or milestone");
   // A milestone has steps instead of a baseline and a target. Its steps are fixed here: kr step marks them, and nothing adds one later.
   const milestone = input.kind === "milestone";
@@ -49,23 +59,22 @@ export function newKr(input: KrInput, root: string): string {
   if (milestone) {
     if (Number.isFinite(input.baseline) || Number.isFinite(input.target)) throw new Error("A milestone has no baseline or target: its steps are its progress");
     if (input.direction) throw new Error("A milestone has no direction: each step is done or not");
-    if (!names.length || names.some((s) => !s)) throw new Error("A milestone needs at least one step (--step)");
+    if (!names.length || names.some((s) => !s)) throw new Error("A milestone needs at least one step");
     if (new Set(names).size !== names.length) throw new Error("Each step of a milestone needs its own name");
   } else {
-    if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a numeric --baseline and --target");
-    if (names.length) throw new Error("Only a milestone has steps: add --kind milestone");
+    if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a starting number and a target number");
+    if (names.length) throw new Error("Only a milestone has steps: set the kind to milestone");
   }
   // In a planning repo a key result is for a period: the company's year, or a department's quarter. Its date defaults to the period's end.
-  const area = areaOf(root);
   const period = input.period ?? (area?.level === "company" ? companyYear(area.repo) : undefined);
   if (area) {
-    const refused = krAreaProblem(area) ?? takenProblem(area.repo, input.id);
+    const refused = krAreaProblem(area) ?? takenProblem(area.repo, id);
     if (refused) throw new Error(refused);
     const problem = periodProblem(area, period);
     if (problem) throw new Error(problem);
     if (!input.by && period) input = { ...input, by: periodEnd(period)! };
   }
-  if (dateProblem(input.by)) throw new Error("A key result needs a date (--by YYYY-MM-DD)");
+  if (dateProblem(input.by)) throw new Error(input.by ? `The due date ${dateProblem(input.by)}` : "A key result needs a due date (YYYY-MM-DD)");
   const direction = krFieldProblems({ direction: input.direction }, "edit")[0];
   if (direction) throw new Error(direction);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
@@ -77,7 +86,7 @@ export function newKr(input: KrInput, root: string): string {
   if (ladders && area?.level === "company") throw new Error(NO_ABOVE_KR);
   if (ladders && aligns.length) throw new Error("Give a link (--aligns-to) or the text (--ladders-up), not both");
   const data = checked({
-    id: input.id,
+    id,
     title: input.title.trim(),
     ...(input.objective ? { objective: input.objective } : {}),
     owner: input.owner.trim(),
@@ -92,7 +101,7 @@ export function newKr(input: KrInput, root: string): string {
     ...(input.staleAfterDays ? { stale_after_days: input.staleAfterDays } : {}),
     checkins: [],
   });
-  return writePlanning(root, join(paths(root).krs, `${input.id}.yaml`), krText(data), { create: true });
+  return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(data), { create: true });
 }
 
 /** Add a dated check-in. Earlier check-ins are never changed. */
