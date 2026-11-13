@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Choose where a new repo lives.** When `nikos start` makes a git repo, or finds one with no origin, it asks whether it should be on GitHub, GitLab or only this computer. For GitHub or GitLab it asks the repo's path (it suggests your own account) and whether it's private, shows the result in the summary, then makes the repo with `gh` or `glab` and sets it as the origin. It never pushes. Without `gh` or `glab` it gives the command to run. `nikos start` and `nikos plan init` take the same choice as flags: `--github <owner/name>` or `--gitlab <group/name>`, with `--public` for a public repo.
+- **Agents ask before making a hosted repo.** The onboarding and plan setup playbooks tell agents to ask where the repo should live, never to pick GitHub or an account themselves, to make it only through nikOS, and never to push without a yes.
+
 ## 0.5.0 (2026-11-10)
 
 nikOS is now two products in one package. **nikOS Plan** keeps a company's objectives, key results and bets in one planning repo, with a folder for each level: company, departments, groups and teams. **nikOS Spec** keeps each code repo's story map in `maps/<key>/`, next to the code that builds it. The two meet in small committed files. A map names the bet it delivers, and writes `delivery.yaml` for the plan to read. The plan lists its code repos in `planning/repos.yaml`. A code repo keeps a copy of the plan's settings in `nikos.plan.yaml`. The design is `docs/rfcs/plan-and-spec.md`.

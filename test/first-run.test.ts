@@ -25,7 +25,7 @@ const scripted = (answers: string[]) => {
 describe("the onboarding wizard", () => {
   it("won't set up in the home folder, and asks the story key apart from the name", async () => {
     const home = mkdtempSync(join(tmpdir(), "nikos-home-"));
-    const { ask, asked } = scripted(["2", "Acme Robotics", "", "", "", "", ""]);
+    const { ask, asked } = scripted(["2", "Acme Robotics", "", "", "", "", "", ""]);
     const a = await askOnboarding(home, ask, home);
     expect(a).toEqual({ kind: "spec", dir: join(home, "acme-robotics"), name: "Acme Robotics", key: "AR", gitInit: true });
     expect(asked.map((x) => x.q.split("\n").at(-1))).toEqual([
@@ -35,14 +35,18 @@ describe("the onboarding wizard", () => {
       "Story key: a short code that starts every story id, like AR-1. It's hard to change later.",
       "Is this code part of a company plan? Give its planning repo, like acme/company-plan, or press Enter to skip",
       "Make it a git repo? Git keeps the history of every change. (Y/n)",
+      "Type 1, 2 or 3",
       "Go ahead? (Y/n)",
     ]);
+    // Where the repo lives: only on this computer unless the person picks GitHub or GitLab.
+    expect(asked[6].s).toBe("3");
     expect(asked[2].q).toContain("You're in your home folder");
     // The menu suggests Spec, and no folder name is suggested at home.
     expect(asked[0].s).toBe("2");
     expect(asked[1].s).toBeUndefined();
     // The summary names the full path before anything is written.
-    expect(asked[6].q).toContain(`In ${join(home, "acme-robotics")} (a new folder)`);
+    expect(asked[7].q).toContain(`In ${join(home, "acme-robotics")} (a new folder)`);
+    expect(asked[7].q).not.toContain("GitHub");
     expect(existsSync(a.dir)).toBe(false);
 
     const lines = setUp(a, home);
@@ -88,7 +92,7 @@ describe("the onboarding wizard", () => {
 
   it("sets nothing up when the summary gets a no, and asks y or n again on anything else", async () => {
     const dir = mkdtempSync(join(tmpdir(), "nikos-no-"));
-    const { ask, asked } = scripted(["2", "Tip Calc", "", "", "maybe", "y", "n"]);
+    const { ask, asked } = scripted(["2", "Tip Calc", "", "", "maybe", "y", "3", "n"]);
     await expect(askOnboarding(dir, ask, "/nowhere")).rejects.toBeInstanceOf(Cancelled);
     expect(asked[5].q).toMatch(/^Please type y for yes or n for no\./);
     expect(existsSync(join(dir, "maps", "tc"))).toBe(false);

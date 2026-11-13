@@ -17,6 +17,7 @@ import { loadRepos, reposIssues, type RepoEntry } from "./repos.js";
 import { hostOfEntry, refreshDelivery } from "./refresh.js";
 import { exportPlanPage, runPlanServe } from "./serve.js";
 import { figuresText, readsText, repoLabel } from "./words.js";
+import { hostingFromFlags, hostRepo, pushStep } from "../lib/hosting.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
@@ -26,6 +27,8 @@ departments have key results. Every level has bets.
 
 Set it up
   plan init        Make this repo the company's planning repo (--name, --year, --pillars, --owner)
+                   --github <owner/name> or --gitlab <group/name> also makes a private repo there
+                   as its origin (--public for a public one). Nothing is pushed
   plan add department <id>   Add a department (--name, --owner, --member)
   plan add group <id>        Add a group (--name, --department <id>, --owner, --member)
   plan add team <KEY>        Add a team. It reports to a department or group (--name, --home <id>)
@@ -245,7 +248,7 @@ export function planIssues(repo: string): PlanningIssue[] {
 }
 
 export async function runPlanRepo(args: string[]): Promise<number> {
-  const { positional, all, opt, has } = parseArgs(args, ["json", "offline"]);
+  const { positional, all, opt, has } = parseArgs(args, ["json", "offline", "public"]);
   const cwd = opt("dir") ?? process.cwd();
   const [cmd, sub, id, extra] = positional;
   const repoOrNone = findPlanRepo(cwd);
@@ -273,8 +276,14 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         console.log(help);
         return 0;
       case "init": {
+        // Checked before anything is written, so a bad --github or --gitlab leaves the folder as it was.
+        const hosting = hostingFromFlags(opt, has);
         const files = initPlanRepo(cwd, { name: opt("name") ?? "", year: opt("year") ?? "", pillars: opt("pillars")?.split(",").map((p) => p.trim()).filter(Boolean), owner: opt("owner") });
-        console.log(`Made the company's planning repo:\n${files.map((f) => `  ${relative(cwd, f)}`).join("\n")}\n\nNext: add a department with nikos plan add department <id> --name "<name>"`);
+        console.log(`Made the company's planning repo:\n${files.map((f) => `  ${relative(cwd, f)}`).join("\n")}`);
+        const hosted = hosting ? hostRepo(cwd, hosting) : [];
+        for (const h of hosted) console.log(h.line);
+        console.log(`\nNext: add a department with nikos plan add department <id> --name "<name>"`);
+        if (hosted.at(-1)?.ok) console.log(`Then: ${pushStep("")}`);
         return 0;
       }
       case "add":

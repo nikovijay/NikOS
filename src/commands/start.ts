@@ -15,6 +15,7 @@ import { REPO_PATH } from "../lib/bets.js";
 import { initPlanRepo, oldLayoutProblem } from "../plan/repo.js";
 import { describeRepoJoin, joinPlanRepo } from "./join.js";
 import { isPlanRepo } from "../planning/model.js";
+import { hostingFromFlags, hostRepo, pushStep } from "../lib/hosting.js";
 
 export interface StartResult {
   /** One line per thing start did, or found already done. */
@@ -42,7 +43,7 @@ export function start(root: string, opts: { name?: string; key?: string } = {}):
     if (v.node) ask.push(v.node);
   }
   const host = detectHost(root);
-  if (!host) ask.push("Is this repo on GitHub or GitLab? There's no origin remote yet, so CI isn't set up.");
+  if (!host) ask.push("Is this repo on GitHub or GitLab? There's no origin remote yet, so CI isn't set up. nikos start --github <owner/name> or --gitlab <group/name> makes one; for a repo that's already there, set the origin, then run nikos ci setup.");
   else if (stack) {
     const c = setupCi(root, { host });
     done.push(c.created.length ? `Added CI for ${host} (${c.created.join(", ")})${c.todo ? `. ${c.todo.split("\n")[0]}` : ""}` : `CI for ${host} is already set up`);
@@ -55,6 +56,8 @@ export const interactive = () => !!process.stdin.isTTY && !!process.stdout.isTTY
 
 const START_USAGE = `Usage: nikos start --plan --name "<company>" --year <year> [--pillars "<a>, <b>"] [--owner <who>] [--dir <path>]
        nikos start --map [--name "<product>"] [--key <KEY>] [--join <planning repo>] [--host gitlab.com] [--dir <path>]
+Either can make its repo on GitHub or GitLab as well, as the origin: --github <owner/name> or
+--gitlab <group/name>. It's private unless you add --public, and nothing is pushed.
 Run it in a terminal, with no flags, to answer a few questions instead.`;
 
 /** The comma-separated list a flag takes, or none. */
@@ -108,10 +111,15 @@ function startPlan(dir: string, flag: (n: string) => string | undefined, has: (n
     if (problem) throw new Error(problem);
     const name = flag("name");
     if (!name) throw new Error('--plan needs the company\'s name, with --name, for example: nikos start --plan --name "Acme" --year 2027');
+    const hosting = hostingFromFlags(flag, has);
     const files = initPlanRepo(dir, { name, year: flag("year") ?? "", pillars: listFlag(flag("pillars")), owner: flag("owner") });
     const cli = cliCommand();
     console.log(`Made the company's planning repo:\n${files.map((f) => `  + ${relative(dir, f)}`).join("\n")}`);
-    console.log(`\nNext steps:\n  1. Add a department: ${cli} plan add department <id> --name "<name>"\n  2. See the plan: ${cli} plan status\n  3. Open it in your browser: ${cli} plan serve`);
+    const hosted = hosting ? hostRepo(dir, hosting) : [];
+    for (const h of hosted) console.log(h.line);
+    const next = [`Add a department: ${cli} plan add department <id> --name "<name>"`, `See the plan: ${cli} plan status`, `Open it in your browser: ${cli} plan serve`];
+    if (hosted.at(-1)?.ok) next.push(pushStep(""));
+    console.log(`\nNext steps:\n${next.map((line, n) => `  ${n + 1}. ${line}`).join("\n")}`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
@@ -124,6 +132,10 @@ function startMap(dir: string, flag: (n: string) => string | undefined, has: (n:
   try {
     const joinTo = flag("join");
     if (has("join") && (!joinTo || !REPO_PATH.test(joinTo))) throw new Error("--join needs the planning repo's path, for example: --join acme/company-plan");
+    const hosting = hostingFromFlags(flag, has);
+    // Before the story map, so its CI and the join see the new origin.
+    const hosted = hosting ? hostRepo(dir, hosting) : [];
+    for (const h of hosted) console.log(h.line);
     const r = start(dir, { name: flag("name"), key: flag("key") });
     for (const d of r.done) console.log(`✓ ${d}`);
     for (const a of r.ask) console.log(`? ${a}`);
@@ -136,6 +148,7 @@ function startMap(dir: string, flag: (n: string) => string | undefined, has: (n:
     }
     console.log(`\n${r.next.summary}\n${r.next.options.map((o, n) => `  ${n + 1}. ${o.label}`).join("\n")}`);
     console.log(`\nSee it in your browser: ${cliCommand()} serve`);
+    if (hosted.at(-1)?.ok) console.log(pushStep(""));
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
