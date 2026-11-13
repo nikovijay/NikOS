@@ -15,6 +15,6 @@ they can see. Ask one question at a time, and offer a recommended answer with ea
    - the company's plan: hand over to the nikos-plan skill and its setup playbook, from its step 1. Only in a new folder.
    - a story map: run the start playbook from its step 1, with `--name` and `--key`. If a company plan exists, ask for its repo and add `--join <planning repo>`.
    A repo with an `intent/` story map from before this release is not set up by `nikos start`. Its map moves by hand to `maps/<key>/` (the CHANGELOG says how), and then `nikos start` can run.
-6. Show it: for a story map, offer to run `nikos serve`, which opens the story map in the browser. For the company's plan, the nikos-plan skill offers `nikos plan serve`. Tell them what they'll see there.
+6. Show it: for a story map, offer to run `nikos serve`, which opens the story map in the browser, where the person can add and edit stories (saves go on a branch and are committed from the page). For the company's plan, the nikos-plan skill offers `nikos plan serve`. Tell them what they'll see there.
 7. Offer the next step as a choice: the first story (build-a-story), connecting their tracker (tracker playbook), or, for a code repo with a plan above it, joining it (join playbook).
 8. Report every step with its evidence or its skip reason.

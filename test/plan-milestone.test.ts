@@ -69,7 +69,7 @@ describe("a milestone key result", () => {
     const repo = acme();
     const dir = FINANCE(repo);
     const base = { id: "close-process", title: "Close process", owner: "Mira", by: "2027-03-31", period: "2027-Q1" };
-    expect(() => newKr({ ...base, baseline: NaN, target: NaN, kind: "milestone", steps: [] } as any, dir)).toThrow("A milestone needs at least one step (--step)");
+    expect(() => newKr({ ...base, baseline: NaN, target: NaN, kind: "milestone", steps: [] } as any, dir)).toThrow("A milestone needs at least one step");
     expect(() => newKr({ ...base, baseline: 0, target: 3, kind: "milestone", steps: ["Map"] } as any, dir)).toThrow("A milestone has no baseline or target: its steps are its progress");
     expect(() => newKr({ ...base, baseline: NaN, target: NaN, kind: "milestone", steps: ["Map"], direction: "down" } as any, dir)).toThrow("A milestone has no direction: each step is done or not");
     expect(() => newKr({ ...base, baseline: NaN, target: NaN, kind: "milestone", steps: ["Map", "Map"] } as any, dir)).toThrow("Each step of a milestone needs its own name");
@@ -79,7 +79,7 @@ describe("a milestone key result", () => {
     const repo = acme();
     const number = await run(repo, "kr", "new", "revenue", "--in", "finance", "--title", "Revenue", "--owner", "Mira", "--baseline", "0", "--target", "9", "--by", "2027-03-31", "--step", "Map");
     expect(number.code).toBe(1);
-    expect(number.out).toContain("Only a milestone has steps: add --kind milestone");
+    expect(number.out).toContain("Only a milestone has steps: set the kind to milestone");
     const odd = await run(repo, "kr", "new", "odd", "--in", "finance", "--title", "Odd", "--owner", "Mira", "--kind", "sideways", "--baseline", "0", "--target", "9", "--by", "2027-03-31");
     expect(odd.out).toContain("kind is number or milestone");
   });

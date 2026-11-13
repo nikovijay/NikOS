@@ -1,5 +1,5 @@
-// nikos serve in a code repo: its story map, live on 127.0.0.1 and as one page. Nothing on it saves, and a
-// planning repo is sent to nikos plan serve.
+// nikos serve in a code repo: its story map, live on 127.0.0.1 and as one page. The live page saves with its
+// token (the saves are in map-serve-save.test.ts), and a planning repo is sent to nikos plan serve.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { copyExample, rootOf } from "./helpers";
 import { runServeCommand, startMapServer } from "../src/commands/serve";
 import { initPlanRepo } from "../src/plan/repo";
 import type { RunningServer } from "../src/planning/server";
+import { hash } from "../src/planning/model";
 
 let running: RunningServer[] = [];
 afterEach(async () => {
@@ -75,14 +76,26 @@ describe("nikos serve in a code repo", () => {
     }
   });
 
-  it("takes no save: every POST is not found, and the pending bar is not there", async () => {
-    const srv = await start(rootOf(copyExample()));
-    const headers = { host: `127.0.0.1:${srv.port}`, "content-type": "application/json", "x-nikos-token": srv.token };
-    for (const path of ["/", "/api/op", "/api/git/commit"]) {
-      const res = await fetch(`http://127.0.0.1:${srv.port}${path}`, { method: "POST", headers, body: "{}" });
-      expect(res.status, path).toBe(404);
-    }
-    expect((await fetch(`http://127.0.0.1:${srv.port}/api/pending`, { headers: { "x-nikos-token": srv.token } })).status).toBe(404);
+  it("takes saves only with its token: a POST without it is refused, and the pending list needs it too", async () => {
+    const root = rootOf(copyExample());
+    const srv = await start(root);
+    const base = `http://127.0.0.1:${srv.port}`;
+    const headers = { host: `127.0.0.1:${srv.port}`, "content-type": "application/json" };
+    const body = JSON.stringify({ op: "story.rename", target: { story: "HT-1" }, args: { title: "Add a task fast" }, expect: "0000000000000000" });
+    expect((await fetch(`${base}/api/op`, { method: "POST", headers, body })).status).toBe(403);
+    // With the token, the save is checked: a stale version is refused, and nothing is written.
+    const stale = await fetch(`${base}/api/op`, { method: "POST", headers: { ...headers, "x-nikos-token": srv.token }, body });
+    expect(stale.status).toBe(409);
+    expect(readFileSync(join(root, "maps/ht/features/tasks/add-a-task.feature"), "utf8")).not.toContain("Add a task fast");
+    // With the feature's current version, the same save goes through and is written.
+    const current = hash(readFileSync(join(root, "maps/ht/features/tasks/add-a-task.feature"), "utf8"));
+    const saved = await fetch(`${base}/api/op`, { method: "POST", headers: { ...headers, "x-nikos-token": srv.token }, body: JSON.stringify({ ...JSON.parse(body), expect: current }) });
+    expect(saved.status).toBe(200);
+    expect(readFileSync(join(root, "maps/ht/features/tasks/add-a-task.feature"), "utf8")).toContain("Feature: Add a task fast");
+    expect((await fetch(`${base}/api/pending`, { headers: { "x-nikos-token": srv.token } })).status).toBe(200);
+    expect((await fetch(`${base}/api/pending`)).status).toBe(403);
+    // Only the save and the git buttons are POST routes: any other path is refused as a save.
+    expect((await fetch(`${base}/`, { method: "POST", headers: { ...headers, "x-nikos-token": srv.token }, body: "{}" })).status).toBe(501);
   });
 
   it("answers only on its own address", async () => {

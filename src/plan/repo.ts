@@ -11,6 +11,7 @@ const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
 import { parse, stringify } from "yaml";
 import { BET_ID } from "../lib/bets.js";
 import { store } from "../lib/store.js";
+import { idFromTitle } from "../planning/rules.js";
 import { AREA_FOLDERS, areaOf, betIds, describeErrors, isPlanRepo, krIds, type Area, type AreaLevel, type PlanningIssue } from "../planning/model.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +158,19 @@ export function takenProblem(repo: string, id: string): string | undefined {
   return hit ? `'${id}' is already used: it's ${hit.kind === "key result" ? "a key result" : hit.kind === "bet" ? "a bet" : "the id of"} ${hit.kind === "key result" || hit.kind === "bet" ? `in ${hit.area.rel}` : hit.area.rel}. Ids are unique within the company.` : undefined;
 }
 
+/**
+ * The id a new bet or key result gets when no id is given: its title's id (idFromTitle), with -2, -3… added
+ * while another key result, bet or area in the company has it. Without a repo (outside a planning area) it is
+ * the title's id as it is. Undefined when there is no title with letters or numbers.
+ */
+export function newIdFor(repo: string | undefined, title: string | undefined): string | undefined {
+  const base = title === undefined ? undefined : idFromTitle(title);
+  if (!base || !repo) return base;
+  let id = base;
+  for (let n = 2; takenProblem(repo, id); n++) id = `${base}-${n}`;
+  return id;
+}
+
 const NO_OKRS = (level: AreaLevel) =>
   `Key results stop at department level, so a ${level} has none. Add it to a department or the company, or make it a bet aimed at their key results.`;
 
@@ -170,7 +184,7 @@ export const krAreaProblem = (area: Area) => (area.level === "group" || area.lev
 export function periodProblem(area: Area, period: string | undefined): string | undefined {
   const year = companyYear(area.repo);
   if (area.level === "department") {
-    if (!period) return `A department's key result needs a quarter: --period ${year ?? "2027"}-Q1`;
+    if (!period) return `A department's key result needs a quarter, such as ${year ?? "2027"}-Q1`;
     const q = QUARTER.exec(period);
     if (!q) return `'${period}' isn't a quarter: write it as ${year ?? "2027"}-Q1`;
     if (year && q[1] !== year) return `${period} isn't in the company's year, ${year}`;
@@ -207,7 +221,7 @@ export function areaAlignmentProblems(area: Area, refs: string[], kind: "kr" | "
     }
     const hit = kindOf(area.repo, ref);
     if (!hit) out.push(`There's no ${noun} called '${ref}' in this company's plan`);
-    else if (hit.kind !== noun) out.push(kind === "kr" ? `${ref} is a bet: a key result aligns to key results` : `${ref} is a key result: a bet aligns to bets, and names key results with --kr`);
+    else if (hit.kind !== noun) out.push(kind === "kr" ? `${ref} is a bet: a key result aligns to key results` : `${ref} is a key result: a bet aligns to bets, and aims at key results`);
     else if (RANK[hit.area.level] >= RANK[area.level]) out.push(`${ref} is in ${hit.area.rel}, which isn't above ${area.rel}: a ${noun} aligns to one at a higher level`);
   }
   return out;
@@ -223,7 +237,7 @@ export function areaKrTargetProblems(area: Area, refs: string[]): string[] {
     }
     const hit = kindOf(area.repo, ref);
     if (!hit) out.push(`There's no key result called '${ref}' in this company's plan`);
-    else if (hit.kind !== "key result") out.push(`${ref} is a bet: --kr names key results, and --aligns-to names bets`);
+    else if (hit.kind !== "key result") out.push(`${ref} is a bet: a bet aims at key results, and aligns to bets`);
   }
   return out;
 }

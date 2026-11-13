@@ -1,12 +1,14 @@
-// `nikos serve`: see this code repo's story map in your browser, or save it as one page. A planning repo
+// `nikos serve`: see this code repo's story map in your browser, or save it as one page. The live page can
+// edit the map: its saves go on a nikos branch, through the same checks as the command line. A planning repo
 // has no story map of its own, so it is sent to nikos plan serve.
 import { writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { renderMap } from "./map.js";
-import { mapDirs } from "../lib/maps.js";
+import { mapDirs, resolveStoryMap } from "../lib/maps.js";
+import type { Runner } from "../lib/git.js";
 import { oldLayoutProblem } from "../plan/repo.js";
 import { isPlanRepo } from "../planning/model.js";
-import { startServer, type RunningServer } from "../planning/server.js";
+import { startServer, type RunningServer, type SaveTarget } from "../planning/server.js";
 
 export function runServeCommand(args: string[]): Promise<number> | number {
   const opt = (n: string) => {
@@ -66,29 +68,53 @@ function mapList(root: string, keys: string[]): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Story maps · ${esc(basename(root))}</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem 1rem;max-width:40rem}</style></head><body><h1>Story maps</h1><p>This repo has ${keys.length} story maps. Pick one:</p><ul>${items}</ul></body></html>`;
 }
 
-/** The story map server: the live map at /, read-only. It takes no save and has no other page. */
-export function startMapServer(root: string, opts: { port?: number; map?: string } = {}): Promise<RunningServer> {
+/** The operations a story map's page can make: its stories, their activities, steps and releases, and their criteria and personas. */
+const MAP_OPS = /^(story|scenario|persona|activity|step|release)\./;
+
+/**
+ * The folder and map a save is for. The map is the one body.map names (or args.map), or the only map when there's
+ * one. An op that isn't a change to a story map is refused, so the page can change nothing else.
+ */
+export function saveMapIn(root: string, body: Record<string, any>): SaveTarget {
+  const op = String(body.op ?? "");
+  if (!MAP_OPS.test(op)) throw new Error(`${op || "This change"} isn't a change the story map makes`);
+  const named = body.map ?? body.args?.map;
+  if (named !== undefined && typeof named !== "string") throw new Error("map is the key of the story map to change");
+  if (typeof body.map === "string" && typeof body.args?.map === "string" && body.map.toLowerCase() !== body.args.map.toLowerCase()) {
+    throw new Error("The change names two story maps. It can change one at a time");
+  }
+  return { root, area: resolveStoryMap(root, { map: named }).id };
+}
+
+/**
+ * The story map server: the live map at /. With the page's own saves (on 127.0.0.1, with the token printed at
+ * start), it changes the map's files on a nikos branch, and the page commits or pushes only when asked.
+ */
+export function startMapServer(root: string, opts: { port?: number; map?: string; run?: Runner } = {}): Promise<RunningServer> {
   return startServer(root, {
     port: opts.port,
+    run: opts.run,
     pages: {
-      page: (query) => {
+      kind: "map",
+      page: (query, token) => {
         const keys = mapKeys(root);
         const asked = query.get("map") ?? opts.map;
-        if (asked === undefined || !keys.includes(asked)) return keys.length > 1 ? mapList(root, keys) : renderMap(root, { live: true });
+        if (asked === undefined || !keys.includes(asked)) return keys.length > 1 ? mapList(root, keys) : renderMap(root, { live: true, token });
         // ?map= with no key is the list, even when the server was started on one map.
-        return renderMap(root, { live: true, map: asked, ...(keys.length > 1 ? { back: "/?map=" } : {}) });
+        return renderMap(root, { live: true, map: asked, token, ...(keys.length > 1 ? { back: "/?map=" } : {}) });
       },
+      saveIn: (body) => saveMapIn(root, body),
     },
   });
 }
 
-/** Serve the story map on 127.0.0.1 until Ctrl+C. The page is read-only, so it needs no key. */
+/** Serve the story map on 127.0.0.1 until Ctrl+C. The link carries the key the page saves with, so keep it to yourself. */
 async function runServe(root: string, opts: { port?: number; map?: string }): Promise<number> {
   const srv = await startMapServer(root, opts);
   console.log("The story map is running. Open this link in your browser:");
-  console.log(`  http://127.0.0.1:${srv.port}/`);
+  console.log(`  ${srv.url}`);
   console.log("");
-  console.log("It only reads this repo: nothing you do on the page changes a file.");
+  console.log("The link has a private key in it, so keep it to yourself.");
   console.log("Press Ctrl+C to stop.");
   return new Promise<number>((ok) => {
     const stop = () => {

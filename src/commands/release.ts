@@ -128,6 +128,18 @@ export function moveStory(input: { map?: string; id: string; to: number }, dir: 
   return { id: input.id, from: fromNumber, to: input.to, validation: save(o) };
 }
 
+/** Put a story that is in no release into one: its id goes on the release's list and its feature gets the release tag. */
+export function placeInRelease(input: { map?: string; id: string; to: number }, dir: string) {
+  const o = open(dir, input.map, input.id);
+  const target = find(o, input.to);
+  if (o.releases.items.some((r) => storiesOf(r).includes(input.id))) throw new Error(`${input.id} is already in a release`);
+  const dest = target.get("stories", true);
+  if (isSeq(dest)) dest.add(input.id);
+  else target.set("stories", o.map.createNode([input.id], { flow: true }));
+  retag(o.mapDir, new Map([[input.id, input.to]]));
+  return { id: input.id, to: input.to, validation: save(o) };
+}
+
 /** Remove an empty release and renumber the ones after it, retagging their stories. */
 export function removeRelease(input: { map?: string; number: number }, dir: string) {
   const o = open(dir, input.map);

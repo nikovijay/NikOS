@@ -46,7 +46,7 @@ describe("runOp: names, levels and ids", () => {
 describe("kr ops", () => {
   it("kr.edit: refuses an empty title, and a field it can't edit", () => {
     const co = area();
-    expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { title: "" }, expect: kr1(co) })).toThrow("A key result needs a title (--title)");
+    expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { title: "" }, expect: kr1(co) })).toThrow("A key result needs a title");
     expect(() => runOp(co, { op: "kr.edit", target: { kr: "kr-1" }, args: { baseline: 3 }, expect: kr1(co) })).toThrow("'baseline' can't be edited here");
   });
 
@@ -82,7 +82,7 @@ describe("bet ops", () => {
     const h = hash(readText(co, "bets/faster.md"));
     expect(() => runOp(co, { op: "bet.edit", target: { bet: "faster" }, args: { outcome: "won" }, expect: h })).toThrow("'outcome' can't be edited here");
     expect(() => runOp(co, { op: "bet.review", target: { bet: "faster" }, args: { decision: "complete", reason: "Done" }, expect: h })).toThrow(
-      "Completing a bet needs its outcome from the key result evidence: --outcome won or --outcome lost",
+      "Completing a bet needs its outcome from the key result evidence: won or lost",
     );
     const r = runOp(co, { op: "bet.review", target: { bet: "faster" }, args: { decision: "continue", reason: "On track" }, expect: h });
     expect(r.changed).toEqual(["planning/company/bets/faster.md"]);
