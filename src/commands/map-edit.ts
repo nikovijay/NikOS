@@ -88,6 +88,10 @@ interface OpForm {
   edit?: boolean;
   confirm?: string;
   danger?: boolean;
+  /** A screen reader name for the submit button, when its text is a symbol such as ↑. */
+  label?: string;
+  /** Extra classes: tool for the small buttons on a release's header. */
+  cls?: string;
 }
 
 /** A form that posts one op. Its fields are read on submit, and the page's script posts them. */
@@ -99,7 +103,8 @@ function opForm(f: OpForm): string {
     f.edit ? "data-edit" : "",
     f.confirm ? `data-confirm="${esc(f.confirm)}"` : "",
   ].filter(Boolean).join(" ");
-  return `<form class="op" ${attrs}><div class="op-fields">${f.fields}</div><div class="actions"><button type="submit"${f.danger ? ' class="danger"' : ""}>${esc(f.submit)}</button><span class="save-msg" role="status"></span></div></form>`;
+  const aria = f.label ? ` aria-label="${esc(f.label)}"` : "";
+  return `<form class="op${f.cls ? ` ${f.cls}` : ""}" ${attrs}><div class="op-fields">${f.fields}</div><div class="actions"><button type="submit"${f.danger ? ' class="danger"' : ""}${aria}>${esc(f.submit)}</button><span class="save-msg" role="status"></span></div></form>`;
 }
 
 /** A small "+" that opens its form. Quiet until hovered or focused; in the story panel it sits in the flow. label names it for a screen reader, with its place. */
@@ -141,6 +146,69 @@ export function addStoryBox(o: { activity: string; step: string; where: string; 
 export function addReleaseBox(storymap: string): string {
   const fields = text("title", "Title", "", { required: true, placeholder: "e.g. Sharing" }) + text("goal", "Goal", "", { wide: true, hint: "What the release is for. Optional." });
   return `<div class="add-row">${pop("+ Release", opForm({ op: "release.new", expect: storymap, fields, submit: "Add release" }), "release-add", "Add a release")}</div>`;
+}
+
+/**
+ * The tools on a release's header: move it earlier or later, rename it, and remove it. Remove is offered only
+ * for an empty release that names no bets of its own, as nikos release remove allows; otherwise it says why.
+ */
+export function releaseTools(r: MapRelease, count: number, storymap: string): string {
+  const target = { release: String(r.number) };
+  const move = (to: number, symbol: string, word: string) =>
+    opForm({ op: "release.reorder", expect: storymap, target, cls: "tool", fields: hidden("to", String(to)), submit: symbol, label: `Move release ${r.number} ${word}` });
+  const rename = pop(
+    "Rename",
+    opForm({
+      op: "release.rename",
+      expect: storymap,
+      target,
+      edit: true,
+      submit: "Save",
+      fields: text("title", "Title", r.title, { required: true }) + text("goal", "Goal", r.goal, { wide: true, hint: "What will be true when it ships. Optional." }),
+    }),
+    "tool-pop",
+    `Rename release ${r.number}`,
+  );
+  const why = r.stories.length
+    ? "Move its stories to another release first"
+    : r.ownBets.length
+      ? `It delivers ${r.ownBets.join(", ")}. Move ${r.ownBets.length === 1 ? "that" : "those"} to another release first`
+      : "";
+  const remove = why
+    ? `<button type="button" class="tool" disabled title="${esc(why)}" aria-label="Remove release ${r.number}. ${esc(why)}">Remove</button>`
+    : opForm({ op: "release.remove", expect: storymap, target, cls: "tool", danger: true, submit: "Remove", label: `Remove release ${r.number}`, confirm: `Remove release ${r.number}, ${r.title}? Later releases are renumbered.`, fields: "" });
+  return `<span class="band-tools">${r.number > 1 ? move(r.number - 1, "↑", "earlier") : ""}${r.number < count ? move(r.number + 1, "↓", "later") : ""}${rename}${remove}</span>`;
+}
+
+/**
+ * The "Add a story" dialog: its title, activity and step, release and priority, with the command it matches.
+ * It opens from the button at the top of the page; each cell's "+ Story" still adds one in place.
+ */
+export function addStoryDialog(m: StoryMap, storymap: string): string {
+  if (!m.releases.length || !m.activities.length) return "";
+  const stepOpts: Opt[] = m.activities.flatMap((a) => a.steps.map((st) => ({ value: st.id, label: `${a.title} · ${st.title}`, attrs: ` data-activity="${esc(a.id)}"` })));
+  const fields =
+    text("title", "Title", "", { required: true, wide: true, placeholder: "What someone can do once it's built" }) +
+    select("activity", "Activity", m.activities.map((a, i) => ({ value: a.id, label: a.title, selected: i === 0 })), { pick: "activity" }) +
+    select("step", "Step", [{ value: "", label: "No step" }, ...stepOpts], { hint: "The steps of the chosen activity." }) +
+    select("release", "Release", m.releases.map((r, i) => ({ value: String(r.number), label: `R${r.number} · ${r.title}`, selected: i === m.releases.length - 1 }))) +
+    select("priority", "Priority", PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABEL[p], selected: p === "must" })));
+  return `<dialog id="add-story" class="sheet-dialog" aria-labelledby="add-story-title"><div class="dialog-body"><div class="dialog-head"><h2 id="add-story-title">Add a story</h2><button type="button" class="close" data-close-dialog aria-label="Close">×</button></div>
+${opForm({ op: "story.new", expect: storymap, fields, submit: "Add story" })}
+<p class="where">It adds the story to storymap.yaml and writes a starter feature file with no scenarios yet. Your agent writes those next.</p></div></dialog>`;
+}
+
+/**
+ * The "Move to" of a story's panel: another release, through the same move as nikos release move. Only a story
+ * that is in a release, on a map with more than one, gets it.
+ */
+export function moveBox(s: MapStory, m: StoryMap, storymap: string): string {
+  const now = m.releases.find((r) => r.stories.some((x) => x.id === s.id));
+  if (!now || m.releases.length < 2) return "";
+  const to = m.releases.filter((r) => r !== now).map((r) => ({ value: String(r.number), label: `R${r.number} · ${r.title}` }));
+  const form = opForm({ op: "story.move", expect: storymap, target: { story: s.id }, fields: select("to", "Move to", to), submit: "Move" });
+  const approval = s.status === "approved" ? `${s.approvedBy || "Its"}'s approval still holds` : "any approval still holds";
+  return `<div class="sub move"><h4>Release</h4><p class="where">Now in R${now.number} · ${esc(now.title)}.</p>${form}<p class="where">It goes to the end of that release's build order. Only its release tag changes, so ${esc(approval)}.</p></div>`;
 }
 
 /** The "+ New persona" beside a story's personas. Its form is the map's, so it is checked against the storymap. */
@@ -256,53 +324,74 @@ export function storyEditArea(s: MapStory, edit: EditData, m: StoryMap): string 
     }),
   );
   return `<div class="edit-area"><h3 class="eyebrow">Edit this story</h3>${note}
+${moveBox(s, m, edit.storymap)}
 <div class="sub"><h4>Details</h4>${details}${personaBox(edit.storymap)}</div>
 <div class="sub"><h4>Placement</h4>${placement}</div>
 <div class="sub"><h4>Acceptance criteria</h4>${criteria}${addCriterion}</div></div>`;
 }
 
-/** Edit-form styles. They use the page's tokens, so they follow the light and dark themes. */
+/** Edit-form styles. They use the shared tokens, so they follow the light and dark themes. */
 export const EDIT_CSS = `
 .add { position: relative; display: block; }
-.add > summary { list-style: none; display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border: 1px dashed var(--line-2); border-radius: 99px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.add > summary { list-style: none; display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border: 1.5px dashed var(--line-strong); border-radius: 7px; color: var(--muted); font-size: 12px; cursor: pointer; }
 .add > summary::-webkit-details-marker { display: none; }
-.add:hover > summary, .add[open] > summary { color: var(--brand); border-color: var(--brand); }
-.add > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.add .pop { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; width: min(300px, 80vw); box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 16px 32px -12px rgba(0,0,0,.3); }
+.add:hover > summary, .add[open] > summary { color: var(--accent); border-color: var(--accent); }
+.add > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.add .pop { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; width: min(320px, 80vw); padding: 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); }
 .cell .add { margin-top: 4px; }
 .activity .add { margin-top: 6px; }
+.activity .add > summary { color: var(--accent-fg); border-color: color-mix(in srgb, var(--accent-fg) 60%, transparent); }
 .slot { align-self: flex-start; }
 .slot > summary { min-height: 40px; padding: 0 14px; }
 .add-row { margin-top: 14px; }
 form.op { display: grid; gap: 10px; margin: 0; }
 .op-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start; }
 .op-fields .wide { grid-column: 1 / -1; }
-.fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--ink-2); }
-.fld input, .fld select, .fld textarea { font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--fg); }
+.fld input, .fld select, .fld textarea { font: inherit; font-weight: 400; font-size: 14px; width: 100%; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); color: var(--fg); }
 .fld select[multiple] { min-height: 96px; }
 .fld textarea { resize: vertical; min-height: 64px; }
-.fld .hint { color: var(--muted); }
+.fld .hint { color: var(--muted); font-weight: 400; }
 .op .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.op button { font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--brand); background: var(--brand); color: var(--surface); cursor: pointer; }
+.op button { font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); cursor: pointer; }
 .op button:disabled { opacity: .6; cursor: default; }
-.op button.danger { background: transparent; color: var(--stamp); border-color: var(--stamp); }
+.op button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
 .op .save-msg { color: var(--muted); font-size: 12px; }
-.op .save-msg.error { color: var(--stamp); }
+.op .save-msg.error { color: var(--bad); }
+.op.tool { display: inline-flex; }
+.op.tool .op-fields { display: none; }
+.op.tool .actions { gap: 4px; }
+.tool, .op.tool button, .tool-pop > summary { font: inherit; font-size: 12px; font-weight: 500; min-height: 26px; padding: 0 9px; border: 1px solid var(--line); border-style: solid; border-radius: 6px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.op.tool button.danger { color: var(--bad); border-color: var(--line); background: var(--surface); }
+.tool:disabled { opacity: .5; cursor: not-allowed; }
+.band-tools { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tool-pop { display: inline-block; }
+.tool-pop > summary { display: inline-flex; align-items: center; }
 .edit-area { display: grid; gap: 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
-.edit-area h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.edit-area h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fg); }
 .edit-area .sub { min-width: 0; }
-.note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--elevated); color: var(--warn); }
-.edit-ac { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.where { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); }
+.edit-ac { margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
 .edit-ac > summary { cursor: pointer; }
 .edit-ac[open] { padding-bottom: 10px; }
 .edit-ac .op { margin-top: 10px; }
 .gwt { margin: 8px 0 0; display: grid; gap: 4px; font-size: 13px; }
 .gwt div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; }
 .gwt dt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 2px; }
-.gwt dd { margin: 0; color: var(--ink-2); }
+.gwt dd { margin: 0; color: var(--fg); }
 .sheet .add { display: block; margin-top: 8px; }
 .sheet .add .pop { position: static; width: auto; box-shadow: none; margin-top: 8px; }
 .sheet .add-row .pop { position: static; }
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: .4; }
+.band.drop-ok .lane { background: var(--accent-weak); outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 8px; }
+.band.drop-ok .divider h2 { color: var(--accent); }
+.drag-msg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 30; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); }
+.dialog-body { padding: 20px; display: grid; gap: 12px; }
+.dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.dialog-head h2 { margin: 0; font-size: 20px; }
+.cmd { margin: 0; font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
 @media (max-width: 767px) {
   .editing .spine { display: block; position: static; padding-top: 12px; }
   .editing .activities { flex-direction: column; align-items: stretch; }
@@ -310,7 +399,10 @@ form.op { display: grid; gap: 10px; margin: 0; }
   .editing .steps { display: none; }
   .editing .slot { align-self: stretch; }
   .op-fields { grid-template-columns: minmax(0, 1fr); }
-  .add .pop { width: min(300px, calc(100vw - 48px)); }
+  .add .pop { width: min(320px, calc(100vw - 48px)); }
+  .divider { position: relative; left: 0; }
+  .tool-pop { position: static; }
+  .tool-pop .pop { left: 0; right: 0; width: auto; }
 }
 `;
 
@@ -383,6 +475,9 @@ document.addEventListener("submit", function (e) {
   call("POST", "/api/op", { op: form.getAttribute("data-op"), map: document.body.getAttribute("data-map"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
     if (res.ok) {
       if (out) out.textContent = res.body.message;
+      // A new story opens in its panel after the reload, so its scenarios can be asked for next.
+      var made = form.getAttribute("data-op") === "story.new" && /^Added (\\S+) to release/.exec(res.body.message || "");
+      if (made) location.hash = "story-" + made[1];
       // Saved: load the page again. The story panel's hash stays in the address, so it opens where it was.
       setTimeout(function () { location.reload(); }, 800);
       return;
@@ -403,6 +498,78 @@ document.addEventListener("submit", function (e) {
     if (sendBtn) sendBtn.disabled = false;
     if (out) { out.className = "save-msg error"; out.textContent = gone(); }
   });
+});
+// The command a story.new form matches, under the form, as the person types.
+function quote(v) { return '"' + String(v).replace(/(["\\\\])/g, "\\\\$1") + '"'; }
+function storyCommand(form) {
+  var el = function (n) { var f = form.elements.namedItem(n); return f && showing(f) ? String(f.value || "").trim() : ""; };
+  var parts = ["nikos story add", quote(el("title") || "<title>"), "--activity", el("activity")];
+  if (el("step")) parts.push("--step", el("step"));
+  if (el("release")) parts.push("--release", el("release"));
+  if (el("priority")) parts.push("--priority", el("priority"));
+  if (document.body.hasAttribute("data-several")) parts.push("--map", document.body.getAttribute("data-map"));
+  return parts.join(" ");
+}
+var adds = document.querySelectorAll('form[data-op="story.new"]');
+for (var a = 0; a < adds.length; a++) {
+  (function (form) {
+    var pre = document.createElement("pre");
+    pre.className = "cmd";
+    pre.setAttribute("aria-label", "The command this matches");
+    form.insertBefore(pre, form.querySelector(".actions"));
+    var update = function () { pre.textContent = storyCommand(form); };
+    form.addEventListener("input", update);
+    form.addEventListener("change", update);
+    update();
+  })(adds[a]);
+}
+// Drag a story's card into another release's band to move it there. It keeps its activity and step.
+var dragId = "", dragFrom = "";
+var msg = document.createElement("div");
+msg.className = "drag-msg";
+msg.setAttribute("role", "status");
+msg.hidden = true;
+document.body.appendChild(msg);
+function say(text) { msg.textContent = text; msg.hidden = false; }
+function bandOf(e) {
+  if (!dragId) return null;
+  var band = e.target && e.target.closest ? e.target.closest(".band[data-number]") : null;
+  if (!band || band.hidden || band.getAttribute("data-number") === dragFrom) return null;
+  return band;
+}
+function clearDrop() { var on = document.querySelectorAll(".drop-ok, .dragging"); for (var i = 0; i < on.length; i++) on[i].classList.remove("drop-ok", "dragging"); }
+document.addEventListener("dragstart", function (e) {
+  var card = e.target && e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
+  if (!card) return;
+  var band = card.closest(".band[data-number]");
+  if (!band) return;
+  dragId = card.getAttribute("data-story");
+  dragFrom = band.getAttribute("data-number");
+  card.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", dragId);
+});
+document.addEventListener("dragend", function () { dragId = ""; dragFrom = ""; clearDrop(); });
+document.addEventListener("dragover", function (e) {
+  var band = bandOf(e);
+  var on = document.querySelectorAll(".band.drop-ok");
+  for (var i = 0; i < on.length; i++) if (on[i] !== band) on[i].classList.remove("drop-ok");
+  if (!band) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  band.classList.add("drop-ok");
+});
+document.addEventListener("drop", function (e) {
+  var band = bandOf(e);
+  if (!band) return;
+  e.preventDefault();
+  var id = dragId, to = band.getAttribute("data-number");
+  clearDrop();
+  say("Moving " + id + " to release " + to + "…");
+  call("POST", "/api/op", { op: "story.move", map: document.body.getAttribute("data-map"), target: { story: id }, args: { to: Number(to) }, expect: document.body.getAttribute("data-storymap") || "" }).then(function (res) {
+    if (res.ok) { say(res.body.message + ". It goes to the end of that release's build order."); setTimeout(function () { location.reload(); }, 900); return; }
+    say(res.status === 409 ? "The map changed since the page loaded. Reload to see the latest, then try again." : errorOf(res));
+  }, function () { say(gone()); });
 });
 var picks = document.querySelectorAll("select[data-pick=activity]");
 for (var k = 0; k < picks.length; k++) pickSteps(picks[k]);

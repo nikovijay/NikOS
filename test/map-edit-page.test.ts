@@ -51,7 +51,7 @@ describe("the editable story map page", () => {
   test("with a token, the page carries the token, the save bar and the edit forms", () => {
     const html = renderMap(sample(), { live: true, token: TOKEN });
     expect(html).toContain(`<meta name="nikos-token" content="${TOKEN}">`);
-    expect(html).toContain('<body class="editing" data-map="ht">');
+    expect(html).toContain('<body class="editing" data-map="ht" data-storymap="');
     expect(html).toContain('<div id="pending" class="pending" role="status" hidden></div>');
     expect(html).toContain("Is nikos serve still running?");
     expect(html).toContain(".pending{");
@@ -92,7 +92,8 @@ describe("the editable story map page", () => {
     expect(capture).toContain('<input type="hidden" name="release" value="1">');
     expect(capture).toContain('<input type="hidden" name="activity" value="tasks">');
     expect(capture).toContain('<input type="hidden" name="step" value="capture">');
-    expect(html.match(/data-op="story\.new"/g)).toHaveLength(6);
+    // One form in each of the six cells, and one in the Add a story dialog.
+    expect(html.match(/data-op="story\.new" data-target/g)).toHaveLength(7);
   });
 
   test("the cells of an unreleased band pick a release, the last one by default", () => {
@@ -189,7 +190,7 @@ describe("the editable story map page", () => {
 
   test("the edit forms and their styles stay readable in light and dark, and collapse on a phone", () => {
     const html = renderMap(sample(), { live: true, token: TOKEN });
-    expect(html).toContain("--notice: #3A3014;");
+    expect(html).toContain(':root[data-theme="dark"]{--bg:#121118');
     expect(html).toContain(".cell:empty { display: none; }");
     expect(html).toContain(".editing .spine { display: block;");
     expect(html).toContain(".op button");

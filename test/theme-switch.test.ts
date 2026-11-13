@@ -42,8 +42,8 @@ describe("the light/dark switch", () => {
     expect(saved).not.toContain("<script");
     expect(saved).not.toContain(THEME_BUTTON);
     for (const html of [live, saved]) {
-      expect(html).toContain(':root[data-theme="dark"] .doing');
-      expect(html).toContain(':root:not([data-theme="light"]) .doing');
+      expect(html).toContain(':root[data-theme="dark"]{--bg:#121118');
+      expect(html).toContain(':root:not([data-theme="light"]){--bg:#121118');
     }
   });
 
