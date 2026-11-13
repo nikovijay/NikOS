@@ -10,9 +10,9 @@
 - **A light/dark switch** on the plan dashboard (live and exported) and on the live story map. A page follows the browser's light or dark setting until you press the switch, then keeps your choice in that browser. The exported story map has no script, so it still follows the browser.
 - **Add and edit from the plan dashboard.** The live dashboard has forms to add a key result (company and departments) and a bet (every level), and to edit a key result or bet, move a key result's target, record a bet's review, and set what a bet aims at or aligns to. Each form shows the fields a person needs, with dropdowns of what can be picked. Saves are small and never pushed, as before. The exported page has no forms.
 - **Bet titles.** A bet can have a title, `--title` on `nikos plan bet new` and in the dashboard's form, and the title shows in place of the id. A key result or bet made with `--title` and no id gets its id from the title (`quick-win`, then `quick-win-2` if that is taken). `nikos plan kr new` takes the same. `nikos plan status` and `--json` show bet titles too.
-
 - **Choose where a new repo lives.** When `nikos start` makes a git repo, or finds one with no origin, it asks whether it should be on GitHub, GitLab or only this computer. For GitHub or GitLab it asks the repo's path (it suggests your own account) and whether it's private, shows the result in the summary, then makes the repo with `gh` or `glab` and sets it as the origin. It never pushes. Without `gh` or `glab` it gives the command to run. `nikos start` and `nikos plan init` take the same choice as flags: `--github <owner/name>` or `--gitlab <group/name>`, with `--public` for a public repo.
 - **Agents ask before making a hosted repo.** The onboarding and plan setup playbooks tell agents to ask where the repo should live, never to pick GitHub or an account themselves, to make it only through nikOS, and never to push without a yes.
+
 ### Changed
 
 - **`nikos serve` prints a private link.** It names the page's key and says to keep the link to yourself, and the read-only line is gone, because the story map can now save to a branch.
