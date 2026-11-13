@@ -3,6 +3,7 @@
 // bet=), the same query its links carry, so the file's own script only swaps the body and keeps the place in
 // the URL, both ?at= and #at=. Nothing in the file asks for anything over the network.
 import { STYLE } from "./page.js";
+import { THEME_JS } from "../lib/theme.js";
 
 /** A page as the export keeps it: its title as plain text, and the content of its body. */
 export interface OfflinePage {
@@ -76,6 +77,7 @@ document.addEventListener("change", function (e) {
 <title>${esc(first?.title ?? "nikOS plan")}</title><style>${STYLE}</style></head>
 <body>
 ${first?.body ?? ""}<script>
+${THEME_JS}
 ${script}
 </script>
 </body></html>

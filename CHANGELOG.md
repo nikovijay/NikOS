@@ -4,8 +4,13 @@
 
 ### Added
 
+- **A light/dark switch** on the plan dashboard (live and exported) and on the live story map. A page follows the browser's light or dark setting until you press the switch, then keeps your choice in that browser. The exported story map has no script, so it still follows the browser.
 - **Choose where a new repo lives.** When `nikos start` makes a git repo, or finds one with no origin, it asks whether it should be on GitHub, GitLab or only this computer. For GitHub or GitLab it asks the repo's path (it suggests your own account) and whether it's private, shows the result in the summary, then makes the repo with `gh` or `glab` and sets it as the origin. It never pushes. Without `gh` or `glab` it gives the command to run. `nikos start` and `nikos plan init` take the same choice as flags: `--github <owner/name>` or `--gitlab <group/name>`, with `--public` for a public repo.
 - **Agents ask before making a hosted repo.** The onboarding and plan setup playbooks tell agents to ask where the repo should live, never to pick GitHub or an account themselves, to make it only through nikOS, and never to push without a yes.
+
+### Fixed
+
+- **Story cards in dark mode** kept their light fill, so their titles were hard to read. They now take the dark colours.
 
 ## 0.5.0 (2026-11-10)
 

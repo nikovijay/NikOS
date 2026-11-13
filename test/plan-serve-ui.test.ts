@@ -244,7 +244,8 @@ describe("what the page is made of", () => {
   it("has a live script that parses, which posts only to this server's own save routes", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
-    const script = /<script>([\s\S]*?)<\/script>/.exec(r)![1];
+    // The last script is the dashboard's own; the one in the head is the light/dark switch.
+    const script = [...r.matchAll(/<script>([\s\S]*?)<\/script>/g)].pop()![1];
     expect(() => new Function(script)).not.toThrow();
     expect(script).toContain('"/api/op"');
     expect(script).not.toMatch(/https?:\/\//);
