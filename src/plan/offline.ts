@@ -2,7 +2,7 @@
 // HTML file that moves between them with no server. Each page is keyed by its query (at=, view=, widen=, kr=,
 // bet=), the same query its links carry, so the file's own script only swaps the body and keeps the place in
 // the URL, both ?at= and #at=. Nothing in the file asks for anything over the network.
-import { STYLE } from "./page.js";
+import { SHARE_JS, STYLE } from "./page.js";
 import { THEME_JS } from "../lib/theme.js";
 
 /** A page as the export keeps it: its title as plain text, and the content of its body. */
@@ -78,6 +78,7 @@ document.addEventListener("change", function (e) {
 <body>
 ${first?.body ?? ""}<script>
 ${THEME_JS}
+${SHARE_JS}
 ${script}
 </script>
 </body></html>

@@ -53,6 +53,8 @@ export interface KrRef {
   /** A milestone's steps in order, with the date each was done (null while not). Empty for a number. */
   steps: { name: string; done: string | null }[];
   latest: { value: number; date: string } | null;
+  /** Every check-in, oldest first, for the page's small chart. */
+  checkins: { value: number; date: string }[];
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
   version: string;
@@ -373,6 +375,10 @@ function krRef(area: Area, id: string, on: string): KrRef {
     kind: kindOf(d),
     steps: (d.steps ?? []).map((s: any) => ({ name: String(s.name), done: s.done ? String(s.done) : null })),
     latest: last ? { value: last.value, date: last.date } : null,
+    checkins: (d.checkins ?? [])
+      .map((c: any) => ({ value: Number(c.value), date: dateOf(c.date) }))
+      .filter((c: { value: number; date: string }) => Number.isFinite(c.value) && c.date)
+      .sort((a: { date: string }, b: { date: string }) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     stale: isStale(d, on),
     version: kr.hash,
     ...(laddersOf(d) && !linkedOf("kr", d) ? { laddersUp: laddersOf(d)! } : {}),

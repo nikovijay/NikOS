@@ -407,8 +407,8 @@ describe("the look of the forms", () => {
   it("the error colour has a value in light, and one in each dark block", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
-    expect(html).toContain("--error:#9b1c1c");
-    expect(html.match(/--error:#ffb3b3/g)).toHaveLength(2);
+    expect(html).toContain("--bad:#b02e29");
+    expect(html.match(/--bad:#ff9c94/g)).toHaveLength(2);
     expect(html).toContain("grid-template-columns:minmax(0,1fr)");
     expect(html).toContain("[hidden]{display:none!important}");
   });
@@ -416,7 +416,7 @@ describe("the look of the forms", () => {
   it("the form controls take the page's colours, so they read in dark mode too", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
-    expect(html).toContain("select,textarea{background:var(--card);color:var(--fg)");
+    expect(html).toContain(".field textarea,.save input,.save select{font:inherit;font-weight:400;width:100%;padding:7px 9px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);color:var(--fg)}");
   });
 
   it("a bet's edit form shows its confidence, and a company bet has no Aligns to form", async () => {

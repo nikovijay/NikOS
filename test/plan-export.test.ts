@@ -122,3 +122,15 @@ describe("the export's title", () => {
     expect(html).toContain('"title":"Fish & Chips · nikOS plan"');
   });
 });
+
+describe("the exported page says what it is", () => {
+  it("is labelled as an exported page, and its Share dialog says to send the file", async () => {
+    const out = target();
+    await exportPlanPage(acmePlan(), out, { offline: true, at: "departments/finance" });
+    const html = readFileSync(out, "utf8");
+    expect(html).toContain('<span class="host-k">Exported page</span>');
+    expect(html).toContain("This page is a file. It works with no network and can't change anything.");
+    expect(html).not.toContain("On this computer");
+    expect(html).not.toContain("private key");
+  });
+});

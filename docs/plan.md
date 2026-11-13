@@ -215,6 +215,18 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
   fixed `--port` keeps it between runs).
 - **The place is in the link.** Every link carries the area, for example
   `?at=departments/finance`, so a page can be bookmarked or shared.
+- **Where it's open, and sharing it.** The top bar says where the page is open:
+  on this computer (the live dashboard) or an exported page. Share… says how to
+  share the plan. The live link only works on your computer while
+  `nikos plan serve` runs and has a private key in it, so don't send it. Send a
+  read-only page made with `--export` instead, or put that page on an internal
+  web host, for example from a CI job each time the planning repo's main branch
+  changes.
+- **Delivery and outcome stay apart.** Each bet shows its delivery from the
+  story maps (Shipped, Building, Not started) and, separately, its outcome
+  (open, won, lost, stopped). A key result shows on track, at risk or off
+  track once it has a check-in, by comparing its progress with how much of its
+  period has gone. Story maps open in their own code repos with `nikos serve`.
 - **Names, not ids.** Areas show their names, and a bet shows its title, with its
   id after it. A new key result or bet made with a title gets its id from the
   title. The id never changes after that.

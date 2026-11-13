@@ -93,11 +93,10 @@ describe("the views each level has", () => {
   it("shows key results for a department and not for a group or team", async () => {
     const { srv } = await start(acmePlan());
     const dept = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
-    expect(dept).toContain("<table>");
-    expect(dept).toContain("Key result</th>");
+    expect(dept).toContain('<article class="card kr-card">');
     expect(dept).toContain(`href="?${FINANCE}&amp;kr=close-days&amp;period=2027-Q1"`);
     const group = (await get(srv.port, "/?at=groups/payments")).text;
-    expect(group).not.toContain("Key result</th>");
+    expect(group).not.toContain('class="card kr-card"');
     expect(group).not.toContain("view=keys");
     const asked = (await get(srv.port, "/?at=groups/payments&view=keys")).text;
     expect(asked).toContain("Key results its bets aim at");
@@ -319,15 +318,36 @@ describe("the quarter, the labels and the forms", () => {
     const ladder = (await get(srv.port, `/?${FINANCE}&view=ladder`)).text;
     expect(ladder).toContain("Own bet · no story map yet");
     const timeline = (await get(srv.port, `/?${FINANCE}&view=timeline`)).text;
-    expect(timeline).toContain("<td>Starts</td>");
-    expect(timeline).toContain("<td>Deadline</td>");
+    expect(timeline).toContain("Starts 2027-01-05");
+    expect(timeline).toContain("Deadline 2027-06-30");
     expect(timeline).toContain("2027-06-30");
   });
 
   it("lists the areas below the company as a sub-area heading that doesn't clash with the bets' one", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, "/?at=company")).text;
-    expect(r).toContain("<h2>Areas below this</h2>");
+    expect(r).toContain('<nav class="side-areas" aria-label="Areas below this">');
     expect(r).not.toContain("<h2>Below this</h2>");
+  });
+});
+
+describe("where the page is open, and how to share it", () => {
+  it("the live page says it runs on this computer, and its Share dialog sends a page, not the private link", async () => {
+    const { srv } = await start(acmePlan());
+    const r = (await get(srv.port, `/?${FINANCE}&view=okrs`)).text;
+    expect(r).toContain('<span class="host-k">On this computer</span>');
+    expect(r).toContain('<button type="button" class="share-btn" data-share aria-haspopup="dialog">Share…</button>');
+    expect(r).toContain('<dialog class="sheet-dialog" id="share" aria-labelledby="share-title">');
+    expect(r).toContain("Its link has a private key in it and only works here while <code>nikos plan serve</code> is running, so don't send it to anyone.");
+    expect(r).toContain("<code>nikos plan serve --export finance.html --in finance</code>");
+    expect(r).toContain("Publish it on your internal site");
+    expect(r).not.toContain("nikos apply");
+  });
+
+  it("the company's Share dialog exports every area, with no --in", async () => {
+    const { srv } = await start(acmePlan());
+    const r = (await get(srv.port, "/?at=company")).text;
+    expect(r).toContain("<code>nikos plan serve --export plan.html</code>");
+    expect(r).not.toContain("--export plan.html --in");
   });
 });
