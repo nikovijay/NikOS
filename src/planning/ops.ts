@@ -4,7 +4,7 @@
 import { join, relative, resolve, sep } from "node:path";
 import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
 import { newActivity, newStep, renameActivity, renameStep } from "../commands/step.js";
-import { newStory, renameStory, removeStory } from "../commands/story.js";
+import { addPersona, addScenario, editScenario, editStory, newStory, placeStory, removeScenario, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
 import { resolveStoryMap, mapDirs } from "../lib/maps.js";
 import { diskStore, MemoryStore, store, withStore, type Store } from "../lib/store.js";
@@ -13,7 +13,7 @@ import { checkIn, editKr, markStep, newKr, reviseTarget } from "./krs.js";
 import { editBet, newBet, reviewBet } from "./bets.js";
 import { setAligns, setBetKrs } from "./aligns.js";
 import { levelOf, planningIssues } from "./levels.js";
-import { idProblem, betFieldProblems, decisionProblem, numberProblem, reasonProblem } from "./rules.js";
+import { idFromTitle, idProblem, betFieldProblems, decisionProblem, numberProblem, reasonProblem, titleProblem } from "./rules.js";
 import { areaOf, hash, labelRoot, StaleError, checkHash } from "./model.js";
 import { validateGroup } from "../commands/validate.js";
 import { krAreaProblem, newIdFor, repoIssues } from "../plan/repo.js";
@@ -34,6 +34,12 @@ export type OpName =
   | "story.rename"
   | "story.move"
   | "story.remove"
+  | "story.edit"
+  | "story.place"
+  | "scenario.add"
+  | "scenario.edit"
+  | "scenario.remove"
+  | "persona.new"
   | "activity.new"
   | "activity.rename"
   | "step.new"
@@ -65,6 +71,12 @@ const GROUP: OpName[] = [
   "story.rename",
   "story.move",
   "story.remove",
+  "story.edit",
+  "story.place",
+  "scenario.add",
+  "scenario.edit",
+  "scenario.remove",
+  "persona.new",
   "activity.new",
   "activity.rename",
   "step.new",
@@ -81,7 +93,7 @@ const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
 
 /** Ops that edit a story map or the settings of a code repo. A planning area never makes them: maps stay in the code repos. */
-const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
+const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "story.edit", "story.place", "scenario.add", "scenario.edit", "scenario.remove", "persona.new", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
 const NAMES: Record<OpName, true> = {
@@ -100,6 +112,12 @@ const NAMES: Record<OpName, true> = {
   "story.rename": true,
   "story.move": true,
   "story.remove": true,
+  "story.edit": true,
+  "story.place": true,
+  "scenario.add": true,
+  "scenario.edit": true,
+  "scenario.remove": true,
+  "persona.new": true,
   "activity.new": true,
   "activity.rename": true,
   "step.new": true,
@@ -144,6 +162,12 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "story.rename": ["title", "confirm", "map"],
   "story.move": ["to", "map"],
   "story.remove": ["map"],
+  "story.edit": ["title", "as_a", "i_want", "so_that", "type", "personas", "priority", "map"],
+  "story.place": ["release", "activity", "step", "map"],
+  "scenario.add": ["title", "priority", "given", "when", "then", "map"],
+  "scenario.edit": ["ac", "title", "priority", "given", "when", "then", "map"],
+  "scenario.remove": ["ac", "map"],
+  "persona.new": ["title", "description", "map"],
   "activity.new": ["title", "id", "map"],
   "activity.rename": ["title", "map"],
   "step.new": ["title", "activity", "id", "map"],
@@ -174,6 +198,11 @@ export const EDITS = new Set<OpName>([
   "story.rename",
   "story.move",
   "story.remove",
+  "story.edit",
+  "story.place",
+  "scenario.add",
+  "scenario.edit",
+  "scenario.remove",
   "activity.rename",
   "step.rename",
   "release.rename",
@@ -195,6 +224,10 @@ const TARGET_KINDS: Record<string, "kr" | "bet" | "story" | "activity" | "step" 
 const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
 const refs = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === "string" && v ? [v] : []);
+/** A text field as given: blank counts as given (it clears or is refused), only a missing one is left out. */
+const given = (v: unknown): string | undefined => (v === undefined || v === null ? undefined : String(v));
+/** Lines of text, as an array or a string with line breaks. */
+const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(/\r?\n/) : []);
 /** A selector list. Empty means no selector at all, the whole part (the form's blank field, and the CLI's no-flag case). */
 
 /** Refuse an op before anything is read or written: unknown name, level, and ids. */
@@ -327,12 +360,34 @@ function apply(root: string, op: Op): string {
       setBetKrs(root, t.bet, { primary: str(a.primary), also: refs(a.also) }, expect);
       return `Saved the key results of ${t.bet}`;
     case "story.new": {
+      checkStoryMap(root, map, expect);
       const r = newStory({ title: String(a.title ?? ""), activity: String(a.activity ?? ""), step: str(a.step), release: a.release === undefined ? undefined : num(a.release), priority: a.priority as any, map }, root);
       return `Added ${r.id} to release ${r.release}`;
     }
     case "story.rename": {
       renameStory(root, { map, id: t.story, title: String(a.title ?? "") }, expect);
       return `Renamed ${t.story}`;
+    }
+    case "story.edit":
+      editStory(root, { map, id: t.story, title: given(a.title), asA: given(a.as_a), iWant: given(a.i_want), soThat: given(a.so_that), type: given(a.type), personas: a.personas === undefined ? undefined : refs(a.personas), priority: given(a.priority) }, expect);
+      return `Saved ${t.story}`;
+    case "story.place": {
+      placeStory(root, { map, id: t.story, release: a.release === undefined ? undefined : num(a.release), activity: String(a.activity ?? ""), step: given(a.step) }, expect);
+      return `Placed ${t.story} under ${String(a.activity ?? "")}`;
+    }
+    case "scenario.add": {
+      const r = addScenario(root, { map, id: t.story, title: String(a.title ?? ""), priority: given(a.priority), given: lines(a.given), when: lines(a.when), then: lines(a.then) }, expect);
+      return `Added ${r.ac} to ${t.story}`;
+    }
+    case "scenario.edit":
+      editScenario(root, { map, id: t.story, ac: String(a.ac ?? ""), title: String(a.title ?? ""), priority: given(a.priority), given: lines(a.given), when: lines(a.when), then: lines(a.then) }, expect);
+      return `Saved ${String(a.ac ?? "")} of ${t.story}`;
+    case "scenario.remove":
+      removeScenario(root, { map, id: t.story, ac: String(a.ac ?? "") }, expect);
+      return `Removed ${String(a.ac ?? "")} from ${t.story}`;
+    case "persona.new": {
+      const r = addPersona(root, { map, title: String(a.title ?? ""), description: given(a.description) }, expect);
+      return `Added persona ${r.id}`;
     }
     case "story.move":
       checkStoryMap(root, map, expect);
@@ -342,20 +397,32 @@ function apply(root: string, op: Op): string {
       removeStory(root, { map, id: t.story }, expect);
       return `Removed ${t.story}`;
     case "activity.new": {
-      const id = newActivity({ title: String(a.title ?? ""), id: str(a.id), map }, root);
+      checkStoryMap(root, map, expect);
+      const problem = titleProblem("activity", a.title);
+      if (problem) throw new Error(problem);
+      // The id is the one given, else the one the title makes; an id already in use is refused.
+      const id = str(a.id) ?? idFromTitle(String(a.title));
+      if (!id) throw new Error("An activity needs a title with letters or numbers");
+      newActivity({ title: String(a.title ?? ""), id, map, strict: true }, root);
       return `Added activity ${id}`;
     }
     case "activity.rename":
       renameActivity(root, { map, id: t.activity, title: String(a.title ?? "") }, expect);
       return `Renamed activity ${t.activity}`;
     case "step.new": {
-      const r = newStep({ title: String(a.title ?? ""), activity: String(a.activity ?? ""), id: str(a.id), map }, root);
+      checkStoryMap(root, map, expect);
+      const problem = titleProblem("step", a.title);
+      if (problem) throw new Error(problem);
+      const id = str(a.id) ?? idFromTitle(String(a.title));
+      if (!id) throw new Error("A step needs a title with letters or numbers");
+      const r = newStep({ title: String(a.title ?? ""), activity: String(a.activity ?? ""), id, map }, root);
       return `Added step ${r.id}`;
     }
     case "step.rename":
       renameStep(root, { map, id: t.step, title: String(a.title ?? ""), activity: str(a.activity) }, expect);
       return `Renamed step ${t.step}`;
     case "release.new": {
+      checkStoryMap(root, map, expect);
       const r = addRelease({ map, title: String(a.title ?? ""), goal: str(a.goal) }, root);
       return `Added release ${r.number}`;
     }

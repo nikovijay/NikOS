@@ -1,13 +1,17 @@
-import { join } from "node:path";
-import { parseDocument, YAMLSeq } from "yaml";
+import { basename, join } from "node:path";
+import { isMap, isSeq, parse, parseDocument, YAMLMap, YAMLSeq } from "yaml";
 import { featureStoryIds, read, walk } from "../lib/project.js";
 import { checkHash } from "../planning/model.js";
+import { idFromTitle, titleProblem } from "../planning/rules.js";
 import { resolveStoryMap, storyPrefix, type StoryMapRef } from "../lib/maps.js";
+import { loadMapData } from "../lib/map-data.js";
 import { store } from "../lib/store.js";
 import { createStoryState, loadStates, statePath, type StoryHome } from "../lib/state-files.js";
 import { slugify } from "./init.js";
 import { validate, type ValidationResult } from "./validate.js";
 import { writeMapSummary } from "../lib/map-summary.js";
+import { addCriterion, criteriaOf, editCriterion, editStoryText, nextCriterion, removeCriterion, setPlacement, type CriterionInput, type StoryFields } from "../lib/feature-edit.js";
+import { moveStory, placeInRelease } from "./release.js";
 
 const PRIORITIES = ["must", "should", "could"] as const;
 
@@ -85,7 +89,7 @@ export function newStory(input: StoryInput, dir: string): StoryResult {
   if (input.step !== undefined) {
     const steps: string[] = ((plain.activities ?? []).find((a: any) => a?.id === input.activity)?.steps ?? []).map((st: any) => st?.id);
     if (!steps.includes(input.step)) {
-      throw new Error(`'${input.step}' is not a step of activity '${input.activity}'. Steps: ${steps.join(", ") || "none (add one with nikos step add)"}`);
+      throw new Error(`'${input.step}' is not a step of activity '${input.activity}'. Steps: ${steps.join(", ") || "none yet"}`);
     }
   }
   const releases: any[] = plain.releases ?? [];
@@ -210,4 +214,162 @@ export function removeStory(dir: string, input: { map?: string; id: string }, ex
   dropState(ref.dir, input.id);
   writeMapSummary(ref.root, ref.dir);
   return { removed: input.id, validation: validate(ref.dir) };
+}
+
+/** The feature file a story edit works on. A story in a release with no feature file yet is a stub: it can't be edited. */
+function editableFeature(ref: StoryMapRef, id: string): string {
+  const file = featureOf(ref, id);
+  if (file) return file;
+  if ([...loadMapData(ref.dir).releases.values()].some((ids) => ids.includes(id))) throw new Error(`${id} has no feature file yet, so it can't be edited here`);
+  throw new Error(`${id} is not a story in ${mapLabel(ref)}`);
+}
+
+/** The persona ids storymap.yaml names. */
+function personaIdsOf(dir: string): string[] {
+  const personas = parse(read(join(dir, "storymap.yaml")))?.personas;
+  return Array.isArray(personas) ? personas.map((p: any) => String(p?.id)) : [];
+}
+
+/** The feature file of a story, its text, and the map it is in, with the expect checked. */
+function featureFor(dir: string, id: string, map: string | undefined, expect: string | undefined) {
+  const ref = resolveStoryMap(dir, { story: id, map });
+  const file = editableFeature(ref, id);
+  const text = read(file);
+  checkHash(id, text, expect);
+  return { ref, file, text };
+}
+
+export interface StoryEditInput extends StoryFields {
+  map?: string;
+  id: string;
+}
+
+/** Change a story's details: its title, narrative, type, personas or priority. A field not given stays as it is. */
+export function editStory(dir: string, input: StoryEditInput, expect?: string): { file: string; validation: ValidationResult } {
+  const { ref, file, text } = featureFor(dir, input.id, input.map, expect);
+  const known = personaIdsOf(ref.dir);
+  const unknown = (input.personas ?? []).find((p) => !known.includes(p));
+  if (unknown !== undefined) throw new Error(`'${unknown}' is not a persona in ${mapLabel(ref)}: add it under personas first`);
+  store().write(file, editStoryText(text, input));
+  // The title and the narrative are in the spec hash, so the proof of a story that has one changes with them.
+  writeMapSummary(ref.root, ref.dir);
+  return { file, validation: validate(ref.dir) };
+}
+
+export interface PlaceInput {
+  map?: string;
+  id: string;
+  /** Move the story to this release. Left out, it stays where it is. */
+  release?: number;
+  activity: string;
+  /** A step of the activity. Blank or left out clears the step. */
+  step?: string;
+}
+
+/** Put a story under an activity and step, and in a release when one is given. */
+export function placeStory(dir: string, input: PlaceInput, expect?: string): { file: string; validation: ValidationResult } {
+  const { ref, file } = featureFor(dir, input.id, input.map, expect);
+  const activityId = input.activity?.trim();
+  if (!activityId) throw new Error("A story needs an activity");
+  const plain = parse(read(join(ref.dir, "storymap.yaml"))) ?? {};
+  const activities: any[] = Array.isArray(plain.activities) ? plain.activities : [];
+  const activity = activities.find((a) => a?.id === activityId);
+  if (!activity) throw new Error(`'${activityId}' is not an activity in storymap.yaml. Activities: ${activities.map((a) => a?.id).join(", ") || "none"}`);
+  const step = input.step?.trim() || undefined;
+  if (step) {
+    const steps: string[] = (activity.steps ?? []).map((st: any) => st?.id);
+    if (!steps.includes(step)) throw new Error(`'${step}' is not a step of activity '${activityId}'. Steps: ${steps.join(", ") || "none yet"}`);
+  }
+  // A feature lives in the folder of its activity, where story add puts it and validate checks it.
+  const home = join(ref.dir, "features", activityId, basename(file));
+  if (home !== file && store().exists(home)) throw new Error(`maps/${ref.id}/features/${activityId}/${basename(file)} already exists, so the story can't move there`);
+  const current = [...loadMapData(ref.dir).releases].find(([, ids]) => ids.includes(input.id))?.[0];
+  // A blank release (the form's "no release" choice, or none sent) leaves the story where it is. A story in no release joins one.
+  const release = input.release !== undefined && !Number.isNaN(input.release) ? input.release : undefined;
+  // moveStory writes the release's tag and storymap.yaml, so the feature is read again after it.
+  if (release !== undefined && release !== current) {
+    if (current === undefined) placeInRelease({ map: ref.id, id: input.id, to: release }, dir);
+    else moveStory({ map: ref.id, id: input.id, to: release }, dir);
+  }
+  // Read again after any release move: moveStory rewrote the feature's release tag.
+  const next = setPlacement(read(file), { activity: activityId, step });
+  if (home === file) store().write(file, next);
+  else {
+    store().write(home, next, { create: true });
+    store().remove(file);
+  }
+  writeMapSummary(ref.root, ref.dir);
+  return { file: home, validation: validate(ref.dir) };
+}
+
+/** A criterion label, AC1, as an op names it. */
+function checkLabel(ac: string): string {
+  if (!/^AC[0-9]+$/.test(ac)) throw new Error(`'${ac}' is not a criterion label (AC1, AC2…)`);
+  return ac;
+}
+
+/** Refuse a criterion label that the story doesn't have. */
+function requireCriterion(text: string, id: string, ac: string): void {
+  if (!criteriaOf(text).some((c) => c.ac === ac)) throw new Error(`${id} has no criterion ${ac}`);
+}
+
+export interface ScenarioInput extends CriterionInput {
+  map?: string;
+  id: string;
+}
+
+/** Add a criterion to a story, numbered one past its highest. */
+export function addScenario(dir: string, input: ScenarioInput, expect?: string): { file: string; ac: string; validation: ValidationResult } {
+  const { ref, file, text } = featureFor(dir, input.id, input.map, expect);
+  const ac = nextCriterion(text);
+  store().write(file, addCriterion(text, input));
+  writeMapSummary(ref.root, ref.dir);
+  return { file, ac, validation: validate(ref.dir) };
+}
+
+/** Replace a criterion's title, priority and steps. */
+export function editScenario(dir: string, input: ScenarioInput & { ac: string }, expect?: string): { file: string; validation: ValidationResult } {
+  const { ref, file, text } = featureFor(dir, input.id, input.map, expect);
+  const ac = checkLabel(input.ac);
+  requireCriterion(text, input.id, ac);
+  store().write(file, editCriterion(text, ac, input));
+  writeMapSummary(ref.root, ref.dir);
+  return { file, validation: validate(ref.dir) };
+}
+
+/** Remove a criterion. The last one can't go. The others are not renumbered. */
+export function removeScenario(dir: string, input: { map?: string; id: string; ac: string }, expect?: string): { file: string; validation: ValidationResult } {
+  const { ref, file, text } = featureFor(dir, input.id, input.map, expect);
+  const ac = checkLabel(input.ac);
+  requireCriterion(text, input.id, ac);
+  store().write(file, removeCriterion(text, ac));
+  writeMapSummary(ref.root, ref.dir);
+  return { file, validation: validate(ref.dir) };
+}
+
+/** Add a persona to storymap.yaml. Its id is made from the title. */
+export function addPersona(dir: string, input: { map?: string; title: string; description?: string }, expect?: string): { id: string; validation: ValidationResult } {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const text = read(mapPath);
+  checkHash("storymap.yaml", text, expect);
+  const problem = titleProblem("persona", input.title);
+  if (problem) throw new Error(problem);
+  const id = idFromTitle(input.title);
+  if (!id) throw new Error("A persona needs a title with letters or numbers");
+  const map = parseDocument(text);
+  const personas = map.get("personas", true);
+  if (isSeq(personas) && personas.items.some((p) => isMap(p) && p.get("id") === id)) throw new Error(`There is already a persona '${id}' in ${mapLabel(ref)}`);
+  const description = input.description?.trim();
+  const entry = { id, title: input.title.trim(), ...(description ? { description } : {}) };
+  if (isSeq(personas)) personas.add(map.createNode(entry));
+  else {
+    // Personas sit above the activities, where the template has them.
+    const top = map.contents as YAMLMap;
+    const at = top.items.findIndex((p: any) => p.key?.value === "activities");
+    top.items.splice(at < 0 ? top.items.length : at, 0, map.createPair("personas", [entry]) as any);
+  }
+  store().write(mapPath, map.toString(yamlOpts));
+  writeMapSummary(ref.root, ref.dir);
+  return { id, validation: validate(ref.dir) };
 }

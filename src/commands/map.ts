@@ -17,6 +17,8 @@ import { OWNER, mapDirs, resolveStoryMap, storyPrefix, type StoryMapRef } from "
 import { writeMapSummary } from "../lib/map-summary.js";
 import { KEY } from "../lib/keys.js";
 import { runMapStatus } from "./map-status.js";
+import { SAVE_BAR_CSS } from "../lib/save-bar.js";
+import { EDIT_CSS, EDIT_JS, addActivityBox, addReleaseBox, addStepBox, addStoryBox, editDataOf, storyEditArea, type EditData } from "./map-edit.js";
 
 export interface MapCriterion {
   id: string;
@@ -193,17 +195,27 @@ const statusOf = (s: MapStory) =>
 const TYPE_WORD: Record<string, string> = { technical: "Technical", bug_risk: "Bug risk" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve. */
-/** back: a link to the list of the repo's maps, for the live page of a repo with more than one. */
-export function renderMap(dir: string, opts: { live?: boolean; map?: string; back?: string } = {}): string {
+/**
+ * The whole story map as one standalone HTML page. live adds the filter bar and its script for nikos serve.
+ * back: a link to the list of the repo's maps, for the live page of a repo with more than one.
+ * token (with live, from nikos serve) makes the page editable: its save bar, and the edit forms of map-edit.ts.
+ */
+export function renderMap(dir: string, opts: { live?: boolean; map?: string; back?: string; token?: string } = {}): string {
   const m = storyMapOf(dir, opts.map);
+  const ref = opts.token === undefined ? undefined : resolveStoryMap(dir, { map: opts.map });
+  const edit: EditData | undefined = ref && editDataOf(ref);
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
   const known = new Set(m.activities.map((a) => a.id));
   const everything = [...m.releases.flatMap((r) => r.stories), ...m.unreleased];
   const groups = [
     ...m.activities,
     ...(everything.some((s) => !known.has(s.activity)) ? [{ id: "", title: "Other", steps: [] as { id: string; title: string }[] }] : []),
-  ].map((a) => ({ ...a, columns: a.steps.length ? a.steps.map((st) => ({ key: `${a.id}/${st.id}`, label: `${a.title} · ${st.title}` })) : [{ key: `${a.id}/`, label: a.title }] }));
+  ].map((a) => ({
+    ...a,
+    columns: a.steps.length
+      ? a.steps.map((st) => ({ key: `${a.id}/${st.id}`, label: `${a.title} · ${st.title}`, activity: a.id, step: st.id }))
+      : [{ key: `${a.id}/`, label: a.title, activity: a.id, step: "" }],
+  }));
   const columns = groups.flatMap((g) => g.columns);
   const columnOf = (s: MapStory) => {
     const g = groups.find((x) => x.id === (known.has(s.activity) ? s.activity : ""))!;
@@ -236,12 +248,16 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     const warn = [[n((s) => s.blocked), "blocked"], [n((s) => s.specChanged), "spec changed"]] as const;
     return parts.join(" · ") + warn.map(([k, w]) => (k ? ` · <span class="warn">${k} ${w}</span>` : "")).join("");
   };
-  const band = (id: string, code: string, heading: string, goal: string, bets: string[], stories: MapStory[]) => {
+  // release is the band's release number: a story added from its cells goes into that release. The unreleased band has none.
+  const band = (id: string, code: string, heading: string, goal: string, bets: string[], stories: MapStory[], release?: number) => {
     const live = stories.filter((s) => s.status !== "cancelled");
     const shipped = live.length > 0 && live.every((s) => isDone(s.status) && !s.specChanged);
     const chips = bets.map((b) => `<span class="bet">${esc(b)}</span>`).join("");
     const cells = columns
-      .map((c) => `<div class="cell" data-activity="${esc(c.label)}">${stories.filter((s) => columnOf(s) === c.key).map(card).join("")}</div>`)
+      .map((c) => {
+        const add = edit && c.activity ? addStoryBox({ activity: c.activity, step: c.step, where: `${c.label}${release !== undefined ? `, release ${release}` : ", not in a release"}`, release, releases: m.releases, storymap: edit.storymap }) : "";
+        return `<div class="cell" data-activity="${esc(c.label)}" data-activity-id="${esc(c.activity)}" data-step-id="${esc(c.step)}">${stories.filter((s) => columnOf(s) === c.key).map(card).join("")}${add}</div>`;
+      })
       .join("");
     return `<section class="band" id="${esc(id)}" data-release="${esc(id)}"><div class="divider"><span class="rnum">${esc(code)}</span><h2>${esc(heading)}</h2>${
       shipped ? `<span class="stamp">Shipped</span>` : ""
@@ -249,13 +265,14 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
       goal ? `<p class="goal">${esc(goal)}</p>` : ""
     }${
       chips ? `<div class="bets"><span class="eyebrow">Delivers</span>${chips}</div>` : ""
-    }${stories.length ? `<div class="lane">${cells}</div>` : `<p class="empty">No stories yet.</p>`}</section>`;
+    }${stories.length ? "" : `<p class="empty">No stories yet.</p>`}${stories.length || edit ? `<div class="lane">${cells}</div>` : ""}</section>`;
   };
-  const bands = m.releases.map((r) => band(`release-${r.number}`, pad(r.number), `Release ${r.number} · ${r.title}`, r.goal, r.bets, r.stories)).join("");
+  const bands = m.releases.map((r) => band(`release-${r.number}`, pad(r.number), `Release ${r.number} · ${r.title}`, r.goal, r.bets, r.stories, r.number)).join("");
   const unreleased = m.unreleased.length ? band("unreleased", "--", "Not in a release", "", [], m.unreleased) : "";
+  // The activities row ends with "+ Activity"; each activity's box has its "+ Step".
   const spine = `<div class="spine"><div class="activities">${groups
-    .map((g) => `<div class="activity" style="--span:${g.columns.length}"><span class="eyebrow">Activity</span><strong>${esc(g.title)}</strong></div>`)
-    .join("")}</div>${
+    .map((g) => `<div class="activity" style="--span:${g.columns.length}"><span class="eyebrow">Activity</span><strong>${esc(g.title)}</strong>${edit && g.id ? addStepBox({ id: g.id, title: g.title }, edit.storymap) : ""}</div>`)
+    .join("")}${edit ? addActivityBox(edit.storymap) : ""}</div>${
     hasSteps ? `<div class="steps">${groups.map((g) => (g.steps.length ? g.steps.map((st) => `<div class="step">${esc(st.title)}</div>`).join("") : `<div class="step none"></div>`)).join("")}</div>` : ""
   }</div>`;
   const jumps = [
@@ -278,29 +295,34 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
       : `<p class="warn">No criteria yet.</p>`;
     return `<div class="sheet-wrap" id="story-${esc(s.id)}"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="${esc(s.id)}"><div class="sheet-head"><span class="sid">${esc(s.id)}</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card ${st.cls}"><span class="sword">${esc(st.word)}</span><div class="sc-title">${esc(s.title)}</div><div class="facts">${facts}</div>${
       s.narrative ? `<p class="narrative">${esc(s.narrative)}</p>` : ""
-    }${notes ? `<ul class="notes">${notes}</ul>` : ""}</div><div class="eyebrow">Acceptance criteria</div>${criteria}</aside></div>`;
+    }${notes ? `<ul class="notes">${notes}</ul>` : ""}</div><div class="eyebrow">Acceptance criteria</div>${criteria}${
+      edit ? storyEditArea(s, edit, m) : ""
+    }</aside></div>`;
   };
   const title = m.project ? `${m.project} · Story map` : "Story map";
   const filters = opts.live ? filterBar(m, everything) : "";
+  // The "+ Release" follows the last release band, and the unreleased band (when it has stories) comes after it.
+  const releaseAdd = edit ? addReleaseBox(edit.storymap) : "";
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)}</title>
-<style>${CSS}</style>
+${edit ? `<meta name="nikos-token" content="${esc(opts.token)}">\n` : ""}<title>${esc(title)}</title>
+<style>${CSS}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}` : ""}</style>
 ${opts.live ? `${THEME_HEAD}\n` : ""}</head>
-<body>
+<body${edit ? ` class="editing" data-map="${esc(ref!.id)}"` : ""}>
 ${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1></div><nav class="jumps" aria-label="Releases">${jumps}</nav>${opts.live ? THEME_BUTTON : ""}</header>
-${filters}<main id="board" tabindex="-1">
-${everything.length ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
+${edit ? `<div id="pending" class="pending" role="status" hidden></div>\n` : ""}${filters}<main id="board" tabindex="-1">
+${everything.length || edit ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
 ${bands}
+${releaseAdd}
 ${unreleased}
 </div>` : `<div class="board"><div class="blank"><h2>No stories yet</h2><p>A story map lists what people do with the product, step by step, and the stories that deliver each step. Add the first one with <code>nikos story add "&lt;title&gt;" --activity &lt;id&gt;</code>, or ask your coding agent to plan the product with you.</p></div></div>`}
 </main>
 ${everything.map(panel).join("\n")}
-${opts.live ? `<script>${FILTER_JS}</script>` : ""}
+${opts.live ? `<script>${FILTER_JS}</script>` : ""}${edit ? `<script>${EDIT_JS}</script>` : ""}
 </body>
 </html>
 `;
@@ -350,7 +372,8 @@ const FILTER_JS = `
       c.setAttribute('data-activity', cell.getAttribute('data-activity'));
       bands.forEach(function (b) {
         var cells = b.querySelectorAll('.lane > .cell');
-        if (cells[i]) Array.prototype.forEach.call(cells[i].children, function (card) { c.appendChild(card.cloneNode(true)); });
+        // Only the cards: the add forms of a cell stay in their own band.
+        if (cells[i]) Array.prototype.forEach.call(cells[i].children, function (card) { if (card.classList.contains('card')) c.appendChild(card.cloneNode(true)); });
       });
       lane.appendChild(c);
     });
@@ -407,9 +430,9 @@ const FILTER_JS = `
 `;
 
 const CSS = `
-:root { color-scheme: light dark; --paper: #F5F5F2; --surface: #FFFFFF; --elevated: #EFEFEB; --line: #E2E3DE; --line-2: #C9CBC5; --ink: #17191A; --ink-2: #3E4347; --muted: #5B6267; --brand: #1C5AA6; --brand-subtle: rgba(28,90,166,.08); --grid: rgba(23,25,26,.05); --stamp: #C42121; --warn: #8A5300; --focus: #1C5AA6; --col: 240px; --gap: 16px; }
+:root { color-scheme: light dark; --paper: #F5F5F2; --surface: #FFFFFF; --elevated: #EFEFEB; --line: #E2E3DE; --line-2: #C9CBC5; --ink: #17191A; --ink-2: #3E4347; --muted: #5B6267; --brand: #1C5AA6; --brand-subtle: rgba(28,90,166,.08); --grid: rgba(23,25,26,.05); --stamp: #C42121; --warn: #8A5300; --focus: #1C5AA6; --notice: #FFF4D6; --notice-fg: #4A3800; --col: 240px; --gap: 16px; }
 ${darkRules(`
-  :root { --paper: #111315; --surface: #181B1E; --elevated: #212529; --line: #2A2F34; --line-2: #3B4147; --ink: #ECEEEF; --ink-2: #C9CED2; --muted: #9EA6AC; --brand: #8DB8F2; --brand-subtle: rgba(141,184,242,.1); --grid: rgba(236,238,239,.04); --stamp: #F28B82; --warn: #F0B657; --focus: #8DB8F2; }
+  :root { --paper: #111315; --surface: #181B1E; --elevated: #212529; --line: #2A2F34; --line-2: #3B4147; --ink: #ECEEEF; --ink-2: #C9CED2; --muted: #9EA6AC; --brand: #8DB8F2; --brand-subtle: rgba(141,184,242,.1); --grid: rgba(236,238,239,.04); --stamp: #F28B82; --warn: #F0B657; --focus: #8DB8F2; --notice: #3A3014; --notice-fg: #FFE7A3; }
   .card { --fill: #1C1F23; --edge: #2E3338; --word: #A9B0B6; }
   .doing { --fill: #15253A; --edge: #24405F; --word: #7FD9A6; }
   .rework { --fill: #2A1F34; --edge: #44325A; --word: #F3B37A; }

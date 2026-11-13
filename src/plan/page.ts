@@ -5,6 +5,7 @@
 // which post to /api/op and the git buttons with the server's token. The offline export has none of them.
 import type { AreaLevel } from "../planning/model.js";
 import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
+import { SAVE_BAR_CSS, saveBarScript } from "../lib/save-bar.js";
 import { idFromTitle } from "../planning/rules.js";
 import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
@@ -138,8 +139,8 @@ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,s
 .views a:hover{color:var(--fg);background:var(--purple-bg)}
 .views a.on,.views a[aria-current="page"]{color:var(--purple);border-bottom-color:var(--purple);font-weight:600}
 .notice{background:var(--notice);color:var(--notice-fg);padding:.5rem .75rem;border-radius:.4rem}
-.pending{background:var(--notice);color:var(--notice-fg);padding:.5rem .75rem;border-radius:.4rem;margin-bottom:.75rem}
-.pending button,.save button{font:inherit;margin-left:.4rem;padding:.2rem .6rem}
+${SAVE_BAR_CSS}
+.save button{font:inherit;margin-left:.4rem;padding:.2rem .6rem}
 .save{margin:.25rem 0}
 .save:not(.form){display:inline-flex;flex-wrap:wrap;gap:.4rem;align-items:center}
 .save:not(.form) input{font:inherit;padding:.15rem .3rem;max-width:11rem}
@@ -850,53 +851,9 @@ function renderBetDrill(d: BetDrill, up: UpChain, page: AreaPage, live: boolean)
  * idFromTitle is the rules module's own function, so the id box makes the same id as the command does.
  */
 const LIVE_SCRIPT = `(function () {
-var meta = document.querySelector('meta[name="nikos-token"]');
-var token = meta ? meta.getAttribute("content") : "";
-var bar = document.getElementById("pending");
 var NL = String.fromCharCode(10);
-function call(method, path, body) {
-  var init = { method: method, headers: { "content-type": "application/json", "x-nikos-token": token }, credentials: "same-origin" };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  return fetch(path, init).then(function (r) {
-    return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }, function () { return { ok: r.ok, status: r.status, body: {} }; });
-  });
-}
-function errorOf(res) { return res.body && res.body.error ? res.body.error : "Something went wrong."; }
-function gone() { return "Couldn't reach the dashboard. Is nikos plan serve still running?"; }
 ${idFromTitle.toString()}
-function pendingBar() {
-  call("GET", "/api/pending").then(function (res) {
-    if (!bar) return;
-    bar.textContent = "";
-    if (!res.ok) { bar.hidden = false; bar.textContent = errorOf(res); return; }
-    var files = res.body.files || [];
-    if (!files.length) { bar.hidden = true; return; }
-    bar.hidden = false;
-    var text = document.createElement("span");
-    text.textContent = files.length + (files.length === 1 ? " saved change" : " saved changes") + (res.body.branch ? " on " + res.body.branch : "") + ". Nothing is pushed until you press Push. ";
-    bar.appendChild(text);
-    var msg = document.createElement("span");
-    msg.className = "save-msg";
-    bar.appendChild(button("Commit", "/api/git/commit", msg));
-    if (res.body.branch && res.body.hasOrigin) bar.appendChild(button("Push", "/api/git/push", msg));
-    bar.appendChild(msg);
-  }, function () { if (bar) { bar.hidden = false; bar.textContent = gone(); } });
-}
-function button(label, path, msg) {
-  var b = document.createElement("button");
-  b.type = "button";
-  b.textContent = label;
-  b.addEventListener("click", function () {
-    b.disabled = true;
-    msg.textContent = "Working…";
-    call("POST", path, {}).then(function (res) {
-      if (!res.ok) { msg.textContent = errorOf(res); b.disabled = false; return; }
-      msg.textContent = res.body.committed ? "Committed " + String(res.body.committed).slice(0, 7) : res.body.pushed ? "Pushed " + res.body.pushed : "Done";
-      pendingBar();
-    }, function () { msg.textContent = gone(); b.disabled = false; });
-  });
-  return b;
-}
+${saveBarScript("nikos plan serve", "dashboard")}
 function showing(el) { return !el.closest("[hidden]"); }
 // A field marked data-when shows while the named field of its form has the value given.
 function syncKinds(form) {

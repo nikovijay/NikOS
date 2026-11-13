@@ -1,12 +1,13 @@
 // The server behind nikos plan serve and nikos serve: a server on 127.0.0.1 that answers with the pages
 // it is given (PageSource). A server that gives saveIn also saves, through the same checks as the command
 // line: every save needs the token printed at start, and the pages need none. On a git repo, saves go on
-// a branch; nothing is pushed or opened as a request unless a person clicks for it.
+// a branch; nothing is pushed or opened as a request unless a person clicks for it. The plan dashboard and
+// the story map are both served here: a server's kind (PageSource.kind) says which saves it takes.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { baseBranch, branchExists, commitPaths, currentBranch, firstLine, gitIn, isGit, onBaseBranch, pathOf, pushBranch, realRun, remoteHas, statusOf, switchNewBranch, unrelatedDirty, type Runner } from "../lib/git.js";
 import { asLine, hostOf, requestArgv, runForge, toolFor } from "../lib/forge.js";
 import { StaleError, today } from "./model.js";
@@ -15,8 +16,13 @@ import { runOp, vetOp, type Op } from "./ops.js";
 const MAX_BODY = 100_000;
 
 const HTML = "text/html; charset=utf-8";
-const NOT_THIS_SITE = "A page on another site can't change this plan";
-const TOKEN_ERROR = "Missing or wrong token. Open the dashboard from the link nikos plan serve printed.";
+/** What each kind of server is called in its messages, and the command that runs it. */
+const KIND: Record<SaveKind, { page: string; thing: string; command: string }> = {
+  plan: { page: "dashboard", thing: "this plan", command: "nikos plan serve" },
+  map: { page: "story map", thing: "this story map", command: "nikos serve" },
+};
+const notThisSite = (ctx: Ctx) => `A page on another site can't change ${KIND[ctx.kind].thing}`;
+const tokenError = (ctx: Ctx) => `Missing or wrong token. Open the ${KIND[ctx.kind].page} from the link ${KIND[ctx.kind].command} printed.`;
 /** The POST routes. Every one passes the same checks, in the same order, before its body is read. */
 const POSTS = new Set(["/api/op", "/api/git/commit", "/api/git/push", "/api/git/pr"]);
 
@@ -27,7 +33,13 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-/** Where a change is saved: the folder it goes in, and the area it is. */
+/**
+ * What a server saves: the plan dashboard its planning area's changes (kind plan), or a story map its map's
+ * changes (kind map). The branch is named for the kind.
+ */
+export type SaveKind = "plan" | "map";
+
+/** Where a change is saved: the folder it goes in, and the area it is (a plan's area, or a map's key). */
 export interface SaveTarget {
   root: string;
   area?: string;
@@ -41,6 +53,8 @@ export interface PageSource {
   data?(query: URLSearchParams): unknown;
   /** Where the change in body goes. Without it the server takes no save, and the git buttons are not there. */
   saveIn?(body: Record<string, any>): SaveTarget;
+  /** The kind of save this server takes. Plan by default. */
+  kind?: SaveKind;
 }
 
 export interface StartOptions {
@@ -52,13 +66,17 @@ export interface StartOptions {
 
 interface Ctx {
   root: string;
+  kind: SaveKind;
   token: string;
   port: number;
   run: Runner;
   /** How many saves this server has made since it started. */
   session: { ops: number };
   pages: PageSource;
-  /** The areas saved to since the last commit, by rel. The git buttons commit these areas' files and no others. */
+  /**
+   * What the saves since the last commit wrote: a plan's area folders (planning/<rel>), or a map's files. The git
+   * buttons commit these and no others.
+   */
   touched: Set<string>;
 }
 
@@ -66,7 +84,8 @@ interface Ctx {
 export async function startServer(root: string, opts: StartOptions): Promise<RunningServer> {
   const token = randomBytes(24).toString("hex");
   let port = 0;
-  const ctx: Ctx = { root, token, port: 0, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages, touched: opts.pages.saveIn ? savedBefore(root) : new Set() };
+  const kind = opts.pages.kind ?? "plan";
+  const ctx: Ctx = { root, kind, token, port: 0, run: opts.run ?? realRun, session: { ops: 0 }, pages: opts.pages, touched: opts.pages.saveIn ? savedBefore(root, kind) : new Set() };
   const server = createServer((req, res) => {
     ctx.port = port;
     route(ctx, req, res).catch((err) => send(res, 500, { error: (err as Error).message }));
@@ -110,7 +129,7 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
   // A server that takes saves answers /api/op and its git buttons only. Its other saves are refused.
   if (req.method === "POST" && ctx.pages.saveIn) {
     if (POSTS.has(path)) return postRequest(ctx, path, req, res);
-    return send(res, 501, { error: "The plan dashboard saves through /api/op: this save isn't on there" });
+    return send(res, 501, { error: `The ${KIND[ctx.kind].page} saves through /api/op: this save isn't on there` });
   }
   return send(res, 404, { error: "Not found" });
 }
@@ -122,7 +141,7 @@ function serveGet(ctx: Ctx, path: string, req: IncomingMessage, res: ServerRespo
   if (path === "/api/data" && pages.data) return send(res, 200, pages.data(query));
   if (path === "/api/pending" && pages.saveIn) {
     const given = req.headers["x-nikos-token"];
-    if (typeof given !== "string" || !sameToken(given, token)) return send(res, 403, { error: TOKEN_ERROR });
+    if (typeof given !== "string" || !sameToken(given, token)) return send(res, 403, { error: tokenError(ctx) });
     return send(res, 200, pendingOf(ctx));
   }
   return send(res, 404, { error: "Not found" });
@@ -154,12 +173,12 @@ function readBody(req: IncomingMessage): Promise<string> {
 async function postRequest(ctx: Ctx, path: string, req: IncomingMessage, res: ServerResponse) {
   const origin = req.headers.origin;
   if (origin !== undefined && origin !== `http://127.0.0.1:${ctx.port}` && origin !== `http://localhost:${ctx.port}`) {
-    return send(res, 403, { error: NOT_THIS_SITE });
+    return send(res, 403, { error: notThisSite(ctx) });
   }
   const site = req.headers["sec-fetch-site"];
-  if (site !== undefined && site !== "same-origin" && site !== "none") return send(res, 403, { error: NOT_THIS_SITE });
+  if (site !== undefined && site !== "same-origin" && site !== "none") return send(res, 403, { error: notThisSite(ctx) });
   const given = req.headers["x-nikos-token"];
-  if (typeof given !== "string" || !sameToken(given, ctx.token)) return send(res, 403, { error: TOKEN_ERROR });
+  if (typeof given !== "string" || !sameToken(given, ctx.token)) return send(res, 403, { error: tokenError(ctx) });
   if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
     return send(res, 415, { error: "Send the change as JSON (Content-Type: application/json)." });
   }
@@ -192,13 +211,15 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
   if (typeof body.expect !== "string") return send(res, 400, { error: "expect (the hash of the version you loaded) is required. Reload the dashboard." });
   if (body.target !== undefined && (!body.target || typeof body.target !== "object" || Array.isArray(body.target))) return send(res, 400, { error: "target must be an object" });
   if (body.args !== undefined && (!body.args || typeof body.args !== "object" || Array.isArray(body.args))) return send(res, 400, { error: "args must be an object" });
-  const op: Op = { op: body.op as Op["op"], ...(body.target ? { target: body.target } : {}), args: body.args ?? {}, expect: body.expect };
+  let op: Op = { op: body.op as Op["op"], ...(body.target ? { target: body.target } : {}), args: body.args ?? {}, expect: body.expect };
   const saveIn = ctx.pages.saveIn;
   if (!saveIn) return send(res, 404, { error: "Not found" });
   // The folder and the checks come first, and the dry run: a refused change never switches the branch.
   let where: SaveTarget;
   try {
     where = saveIn(body);
+    // A map save names its map to the op too, so the op changes that map and no other.
+    if (ctx.kind === "map" && where.area) op = { ...op, args: { ...op.args, map: where.area } };
     vetOp(where.root, op);
   } catch (err) {
     return saveError(res, err);
@@ -208,10 +229,10 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
   try {
     const r = runOp(where.root, op, { strict: true });
     ctx.session.ops++;
-    if (where.area) {
-      ctx.touched.add(where.area);
-      keepSaved(ctx.root, ctx.touched);
-    }
+    // A plan save keeps its area's folder for the commit. A map save keeps the files its op wrote, and no others.
+    const kept = ctx.kind === "map" ? r.changed : where.area ? [`planning/${where.area}`] : [];
+    for (const p of kept) ctx.touched.add(p);
+    if (kept.length) keepSaved(ctx);
     return send(res, 200, { ok: true, message: r.message, changed: r.changed, branch: prep.branch ?? null, ...(where.area ? { area: where.area } : {}), ...(prep.notice ? { notice: prep.notice } : {}) });
   } catch (err) {
     return saveError(res, err);
@@ -220,8 +241,8 @@ function opRequest(ctx: Ctx, body: Record<string, any>, res: ServerResponse) {
 
 /**
  * Before a save: on a git repo, a save made while the repo is on its base branch goes on a new
- * nikos branch first, named for the area it saves (nikos/plan-departments-finance-<date>) or else the
- * plan's level. A save on another branch writes onto it. Detached HEAD saves as plain files.
+ * nikos branch first, named for what it saves: nikos/plan-departments-finance-<date> for a plan's area, or
+ * nikos/map-<key>-<date> for a story map. A save on another branch writes onto it. Detached HEAD saves as plain files.
  */
 function beginSave(ctx: Ctx, area?: string): { ok: true; branch?: string; notice?: string } | { ok: false; error: string } {
   const { root, run } = ctx;
@@ -229,46 +250,78 @@ function beginSave(ctx: Ctx, area?: string): { ok: true; branch?: string; notice
   const branch = currentBranch(root, run);
   if (!branch) return { ok: true, notice: "Saves aren't on a branch because HEAD is detached" };
   if (!onBaseBranch(branch, baseBranch(root, run))) return { ok: true, branch };
-  const label = area ? area.split("/").join("-") : "plan";
+  const label = area ? area.split("/").join("-") : ctx.kind;
   const stamp = today();
-  let name = `nikos/plan-${label}-${stamp}`;
-  for (let n = 2; branchExists(root, name, run); n++) name = `nikos/plan-${label}-${stamp}-${n}`;
+  let name = `nikos/${ctx.kind}-${label}-${stamp}`;
+  for (let n = 2; branchExists(root, name, run); n++) name = `nikos/${ctx.kind}-${label}-${stamp}-${n}`;
   const made = switchNewBranch(root, name, run);
   if (!made.ok) return { ok: false, error: `Couldn't create a branch: ${made.error}` };
   return { ok: true, branch: name };
 }
 
-/** Where a plan dashboard keeps the areas it has saved to and not committed. It's under .nikos/, which git ignores. */
-const savedFile = (root: string) => join(root, ".nikos", "saved-areas.json");
+/**
+ * Where a server keeps the saves it has not committed, by kind: a plan's areas, or a map's files. Both are
+ * under .nikos/, which git ignores, so a plan's areas and a map's files never mix.
+ */
+const savedFile = (root: string, kind: SaveKind) => join(root, ".nikos", kind === "map" ? "saved-maps.json" : "saved-areas.json");
 
-/** The areas saved to before this start, from that file. None when it's missing or unreadable. */
-function savedBefore(root: string): Set<string> {
+/** The saves kept before this start, from that file. None when it's missing or unreadable. */
+function savedBefore(root: string, kind: SaveKind): Set<string> {
   try {
-    const v = JSON.parse(readFileSync(savedFile(root), "utf8"));
-    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+    const v = JSON.parse(readFileSync(savedFile(root, kind), "utf8"));
+    // A file from before plan saves named areas by their rel (departments/finance): those are planning/ folders now.
+    const paths = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    return new Set(kind === "plan" ? paths.map((p) => (p.startsWith("planning/") ? p : `planning/${p}`)) : paths);
   } catch {
     return new Set();
   }
 }
 
-/** Keeps the list of areas saved to. A save is on disk already, so a list that can't be written costs only the restart. */
-function keepSaved(root: string, areas: Set<string>): void {
+/**
+ * Keeps the list of saves not committed. A save is on disk already, so a list that can't be written costs only the restart.
+ * The list is under .nikos/, which git is asked to leave out (through its exclude file, as plan refresh does).
+ */
+function keepSaved(ctx: Ctx): void {
+  const file = savedFile(ctx.root, ctx.kind);
   try {
-    mkdirSync(join(root, ".nikos"), { recursive: true });
-    writeFileSync(savedFile(root), `${JSON.stringify([...areas].sort())}\n`);
+    mkdirSync(join(ctx.root, ".nikos"), { recursive: true });
+    writeFileSync(file, `${JSON.stringify([...ctx.touched].sort())}\n`);
   } catch {
-    // The save stands; only a restart would forget which areas it was in.
+    // The save stands; only a restart would forget which saves were in.
+    return;
+  }
+  excludeNikos(ctx.root, file, ctx.run);
+}
+
+/** Leaves .nikos/ out of git, in the repo's own exclude file, unless git ignores this file already. */
+function excludeNikos(root: string, file: string, run: Runner): void {
+  if (!isGit(root, run)) return;
+  const rel = file.slice(root.length + 1).split(sep).join("/");
+  if (gitIn(root, ["check-ignore", "-q", rel], run).status === 0) return;
+  const exclude = gitIn(root, ["rev-parse", "--git-path", "info/exclude"], run).stdout.trim();
+  if (!exclude) return;
+  const path = resolve(root, exclude);
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, "# nikOS: the saves not yet committed from nikos serve or nikos plan serve\n/.nikos/\n");
+  } catch {
+    // Without the exclude, .nikos/ shows as untracked: the save still stands.
   }
 }
 
-/** The areas the git buttons commit: the ones saved to and not committed yet, and no other area's files. */
-function savedAreas(ctx: Ctx): string[] {
+/** The paths the git buttons work on: what the saves not committed wrote, and no other file. */
+function savePaths(ctx: Ctx): string[] {
   return [...ctx.touched].sort();
 }
 
-/** The paths the git buttons work on: the planning/ folders of the areas saved to. */
-function savePaths(ctx: Ctx): string[] {
-  return savedAreas(ctx).map((a) => `planning/${a}`);
+/** The commit message a click makes when none is typed: the plan's areas, or a map's keys. */
+function defaultMessage(ctx: Ctx, count: number): string {
+  if (ctx.kind === "map") {
+    const keys = [...new Set([...ctx.touched].map((p) => p.split("/")[1] ?? "").filter(Boolean))].sort();
+    return `Update the ${keys.join(", ")} story map${keys.length > 1 ? "s" : ""}`;
+  }
+  const areas = [...ctx.touched].map((p) => p.replace(/^planning\//, "")).sort();
+  return `nikos: plan changes to ${areas.join(", ")} (${count})`;
 }
 
 /** What the pending bar shows: the saved files not yet committed, the branch, and the forge's commands. */
@@ -318,19 +371,17 @@ function gitRequest(ctx: Ctx, path: string, body: Record<string, any>, res: Serv
   if (path === "/api/git/commit") {
     if (onBaseBranch(branch, base)) return send(res, 400, { error: `Saves are on ${branch}, the base branch. Make a save first, so it goes on a nikos branch` });
     // Exactly the files the pending bar lists: never a whole folder, so an untracked stray file is not taken.
-    // In a plan dashboard that is the areas saved to, and no other area's files.
+    // That is the areas saved to in a plan, or the files a map's saves wrote, and no other file.
     const files = statusOf(root, savePaths(ctx), run).map(pathOf);
     if (!files.length) return send(res, 400, { error: "Nothing to commit" });
     const secret = files.find(looksSecret);
     if (secret) return send(res, 400, { error: `Not committing ${secret}: it looks like a secret. Remove it from the repo, or commit it by hand` });
-    const changed = files.length;
-    const what = `plan changes to ${savedAreas(ctx).join(", ")}`;
-    const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : `nikos: ${what} (${changed})`;
+    const message = typeof body.message === "string" && body.message.trim() ? body.message.trim() : defaultMessage(ctx, files.length);
     const r = commitPaths(root, files, message, run);
     if (!r.ok) return send(res, 400, { error: r.error });
-    // Committed: no area is waiting now, so a restart has none to remember.
+    // Committed: nothing is waiting now, so a restart has nothing to remember.
     ctx.touched.clear();
-    keepSaved(root, ctx.touched);
+    keepSaved(ctx);
     return send(res, 200, { committed: r.sha, message, branch });
   }
   if (path === "/api/git/push") {
