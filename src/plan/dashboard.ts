@@ -7,7 +7,7 @@ import { alignsList, laddersOf, linkedOf } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
 import { below, readCache, type BetDelivery, type DeliveryWarning, type PlanDeliveries, type RepoRead, type StoryRow } from "./delivery.js";
-import { areaFile, areaHolding, chainOf, findArea, listAreas, parentOf } from "./repo.js";
+import { areaAlignmentProblems, areaFile, areaHolding, chainOf, companyIds, companyYear, findArea, listAreas, parentOf, type Entry } from "./repo.js";
 
 /** One area in the tree, company first, then each area below it. */
 export interface AreaNode {
@@ -73,6 +73,8 @@ export interface DashKr extends KrRef {
 /** A bet as a row of the ladder: its outcome, where it sits, and its delivery when it has any. */
 export interface BetRef {
   id: string;
+  /** What the bet is, in a few words, when it has a title. The page shows it in place of the id. */
+  title?: string;
   rel: string;
   /** The bets it aligns to, by bare id. */
   aligns: string[];
@@ -91,6 +93,10 @@ export interface DashBet extends BetRef {
   starts: string;
   review_on: string;
   deadline: string;
+  /** How sure the team is of the bet. The edit form starts from it. */
+  confidence: "low" | "medium" | "high";
+  /** The hash of the bet's file as read: a save from the page sends it back, so a file changed since fails. */
+  version: string;
   krs: { primary: string | null; also: string[] };
   /** The bets above it that it aligns to, found in the company. */
   aligns_to: BetRef[];
@@ -121,10 +127,36 @@ export interface UnlinkedRef {
   text: string;
 }
 
+/** One thing a form can pick: a key result or a bet, by its id, labelled with its title and held in an area. */
+export interface Choice {
+  value: string;
+  label: string;
+  /** The area that holds it, as people write it: company, departments/finance. Its name is in the page's names. */
+  area: string;
+}
+
+/** What the dashboard's forms offer for an area, built from the whole company. */
+export interface Choices {
+  /** Every key result a bet may aim at: the company's and each department's. */
+  aimKrs: Choice[];
+  /** The key results a key result in this area may align to: those in a level above it. Empty for the company. */
+  alignKrs: Choice[];
+  /** The bets a bet in this area may align to: those in a level above it. Empty for the company. */
+  alignBets: Choice[];
+  /** The quarters a department's new key result may be for: the page's quarter, the next three in the year, and any with key results. Empty above a department. */
+  periods: string[];
+  /** The objectives already written for key results in this area, for the form to suggest. */
+  objectives: string[];
+}
+
 export interface AreaPage {
   plan: { rel: string; level: AreaLevel; id: string; name: string; period?: string; reportsTo: string | null };
   today: string;
   tree: AreaTree;
+  /** Every area's name, by its rel: show these, not the rel. */
+  names: Record<string, string>;
+  /** The choices for the forms: see Choices. */
+  choices: Choices;
   breadcrumb: Crumb[];
   /** The quarters that have department key results, oldest first. */
   periods: string[];
@@ -158,6 +190,8 @@ export interface AreaPage {
 
 export interface DrillBet {
   id: string;
+  /** The bet's title, when it has one. The page shows it in place of the id. */
+  title?: string;
   rel: string;
   outcome: string;
   /** primary and also: the bet aims at the key result. via: a bet below one that does. */
@@ -182,7 +216,7 @@ export interface KrDrill {
 export interface BetDrill {
   bet: BetRef;
   /** Each bet below this one through aligns_to, nearest first. Each is listed once. */
-  children: { id: string; rel: string; level: AreaLevel; outcome: string; delivery?: BetDelivery }[];
+  children: { id: string; title?: string; rel: string; level: AreaLevel; outcome: string; delivery?: BetDelivery }[];
   maps: DrillMap[];
 }
 
@@ -351,6 +385,10 @@ const dateOf = (v: unknown): string => (typeof v === "string" ? v : v instanceof
 interface BetRec {
   id: string;
   area: Area;
+  title?: string;
+  /** The hash of the bet's file, as read. */
+  version: string;
+  confidence: "low" | "medium" | "high";
   owner: string;
   team: string;
   hypothesis: string;
@@ -372,10 +410,14 @@ function betRecords(repo: string): { bets: Map<string, BetRec>; problems: string
   for (const area of listAreas(repo)) {
     for (const id of betIds(area.dir)) {
       try {
-        const m = loadBet(area.dir, id).meta;
+        const loaded = loadBet(area.dir, id);
+        const m = loaded.meta;
         bets.set(id, {
           id,
           area,
+          ...(typeof m.title === "string" && m.title.trim() ? { title: m.title } : {}),
+          version: loaded.hash,
+          confidence: m.confidence ?? "medium",
           owner: m.owner ?? "",
           team: m.team ?? "",
           hypothesis: m.hypothesis ?? "",
@@ -430,6 +472,7 @@ function betRefOf(rec: BetRec, deliveries: PlanDeliveries): BetRef {
   const delivery = deliveries.bets.get(rec.id);
   return {
     id: rec.id,
+    ...(rec.title ? { title: rec.title } : {}),
     rel: rec.area.rel,
     aligns: rec.aligns,
     outcome: rec.outcome,
@@ -456,7 +499,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   if (area.level !== "company") {
     const picked = pickPeriod(periods, opts.period, today);
     period = picked.period;
-    if (picked.notice) notices.push(picked.notice);
+    // Only departments own key results, so the notice about a quarter with none is theirs. A group or team's links still carry the quarter.
+    if (picked.notice && area.level === "department") notices.push(picked.notice);
   }
   const ownBets = [...records.values()].filter((b) => b.area.rel === area.rel);
 
@@ -523,6 +567,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       starts: b.starts,
       review_on: b.review_on,
       deadline: b.deadline,
+      confidence: b.confidence,
+      version: b.version,
       krs: b.krs,
       aligns_to: aligns,
     };
@@ -583,6 +629,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     },
     today,
     tree,
+    names: Object.fromEntries(tree.map((n) => [n.rel, n.name])),
+    choices: choicesOf(repo, area, records, period, today, periods),
     breadcrumb: breadcrumbOf(tree, area.rel),
     periods,
     ...(period !== undefined ? { period } : {}),
@@ -601,6 +649,64 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   };
 }
 
+/** The quarter after a quarter: 2026-Q4 is 2027-Q1. */
+const nextQuarter = (q: string): string => (q.endsWith("Q4") ? `${Number(q.slice(0, 4)) + 1}-Q1` : `${q.slice(0, 5)}Q${Number(q.slice(6)) + 1}`);
+
+/**
+ * The choices a page's forms offer, from the whole company. An area's own list is for its level: a key result
+ * aligns to one above it, and so does a bet. Titles are the labels; a bet without one is labelled by its id.
+ */
+function choicesOf(repo: string, area: Area, records: Map<string, BetRec>, period: string | undefined, today: string, periods: string[]): Choices {
+  const entries = companyIds(repo);
+  const krs = entries.filter((e) => e.kind === "key result");
+  const krLabel = (e: Entry): string => {
+    try {
+      return String(loadKr(e.area.dir, e.id).data.title ?? e.id);
+    } catch {
+      return e.id; // reported with the area's own files
+    }
+  };
+  const krChoice = (e: Entry): Choice => ({ value: e.id, label: krLabel(e), area: e.area.rel });
+  const betChoice = (e: Entry): Choice => ({ value: e.id, label: records.get(e.id)?.title ?? e.id, area: e.area.rel });
+  const above = (e: Entry, kind: "kr" | "bet") => areaAlignmentProblems(area, [e.id], kind).length === 0;
+
+  let quarters: string[] = [];
+  if (area.level === "department") {
+    // Only quarters within the company's year: a quarter outside it is refused when a key result is made. With no
+    // key results shown, the base is the year's first quarter when today's quarter is outside the year.
+    const year = companyYear(repo);
+    const current = quarterOf(today);
+    const base = period ?? (year && !current.startsWith(`${year}-`) ? `${year}-Q1` : current);
+    const out = new Set<string>([base, ...periods]);
+    let q = base;
+    for (let i = 0; i < 3; i++) {
+      q = nextQuarter(q);
+      out.add(q);
+    }
+    quarters = [...out].filter((x) => !year || x.startsWith(`${year}-`)).sort();
+  }
+  let objectives: string[] = [];
+  if (area.level === "company" || area.level === "department") {
+    const found = new Set<string>();
+    for (const id of krIds(area.dir)) {
+      try {
+        const text = loadKr(area.dir, id).data.objective;
+        if (typeof text === "string" && text.trim()) found.add(text);
+      } catch {
+        // reported with the area's own files
+      }
+    }
+    objectives = [...found].sort();
+  }
+  return {
+    aimKrs: krs.map(krChoice),
+    alignKrs: krs.filter((e) => above(e, "kr")).map(krChoice),
+    alignBets: entries.filter((e) => e.kind === "bet" && above(e, "bet")).map(betChoice),
+    periods: quarters,
+    objectives,
+  };
+}
+
 /** A key result's drill-down: the bets that aim at it, and the bets below those, grouped by the area that holds them. */
 export function drillKr(repo: string, krId: string, deliveries: PlanDeliveries, now: Date = new Date()): KrDrill | undefined {
   const kr = aboveKr(repo, krId, now.toISOString().slice(0, 10));
@@ -615,6 +721,7 @@ export function drillKr(repo: string, krId: string, deliveries: PlanDeliveries, 
     const delivery = deliveries.bets.get(id);
     areas.get(rec.area.rel)!.bets.push({
       id,
+      ...(rec.title ? { title: rec.title } : {}),
       rel: rec.area.rel,
       outcome: rec.outcome,
       aims: aim,
@@ -636,7 +743,7 @@ export function drillBet(repo: string, betId: string, deliveries: PlanDeliveries
     children: below(betId, childrenOf(bets)).map((id) => {
       const c = bets.get(id)!;
       const delivery = deliveries.bets.get(id);
-      return { id, rel: c.area.rel, level: c.area.level, outcome: c.outcome, ...(delivery ? { delivery } : {}) };
+      return { id, ...(c.title ? { title: c.title } : {}), rel: c.area.rel, level: c.area.level, outcome: c.outcome, ...(delivery ? { delivery } : {}) };
     }),
     maps: (deliveries.bets.get(betId)?.delivery?.maps ?? []).map(maps),
   };

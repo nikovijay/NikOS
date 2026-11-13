@@ -87,7 +87,7 @@ describe("POST /api/op", () => {
     const srv = await start(root);
     const res = await ok(srv, "/api/op", opBody("kr.edit", { kr: "kr-1" }, { title: "" }, hash(readText(root, "planning/company/krs/kr-1.yaml"))));
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("A key result needs a title (--title)");
+    expect(res.body.error).toBe("A key result needs a title");
   });
 
   it("refuses an op a planning area doesn't make, with a 400", async () => {

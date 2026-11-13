@@ -94,6 +94,7 @@ nikos plan add team WEB --name "Checkout web" --home payments
 nikos plan kr new revenue --in company --title "Annual recurring revenue" --owner Niko --baseline 0 --target 60000 --unit USD
 nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --direction down --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
+nikos plan bet new --in payments --title "Faster checkout" --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days   # the id is made from the title
 nikos plan checkin close-days 10 --note "First week of auto-match"
 nikos plan checkin close-days 10.5 --date 2027-01-03   # a back-dated check-in goes in date order
 nikos plan kr new close-process --in finance --title "Close process" --owner Mira --kind milestone --step "Map steps" --step "Pilot" --step "Roll out" --period 2027-Q1
@@ -214,12 +215,20 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
   fixed `--port` keeps it between runs).
 - **The place is in the link.** Every link carries the area, for example
   `?at=departments/finance`, so a page can be bookmarked or shared.
-- **Saves are small and never pushed.** A key result has a check-in form, with a
-  date that is today unless you pick another, and the
-  Bets page has a form to add a bet. Each save goes in the area's own folder, on
+- **Names, not ids.** Areas show their names, and a bet shows its title, with its
+  id after it. A new key result or bet made with a title gets its id from the
+  title. The id never changes after that.
+- **Add and edit.** The Key results and OKRs views have a form to add a key result
+  (company and departments; a department's takes a quarter). Bets have a form to
+  add a bet, at every level. Each key result and bet has an Edit form with its
+  fields filled in, and a bet has a form to record its review. A key result has a
+  check-in form, with a date that is today unless you pick another. Dropdowns
+  offer only what the plan allows: a bet aims at a key result, and aligns to a bet
+  above it.
+- **Saves are small and never pushed.** Each save goes in the area's own folder, on
   a `nikos/plan-<area>-<date>` branch. A bar at the top lists the saved changes:
   Commit commits only those areas' files, and Push is the only thing that sends
-  them. Other changes are made with the `nikos plan` commands above.
+  them. Anything the forms don't cover is made with the `nikos plan` commands above.
 
 A dashboard that can't refresh the code repos on start still opens, and says why
 at the top of every page. `--offline` skips the refresh.

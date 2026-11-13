@@ -34,17 +34,19 @@ Set it up
   plan add team <KEY>        Add a team. It reports to a department or group (--name, --home <id>)
 
 Key results and bets
-  plan kr new <id>     Add a key result (--in <area>, --title, --owner, --baseline, --target,
+  plan kr new [<id>]   Add a key result (--in <area>, --title, --owner, --baseline, --target,
                        --period 2027-Q1 for a department, --by, --unit, --objective, --aligns-to,
                        --direction up|down for a figure that should go down, such as days to close)
+                       The id is optional with --title: it's made from the title (quick-win, quick-win-2)
                        A milestone has steps instead: --kind milestone --step "<name>" (repeat --step)
                        --ladders-up "<text>" says what it ladders up to until a link exists (not for a company key result)
   plan kr target <id> <value>   Move a key result's target. The original stays recorded
   plan kr direction <id> up|down   Change which way a key result should move
   plan kr step <id> "<name>"    Mark one step of a milestone done (--date, default today)
   plan checkin <kr-id> <value>  Record where a key result is now (--note, --evidence, --date). Not for a milestone: use plan kr step
-  plan bet new <id>    Add a bet (--in <area>, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
+  plan bet new [<id>]  Add a bet (--in <area>, --title, --owner, --hypothesis, --review YYYY-MM-DD, --kr,
                        --also, --aligns-to, --starts, --deadline, --confidence, --evidence, --ladders-up)
+                       The id is optional with --title: it's made from the title, as for a key result
   plan bet review <id> <continue|change|stop|complete>   Record a review (--why, --outcome)
   plan ladder          The items whose ladders_up text has no link yet (--json)
   plan ladder <id>     What an item could link to, ranked by the words it shares with its text (--json)
@@ -109,7 +111,9 @@ function betLine(area: Area, id: string): string {
   const b = loadBet(area.dir, id).meta;
   const krs = [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean);
   const aligns = alignsList(b.aligns_to);
-  return `    ${id} — outcome: ${b.outcome} · review on ${b.review_on}${krs.length ? ` · aims at ${krs.join(", ")}` : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(b, "bet")}`;
+  // A bet's title, when it has one, reads before its outcome; the id is what links name.
+  const title = typeof b.title === "string" && b.title.trim() ? `${b.title} · ` : "";
+  return `    ${id} — ${title}outcome: ${b.outcome} · review on ${b.review_on}${krs.length ? ` · aims at ${krs.join(", ")}` : ""}${aligns.length ? ` · aligns to ${aligns.join(", ")}` : ""}${notLinkedYet(b, "bet")}`;
 }
 
 /** The repos planning/repos.yaml lists. A file that doesn't load lists none here: plan validate reports it. */
@@ -228,6 +232,7 @@ export function planStatusJson(repo: string, area?: Area, deliveries: PlanDelive
         const b = loadBet(a.dir, id).meta;
         return {
           id,
+          title: typeof b.title === "string" && b.title.trim() ? b.title : null,
           outcome: b.outcome,
           reviewOn: b.review_on,
           aimsAt: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
@@ -294,7 +299,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         }
         break;
       case "kr":
-        if (sub === "new" && id) {
+        if (sub === "new") {
           const where = area("key result");
           const path = newKr(
             {
@@ -340,11 +345,12 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         }
         break;
       case "bet":
-        if (sub === "new" && id) {
+        if (sub === "new") {
           const where = area("bet");
           const path = newBet(
             {
               id,
+              title: opt("title"),
               owner: opt("owner") ?? "",
               hypothesis: opt("hypothesis") ?? "",
               reviewOn: opt("review") ?? "",
@@ -482,7 +488,25 @@ export async function runPlanRepo(args: string[]): Promise<number> {
     console.error(`✗ Something is missing. How to use it:\n\n${line.join("\n")}\n\nSee every plan command: nikos plan help`);
     return 1;
   } catch (err) {
-    console.error(`✗ ${(err as Error).message}`);
+    console.error(`✗ ${withFlag((err as Error).message)}`);
     return 1;
   }
+}
+
+/** The flag that gives each missing field. The messages are shared with the dashboard, so they name no flags; the command line adds them. */
+const FLAGS: [RegExp, string][] = [
+  [/^A (bet|key result) needs a title\b/, "--title"],
+  [/^A (bet|key result) needs an owner\b/, "--owner"],
+  [/^A bet needs a hypothesis\b/, "--hypothesis"],
+  [/^A bet needs a review date\b/, "--review YYYY-MM-DD"],
+  [/^A key result needs a due date\b/, "--by YYYY-MM-DD"],
+  [/^A key result needs a starting number and a target number\b/, "--baseline and --target"],
+  [/^A milestone needs at least one step\b/, "--step"],
+  [/^A review needs a reason\b/, "--why"],
+];
+
+/** A refusal with the flag that fixes it, when it names a missing field. */
+export function withFlag(message: string): string {
+  const hit = FLAGS.find(([re]) => re.test(message));
+  return hit ? `${message} (${hit[1]})` : message;
 }

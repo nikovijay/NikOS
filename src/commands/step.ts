@@ -35,17 +35,24 @@ export function newStep(input: { title: string; activity: string; id?: string; m
   return { id, validation: validate(mapDir) };
 }
 
-/** Add an activity to the story map, e.g. an area of an existing product or an imported epic. Returns its id; an existing one is left as it is. */
-export function newActivity(input: { title: string; id?: string; map?: string }, dir: string): string {
+/**
+ * Add an activity to the story map, e.g. an area of an existing product or an imported epic. Returns its id; an existing one is
+ * left as it is, unless strict: then it is refused, so a second person's new activity can't quietly take the first one's place.
+ */
+export function newActivity(input: { title: string; id?: string; map?: string; strict?: boolean }, dir: string): string {
   const title = input.title?.trim();
   if (!title) throw new Error("An activity needs a title");
-  const mapDir = resolveStoryMap(dir, { map: input.map }).dir;
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const mapDir = ref.dir;
   const mapPath = join(mapDir, "storymap.yaml");
   const map = parseDocument(read(mapPath));
   const id = input.id ?? slugify(title);
   const activities = map.get("activities", true);
   if (!isSeq(activities)) throw new Error("storymap.yaml has no activities list");
-  if (activities.items.some((a) => isMap(a) && a.get("id") === id)) return id;
+  if (activities.items.some((a) => isMap(a) && a.get("id") === id)) {
+    if (input.strict) throw new Error(`There is already an activity '${id}' in maps/${ref.id}`);
+    return id;
+  }
   activities.add(map.createNode({ id, title }));
   store().write(mapPath, map.toString(yamlOpts));
   return id;

@@ -184,7 +184,8 @@ export function switchNewBranchFrom(root: string, name: string, from: string, ru
 }
 export function commitPaths(root: string, paths: string[], message: string, run: Runner = realRun): { ok: boolean; sha?: string; error?: string } {
   if (!paths.length) return { ok: false, error: "Nothing to commit" };
-  const add = gitIn(root, ["add", "--", ...paths], run);
+  // -A stages a removed file too: a story moved into another activity folder shows its old path as removed.
+  const add = gitIn(root, ["add", "-A", "--", ...paths], run);
   if (add.status !== 0) return { ok: false, error: firstLine(add.stderr) || "git add failed" };
   const staged = gitIn(root, ["diff", "--cached", "--name-only", "--", ...paths], run);
   if (!staged.stdout.trim()) return { ok: false, error: "Nothing to commit" };
