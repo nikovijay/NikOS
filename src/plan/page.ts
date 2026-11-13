@@ -6,6 +6,7 @@
 import type { AreaLevel } from "../planning/model.js";
 import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import { SAVE_BAR_CSS, saveBarScript } from "../lib/save-bar.js";
+import { DESIGN_CSS } from "../lib/design.js";
 import { idFromTitle } from "../planning/rules.js";
 import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
@@ -113,88 +114,276 @@ function labelOf(page: AreaPage, id: string): string {
   return page.choices.aimKrs.find((c) => c.value === id)?.label ?? page.choices.alignBets.find((c) => c.value === id)?.label ?? id;
 }
 
-/** A bet's line in a list: its name linked to its drill-down, its outcome, owner and delivery. from names the area it's in, when it isn't this one. */
-function betLine(b: BetRef | DashBet, page: AreaPage, from?: string): string {
-  const owner = b.owner ? `. Owner: ${esc(b.owner)}` : "";
-  const where = from ? ` <span class="where">${esc(from)}</span>` : "";
-  return `<li>${betLink(b, page.period)}${betId(b)}${where} — ${esc(b.outcome)}${owner}. Delivery: ${esc(deliveryText(b.delivery))}</li>`;
+/** A bet's delivery as a pill: Shipped, Building or Not started from its own maps, through the bets below, or none yet. */
+export function deliveryPill(d: BetDelivery | undefined): string {
+  if (d?.source === "own" && d.delivery) {
+    const st = d.delivery.status;
+    return `<span class="pill ${st === "Shipped" ? "s-good" : st === "Building" ? "s-accent" : "s-idle"}">${esc(st)}</span>`;
+  }
+  if (d?.source === "via") return `<span class="pill s-accent">Through the bets below</span>`;
+  return `<span class="pill s-idle">No story map yet</span>`;
 }
 
-export const STYLE = `:root{--bg:#fbfbf8;--fg:#1d1d1b;--muted:#6b6b66;--line:#dcdcd4;--card:#ffffff;--purple:#5b3fb0;--purple-bg:#efeafb;--green:#23663f;--green-bg:#e4f2e8;--grey:#5d5d58;--grey-bg:#eeeeea;--notice:#fff4d6;--notice-fg:#4a3800;--link:#2b59c3;--error:#9b1c1c}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#171716;--fg:#ecebe6;--muted:#a3a39b;--line:#3a3a36;--card:#21211f;--purple:#c2b2f5;--purple-bg:#2d2840;--green:#94d6aa;--green-bg:#1f3428;--grey:#b8b8b0;--grey-bg:#2a2a27;--notice:#3a3014;--notice-fg:#ffe7a3;--link:#9bb8ff;--error:#ffb3b3}}
-:root[data-theme="dark"]{--bg:#171716;--fg:#ecebe6;--muted:#a3a39b;--line:#3a3a36;--card:#21211f;--purple:#c2b2f5;--purple-bg:#2d2840;--green:#94d6aa;--green-bg:#1f3428;--grey:#b8b8b0;--grey-bg:#2a2a27;--notice:#3a3014;--notice-fg:#ffe7a3;--link:#9bb8ff;--error:#ffb3b3}
-body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;margin:0 auto;max-width:72rem;padding:1rem;line-height:1.5;box-sizing:border-box}
-a{color:var(--link)}
-[hidden]{display:none!important}
-a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
-.top{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between}
-.altitudes a,.altitudes span{display:inline-block;padding:.25rem .6rem;border:1px solid var(--line);border-radius:999px;margin-right:.25rem;text-decoration:none}
-.altitudes a.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
-.altitudes span{color:var(--muted)}
-.crumbs{margin:.75rem 0 .25rem;color:var(--muted)}
-.quarters{margin:.25rem 0;color:var(--muted)}
+/** A bet's outcome as an outlined pill, apart from its delivery: shipped is not won. */
+export function outcomePill(outcome: string): string {
+  const cls = outcome === "open" ? "o-open" : outcome === "won" ? "o-won" : outcome === "lost" ? "o-lost" : outcome === "stopped" ? "o-stopped" : "o-other";
+  const word = outcome ? outcome.charAt(0).toUpperCase() + outcome.slice(1) : "Open";
+  return `<span class="o-pill ${cls}" title="Outcome, called at review from key result evidence">${esc(word)}</span>`;
+}
+
+/** A bet's line in a list: its name linked to its drill-down, its delivery and outcome, then its owner and delivery in words. from names the area it's in, when it isn't this one. */
+function betLine(b: BetRef | DashBet, page: AreaPage, from?: string): string {
+  const owner = b.owner ? `Owner: ${esc(b.owner)}. ` : "";
+  const where = from ? ` <span class="where">${esc(from)}</span>` : "";
+  return `<li>${betLink(b, page.period)}${betId(b)}${where} ${deliveryPill(b.delivery)} ${outcomePill(b.outcome)}<span class="said">${owner}Delivery: ${esc(deliveryText(b.delivery))}</span></li>`;
+}
+
+const DAY = 864e5;
+const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+const shortDate = (iso: string) => {
+  const d = new Date(dayOf(iso));
+  return Number.isNaN(d.getTime()) ? iso : `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
+
+/** Where a key result's period starts: its quarter's first day, else the first day of the year it is due in. */
+function periodStart(k: KrRef): string | undefined {
+  const q = /^(\d{4})-Q([1-4])$/.exec(k.period ?? "");
+  if (q) return `${q[1]}-${String((Number(q[2]) - 1) * 3 + 1).padStart(2, "0")}-01`;
+  const y = /^(\d{4})/.exec(k.by);
+  return y ? `${y[1]}-01-01` : undefined;
+}
+
+/** How far through its period a key result is on a day, 0 to 1, or undefined when its dates don't say. */
+function paceOf(k: KrRef, today: string): number | undefined {
+  const start = periodStart(k);
+  if (!start || !k.by) return undefined;
+  const span = dayOf(k.by) - dayOf(start);
+  if (!(span > 0)) return undefined;
+  return Math.max(0, Math.min(1, (dayOf(today) - dayOf(start)) / span));
+}
+
+/** On track, at risk or off track, from progress against how much of the period has gone. None until it has a check-in or a step done. */
+function krStatus(k: KrRef, today: string): { label: string; cls: string; tone: string } | undefined {
+  const started = k.kind === "milestone" ? k.steps.some((s) => s.done) : !!k.latest;
+  const pace = paceOf(k, today);
+  if (!started || pace === undefined || !Number.isFinite(k.progress)) return undefined;
+  const gap = pace - Math.max(0, k.progress);
+  if (gap <= 0.1) return { label: "On track", cls: "s-good", tone: "good" };
+  if (gap <= 0.25) return { label: "At risk", cls: "s-warn", tone: "warn" };
+  return { label: "Off track", cls: "s-bad", tone: "bad" };
+}
+
+const statusPill = (k: KrRef, today: string) => {
+  const st = krStatus(k, today);
+  return st ? `<span class="pill ${st.cls}">${st.label}</span>` : `<span class="pill s-idle">${k.kind === "milestone" ? "No steps done yet" : "No check-ins yet"}</span>`;
+};
+
+/** The progress bar, with a tick for how far through the period it is. */
+function krBar(k: KrRef, today: string): string {
+  const p = Number.isFinite(k.progress) ? Math.max(0, Math.min(1, k.progress)) : 0;
+  const pace = paceOf(k, today);
+  const tone = krStatus(k, today)?.tone ?? "";
+  const label = `${Math.round(p * 100)}% of the way${pace === undefined ? "" : `; ${Math.round(pace * 100)}% of the period has gone`}`;
+  return `<div class="bar ${tone}" role="img" aria-label="${esc(label)}"><i style="width:${(p * 100).toFixed(1)}%"></i>${pace === undefined ? "" : `<span class="pace" style="left:${(pace * 100).toFixed(1)}%"></span>`}</div>`;
+}
+
+/** A small chart of a key result's check-ins from its baseline, with its target as a dashed line. */
+function sparkOf(k: DashKr): string {
+  const pts = [...(k.checkins ?? [])];
+  const start = periodStart(k);
+  if (!pts.length || !start || !k.by) return "";
+  const values = [k.baseline, k.target, ...pts.map((c) => c.value)];
+  const lo = Math.min(...values), hi = Math.max(...values), span = dayOf(k.by) - dayOf(start);
+  if (!(span > 0)) return "";
+  const X = (d: string) => 2 + (92 * Math.max(0, Math.min(1, (dayOf(d) - dayOf(start)) / span)));
+  const Y = (v: number) => 25 - (22 * (v - lo)) / (hi - lo || 1);
+  const line = [`${X(start).toFixed(1)},${Y(k.baseline).toFixed(1)}`, ...pts.map((c) => `${X(c.date).toFixed(1)},${Y(c.value).toFixed(1)}`)].join(" ");
+  const last = pts[pts.length - 1]!;
+  return `<svg class="spark" viewBox="0 0 96 28" aria-hidden="true"><line x1="2" x2="94" y1="${Y(k.target).toFixed(1)}" y2="${Y(k.target).toFixed(1)}" stroke="var(--good)" stroke-dasharray="3 3" stroke-width="1"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.8"/><circle cx="${X(last.date).toFixed(1)}" cy="${Y(last.value).toFixed(1)}" r="2.6" fill="var(--accent)"/></svg>`;
+}
+
+/** A figure with its unit: "68.4 %", "31 s". */
+const withUnit = (v: number, unit: string) => `${v}${unit ? (unit === "%" ? "%" : ` ${unit}`) : ""}`;
+
+/** The dashboard's own parts, on the shared design: the shell, the cards, the ladder, the timeline and the forms. */
+const PAGE_CSS = `[hidden]{display:none!important}
+body{margin:0}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;max-width:1440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.side{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:1.1rem;color:var(--fg);text-decoration:none}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;flex:none}
+.brand-mark svg{width:18px;height:18px}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:.75rem;color:var(--muted);line-height:1.2}
+.views{display:flex;flex-direction:column;gap:2px}
+.views a{display:block;padding:7px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font-weight:500;font-size:.93rem}
+.views a:hover{background:var(--surface-2)}
+.views a[aria-current="page"]{background:var(--accent-weak);color:var(--accent)}
+.side-areas{display:grid;gap:2px;border-top:1px solid var(--line);padding-top:12px}
+.side-areas a{font-size:.88rem;color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:6px}
+.side-areas a:hover{color:var(--fg);background:var(--surface-2)}
+.main{min-width:0;padding-top:16px}
+.top{display:grid;gap:10px;padding-block:4px 12px;border-bottom:1px solid var(--line)}
+.top-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.top-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+.altitudes{display:inline-flex;flex-wrap:wrap;background:var(--surface-2);border-radius:10px;padding:3px;gap:2px}
+.altitudes a,.altitudes span{padding:6px 12px;border-radius:8px;font-weight:500;font-size:.9rem;color:var(--muted);text-decoration:none}
+.altitudes a:hover{color:var(--fg)}
+.altitudes a.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.altitudes span{font-size:.82rem}
+.picker label{display:flex;align-items:center;gap:8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.picker select{text-transform:none;letter-spacing:0;font-size:.92rem;color:var(--fg);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:6px 10px;font-weight:500;max-width:100%}
+.share-btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:.85rem;cursor:pointer}
+.share-btn:hover,.theme-toggle:hover{border-color:var(--line-strong)}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;font-size:.88rem;color:var(--muted)}
+.crumbs a{color:var(--muted);text-decoration:none;padding:1px 4px;border-radius:4px}
+.crumbs a:hover{color:var(--fg);background:var(--surface-2)}
+.crumbs a:last-child{color:var(--fg);font-weight:600}
+.page-head{display:grid;gap:6px;padding-top:22px;max-width:72ch}
+h1{font-size:1.9rem;line-height:1.15;margin:0}
+h1 .id{font-family:var(--f-body);font-size:.5em;font-weight:500;letter-spacing:0;vertical-align:middle}
+h2{font-size:1.2rem;line-height:1.3;margin:28px 0 12px}
+h3{font-size:1rem;margin:18px 0 8px}
+h4{font-size:.8rem;margin:4px 0 8px;font-family:var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.quarters{margin:4px 0 0;color:var(--muted);font-size:.9rem}
 .quarters .on{color:var(--fg);font-weight:600}
-.views{display:flex;flex-wrap:wrap;gap:.25rem;border-bottom:1px solid var(--line);margin:.75rem 0 1rem}
-.views a{padding:.45rem .8rem;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--muted);text-decoration:none;border-radius:.4rem .4rem 0 0}
-.views a:hover{color:var(--fg);background:var(--purple-bg)}
-.views a.on,.views a[aria-current="page"]{color:var(--purple);border-bottom-color:var(--purple);font-weight:600}
-.notice{background:var(--notice);color:var(--notice-fg);padding:.5rem .75rem;border-radius:.4rem}
-${SAVE_BAR_CSS}
-.save button{font:inherit;margin-left:.4rem;padding:.2rem .6rem}
-.save{margin:.25rem 0}
-.save:not(.form){display:inline-flex;flex-wrap:wrap;gap:.4rem;align-items:center}
-.save:not(.form) input{font:inherit;padding:.15rem .3rem;max-width:11rem}
-input:not([type=checkbox]),select,textarea{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:.3rem}
-.save-msg{color:var(--muted);font-size:.85rem}
-.save-msg.error{color:var(--error)}
-.id{color:var(--muted);font-family:ui-monospace,monospace;font-size:.85em}
-.where{color:var(--muted);font-size:.9em}
-.meta{color:var(--muted);margin:.1rem 0}
-h1{margin:.25rem 0}h2{margin-top:1.5rem;font-size:1.15rem}h3{font-size:1rem;margin:1rem 0 .25rem}h4{font-size:.95rem;margin:.2rem 0 .4rem}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid var(--line);padding:.35rem .4rem;vertical-align:top}
-.ladder-scroll{overflow-x:auto;padding-bottom:.5rem}
+.notice{background:var(--notice);color:var(--notice-fg);padding:10px 14px;border-radius:var(--r);font-size:.9rem;margin:12px 0 0}
+.id{color:var(--muted);font-family:var(--f-mono);font-size:.8em}
+.where{display:inline-block;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--surface-2);border-radius:4px;padding:0 6px;line-height:1.7}
+.meta{color:var(--muted);margin:4px 0;font-size:.9rem}
+ul{padding-left:1.2rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:12px 0}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:18px 0}
+.strip>div{background:var(--surface);padding:12px 16px;display:grid;gap:4px}
+.strip .big{font-family:var(--f-display);font-size:1.5rem;font-weight:700;line-height:1}
+.strip .parts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.82rem;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.kr-card{display:grid;gap:10px;align-content:start;margin:0;min-width:0}
+.kr-card .head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.kr-card .head a{font-weight:600;color:var(--fg);text-decoration:none}
+.kr-card .head a:hover{text-decoration:underline}
+.figure{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.figure .now{font-family:var(--f-display);font-size:1.6rem;font-weight:700;line-height:1}
+.figure .of{color:var(--muted);font-size:.85rem}
+.bar{position:relative;height:8px;border-radius:99px;background:var(--surface-2)}
+.bar>i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--accent)}
+.bar.good>i{background:var(--good)}.bar.warn>i{background:var(--warn)}.bar.bad>i{background:var(--bad)}
+.bar .pace{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--fg);opacity:.55;border-radius:2px}
+.card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.spark{display:block;width:96px;height:28px}
+.okr{padding:0;overflow:hidden}
+.okr-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.okr-head>div{min-width:0}
+.okr-head a{font-weight:600}
+.okr-body{padding:6px 16px 12px}
+.okr-body>ul,.rows{list-style:none;padding:0;margin:6px 0;display:grid;gap:2px}
+.rows>li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border-radius:8px}
+.rows>li:hover{background:var(--surface-2)}
+.rows .said{flex-basis:100%;font-size:.84rem;color:var(--muted)}
+.o-pill{display:inline-flex;align-items:center;font-size:.75rem;font-weight:600;border-radius:99px;padding:0 9px;line-height:1.7;border:1.5px solid currentColor;white-space:nowrap}
+.o-open{color:var(--muted)}.o-won{color:var(--good)}.o-lost{color:var(--bad)}.o-stopped{color:var(--idle);border-style:dashed}.o-other{color:var(--warn)}
+.bet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.bet-card{margin:0;display:grid;gap:10px;align-content:start;min-width:0}
+.bet-card h3{margin:0;font-size:1.02rem}
+.bet-card .belief{border-left:3px solid var(--accent);padding:2px 0 2px 12px;color:var(--muted);font-size:.92rem;margin:0}
+.bet-card .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.86rem;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0}
+.stack{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2)}
+.stack i{display:block;height:100%}
+.stack .d{background:var(--good)}.stack .b{background:var(--accent)}
+.ladder-scroll{overflow-x:auto;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .ladder{position:relative}
-.ladder svg{position:absolute;left:0;top:0;pointer-events:none;color:var(--muted)}
-.ladder path{fill:none;stroke:currentColor;stroke-width:1.2;opacity:.7}
-.colhead{position:absolute;top:0;font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.grouphead{position:absolute;font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cell{position:absolute;box-sizing:border-box;border-radius:.45rem;padding:.35rem .5rem;overflow:hidden;border:1px solid var(--line);background:var(--card)}
-.cell .t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-.cell .m{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.8rem;color:var(--muted)}
-.cell.above-kr,.cell.above-bet{background:var(--grey-bg);color:var(--grey)}
-.cell.kr{background:var(--purple-bg);border-color:var(--purple)}
-.cell.kr .m{color:var(--purple)}
-.cell.bet{background:var(--green-bg);border-color:var(--green)}
-.cell.bet .m{color:var(--green)}
+.ladder svg{position:absolute;left:0;top:0;pointer-events:none;color:var(--wire)}
+.ladder path{fill:none;stroke:currentColor;stroke-width:1.6}
+.colhead{position:absolute;top:0;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grouphead{position:absolute;font-size:.78rem;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell{position:absolute;border-radius:8px;padding:7px 10px;overflow:hidden;border:1px solid var(--line);background:var(--surface)}
+.cell .t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:.86rem;color:var(--fg);text-decoration:none}
+.cell .t:hover{text-decoration:underline}
+.cell .m{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.75rem;color:var(--muted)}
+.cell.kr,.cell.bet{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.cell.above-kr,.cell.above-bet{background:var(--surface-2)}
 .more{position:absolute;font-size:.85rem;color:var(--muted)}
-.widen{margin:.5rem 0}
-.widen a{margin-right:.75rem}
-.card{border:1px solid var(--line);border-radius:.5rem;padding:.6rem .8rem;margin:.6rem 0;background:var(--card)}
-.empty{border:1px dashed var(--line);border-radius:.5rem;padding:.9rem 1rem;margin:.6rem 0}
-.empty p{margin:.25rem 0}
-.primary{font:inherit;font-weight:600;padding:.4rem .9rem;border-radius:.35rem;border:1px solid var(--purple);background:var(--purple);color:var(--card);cursor:pointer}
-details.add>summary,details.edit>summary,details.form-more>summary{cursor:pointer;color:var(--purple);font-weight:600}
-details.add>summary{padding:.3rem 0}
-details.edit{margin:.5rem 0;border-top:1px dashed var(--line);padding-top:.4rem}
-.sub{margin:.6rem 0}
-form.form{margin:.5rem 0}
-form.form .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem .9rem;align-items:start}
+.widen{display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0 12px}
+.tl{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.tl-row{display:grid;grid-template-columns:minmax(160px,250px) minmax(0,1fr);border-top:1px solid var(--line);align-items:center}
+.tl-row:first-child{border-top:0}
+.tl-label{padding:8px 14px;display:grid;gap:2px;min-width:0;font-size:.86rem}
+.tl-label a{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-label .meta{margin:0;font-size:.76rem}
+.tl-track{position:relative;height:40px;border-left:1px solid var(--line)}
+.tl-head .tl-track{height:28px}
+.tl-month{position:absolute;top:0;bottom:0;border-left:1px dashed var(--line);font-size:.7rem;color:var(--muted);padding:5px 0 0 4px;white-space:nowrap}
+.tl-bar{position:absolute;top:13px;height:14px;border-radius:5px;background:var(--accent-weak);border:1.5px solid var(--accent)}
+.tl-mark{position:absolute;top:13px;width:12px;height:12px;transform:translateX(-50%) rotate(45deg);background:var(--surface);border:2px solid var(--fg);border-radius:2px}
+.tl-mark.due{border-color:var(--good)}
+.tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--bad);opacity:.7}
+.tl-group{padding:7px 14px;background:var(--surface-2);font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;border-top:1px solid var(--line)}
+.tl-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:.8rem;color:var(--muted);margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;border-top:1px solid var(--line);padding:9px 12px;vertical-align:top}
+thead th{border-top:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);background:var(--surface-2)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.empty{border:1.5px dashed var(--line-strong);border-radius:var(--r);padding:22px;margin:12px 0;display:grid;gap:8px;max-width:640px}
+.empty p{margin:0}
+.unlinked{border:1.5px dashed var(--line-strong);border-radius:var(--r);padding:14px 16px}
+.unlinked ul{margin:8px 0 0}
+.drill{display:grid;gap:4px}
+.drill>h2:first-child{font-size:1.5rem;margin-top:22px}
+.serve-hint{font-size:.84rem;color:var(--muted)}
+.primary{font:inherit;font-weight:600;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer}
+details.add{padding:0}
+details.add>summary{padding:12px 16px;cursor:pointer;color:var(--accent);font-weight:600}
+details.add[open]>summary{border-bottom:1px solid var(--line)}
+details.add>form{padding:4px 16px 14px}
+details.edit{margin:10px 0 0;border-top:1px dashed var(--line);padding-top:8px}
+details.edit>summary,details.form-more>summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:.9rem}
+.sub{margin:10px 0;background:var(--surface-2);border-radius:var(--r);padding:12px 14px}
+form.form{margin:8px 0}
+form.form .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;align-items:start}
 form.form .form-more{grid-column:1/-1}
-form.form .form-more .fields{margin-top:.5rem}
-.field{display:flex;flex-direction:column;gap:.2rem;font-size:.92rem;min-width:0}
+form.form .form-more .fields{margin-top:8px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:.84rem;font-weight:600;min-width:0}
 .field.wide{grid-column:1/-1}
-.field .hint{color:var(--muted);font-size:.82rem}
-.field input,.field select,.field textarea{font:inherit;width:100%;box-sizing:border-box;padding:.4rem .5rem;border:1px solid var(--line);border-radius:.35rem;background:var(--card);color:var(--fg)}
+.field .hint{color:var(--muted);font-size:.8rem;font-weight:400}
+.field input,.field select,.field textarea,.save input,.save select{font:inherit;font-weight:400;width:100%;padding:7px 9px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);color:var(--fg)}
 .field textarea{resize:vertical;min-height:4.5rem}
 .field select[multiple]{min-height:7rem}
-form.form .actions{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.6rem}
-form.form .actions button{font:inherit;font-weight:600;padding:.4rem .9rem;border-radius:.35rem;border:1px solid var(--purple);background:var(--purple);color:var(--card);cursor:pointer}
+form.form .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+form.form .actions button,.save:not(.form) button{font:inherit;font-weight:600;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer}
+.save:not(.form){display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:4px 0}
+.save:not(.form) label{display:grid;gap:3px;font-size:.78rem;font-weight:600;color:var(--muted)}
+.save:not(.form) input,.save:not(.form) select{width:auto;max-width:11rem;padding:5px 8px}
+.save-msg{color:var(--muted);font-size:.85rem}
+.save-msg.error{color:var(--bad)}
 button:disabled{opacity:.55;cursor:default}
-ul{padding-left:1.2rem}
-select{font:inherit;padding:.2rem .4rem;max-width:100%}
-@media (max-width:40rem){body{padding:.75rem}form.form .fields{grid-template-columns:minmax(0,1fr)}}
-.top-right{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
-${THEME_CSS}`;
+dialog.sheet-dialog .box{padding:20px;display:grid;gap:12px}
+dialog.sheet-dialog h2{margin:0}
+.opt{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px 14px;display:grid;gap:6px}
+.opt h3{margin:0;font-family:var(--f-body);font-size:.95rem}
+.opt p{margin:0;font-size:.88rem;color:var(--muted)}
+.opt code{display:block;background:var(--surface-2);border-radius:6px;padding:7px 10px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+@media (max-width:860px){
+.app{grid-template-columns:minmax(0,1fr);gap:0}
+.side{position:static;max-height:none;padding-block:14px 0;gap:10px}
+.views{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:6px;scrollbar-width:none}
+.views a{white-space:nowrap;flex:none}
+.side-areas{display:none}
+.top-right{margin-left:0}
+.altitudes{flex-wrap:nowrap}
+.altitudes a,.altitudes span{padding:6px 8px;font-size:.84rem}
+h1{font-size:1.55rem}
+form.form .fields{grid-template-columns:minmax(0,1fr)}
+.tl-row{grid-template-columns:minmax(0,1fr)}
+.tl-track{border-left:0;border-top:1px dashed var(--line)}
+.tl-head .tl-label{display:none}
+}`;
+
+/** The dashboard's whole style: the shared design, the save bar, the light/dark switch, then its own parts. */
+export const STYLE = `${THEME_CSS}
+${DESIGN_CSS}
+${SAVE_BAR_CSS}
+${PAGE_CSS}`;
 
 /** The altitude switcher: each level's page is the one above this area, or the first area at that level. */
 function altitudes(page: AreaPage): string {
@@ -565,15 +754,28 @@ function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
   return `<details class="edit"><summary>Edit this bet</summary>${forms.join("")}</details>`;
 }
 
-/** The key results table: company and departments only. */
+/** The key results: a summary, then a card for each, grouped by objective. Company and departments only. */
 function renderKeys(page: AreaPage, live: boolean): string {
   const add = addKrForm(page, live);
   if (!page.krs.length) return `${add}${krEmpty(page, live)}`;
-  const rows = page.krs.map((k) => {
-    const latest = k.kind === "milestone" ? (stepsLeft(k) ? `To do: ${stepsLeft(k)}` : "All steps done") : k.latest ? `${k.latest.value} on ${k.latest.date}` : "no check-ins";
-    return `<tr><td><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span></td><td>${esc(k.objective)}</td><td>${esc(k.owner)}</td><td>${esc(shareOf(k))}</td><td>${k.kind === "milestone" ? "steps" : `${esc(String(k.target))}${k.unit ? ` ${esc(k.unit)}` : ""}`}</td><td>${esc(latest)}${k.stale ? " · stale" : ""}</td><td>${esc(k.by)}</td><td>${checkinForm(k, live)}</td></tr>`;
-  });
-  return `${add}<table><thead><tr><th>Key result</th><th>Objective</th><th>Owner</th><th>Progress</th><th>Target</th><th>Latest</th><th>By</th><th>Check in</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  const st = page.krs.map((k) => krStatus(k, page.today)?.label);
+  const n = (l: string) => st.filter((x) => x === l).length;
+  const ds = page.bets.map((b) => (b.delivery?.source === "own" ? b.delivery.delivery?.status : undefined));
+  const strip = `<div class="strip"><div><span class="eyebrow">Key results</span><span class="big num">${page.krs.length}</span><span class="parts"><span>${n("On track")} on track</span><span>${n("At risk")} at risk</span><span>${n("Off track")} off track</span></span></div><div><span class="eyebrow">Bets</span><span class="big num">${page.bets.length}</span><span class="parts"><span>${ds.filter((x) => x === "Building").length} building</span><span>${ds.filter((x) => x === "Shipped").length} shipped</span><span>${page.bets.filter((b) => b.outcome === "won").length} won</span></span></div></div>`;
+  const byObjective = new Map<string, DashKr[]>();
+  for (const k of page.krs) byObjective.set(k.objective, [...(byObjective.get(k.objective) ?? []), k]);
+  const sections = [...byObjective].map(([objective, krs]) => `<section>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live)).join("")}</div></section>`);
+  return `${add}${strip}${sections.join("")}`;
+}
+
+/** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
+function krCard(k: DashKr, page: AreaPage, live: boolean): string {
+  const figure =
+    k.kind === "milestone"
+      ? `<div class="figure"><span class="now num">${k.steps.filter((x) => x.done).length}/${k.steps.length}</span><span class="of">steps done</span></div>`
+      : `<div class="figure"><span class="now num">${esc(k.latest ? withUnit(k.latest.value, k.unit) : "—")}</span><span class="of">from ${esc(withUnit(k.baseline, k.unit))} to ${esc(withUnit(k.target, k.unit))}${k.direction === "down" ? ", going down" : ""}</span></div>`;
+  const when = k.latest ? `Checked in ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "" : "No check-ins yet";
+  return `<article class="card kr-card"><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}</article>`;
 }
 
 /** The empty state of an area's key results: the year for the company, the quarter for a department. */
@@ -598,9 +800,9 @@ function renderOkrs(page: AreaPage, live: boolean): string {
       const elsewhere = page.aimingBets.filter((b) => b.of === k.id);
       const lines = [...aimed.map((b) => betLine(b, page)), ...elsewhere.map((b) => betLine(b, page, areaName(page, b.rel)))];
       parts.push(
-        `<div class="card"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span><div class="meta">${esc(krMeta(k))}${k.aligns_to.length ? `. Aligns to ${esc(k.aligns_to.map((id) => labelOf(page, id)).join(", "))}` : ""}</div>${checkinForm(k, live)}${
-          lines.length ? `<ul>${lines.join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'
-        }${editKrBlock(k, page, live)}</div>`,
+        `<div class="card okr"><div class="okr-head"><div><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span><div class="meta">${esc(krMeta(k))}${k.aligns_to.length ? `. Aligns to ${esc(k.aligns_to.map((id) => labelOf(page, id)).join(", "))}` : ""}</div></div>${statusPill(k, page.today)}</div><div class="okr-body">${checkinForm(k, live)}${
+          lines.length ? `<ul class="rows">${lines.join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'
+        }${editKrBlock(k, page, live)}</div></div>`,
       );
     }
     parts.push("</section>");
@@ -612,7 +814,7 @@ function renderOkrs(page: AreaPage, live: boolean): string {
   else if (own) body = krEmpty(page, live);
   else body = emptyState("Its bets aim at no key results yet.", "Key results come from the level above. Make a bet that aims at one of them.", addAction(live, "add-bet", "Add a bet", BET_COMMAND));
   // The bet form sits at the top for every level, so a bet can be added once key results exist too.
-  return `${addKrForm(page, live)}${addBetForm(page, live)}<h2>${esc(heading)}</h2>${body}${loose.length ? `<h2>Bets that aim at no key result shown here</h2><ul>${loose.map((b) => betLine(b, page)).join("")}</ul>` : ""}`;
+  return `${addKrForm(page, live)}${addBetForm(page, live)}<h2>${esc(heading)}</h2>${body}${loose.length ? `<h2>Bets that aim at no key result shown here</h2><ul class="rows">${loose.map((b) => betLine(b, page)).join("")}</ul>` : ""}`;
 }
 
 /** The four-column ladder: above key results, this area's key results, this area's bets, above bets. */
@@ -762,12 +964,20 @@ function renderWiden(page: AreaPage, state: PlanView): string {
 function renderBelow(belowBets: BelowBet[], page: AreaPage): string {
   if (!belowBets.length) return "<p>None below this area yet.</p>";
   const how = (b: BelowBet) => (b.how === "child" ? `Below ${b.of}` : aimText(b.how, b.of));
-  return `<h2>Below this area</h2><ul>${belowBets.map((b) => `<li>${betLink(b, page.period)}${betId(b)} (${esc(areaName(page, b.rel))}) — ${esc(b.outcome)}. ${esc(how(b))}. Delivery: ${esc(deliveryText(b.delivery))}</li>`).join("")}</ul>`;
+  return `<h2>Below this area</h2><ul class="rows">${belowBets.map((b) => `<li>${betLink(b, page.period)}${betId(b)} (${esc(areaName(page, b.rel))}) — ${esc(b.outcome)}. ${esc(how(b))}. Delivery: ${esc(deliveryText(b.delivery))}</li>`).join("")}</ul>`;
 }
 
 /** The ladder page: the widen links, the ladder, and what widened below. */
 function renderLadderPage(page: AreaPage, state: PlanView): string {
   return `${renderWiden(page, state)}${renderLadder(page, state)}${state.widen.down ? renderBelow(page.belowBets, page) : ""}`;
+}
+
+/** A bet's stories as a bar: done, then in progress, out of all of them. Only for a bet whose own maps have stories. */
+function deliveryBar(d: BetDelivery | undefined): string {
+  const f = d?.source === "own" ? d.delivery : undefined;
+  if (!f || !f.total) return "";
+  const w = (n: number) => `${((100 * n) / f.total).toFixed(1)}%`;
+  return `<div class="stack" role="img" aria-label="${f.done} of ${f.total} stories done, ${f.inProgress} in progress"><i class="d" style="width:${w(f.done)}"></i><i class="b" style="width:${w(f.inProgress)}"></i></div>`;
 }
 
 function renderBets(page: AreaPage, live: boolean): string {
@@ -776,35 +986,47 @@ function renderBets(page: AreaPage, live: boolean): string {
   const body = page.bets
     .map((b: DashBet) => {
       const facts: string[] = [];
-      if (b.owner) facts.push(`<li>Owner: ${esc(b.owner)}</li>`);
-      if (b.team) facts.push(`<li>Team: ${esc(b.team)}</li>`);
-      if (b.hypothesis) facts.push(`<li>Hypothesis: ${esc(b.hypothesis)}</li>`);
-      if (b.review_on) facts.push(`<li>Review on ${esc(b.review_on)}</li>`);
+      if (b.owner) facts.push(`<dt>Owner</dt><dd>${esc(b.owner)}</dd>`);
+      if (b.team) facts.push(`<dt>Team</dt><dd>${esc(b.team)}</dd>`);
+      if (b.review_on) facts.push(`<dt>Review</dt><dd>${esc(shortDate(b.review_on))}${b.review_on < page.today && b.outcome === "open" ? ' · <strong style="color:var(--bad)">due</strong>' : ""}</dd>`);
       const aims = [b.krs.primary, ...b.krs.also].filter((x): x is string => !!x);
-      if (aims.length) facts.push(`<li>Aims at ${aims.map((id) => `<a href="${esc(krHref(page.plan.rel, id, page.period))}">${esc(labelOf(page, id))}</a>`).join(", ")}</li>`);
-      if (b.aligns_to.length) facts.push(`<li>Aligns to ${b.aligns_to.map((x) => betLink(x, page.period)).join(", ")}</li>`);
-      facts.push(`<li>Delivery: ${esc(deliveryText(b.delivery))}</li>`);
-      if (b.stories.length) facts.push(`<li>Stories: ${b.stories.map((s) => `${esc(s.id)} (${esc(s.status ?? "no summary yet")})`).join(", ")}</li>`);
-      return `<article class="card"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3><p>${esc(b.outcome)}</p><ul>${facts.join("")}</ul>${editBetBlock(b, page, live)}</article>`;
+      if (aims.length) facts.push(`<dt>Aims at</dt><dd>${aims.map((id) => `<a href="${esc(krHref(page.plan.rel, id, page.period))}">${esc(labelOf(page, id))}</a>`).join(", ")}</dd>`);
+      if (b.aligns_to.length) facts.push(`<dt>Aligns to</dt><dd>${b.aligns_to.map((x) => betLink(x, page.period)).join(", ")}</dd>`);
+      facts.push(`<dt>Delivery</dt><dd>${esc(deliveryText(b.delivery))}</dd>`);
+      if (b.stories.length) facts.push(`<dt>Stories</dt><dd>${b.stories.map((s) => `${esc(s.id)} (${esc(s.status ?? "no summary yet")})`).join(", ")}</dd>`);
+      return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, page, live)}</article>`;
     })
     .join("");
-  return `${add}${body}`;
+  return `${add}<div class="bet-cards">${body}</div>`;
 }
 
+/** The timeline: each bet from its start to its deadline with its review, and each key result's due date, against the months. */
 function renderTimeline(page: AreaPage): string {
-  const dated: { date: string; what: string; item: string; href: string; rel: string }[] = [];
-  for (const b of page.bets) {
-    const item = `${betName(b)} — ${b.outcome}`;
-    const href = betHref(b.rel, b.id, page.period);
-    if (b.starts) dated.push({ date: b.starts, what: "Starts", item, href, rel: b.rel });
-    if (b.review_on) dated.push({ date: b.review_on, what: "Review", item, href, rel: b.rel });
-    if (b.deadline) dated.push({ date: b.deadline, what: "Deadline", item, href, rel: b.rel });
+  const bets = page.bets.filter((b) => b.starts || b.review_on || b.deadline);
+  const krs = page.krs.filter((k) => k.by);
+  if (!bets.length && !krs.length) return emptyState("No dated items yet.", "Bets show here once they have a start, a review date or a deadline, and key results once they have a due date.");
+  const dates = [...bets.flatMap((b) => [b.starts, b.review_on, b.deadline]), ...krs.map((k) => k.by), page.today].filter((d) => !!d && !Number.isNaN(dayOf(d))).sort();
+  const lo = new Date(dayOf(dates[0]!)), hi = new Date(dayOf(dates[dates.length - 1]!));
+  // A month's room after the last date, so a mark on it isn't cut off at the edge.
+  const start = Date.UTC(lo.getUTCFullYear(), lo.getUTCMonth(), 1), end = Date.UTC(hi.getUTCFullYear(), hi.getUTCMonth() + 2, 1);
+  const X = (d: string) => `${((100 * (dayOf(d) - start)) / (end - start)).toFixed(2)}%`;
+  const months: number[] = [];
+  for (let d = new Date(start); d.getTime() < end; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) months.push(d.getTime());
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const grid = months.map((m) => `<span class="tl-month" style="left:${((100 * (m - start)) / (end - start)).toFixed(2)}%"></span>`).join("");
+  const today = `<span class="tl-today" style="left:${X(page.today)}" title="Today, ${esc(shortDate(page.today))}"></span>`;
+  const head = `<div class="tl-row tl-head"><div class="tl-label"></div><div class="tl-track">${months.map((m, i) => `<span class="tl-month" style="left:${((100 * (m - start)) / (end - start)).toFixed(2)}%">${months.length > 8 && i % 2 ? "" : MON[new Date(m).getUTCMonth()]}</span>`).join("")}${today}</div></div>`;
+  // One list in date order: each key result by its due date, each bet by its first date.
+  const rows: { date: string; html: string }[] = [];
+  for (const k of krs) rows.push({ date: k.by, html: `<div class="tl-row"><div class="tl-label"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a><p class="meta">Key result due ${esc(k.by)}</p></div><div class="tl-track" aria-hidden="true">${grid}<span class="tl-mark due" style="left:${X(k.by)}"></span>${today}</div></div>` });
+  for (const b of bets) {
+    const from = b.starts || b.review_on, to = b.deadline || b.review_on;
+    const said = [b.starts && `Starts ${b.starts}`, b.review_on && `Review ${b.review_on}`, b.deadline && `Deadline ${b.deadline}`].filter(Boolean).join(" · ");
+    const bar = from && to && to >= from ? `<span class="tl-bar" style="left:${X(from)};width:calc(${X(to)} - ${X(from)})"></span>` : "";
+    rows.push({ date: [b.starts, b.review_on, b.deadline].filter(Boolean).sort()[0]!, html: `<div class="tl-row"><div class="tl-label"><a href="${esc(betHref(b.rel, b.id, page.period))}">${esc(betName(b))} — ${esc(b.outcome)}</a><p class="meta">${esc(said)}</p></div><div class="tl-track" aria-hidden="true">${grid}${bar}${b.review_on ? `<span class="tl-mark" style="left:${X(b.review_on)}"></span>` : ""}${today}</div></div>` });
   }
-  for (const k of page.krs) if (k.by) dated.push({ date: k.by, what: "Key result due", item: k.title, href: krHref(k.rel, k.id, page.period), rel: k.rel });
-  if (!dated.length) return "<p>No dated items yet.</p>";
-  dated.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.item.localeCompare(b.item)));
-  const rows = dated.map((d) => `<tr><td>${esc(d.date)}</td><td>${esc(d.what)}</td><td><a href="${esc(d.href)}">${esc(d.item)}</a></td><td>${esc(areaName(page, d.rel))}</td></tr>`);
-  return `<table><thead><tr><th>Date</th><th>What</th><th>Item</th><th>Area</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  rows.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  return `<p class="tl-legend"><span>Bar: a bet from its start to its deadline</span><span>Diamond: a review, or a key result's due date</span><span>Red line: today, ${esc(shortDate(page.today))}</span><span>${esc(MON[new Date(start).getUTCMonth()]!)} ${new Date(start).getUTCFullYear()} to ${esc(MON[new Date(end - DAY).getUTCMonth()]!)} ${new Date(end - DAY).getUTCFullYear()}</span></p><div class="tl">${head}${rows.map((r) => r.html).join("")}</div>`;
 }
 
 /** A text-only item's line on its own drill-down: what it says, and that no figure counts it. Nothing once a link backs it. */
@@ -813,12 +1035,15 @@ const notLinkedLine = (text?: string) => (text ? `<p class="meta">Not linked yet
 /** The line that sends a person to the area that holds a key result or bet, to change it there. */
 const elsewhereLine = (what: string, rel: string, href: string, page: AreaPage) => `<p class="meta">To change this ${what}, open it in <a href="${esc(href)}">${esc(areaName(page, rel))}</a>.</p>`;
 
+/** Where a story map opens: in its own code repo, with nikos serve. The plan only reads its delivery. */
+const SERVE_HINT = `<p class="serve-hint">The plan reads each map's committed delivery file. To open a whole story map, run <code>nikos serve</code> in its code repo.</p>`;
+
 function renderKrDrill(d: KrDrill, page: AreaPage, live: boolean): string {
   const k = d.kr;
-  const head = `<h2>Key result: ${esc(k.title)}</h2><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(areaName(page, k.rel))} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>${notLinkedLine(k.laddersUp)}`;
+  const head = `<h2>Key result: ${esc(k.title)}</h2><p>${statusPill(k, page.today)}</p><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(areaName(page, k.rel))} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>${notLinkedLine(k.laddersUp)}`;
   const own = page.krs.find((x) => x.id === k.id && x.rel === k.rel);
   const editing = own ? editKrBlock(own, page, live) : k.rel === page.plan.rel ? "" : elsewhereLine("key result", k.rel, krHref(k.rel, k.id, page.period), page);
-  if (!d.areas.length) return `${head}<p>No bets aim at this key result yet.</p>${editing}`;
+  if (!d.areas.length) return `<div class="drill">${head}<p>No bets aim at this key result yet.</p>${editing}</div>`;
   const areas = d.areas.map((a) => {
     const items = a.bets.map((b: DrillBet) => {
       const maps = b.maps.length ? `<ul>${b.maps.map((m) => `<li>${esc(mapText(m))}</li>`).join("")}</ul>` : "";
@@ -826,22 +1051,23 @@ function renderKrDrill(d: KrDrill, page: AreaPage, live: boolean): string {
     });
     return `<h3>${esc(a.name)}</h3><ul>${items.join("")}</ul>`;
   });
-  return `${head}${areas.join("")}${editing}`;
+  const anyMaps = d.areas.some((a) => a.bets.some((b) => b.maps.length));
+  return `<div class="drill">${head}${areas.join("")}${anyMaps ? SERVE_HINT : ""}${editing}</div>`;
 }
 
 function renderBetDrill(d: BetDrill, up: UpChain, page: AreaPage, live: boolean): string {
   const b = d.bet;
-  const head = `<h2>Bet: ${esc(betName(b))}${betId(b)}</h2><p>${esc(b.outcome)}</p><p class="meta">In ${esc(areaName(page, b.rel))}${b.owner ? ` · Owner: ${esc(b.owner)}` : ""}</p><p>Delivery: ${esc(deliveryText(b.delivery))}</p>${notLinkedLine(b.laddersUp)}`;
+  const head = `<h2>Bet: ${esc(betName(b))}${betId(b)}</h2><p class="row">${deliveryPill(b.delivery)} ${outcomePill(b.outcome)}</p><p class="meta">In ${esc(areaName(page, b.rel))}${b.owner ? ` · Owner: ${esc(b.owner)}` : ""}</p><p>Delivery: ${esc(deliveryText(b.delivery))}</p><p class="meta">Delivery comes from the story maps. The outcome is called at review, from key result evidence.</p>${notLinkedLine(b.laddersUp)}`;
   const own = page.bets.find((x) => x.id === b.id && x.rel === b.rel);
   const editing = own ? editBetBlock(own, page, live) : b.rel === page.plan.rel ? "" : elsewhereLine("bet", b.rel, betHref(b.rel, b.id, page.period), page);
-  const maps = d.maps.length ? `<h3>Story maps that deliver it</h3><ul>${d.maps.map((m) => `<li>${esc(mapText(m))}</li>`).join("")}</ul>` : "";
+  const maps = d.maps.length ? `<h3>Story maps that deliver it</h3><ul>${d.maps.map((m) => `<li>${esc(mapText(m))}</li>`).join("")}</ul>${SERVE_HINT}` : "";
   const chain = up.levels.length
     ? up.levels.map((lvl) => `<h3>${lvl.depth === 1 ? "Aligns to" : `Level ${lvl.depth} up`}</h3><ul>${lvl.bets.map((x) => `<li>${betLink(x, page.period)}${betId(x)} (${esc(areaName(page, x.rel))}) — ${esc(x.outcome)}</li>`).join("")}</ul>`).join("")
     : "<h3>Aligns to</h3><p>Nothing above it.</p>";
   const below = d.children.length
     ? `<h3>Below it</h3><ul>${d.children.map((c) => `<li>${betLink(c, page.period)}${betId(c)} (${esc(areaName(page, c.rel))}) — ${esc(c.outcome)}. Delivery: ${esc(deliveryText(c.delivery))}</li>`).join("")}</ul>`
     : "";
-  return `${head}${maps}<h2>Up the chain</h2>${chain}${below}${editing}`;
+  return `<div class="drill">${head}${maps}<h2>Up the chain</h2>${chain}${below}${editing}</div>`;
 }
 
 /**
@@ -969,6 +1195,29 @@ export interface RenderBodyOptions extends PlanRenderOptions {
   offline?: boolean;
 }
 
+/** The Share dialog: what a person can send, which depends on where the page is open. Nothing here is a link to this page, which is private. */
+function shareDialog(page: AreaPage, offline: boolean): string {
+  // --in takes the area's id as well as its folder, and the id reads as a name.
+  const rel = page.plan.rel;
+  const file = rel === "company" ? "plan.html" : `${page.plan.id}.html`;
+  const opt = (title: string, body: string, code?: string) => `<div class="opt"><h3>${esc(title)}</h3><p>${body}</p>${code ? `<code>${esc(code)}</code>` : ""}</div>`;
+  const body = offline
+    ? `<p>This page is a file. It works with no network and can't change anything. Send the file itself, or put it on an internal web host your company already uses. It names the code repos it reads, so share it only with people who may see them.</p>${opt("Get a newer copy", "Ask someone with the planning repo to export it again.", "nikos plan serve --export plan.html")}`
+    : `<p>This dashboard runs on your computer. Its link has a private key in it and only works here while <code>nikos plan serve</code> is running, so don't send it to anyone. To share the plan, use one of these.</p>${opt(
+        "Send a read-only page",
+        "One file that opens in any browser and works offline. It names the code repos it reads, so send it only to people who may see them.",
+        `nikos plan serve --export ${file}${rel === "company" ? "" : ` --in ${page.plan.id}`}`,
+      )}${opt(
+        "Publish it on your internal site",
+        "Export the page for every area and put the file on an internal web host. A CI job can export it each time the planning repo's main branch changes, so the page always shows the merged plan.",
+        "nikos plan serve --export plan.html",
+      )}`;
+  return `<dialog class="sheet-dialog" id="share" aria-labelledby="share-title"><div class="box"><h2 id="share-title">Share the plan</h2>${body}<div><button class="btn" type="button" data-share-close>Close</button></div></div></dialog>`;
+}
+
+/** Opens the Share dialog. The live page and the export both carry it. */
+export const SHARE_JS = `document.addEventListener("click",function(e){var t=e.target&&e.target.closest?e.target:null;if(!t)return;var d=document.getElementById("share");if(!d)return;if(t.closest("[data-share]")&&d.showModal)d.showModal();else if(t.closest("[data-share-close]")||t===d)d.close();});`;
+
 /** One area's page, as the content of its body. The view shows the area; a drill-down (kr or bet) replaces it. */
 export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBodyOptions = {}): string {
   const name = page.plan.name;
@@ -981,7 +1230,7 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
     .join("");
   const below = page.tree.filter((n) => n.parent === page.plan.rel);
   const subs = below.length
-    ? `<h2>Areas below this</h2><ul>${below.map((n) => `<li><a href="${esc(hrefOf({ at: n.rel, period: periodFor(n.rel, page.period) }))}">${esc(n.name)}</a></li>`).join("")}</ul>`
+    ? `<nav class="side-areas" aria-label="Areas below this"><span class="eyebrow">Areas below this</span>${below.map((n) => `<a href="${esc(hrefOf({ at: n.rel, period: periodFor(n.rel, page.period) }))}">${esc(n.name)}</a>`).join("")}</nav>`
     : "";
   // The suggestions of the objectives forms offer. One list for the page, since its forms share it.
   const datalist = live && page.choices.objectives.length ? `<datalist id="objectives">${page.choices.objectives.map((o) => `<option value="${esc(o)}">`).join("")}</datalist>` : "";
@@ -993,19 +1242,30 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   else if (current === "ladder") body = renderLadderPage(page, state.view);
   else if (current === "bets") body = renderBets(page, live);
   else body = renderTimeline(page);
-  const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current, period: page.period }))}">Back to ${esc(name)}</a></p>` : "";
+  const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current, period: page.period }))}">← Back to ${esc(name)}</a></p>` : "";
   const reads = page.repos.map((r) => `<li>${esc(repoLabel(r))}: ${esc(r.age)}</li>`);
   const list = (items: string[]) => (items.length ? `<ul>${items.join("")}</ul>` : "<p>None yet.</p>");
-  return `${datalist}<header class="top">
-<nav class="altitudes" aria-label="Altitude">${altitudes(page)}</nav>
-<div class="top-right">${picker(page, !!opts.offline)}${THEME_BUTTON}</div>
-</header>
-<nav class="crumbs" aria-label="Breadcrumb">${crumbs(page)}</nav>
-${quarters(page, state)}
-<h1>${esc(name)} <span class="id">${esc(LEVEL_LABEL[page.plan.level])}${period ? ` · ${esc(period)}` : ""}</span></h1>
-${page.notices.map((n) => `<p class="notice">${esc(n)}</p>`).join("")}
-${subs}
+  const host = opts.offline
+    ? `<span class="host"><span class="host-k">Exported page</span><span class="host-v">read-only</span></span>`
+    : `<span class="host" title="Only you can open this, while nikos plan serve runs"><span class="host-k">On this computer</span><span class="host-v" data-host>127.0.0.1</span></span>`;
+  const eyebrow = state.drill ? LEVEL_LABEL[page.plan.level] : VIEW_LABEL[current];
+  return `${datalist}<a class="skip" href="#main">Skip to the page</a>
+<div class="app">
+<aside class="side">
+<a class="brand" href="${esc(hrefOf({ at: "company" }))}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,18 10,8 14,14 20,5"/></svg></span><span>nikOS Plan<small>${esc(page.names.company ?? "")}</small></span></a>
 ${state.drill ? "" : `<nav class="views" aria-label="Views">${viewLinks}</nav>`}
+${subs}
+</aside>
+<div class="main">
+<header class="top">
+<div class="top-row"><nav class="altitudes" aria-label="Altitude">${altitudes(page)}</nav><div class="picker">${picker(page, !!opts.offline)}</div>
+<div class="top-right">${host}<button type="button" class="share-btn" data-share aria-haspopup="dialog">Share…</button>${THEME_BUTTON}</div></div>
+<nav class="crumbs" aria-label="Breadcrumb">${crumbs(page)}</nav>
+</header>
+${live ? '<div id="pending" class="pending" role="status" hidden></div>' : ""}
+${page.notices.map((n) => `<p class="notice">${esc(n)}</p>`).join("")}
+<main id="main" tabindex="-1">
+<div class="page-head"><span class="eyebrow">${esc(eyebrow)}</span><h1>${esc(name)} <span class="id">${esc(LEVEL_LABEL[page.plan.level])}${period ? ` · ${esc(period)}` : ""}</span></h1>${quarters(page, state)}</div>
 ${back}
 ${body}
 ${state.drill ? "" : renderUnlinked(page)}
@@ -1013,6 +1273,10 @@ ${state.drill ? "" : renderUnlinked(page)}
 ${list(reads)}
 ${page.warnings.length ? `<h2>Warnings</h2>${list(page.warnings.map((w) => esc(w.message)))}` : ""}
 ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map((p) => esc(p)))}` : ""}
+</main>
+</div>
+</div>
+${shareDialog(page, !!opts.offline)}
 `;
 }
 
@@ -1023,7 +1287,7 @@ function renderUnlinked(page: AreaPage): string {
     const href = u.kind === "key result" ? krHref(u.rel, u.id, page.period) : betHref(u.rel, u.id, page.period);
     return `<li><a href="${esc(href)}">${esc(u.id)}</a> (${esc(u.kind)}, ${esc(areaName(page, u.rel))}) — "${esc(u.text)}"</li>`;
   });
-  return `<h2>Not linked yet</h2><p class="meta">These say what they ladder up to in words, but no link backs them yet. They count in no figure. To see what each could link to, run nikos plan ladder &lt;id&gt;.</p><ul>${items.join("")}</ul>`;
+  return `<h2>Not linked yet</h2><div class="unlinked"><p class="meta">These say what they ladder up to in words, but no link backs them yet. They count in no figure. To see what each could link to, run nikos plan ladder &lt;id&gt;.</p><ul>${items.join("")}</ul></div>`;
 }
 
 /** The page title, as text: the area's name, then the product. The export puts it in the document's own title. */
@@ -1043,9 +1307,11 @@ export function renderPlanPage(page: AreaPage, state: PageState, opts: { token: 
 <meta name="nikos-token" content="${esc(opts.token)}">
 <title>${planTitle(page)}</title><style>${STYLE}</style>${THEME_HEAD}</head>
 <body>
-<div id="pending" class="pending" role="status" hidden></div>
 ${renderPlanBody(page, state, { live: true })}<script>
 ${LIVE_SCRIPT}
+${SHARE_JS}
+var hostEl = document.querySelector("[data-host]");
+if (hostEl) hostEl.textContent = location.host;
 </script></body></html>
 `;
 }

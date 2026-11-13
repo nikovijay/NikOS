@@ -3,7 +3,10 @@
 // has no story map of its own, so it is sent to nikos plan serve.
 import { writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { renderMap } from "./map.js";
+import { brand, progressBar, renderMap, storyMapOf } from "./map.js";
+import { DESIGN_CSS } from "../lib/design.js";
+import { isDone } from "../lib/project.js";
+import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
 import type { Runner } from "../lib/git.js";
 import { oldLayoutProblem } from "../plan/repo.js";
@@ -62,10 +65,19 @@ const mapKeys = (root: string) => mapDirs(root).map((d) => basename(d)).sort();
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-/** With several maps and none picked, / lists them, each a link to its own page. */
+/** With several maps and none picked, / lists them: a card for each, with its progress, linking to its own page. */
 function mapList(root: string, keys: string[]): string {
-  const items = keys.map((k) => `<li><a href="/?map=${encodeURIComponent(k)}">${esc(k)}</a></li>`).join("");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Story maps · ${esc(basename(root))}</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem 1rem;max-width:40rem}</style></head><body><h1>Story maps</h1><p>This repo has ${keys.length} story maps. Pick one:</p><ul>${items}</ul></body></html>`;
+  const cards = keys
+    .map((k) => {
+      const m = storyMapOf(root, k);
+      const all = [...m.releases.flatMap((r) => r.stories), ...m.unreleased].filter((s) => s.status !== "cancelled");
+      const done = all.filter((s) => isDone(s.status)).length;
+      const meta = [m.owner && `Owned by ${esc(m.owner)}`, m.bet && `delivers ${esc(m.bet)}`].filter(Boolean).join(", ");
+      return `<li><a class="mapcard" href="/?map=${encodeURIComponent(k)}"><span class="eyebrow">maps/${esc(k)}</span><h2>${esc(m.project || k)}</h2>${meta ? `<span class="muted">${meta}</span>` : ""}${progressBar(all, false)}<span class="num">${done} of ${all.length} stories done · ${m.releases.length} release${m.releases.length === 1 ? "" : "s"}</span></a></li>`;
+    })
+    .join("");
+  const css = `body{margin:0}.wrap{max-width:1100px;margin:0 auto;padding:16px 24px 48px}.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding-bottom:12px;border-bottom:1px solid var(--line)}.spacer{flex:1}.brand{display:inline-flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:16px}.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center}.brand-mark svg{width:18px;height:18px;stroke:var(--accent-fg)}.brand-t small{display:block;font-family:var(--f-mono);font-weight:400;font-size:12px;color:var(--muted)}h1{margin:24px 0 4px;font-size:28px}.maps{list-style:none;margin:20px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}.mapcard{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;color:var(--fg);text-decoration:none}.mapcard:hover{border-color:var(--line-strong);box-shadow:var(--shadow)}.mapcard h2{margin:0;font-size:19px}.stack{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--surface-2)}.stack i{display:block;height:100%}@media (max-width:767px){.wrap{padding:12px 16px 32px}}${THEME_CSS}`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Story maps · ${esc(basename(root))}</title><style>${DESIGN_CSS}\n${css}</style>${THEME_HEAD}</head><body><div class="wrap"><header class="bar">${brand(basename(root))}<span class="spacer"></span>${THEME_BUTTON}</header><main><h1>Story maps</h1><p class="muted">This repo has ${keys.length} story maps. Pick one.</p><ul class="maps">${cards}</ul></main></div></body></html>`;
 }
 
 /** The operations a story map's page can make: its stories, their activities, steps and releases, and their criteria and personas. */

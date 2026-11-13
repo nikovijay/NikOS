@@ -3,8 +3,11 @@
 // so it names the command that runs that server, for the message when the server can't be reached.
 
 /** The bar's style: the notice box it sits in, and its buttons. */
-export const SAVE_BAR_CSS = `.pending{background:var(--notice);color:var(--notice-fg);padding:.5rem .75rem;border-radius:.4rem;margin-bottom:.75rem}
-.pending button{font:inherit;margin-left:.4rem;padding:.2rem .6rem}`;
+export const SAVE_BAR_CSS = `.pending{background:var(--accent);color:var(--accent-fg);padding:10px 12px 10px 16px;border-radius:var(--r,10px);margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:.92rem}
+.pending button{font:inherit;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid color-mix(in srgb,currentColor 50%,transparent);background:transparent;color:inherit;cursor:pointer}
+.pending button:first-of-type{background:var(--accent-fg);color:var(--accent);border-color:transparent}
+.pending button:disabled{opacity:.6;cursor:progress}
+.pending[hidden]{display:none}`;
 
 /**
  * The bar's script, for a page (named `what`, as the message says) that saves through the server `command` runs.
