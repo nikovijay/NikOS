@@ -14,6 +14,9 @@ import { ownRepo } from "../lib/git.js";
 import { KEY } from "../lib/keys.js";
 import { initPlanRepo } from "../plan/repo.js";
 import { describeRepoJoin, joinPlanRepo } from "./join.js";
+import { realRun, type Runner } from "../lib/git.js";
+import { toolFor, type Host } from "../lib/forge.js";
+import { badRepoPath, createHostedRepo, describeHosting, FORGE_NAME, hasOrigin, pushStep, signedInAs, type Hosting } from "../lib/hosting.js";
 
 /** Ask one question; an empty answer takes the suggestion. */
 export type Ask = (question: string, suggestion?: string) => Promise<string>;
@@ -32,6 +35,8 @@ export interface OnboardAnswers {
   /** The planning repo a code repo joins, e.g. acme/company-plan. */
   planRepo?: string;
   gitInit: boolean;
+  /** The GitHub or GitLab repo to make for it, when the person chose one. */
+  hosting?: Hosting;
 }
 
 /** The answers the menu takes: 1 or 2, or the word. */
@@ -66,6 +71,31 @@ async function confirm(ask: Ask, question: string, suggestion: "y" | "n"): Promi
 }
 const isRepo = (dir: string) => existsSync(join(dir, ".git"));
 
+/** Where the repo lives: the answers the hosting menu takes. */
+const WHERE: Record<string, Host | "local"> = { "1": "github", github: "github", "2": "gitlab", gitlab: "gitlab", "3": "local", local: "local" };
+
+/** Ask where a git repo with no origin should live, and for a hosted one, its path and whether it's private. */
+async function askHosting(ask: Ask, name: string, run: Runner): Promise<Hosting | undefined> {
+  const menu = [
+    "Where should the repo live?",
+    "  1  GitHub",
+    "  2  GitLab",
+    "  3  Only on this computer for now. You can add it to GitHub or GitLab later.",
+    "Type 1, 2 or 3",
+  ].join("\n");
+  const where = WHERE[(await askUntil(ask, menu, "3", (a) => (WHERE[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type 1, 2 or 3.`))).toLowerCase()];
+  if (where === "local") return undefined;
+  const forge = where;
+  const tool = forge === "github" ? "gh" : "glab";
+  const owner = signedInAs(forge, run);
+  const missing = toolFor(forge, run) ? "" : `${tool} isn't installed here, so nikOS will show the command to make it instead.\n`;
+  const repo = await askUntil(ask, `${missing}Its path on ${FORGE_NAME[forge]}: the owner (you or an organisation) and the name, like acme/company-plan`, owner ? `${owner}/${slugify(name)}` : undefined, (a) =>
+    !a ? "It needs a path." : badRepoPath(forge, a),
+  );
+  const isPrivate = await confirm(ask, "Make it private, so only the people you add can see it?", "y");
+  return { forge, repo, private: isPrivate };
+}
+
 /** Ask until the answer passes, three times at most. */
 async function askUntil(ask: Ask, question: string, suggestion: string | undefined, ok: (a: string) => string | undefined): Promise<string> {
   const first = question;
@@ -96,7 +126,7 @@ const MENU = [
   "Type 1 or 2",
 ].join("\n");
 
-export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Promise<OnboardAnswers> {
+export async function askOnboarding(cwd: string, ask: Ask, home = homedir(), run: Runner = realRun): Promise<OnboardAnswers> {
   // A repo with intent/ is migrated, not set up again: say so before asking anything.
   if (existsSync(join(cwd, "intent"))) throw new Error("this repo has intent/: move intent/ to maps/<key>/ by hand, as the release notes describe");
   const kind = KINDS[(await askUntil(ask, MENU, "2", (a) => (KINDS[a.toLowerCase()] ? undefined : `'${a}' isn't one of the choices. Please type 1 or 2.`))).toLowerCase()];
@@ -140,6 +170,8 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
     pillars = listOf(await ask("Company pillars, separated by commas. Press Enter to skip"));
   }
   const gitInit = isRepo(dir) ? false : await confirm(ask, "Make it a git repo? Git keeps the history of every change.", "y");
+  // A git repo with no origin yet can live on GitHub or GitLab. nikOS asks; it never picks.
+  const hosting = gitInit || (isRepo(dir) && !hasOrigin(dir, run)) ? await askHosting(ask, name, run) : undefined;
 
   // Say exactly what will happen, with the full path, before anything is written.
   const where = existsSync(dir) ? `${dir}${dir === resolve(cwd) ? " (this folder)" : ""}` : `${dir} (a new folder)`;
@@ -148,6 +180,7 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
     kind === "plan" ? `  A company plan for ${name}, planning ${year}${pillars?.length ? `, pillars ${pillars.join(", ")}` : ""}` : `  A story map for ${name}, story key ${key}${planRepo ? `, linked to the plan in ${planRepo}` : ""}`,
     `  In ${where}`,
     ...(gitInit ? ["  As a new git repo"] : isRepo(dir) ? ["  In the git repo that's already there"] : ["  It won't be a git repo"]),
+    ...(hosting ? [`  On ${describeHosting(hosting)}, as its origin. Nothing is pushed.`] : []),
     "Go ahead?",
   ].join("\n");
   if (!(await confirm(ask, summary, "y"))) throw new Cancelled();
@@ -160,11 +193,12 @@ export async function askOnboarding(cwd: string, ask: Ask, home = homedir()): Pr
     ...(year ? { year } : {}),
     ...(pillars?.length ? { pillars } : {}),
     ...(planRepo ? { planRepo } : {}),
+    ...(hosting ? { hosting } : {}),
   };
 }
 
 /** Set it up from the answers. Returns the lines to show. */
-export function setUp(a: OnboardAnswers, cwd: string): string[] {
+export function setUp(a: OnboardAnswers, cwd: string, run: Runner = realRun): string[] {
   const out: string[] = [];
   const cli = cliCommand();
   if (!existsSync(a.dir)) {
@@ -175,6 +209,9 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     const r = spawnSync("git", ["init", "-q", "-b", "main"], { cwd: a.dir, encoding: "utf8" });
     out.push(r.status === 0 ? "✓ Made it a git repo" : `! Couldn't make it a git repo: ${(r.stderr || r.error?.message || "").trim()}`);
   }
+  // Before the files, so a story map's CI and join see the origin.
+  const hosted = a.hosting && isRepo(a.dir) ? createHostedRepo(a.dir, a.hosting, run) : undefined;
+  if (hosted) out.push(hosted.line);
   // What to do next, one step per line, in order. Every command can be run as it is.
   const next: string[] = [];
   const cd = a.dir === resolve(cwd) ? "" : `cd ${relative(cwd, a.dir) || a.dir} && `;
@@ -197,6 +234,7 @@ export function setUp(a: OnboardAnswers, cwd: string): string[] {
     next.push(`See it in your browser: ${cd}${cli} serve`);
     next.push('Ask your coding agent to "build the first story", or to plan the product with you.');
   }
+  if (hosted?.ok) next.push(pushStep(cd));
   out.push("", "Next steps:");
   out.push(...next.map((line, n) => `  ${n + 1}. ${line}`));
   const stale = staleCliWarning();

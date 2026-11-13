@@ -87,6 +87,7 @@ planning/
 
 ```bash
 nikos plan init --name "Acme" --year 2027 --pillars "Growth, Trust"
+nikos plan init --name "Acme" --year 2027 --github acme/company-plan   # also a private GitHub repo, as its origin
 nikos plan add department finance --name "Finance" --owner Mira
 nikos plan add group payments --name "Payments" --department finance
 nikos plan add team WEB --name "Checkout web" --home payments
