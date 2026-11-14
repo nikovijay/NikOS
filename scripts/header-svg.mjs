@@ -12,10 +12,19 @@ let seed = 7;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 const pick = (s) => s[Math.floor(rand() * s.length)];
 
-// The logo: two strokes, from assets/icon.svg.
+// The logo: two strokes, from assets/icon.svg. Each stroke is cut into Morse
+// code, read upward: dash dot (N) on the left, dot dot dot dash (V) on the right.
 const strokes = [
-  [[287, 252], [179, 483], [180, 485], [253, 484], [324, 331]],
-  [[504, 251], [431, 251], [360, 404], [396, 483], [398, 482], [501, 261]],
+  [
+    [[287, 252], [324, 331], [312.1, 356.7], [275.1, 277.7]],
+    [[269.1, 290.5], [306.1, 369.6], [253, 484], [179, 484]],
+  ],
+  [
+    [[431, 251], [504, 251], [450.2, 366.6], [413.6, 288.5]],
+    [[407.6, 301.3], [444.2, 379.4], [432.3, 405], [395.7, 327]],
+    [[389.8, 339.8], [426.3, 417.9], [414.4, 443.5], [377.9, 365.5]],
+    [[371.9, 378.3], [408.4, 456.3], [396.5, 481.9], [360, 404]],
+  ],
 ];
 const inside = (poly, x, y) => {
   let c = false;
@@ -29,12 +38,12 @@ const inside = (poly, x, y) => {
 // Fit the logo into 48 x 18 cells in the middle of the grid.
 const LC = 48, LR = 18, x0 = 179, y0 = 251, sx = (504 - 179) / LC, sy = (485 - 251) / LR;
 const ox = Math.round((COLS - LC) / 2), oy = Math.round((ROWS - LR) / 2);
-const cells = strokes.map((poly) => {
+const cells = strokes.map((polys) => {
   const out = [];
   for (let r = 0; r < LR; r++)
     for (let c = 0; c < LC; c++) {
       let hit = 0;
-      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) hit += inside(poly, x0 + (c + (i + 0.5) / 4) * sx, y0 + (r + (j + 0.5) / 4) * sy);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) hit += polys.some((poly) => inside(poly, x0 + (c + (i + 0.5) / 4) * sx, y0 + (r + (j + 0.5) / 4) * sy));
       const cover = hit / 16;
       if (cover < 0.2) continue;
       // Solid inside, slashes along the slanted edges.
