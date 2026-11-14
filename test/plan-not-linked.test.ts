@@ -13,6 +13,7 @@ import { runPlanRepo } from "../src/plan/cli";
 import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
 import { suggest } from "../src/commands/suggest";
 import { acceptLadder } from "../src/planning/ladder";
+import { ladderLines } from "./plan-serve-fixture";
 
 const NOW = new Date("2026-11-10T12:00:00Z");
 
@@ -86,7 +87,7 @@ describe("not linked yet, on the dashboard at every altitude", () => {
     await world(repo);
     // close-days aligns to revenue, so one line is drawn. pay-ledger has only text, so it is in the column with no line.
     const html = bodyOf(repo, "departments/finance", "ladder", "2027-Q1");
-    expect(html.match(/<path /g)?.length).toBe(1);
+    expect(ladderLines(html)).toBe(1);
     expect(html).toContain("Ledger match rate");
   });
 
@@ -203,7 +204,7 @@ describe("not linked yet, on a drill-down, in every quarter, and on a team's lad
     await world(repo);
     expect(await run(repo, "bet", "new", "more-checks", "--in", "WEB", "--owner", "Sam", "--hypothesis", "More checks", "--review", "2027-02-14", "--kr", "revenue", "--aligns-to", "checkout-first")).toBe(0);
     const html = bodyOf(repo, "teams/WEB", "ladder");
-    expect(html.match(/<path /g)?.length).toBe(2);
+    expect(ladderLines(html)).toBe(2);
     expect(html).toContain("more-checks");
   });
 });

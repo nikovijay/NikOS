@@ -26,3 +26,6 @@ export function acmePlan(listed?: string): string {
   if (listed !== undefined) write(join(repo, "planning/repos.yaml"), `version: 1\nrepos:\n  - repo: acme/payments-web\n    host: github.com\n    url: "${listed}"\n`);
   return repo;
 }
+
+/** How many lines the ladder draws: its curves, not the brand mark's paths. */
+export const ladderLines = (html: string): number => html.match(/<path d="M[^"]*C[^"]*"\/>/g)?.length ?? 0;

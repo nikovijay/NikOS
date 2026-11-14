@@ -6,7 +6,7 @@
 import type { AreaLevel } from "../planning/model.js";
 import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import { SAVE_BAR_CSS, saveBarScript } from "../lib/save-bar.js";
-import { DESIGN_CSS } from "../lib/design.js";
+import { BRAND_MARK, DESIGN_CSS } from "../lib/design.js";
 import { idFromTitle } from "../planning/rules.js";
 import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
@@ -211,7 +211,7 @@ body{margin:0}
 .app{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;max-width:1440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
 .side{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px;min-width:0}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:1.1rem;color:var(--fg);text-decoration:none}
-.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;flex:none}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;flex:none}
 .brand-mark svg{width:18px;height:18px}
 .brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:.75rem;color:var(--muted);line-height:1.2}
 .views{display:flex;flex-direction:column;gap:2px}
@@ -1252,7 +1252,7 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   return `${datalist}<a class="skip" href="#main">Skip to the page</a>
 <div class="app">
 <aside class="side">
-<a class="brand" href="${esc(hrefOf({ at: "company" }))}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,18 10,8 14,14 20,5"/></svg></span><span>nikOS Plan<small>${esc(page.names.company ?? "")}</small></span></a>
+<a class="brand" href="${esc(hrefOf({ at: "company" }))}"><span class="brand-mark" aria-hidden="true">${BRAND_MARK}</span><span>nikOS Plan<small>${esc(page.names.company ?? "")}</small></span></a>
 ${state.drill ? "" : `<nav class="views" aria-label="Views">${viewLinks}</nav>`}
 ${subs}
 </aside>

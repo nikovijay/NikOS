@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The N mark heads both pages.** The plan dashboard and the story map, live and exported, now show the N mark from `assets/icon.svg` in their header, in place of the placeholder icons.
+
 ## 0.6.0 (2026-11-13)
 
 The plan dashboard and the story map are now places to work, not only to read. From `nikos plan serve` you can add and edit key results and bets. From `nikos serve` you can add activities, steps, stories and releases, and edit a story and its acceptance criteria. Saves from either page go on a branch, and nothing is pushed until you press Push. Both pages share a new design in light and dark. `nikos start` now asks whether a new repo should be on GitHub, GitLab or only this computer. Nothing in this release breaks a 0.5 setup.
