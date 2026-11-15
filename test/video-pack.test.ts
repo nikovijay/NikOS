@@ -79,6 +79,8 @@ describe("Video pack", () => {
     ];
     for (const path of files(pack)) {
       const text = readFileSync(path, "utf8");
+      // A rendered video or image is bytes, not text: by chance they can read as an email address. Text files only.
+      if (text.includes("\u0000")) continue;
       for (const leak of leaks) expect(text, `${relative(root, path)} matches ${leak}`).not.toMatch(leak);
     }
   });
