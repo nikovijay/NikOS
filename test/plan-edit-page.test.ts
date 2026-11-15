@@ -245,7 +245,9 @@ describe("names, not ids of areas", () => {
     const { srv } = await start(repo);
     const bets = await get(srv.port, "/?at=groups%2Fpayments&view=bets");
     expect(bets).toContain('>Speed up checkout</a> <span class="id">speed-up</span>');
-    expect(bets).toContain('<span class="where">Payments</span>');
+    // A bet from an area below carries its area's name on the board.
+    const below = await get(srv.port, `/?${FINANCE}&view=bets&scope=below`);
+    expect(below).toContain('>Speed up checkout</a> <span class="id">speed-up</span> <span class="where">Payments</span>');
     const okrs = await get(srv.port, `/?${FINANCE}&view=okrs`);
     expect(okrs).toContain('>Speed up checkout</a> <span class="id">speed-up</span>');
   });
@@ -267,7 +269,9 @@ describe("names, not ids of areas", () => {
   it("a bet without a title keeps its id as its name, with no second id after it", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, "/?at=teams%2FWEB&view=bets");
-    expect(html).toContain('>web-bet</a> <span class="where">Checkout web</span>');
+    expect(html).toMatch(/>web-bet<\/a><\/h3>/);
+    const below = await get(srv.port, "/?at=groups%2Fpayments&view=bets&scope=below");
+    expect(below).toContain('>web-bet</a> <span class="where">Checkout web</span>');
   });
 
   it("no page reads an area's rel in its text: the names are shown, the rels only in links and forms", async () => {
@@ -516,6 +520,92 @@ describe("the overview", () => {
     expect(html).toContain("Key results its bets aim at");
     expect(html).not.toContain('data-open="checkin-session"');
     expect(html).not.toContain('id="checkin-session"');
+  });
+});
+
+describe("the key results' filters", () => {
+  /** A department with three key results, owned by two people, one of them on track. */
+  function threeKrs(): string {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Ola", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
+    newKr({ id: "invoices", title: "Invoices matched", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
+    return repo;
+  }
+  const shownCards = (html: string) => [...html.matchAll(/<article class="card kr-card" data-kr data-text="[^"]*" data-status="[^"]*" data-owner="[^"]*"( hidden)?>[\s\S]*?<a href="[^"]*">([^<]+)<\/a>/g)].filter((m) => !m[1]).map((m) => m[2]);
+
+  it("narrow the cards on the server from the query, so a link keeps them, and say when none match", async () => {
+    const { srv } = await start(threeKrs());
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys`))).toEqual(["Aimless", "Invoices matched", "Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&owner=Mira`))).toEqual(["Invoices matched", "Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&status=on-track`))).toEqual(["Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&q=invoices+match`))).toEqual(["Invoices matched"]);
+    const none = await get(srv.port, `/?${FINANCE}&view=keys&q=nothing`);
+    expect(none).toContain('<p class="meta" data-none>No key results match.');
+    // The form keeps the place and works with no script.
+    expect(none).toContain('<form class="filters" role="search" method="get" data-filters><input type="hidden" name="at" value="departments/finance"><input type="hidden" name="view" value="keys">');
+    expect(none).toContain('<input type="search" name="q" value="nothing"');
+    expect(none).toContain("<noscript><button type=\"submit\" class=\"btn\">Apply</button></noscript>");
+  });
+
+  it("an objective with no key result showing is hidden, and the list layout is one row each", async () => {
+    const { srv } = await start(threeKrs());
+    const html = await get(srv.port, `/?${FINANCE}&view=keys&owner=Ola&layout=list`);
+    expect(html).toMatch(/<section data-group hidden><h2>Key results<\/h2>/);
+    expect(html).toContain('<div data-layout="cards" hidden>');
+    expect(html).toContain('<div data-layout="list"><div class="tbl"><table class="kr-list">');
+    expect(html).toContain('<input type="radio" name="layout" value="list" checked>');
+    expect(html.match(/<tr data-kr [^>]*>/g)).toHaveLength(3);
+    expect(html.match(/<tr data-kr [^>]* hidden>/g)).toHaveLength(2);
+  });
+
+  it("the filter script narrows the same way, and is in the live page and the export", async () => {
+    const repo = threeKrs();
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=keys`);
+    const source = /function passes\(el, words, status, owner\) \{[\s\S]*?\n\}/.exec(html)?.[0];
+    expect(source).toBeDefined();
+    const passes = new Function(`${source}; return passes;`)() as (el: object, w: string[], s: string, o: string) => boolean;
+    const el = (text: string, status: string, owner: string) => ({ getAttribute: (n: string) => ({ "data-text": text, "data-status": status, "data-owner": owner })[n] ?? null });
+    expect(passes(el("invoices matched invoices mira", "not-started", "Mira"), ["invoices", "match"], "", "")).toBe(true);
+    expect(passes(el("invoices matched invoices mira", "not-started", "Mira"), ["close"], "", "")).toBe(false);
+    expect(passes(el("x", "on-track", "Mira"), [], "at-risk", "")).toBe(false);
+    expect(passes(el("x", "on-track", "Mira"), [], "", "Ola")).toBe(false);
+    const out = join(tmp("nikos-export-"), "plan.html");
+    await exportPlanPage(repo, out, { offline: true, at: "departments/finance" });
+    expect(readFileSync(out, "utf8")).toContain("function passes(el, words, status, owner)");
+  });
+});
+
+describe("the bets board", () => {
+  it("puts each bet in a column: not started without a map, decided once a review closes it", async () => {
+    const repo = acmePlan();
+    reviewBet(findArea(repo, "finance").dir, "inbox-match", { decision: "stop", reason: "Not worth it." });
+    newBet({ id: "next-up", title: "Next up", owner: "Sam", hypothesis: "It helps.", reviewOn: "2027-02-14", primary: "close-days" }, findArea(repo, "finance").dir);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=bets`);
+    const col = (name: string) => new RegExp(`<section class="col" aria-label="${name}">([\\s\\S]*?)</section>`).exec(html)![1];
+    expect(col("Not started")).toContain(">Next up</a>");
+    expect(col("Decided")).toContain(">inbox-match</a>");
+    expect(col("Building")).toContain("None");
+    expect(html).toContain("Bets move across as their stories move in the code, or when a review decides them.");
+  });
+
+  it("a switch adds every bet in the areas below, each with its area; a team has no switch", async () => {
+    const { srv } = await start(acmePlan());
+    const own = await get(srv.port, `/?${FINANCE}&view=bets`);
+    expect(own).toContain('<nav class="scope" aria-label="Which bets"><a href="?at=departments%2Ffinance&amp;view=bets&amp;period=2027-Q1" class="on" aria-current="true">Finance only</a><a href="?at=departments%2Ffinance&amp;view=bets&amp;period=2027-Q1&amp;scope=below">With the areas below (2)</a></nav>');
+    // The board alone: from its start to the next heading, before the drawers at the end of the page.
+    const board = (html: string) => html.slice(html.indexOf('<div class="board">'), html.indexOf("<h2>Code repos read</h2>"));
+    expect(board(own)).toContain(">inbox-match</a>");
+    expect(board(own)).not.toContain(">web-bet</a>");
+    const below = await get(srv.port, `/?${FINANCE}&view=bets&scope=below`);
+    expect(board(below)).toContain('>web-bet</a> <span class="where">Checkout web</span>');
+    expect(below).toContain('>faster-checkout</a> <span class="where">Payments</span>');
+    // Bets from below have no Edit button here: they are changed in their own area.
+    expect(below).not.toContain('data-open="detail-bet-teams-WEB-web-bet"');
+    const team = await get(srv.port, "/?at=teams%2FWEB&view=bets");
+    expect(team).not.toContain('class="scope"');
   });
 });
 

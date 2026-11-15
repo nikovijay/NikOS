@@ -93,7 +93,7 @@ describe("the views each level has", () => {
   it("shows key results for a department and not for a group or team", async () => {
     const { srv } = await start(acmePlan());
     const dept = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
-    expect(dept).toContain('<article class="card kr-card">');
+    expect(dept).toContain('<article class="card kr-card" data-kr data-text="close days close-days  mira" data-status="on-track" data-owner="Mira">');
     expect(dept).toContain(`href="?${FINANCE}&amp;kr=close-days&amp;period=2027-Q1"`);
     const group = (await get(srv.port, "/?at=groups/payments")).text;
     expect(group).not.toContain('class="card kr-card"');
@@ -266,7 +266,7 @@ describe("what the page is made of", () => {
   it("gives the same page's data as JSON, with the view and the drill", async () => {
     const { srv } = await start(acmePlan());
     const data = JSON.parse((await get(srv.port, `/api/data?${FINANCE}&kr=close-days`)).text);
-    expect(data.view).toEqual({ view: "overview", widen: { up: false, down: false }, more: false });
+    expect(data.view).toEqual({ view: "overview", widen: { up: false, down: false }, more: false, filter: { q: "", status: "", owner: "", layout: "cards" }, scope: "own" });
     expect(data.drill.kind).toBe("kr");
     expect(data.drill.kr.areas.map((a: { rel: string }) => a.rel)).toEqual(["departments/finance", "groups/payments", "teams/WEB"]);
     expect(data.belowBets).toEqual([]);

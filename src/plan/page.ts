@@ -19,6 +19,18 @@ export interface PlanView {
   view: ViewName;
   widen: { up: boolean; down: boolean };
   more: boolean;
+  /** What the key results are narrowed to, and how they are laid out. The query carries it, so a link keeps it. */
+  filter: KrFilter;
+  /** The bets board: this area's bets, or with every bet in the areas below. */
+  scope: "own" | "below";
+}
+
+/** The key results' filters: words to find, a status, an owner, and cards or a list. Empty is all of them. */
+export interface KrFilter {
+  q: string;
+  status: string;
+  owner: string;
+  layout: "cards" | "list";
 }
 
 /** A drill-down page: a key result's bets and maps, or a bet's chain up, the bets below it and its maps. */
@@ -49,8 +61,23 @@ export function viewOf(query: URLSearchParams, level: AreaLevel): PlanView {
   const asked = query.get("view") ?? "";
   const widen = query.get("widen") ?? "";
   const view = (viewsFor(level) as string[]).includes(asked) ? (asked as ViewName) : "overview";
-  return { view, widen: { up: widen === "up" || widen === "all", down: widen === "down" || widen === "all" }, more: query.get("more") === "all" };
+  const status = query.get("status") ?? "";
+  const filter: KrFilter = {
+    q: (query.get("q") ?? "").trim(),
+    status: STATUS_KEYS.some((s) => s.value === status) ? status : "",
+    owner: query.get("owner") ?? "",
+    layout: query.get("layout") === "list" ? "list" : "cards",
+  };
+  return { view, widen: { up: widen === "up" || widen === "all", down: widen === "down" || widen === "all" }, more: query.get("more") === "all", filter, scope: query.get("scope") === "below" ? "below" : "own" };
 }
+
+/** The statuses a key result can be filtered by: the page's own three, and one for a key result with no check-in yet. */
+const STATUS_KEYS: Opt[] = [
+  { value: "on-track", label: "On track" },
+  { value: "at-risk", label: "At risk" },
+  { value: "off-track", label: "Off track" },
+  { value: "not-started", label: "Not started" },
+];
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
@@ -376,6 +403,26 @@ dialog.session h3{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:
 .preview{margin:4px 0;padding:8px 12px;border-radius:8px;background:var(--accent-weak);font-size:.9rem}
 .preview:empty{display:none}
 .session-nav{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.filters{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:4px 0 14px}
+.filters input[type=search],.filters select{font:inherit;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--fg)}
+.f-search{flex:1 1 220px}
+.f-search input{width:100%;box-sizing:border-box}
+.filters .seg input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.kr-list td .meta{font-size:.8rem}
+.scope{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface-2);margin:4px 0 8px}
+.scope a{padding:5px 12px;border-radius:999px;text-decoration:none;color:var(--muted);font-weight:600;font-size:.86rem}
+.scope a.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.board-note{margin:4px 0 12px}
+.board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:6px;align-items:start}
+.col{display:grid;gap:10px;background:var(--surface-2);border-radius:var(--r);padding:10px}
+.col-head{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;margin:2px 4px;display:flex;justify-content:space-between;font-family:var(--f-body)}
+.col-head .count{color:var(--muted)}
+.col-empty{margin:4px}
+.board-card{margin:0}
+.board-card h3{font-size:.98rem;margin:0}
+.board-card p{margin:6px 0 0}
+.board-card .due{color:var(--bad)}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
 fieldset.field{border:0;margin:0;padding:0}
 fieldset.field legend{padding:0;margin-bottom:4px}
@@ -864,7 +911,43 @@ function betForms(b: DashBet, page: AreaPage): { edit: string[]; review: string 
 }
 
 /** The key results: a summary, then a card for each, grouped by objective. Company and departments only. */
-function renderKeys(page: AreaPage, live: boolean): string {
+/** A key result's status as a filter reads it: on-track, at-risk, off-track, or not-started before its first check-in. */
+const statusKey = (k: KrRef, today: string) => krStatus(k, today)?.label.toLowerCase().replace(" ", "-") ?? "not-started";
+
+/** What the filters read off a key result's card or row: the words it is found by, its status and its owner. */
+const krData = (k: DashKr, page: AreaPage) =>
+  ` data-kr data-text="${esc([k.title, k.id, k.objective, k.owner].join(" ").toLowerCase())}" data-status="${statusKey(k, page.today)}" data-owner="${esc(k.owner)}"`;
+
+/** Whether a key result passes the filters. The live script applies the same rule as they change (krShown). */
+function krShown(k: DashKr, page: AreaPage, f: KrFilter): boolean {
+  const text = [k.title, k.id, k.objective, k.owner].join(" ").toLowerCase();
+  return (!f.q || f.q.toLowerCase().split(/\s+/).every((w) => text.includes(w))) && (!f.status || statusKey(k, page.today) === f.status) && (!f.owner || k.owner === f.owner);
+}
+
+/**
+ * The key results' filters, as a form. It works with no script: it sends the query, and the page comes back
+ * narrowed. With the script the page narrows as you type, and the query in the address bar follows.
+ */
+function filterBar(page: AreaPage, f: KrFilter): string {
+  const owners = [...new Set(page.krs.map((k) => k.owner).filter(Boolean))].sort();
+  const keep = [hidden("at", page.plan.rel), hidden("view", "keys"), page.period ? hidden("period", page.period) : ""].join("");
+  const opt = (o: Opt, on: string) => `<option value="${esc(o.value)}"${o.value === on ? " selected" : ""}>${esc(o.label)}</option>`;
+  const layout = (["cards", "list"] as const).map((l) => `<label class="seg"><input type="radio" name="layout" value="${l}"${f.layout === l ? " checked" : ""}><span>${l === "cards" ? "Cards" : "List"}</span></label>`).join("");
+  return `<form class="filters" role="search" method="get" data-filters>${keep}<label class="f-search"><span class="sr">Find</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Find a key result"></label><label><span class="sr">Status</span><select name="status"><option value="">Any status</option>${STATUS_KEYS.map((o) => opt(o, f.status)).join("")}</select></label><label><span class="sr">Owner</span><select name="owner"><option value="">Any owner</option>${owners.map((o) => opt({ value: o, label: o }, f.owner)).join("")}</select></label><div class="segs" role="group" aria-label="Layout">${layout}</div><noscript><button type="submit" class="btn">Apply</button></noscript><span class="meta" data-count aria-live="polite"></span></form>`;
+}
+
+const hidden = (name: string, value: string) => `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
+
+/** The key results as a list: one row each, with its owner, status, progress, last check-in and due date. */
+function krList(page: AreaPage, f: KrFilter): string {
+  const rows = page.krs.map((k) => {
+    const last = k.kind === "milestone" ? stepsOf(k) : k.latest ? `${withUnit(k.latest.value, k.unit)} on ${shortDate(k.latest.date)}` : "None yet";
+    return `<tr${krData(k, page)}${krShown(k, page, f) ? "" : " hidden"}><td><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a><div class="meta">${esc(k.objective)}</div></td><td>${esc(k.owner)}</td><td>${statusPill(k, page.today)}</td><td class="num">${esc(k.kind === "milestone" ? `${Math.round(k.progress * 100)}%` : pct(k.progress))}</td><td>${esc(last)}</td><td>${esc(shortDate(k.by))}</td></tr>`;
+  });
+  return `<div class="tbl"><table class="kr-list"><thead><tr><th>Key result</th><th>Owner</th><th>Status</th><th>Progress</th><th>Last check-in</th><th>Due</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+function renderKeys(page: AreaPage, live: boolean, f: KrFilter = { q: "", status: "", owner: "", layout: "cards" }): string {
   if (!page.krs.length) return krEmpty(page, live);
   const st = page.krs.map((k) => krStatus(k, page.today)?.label);
   const n = (l: string) => st.filter((x) => x === l).length;
@@ -872,11 +955,14 @@ function renderKeys(page: AreaPage, live: boolean): string {
   const strip = `<div class="strip"><div><span class="eyebrow">Key results</span><span class="big num">${page.krs.length}</span><span class="parts"><span>${n("On track")} on track</span><span>${n("At risk")} at risk</span><span>${n("Off track")} off track</span></span></div><div><span class="eyebrow">Bets</span><span class="big num">${page.bets.length}</span><span class="parts"><span>${ds.filter((x) => x === "Building").length} building</span><span>${ds.filter((x) => x === "Shipped").length} shipped</span><span>${page.bets.filter((b) => b.outcome === "won").length} won</span></span></div></div>`;
   const byObjective = new Map<string, DashKr[]>();
   for (const k of page.krs) byObjective.set(k.objective, [...(byObjective.get(k.objective) ?? []), k]);
-  const sections = [...byObjective].map(([objective, krs]) => `<section>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live)).join("")}</div></section>`);
-  return `${strip}${sections.join("")}`;
+  const sections = [...byObjective].map(
+    ([objective, krs]) =>
+      `<section data-group${krs.some((k) => krShown(k, page, f)) ? "" : " hidden"}>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live, !krShown(k, page, f))).join("")}</div></section>`,
+  );
+  const none = `<p class="meta" data-none${page.krs.some((k) => krShown(k, page, f)) ? " hidden" : ""}>No key results match. <a href="${esc(hrefOf({ at: page.plan.rel, view: "keys", period: page.period }))}">Clear the filters</a></p>`;
+  return `${strip}${filterBar(page, f)}${none}<div data-layout="cards"${f.layout === "cards" ? "" : " hidden"}>${sections.join("")}</div><div data-layout="list"${f.layout === "list" ? "" : " hidden"}>${krList(page, f)}</div>`;
 }
 
-/** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
 /** A key result's figure: steps done for a milestone, else its latest value against where it started and its target. */
 function krFigure(k: DashKr): string {
   return k.kind === "milestone"
@@ -884,10 +970,11 @@ function krFigure(k: DashKr): string {
       : `<div class="figure"><span class="now num">${esc(k.latest ? withUnit(k.latest.value, k.unit) : "—")}</span><span class="of">from ${esc(withUnit(k.baseline, k.unit))} to ${esc(withUnit(k.target, k.unit))}${k.direction === "down" ? ", going down" : ""}</span></div>`;
 }
 
-function krCard(k: DashKr, page: AreaPage, live: boolean): string {
+/** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
+function krCard(k: DashKr, page: AreaPage, live: boolean, hidden = false): string {
   const figure = krFigure(k);
   const when = k.latest ? `Checked in ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "" : "No check-ins yet";
-  return `<article class="card kr-card"><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}${editKrBlock(k, live)}</article>`;
+  return `<article class="card kr-card"${krData(k, page)}${hidden ? " hidden" : ""}><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}${editKrBlock(k, live)}</article>`;
 }
 
 /** The empty state of an area's key results: the year for the company, the quarter for a department. */
@@ -1091,15 +1178,49 @@ function deliveryBar(d: BetDelivery | undefined): string {
   return `<div class="stack" role="img" aria-label="${f.done} of ${f.total} stories done, ${f.inProgress} in progress"><i class="d" style="width:${w(f.done)}"></i><i class="b" style="width:${w(f.inProgress)}"></i></div>`;
 }
 
-function renderBets(page: AreaPage, live: boolean): string {
-  if (!page.bets.length) return emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
-  const body = page.bets
-    .map((b: DashBet) => {
-      const facts = betFacts(b, page);
-      return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, live)}</article>`;
-    })
-    .join("");
-  return `<div class="bet-cards">${body}</div>`;
+/** The bets board's columns, left to right. */
+const COLUMNS = ["Not started", "Building", "Shipped", "Decided"] as const;
+type Column = (typeof COLUMNS)[number];
+
+/**
+ * Where a bet sits on the board. Decided once a review closed it (won, lost or stopped); else from its stories:
+ * its own maps' status, or for a bet delivered by the bets below it, Shipped when all of theirs shipped and
+ * Building once any has started. A bet with no map has not started. Nothing is dragged: the code and the reviews move it.
+ */
+function columnOf(b: BetRef): Column {
+  if (b.outcome && b.outcome !== "open") return "Decided";
+  const d = b.delivery;
+  if (d?.source === "own" && d.delivery) return d.delivery.status;
+  if (d?.source === "via" && d.via.length) {
+    const st = d.via.map((v) => v.delivery.status);
+    if (st.every((x) => x === "Shipped")) return "Shipped";
+    if (st.some((x) => x !== "Not started")) return "Building";
+  }
+  return "Not started";
+}
+
+/** One bet on the board: its name and area, its delivery, owner and review, and for the area's own bets the Edit button. */
+function boardCard(b: BetRef | DashBet, page: AreaPage, live: boolean): string {
+  const own = "version" in b && b.rel === page.plan.rel ? (b as DashBet) : undefined;
+  const review = own?.review_on ? ` · review ${esc(shortDate(own.review_on))}${own.review_on < page.today && own.outcome === "open" ? ' <strong class="due">due</strong>' : ""}` : "";
+  return `<article class="card bet-card board-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)}${b.rel === page.plan.rel ? "" : ` <span class="where">${esc(areaName(page, b.rel))}</span>`}</h3>${b.outcome && b.outcome !== "open" ? outcomePill(b.outcome) : ""}</div><div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<p class="meta">${b.owner ? esc(b.owner) : "No owner"}${review}</p>${own ? editBetBlock(own, live) : ""}</article>`;
+}
+
+/**
+ * The bets as a board, in four columns by where each one is. A switch adds every bet in the areas below, each
+ * with the area it is in. The board is read from the code and the reviews, so it has nothing to drag.
+ */
+function renderBets(page: AreaPage, live: boolean, scope: "own" | "below" = "own"): string {
+  const hasBelow = page.tree.some((n) => n.parent === page.plan.rel);
+  const shown: (BetRef | DashBet)[] = [...page.bets, ...(scope === "below" && hasBelow ? page.belowAreaBets : [])];
+  const link = (to: "own" | "below", label: string) => `<a href="${esc(hrefOf({ at: page.plan.rel, view: "bets", period: page.period, scope: to === "below" ? "below" : undefined }))}"${scope === to ? ' class="on" aria-current="true"' : ""}>${esc(label)}</a>`;
+  const switcher = hasBelow ? `<nav class="scope" aria-label="Which bets">${link("own", `${page.plan.name} only`)}${link("below", `With the areas below (${page.belowAreaBets.length})`)}</nav>` : "";
+  if (!shown.length) return `${switcher}${emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND))}`;
+  const cols = COLUMNS.map((c) => {
+    const here = shown.filter((b) => columnOf(b) === c);
+    return `<section class="col" aria-label="${c}"><h2 class="col-head">${c} <span class="count">${here.length}</span></h2>${here.map((b) => boardCard(b, page, live)).join("") || '<p class="meta col-empty">None</p>'}</section>`;
+  });
+  return `${switcher}<p class="meta board-note">Bets move across as their stories move in the code, or when a review decides them.</p><div class="board">${cols.join("")}</div>`;
 }
 
 /** A bet's facts, as the rows of a list: owner, team, review, what it aims at and aligns to, delivery and stories. */
@@ -1625,6 +1746,49 @@ function shareDialog(page: AreaPage, offline: boolean): string {
   return `<dialog class="sheet-dialog" id="share" aria-labelledby="share-title"><div class="box"><h2 id="share-title">Share the plan</h2>${body}<div><button class="btn" type="button" data-share-close>Close</button></div></div></dialog>`;
 }
 
+/**
+ * The key results' filters, as they change: each card and row shows when it passes them (the rule krShown
+ * applies on the server), an objective with none showing hides, and the layout switches. The live page puts
+ * the filters in its address, so a reload or a link keeps them; the export, which swaps pages itself, does not.
+ * Both carry it, and it listens on the document, so it works on a page the export swaps in.
+ */
+export const FILTER_JS = `(function () {
+function passes(el, words, status, owner) {
+  var text = el.getAttribute("data-text") || "";
+  for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) < 0) return false;
+  return (!status || el.getAttribute("data-status") === status) && (!owner || el.getAttribute("data-owner") === owner);
+}
+function apply(form) {
+  var q = form.elements.namedItem("q").value.trim();
+  var status = form.elements.namedItem("status").value;
+  var owner = form.elements.namedItem("owner").value;
+  var picked = form.querySelector("input[name=layout]:checked");
+  var layout = picked ? picked.value : "cards";
+  var words = q.toLowerCase().split(" ").filter(function (w) { return w !== ""; });
+  var all = document.querySelectorAll("[data-kr]");
+  for (var i = 0; i < all.length; i++) all[i].hidden = !passes(all[i], words, status, owner);
+  var groups = document.querySelectorAll("[data-group]");
+  for (var g = 0; g < groups.length; g++) groups[g].hidden = !groups[g].querySelector("[data-kr]:not([hidden])");
+  var layouts = document.querySelectorAll("[data-layout]");
+  for (var l = 0; l < layouts.length; l++) layouts[l].hidden = layouts[l].getAttribute("data-layout") !== layout;
+  var cards = document.querySelectorAll(".kr-card[data-kr]");
+  var showing = document.querySelectorAll(".kr-card[data-kr]:not([hidden])").length;
+  var none = document.querySelector("[data-none]");
+  if (none) none.hidden = showing > 0;
+  var count = form.querySelector("[data-count]");
+  if (count) count.textContent = showing === cards.length ? "" : showing + " of " + cards.length;
+  if (!document.querySelector('meta[name="nikos-token"]')) return;
+  var query = new URLSearchParams(location.search);
+  var set = { q: q, status: status, owner: owner, layout: layout === "cards" ? "" : layout };
+  for (var k in set) if (set[k]) query.set(k, set[k]); else query.delete(k);
+  history.replaceState(null, "", "?" + query.toString());
+}
+function formOf(e) { return e.target && e.target.closest ? e.target.closest("[data-filters]") : null; }
+document.addEventListener("input", function (e) { var f = formOf(e); if (f) apply(f); });
+document.addEventListener("change", function (e) { var f = formOf(e); if (f) apply(f); });
+document.addEventListener("submit", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-filters")) { e.preventDefault(); apply(e.target); } });
+})();`;
+
 /** Opens the Share dialog. The live page and the export both carry it. */
 export const SHARE_JS = `document.addEventListener("click",function(e){var t=e.target&&e.target.closest?e.target:null;if(!t)return;var d=document.getElementById("share");if(!d)return;if(t.closest("[data-share]")&&d.showModal)d.showModal();else if(t.closest("[data-share-close]")||t===d)d.close();});`;
 
@@ -1648,10 +1812,10 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   if (state.drill?.kind === "kr") body = renderKrDrill(state.drill.kr, page, live);
   else if (state.drill?.kind === "bet") body = renderBetDrill(state.drill.bet, state.drill.up, page, live);
   else if (current === "overview") body = renderOverview(page, live);
-  else if (current === "keys") body = renderKeys(page, live);
+  else if (current === "keys") body = renderKeys(page, live, state.view.filter);
   else if (current === "okrs") body = renderOkrs(page, live);
   else if (current === "ladder") body = renderLadderPage(page, state.view);
-  else if (current === "bets") body = renderBets(page, live);
+  else if (current === "bets") body = renderBets(page, live, state.view.scope);
   else body = renderTimeline(page);
   const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current, period: page.period }))}">← Back to ${esc(name)}</a></p>` : "";
   const reads = page.repos.map((r) => `<li>${esc(repoLabel(r))}: ${esc(r.age)}</li>`);
@@ -1730,6 +1894,7 @@ export function renderPlanPage(page: AreaPage, state: PageState, opts: { token: 
 ${renderPlanBody(page, state, { live: true })}<script>
 ${LIVE_SCRIPT}
 ${SHARE_JS}
+${FILTER_JS}
 var hostEl = document.querySelector("[data-host]");
 if (hostEl) hostEl.textContent = location.host;
 </script></body></html>
