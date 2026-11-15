@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 (2026-11-15)
 
 ### Changed
 
+- **The README explains how nikOS works now.** It covers how a bet in the company's plan becomes a story map in a code repo and comes back as delivery on the dashboard, what you can change on each page, and how to run nikOS from a terminal, including `nikos plan init --name --year`.
 - **The N mark heads both pages.** The plan dashboard and the story map, live and exported, now show the N mark from `assets/icon.svg` in their header, in place of the placeholder icons.
 
 ## 0.6.0 (2026-11-13)
