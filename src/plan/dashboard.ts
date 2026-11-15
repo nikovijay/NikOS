@@ -192,6 +192,8 @@ export interface AreaPage {
    * at a key result the area holds, else only the areas below it.
    */
   aimingBets: BelowBet[];
+  /** Every bet in the areas below this one, at any depth, for the bets board's "with the areas below". */
+  belowAreaBets: BetRef[];
   repos: RepoRead[];
   /** What the page says before the rest: an unknown area, or a quarter with no key results. */
   notices: string[];
@@ -635,6 +637,8 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
   const aimingBets: BelowBet[] = [];
   const holds = area.level === "company" || area.level === "department";
   const under = (rel: string) => tree.find((n) => n.rel === rel)?.path.includes(area.rel) ?? false;
+  // Every bet in an area below this one, at any depth, for the bets board.
+  const belowAreaBets = [...records.values()].filter((b) => b.area.rel !== area.rel && under(b.area.rel)).map((b) => betRefOf(b, opts.deliveries));
   for (const k of krs) {
     for (const b of records.values()) {
       if (b.area.rel === area.rel || !(holds || under(b.area.rel))) continue;
@@ -668,6 +672,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
     widen,
     belowBets,
     aimingBets,
+    belowAreaBets,
     unlinked,
     repos: opts.deliveries.repos,
     notices,

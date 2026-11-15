@@ -12,13 +12,25 @@ import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
 import { figuresText, readsText, repoLabel } from "./words.js";
 
-export type ViewName = "keys" | "okrs" | "ladder" | "bets" | "timeline";
+export type ViewName = "overview" | "keys" | "okrs" | "alignment" | "ladder" | "bets" | "timeline" | "activity";
 
 /** The view a page shows, and what the ladder widens to. more lifts the ladder's cap of rows per column. */
 export interface PlanView {
   view: ViewName;
   widen: { up: boolean; down: boolean };
   more: boolean;
+  /** What the key results are narrowed to, and how they are laid out. The query carries it, so a link keeps it. */
+  filter: KrFilter;
+  /** The bets board: this area's bets, or with every bet in the areas below. */
+  scope: "own" | "below";
+}
+
+/** The key results' filters: words to find, a status, an owner, and cards or a list. Empty is all of them. */
+export interface KrFilter {
+  q: string;
+  status: string;
+  owner: string;
+  layout: "cards" | "list";
 }
 
 /** A drill-down page: a key result's bets and maps, or a bet's chain up, the bets below it and its maps. */
@@ -34,23 +46,40 @@ export interface PlanRenderOptions {
   live?: boolean;
 }
 
-const VIEW_LABEL: Record<ViewName, string> = { keys: "Key results", okrs: "OKRs and bets", ladder: "Ladder", bets: "Bets", timeline: "Timeline" };
+const VIEW_LABEL: Record<ViewName, string> = { overview: "Overview", keys: "Key results", okrs: "OKRs and bets", alignment: "Alignment", ladder: "Ladder", bets: "Bets", timeline: "Timeline", activity: "Activity" };
 const LEVEL_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team" };
 const ALTITUDE_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Departments", group: "Groups", team: "Teams" };
 const ALTITUDES: AreaLevel[] = ["company", "department", "group", "team"];
 
-/** The views an area has: key results only for the company and departments, which own the key results. */
+/** The views an area has: the overview first, and key results only for the company and departments, which own the key results. */
 export function viewsFor(level: AreaLevel): ViewName[] {
-  return level === "company" || level === "department" ? ["keys", "okrs", "ladder", "bets", "timeline"] : ["okrs", "ladder", "bets", "timeline"];
+  return level === "company" || level === "department"
+    ? ["overview", "keys", "okrs", "alignment", "ladder", "bets", "timeline", "activity"]
+    : ["overview", "okrs", "alignment", "ladder", "bets", "timeline", "activity"];
 }
 
-/** What the query asks for. An unknown view is the OKRs and bets page; keys is refused for a group or team. */
+/** What the query asks for. An unknown view is the overview; keys is refused for a group or team. */
 export function viewOf(query: URLSearchParams, level: AreaLevel): PlanView {
   const asked = query.get("view") ?? "";
   const widen = query.get("widen") ?? "";
-  const view = (viewsFor(level) as string[]).includes(asked) ? (asked as ViewName) : "okrs";
-  return { view, widen: { up: widen === "up" || widen === "all", down: widen === "down" || widen === "all" }, more: query.get("more") === "all" };
+  const view = (viewsFor(level) as string[]).includes(asked) ? (asked as ViewName) : "overview";
+  const status = query.get("status") ?? "";
+  const filter: KrFilter = {
+    q: (query.get("q") ?? "").trim(),
+    status: STATUS_KEYS.some((s) => s.value === status) ? status : "",
+    owner: query.get("owner") ?? "",
+    layout: query.get("layout") === "list" ? "list" : "cards",
+  };
+  return { view, widen: { up: widen === "up" || widen === "all", down: widen === "down" || widen === "all" }, more: query.get("more") === "all", filter, scope: query.get("scope") === "below" ? "below" : "own" };
 }
+
+/** The statuses a key result can be filtered by: the page's own three, and one for a key result with no check-in yet. */
+const STATUS_KEYS: Opt[] = [
+  { value: "on-track", label: "On track" },
+  { value: "at-risk", label: "At risk" },
+  { value: "off-track", label: "Off track" },
+  { value: "not-started", label: "Not started" },
+];
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
@@ -358,6 +387,64 @@ dialog.drawer::backdrop{background:rgba(20,16,40,.4)}
 .history{list-style:none;margin:8px 0;padding:0;display:grid;gap:0}
 .history li{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
 .history li:first-child{border-top:0}
+.attention{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.attention li{display:grid;grid-template-columns:10em minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:10px 14px;border-top:1px solid var(--line)}
+.attention li:first-child{border-top:0}
+.att-kind{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--warn)}
+.att-what{font-weight:600}
+.kr-rows{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.kr-rows li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.kr-rows li .bar{grid-column:1/-1;margin:0}
+dialog.session{width:min(620px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg)}
+dialog.session::backdrop{background:rgba(20,16,40,.4)}
+dialog.session .box{padding:0 22px 20px;gap:6px}
+dialog.session .drawer-head{padding:18px 0 12px;margin-bottom:6px}
+dialog.session .bar{margin:8px 0 14px}
+dialog.session h3{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 6px}
+.queue{margin:10px 0;padding-left:1.3em;display:grid;gap:4px}
+.preview{margin:4px 0;padding:8px 12px;border-radius:8px;background:var(--accent-weak);font-size:.9rem}
+.preview:empty{display:none}
+.session-nav{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.filters{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:4px 0 14px}
+.filters input[type=search],.filters select{font:inherit;padding:6px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--fg)}
+.f-search{flex:1 1 220px}
+.f-search input{width:100%;box-sizing:border-box}
+.filters .seg input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.kr-list td .meta{font-size:.8rem}
+.scope{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface-2);margin:4px 0 8px}
+.scope a{padding:5px 12px;border-radius:999px;text-decoration:none;color:var(--muted);font-weight:600;font-size:.86rem}
+.scope a.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.board-note{margin:4px 0 12px}
+.board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:6px;align-items:start}
+.col{display:grid;gap:10px;background:var(--surface-2);border-radius:var(--r);padding:10px}
+.col-head{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;margin:2px 4px;display:flex;justify-content:space-between;font-family:var(--f-body)}
+.col-head .count{color:var(--muted)}
+.col-empty{margin:4px}
+.board-card{margin:0}
+.board-card h3{font-size:.98rem;margin:0}
+.board-card p{margin:6px 0 0}
+.board-card .due{color:var(--bad)}
+.tree-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+.tree,.branch{list-style:none;margin:0;padding:0}
+.tree>li{margin:8px 0}
+.branch{margin-left:16px}
+.branch>li{position:relative;padding:6px 0 0 22px;border-left:1.5px solid var(--wire)}
+.branch>li:last-child{border-left-color:transparent}
+.branch>li::before{content:"";position:absolute;left:-1.5px;top:0;width:20px;height:25px;border-left:1.5px solid var(--wire);border-bottom:1.5px solid var(--wire);border-bottom-left-radius:8px}
+.node{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);max-width:760px}
+.node.own{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.node.kr{border-left:3px solid var(--accent)}
+.node-body{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;min-width:0}
+.node-body a{font-weight:600}
+.twisty{flex:none;width:22px;height:22px;margin-top:1px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface-2);color:var(--fg);cursor:pointer;font:inherit;line-height:1;padding:0}
+.twisty::before{content:"−"}
+.twisty[aria-expanded=false]::before{content:"+"}
+.twisty-gap{flex:none;width:22px}
+.chips{margin:4px 0 8px}
+.chip{font:inherit;font-size:.86rem;font-weight:600;padding:5px 12px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--fg);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.feed-kind{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--muted);margin-right:4px}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
 fieldset.field{border:0;margin:0;padding:0}
 fieldset.field legend{padding:0;margin-bottom:4px}
@@ -411,6 +498,7 @@ form.form .fields{grid-template-columns:minmax(0,1fr)}
 .tl-row{grid-template-columns:minmax(0,1fr)}
 .tl-track{border-left:0;border-top:1px dashed var(--line)}
 .tl-head .tl-label{display:none}
+.attention li{grid-template-columns:minmax(0,1fr)}
 }`;
 
 /** The dashboard's whole style: the shared design, the save bar, the light/dark switch, then its own parts. */
@@ -515,6 +603,10 @@ interface FormSpec {
   more?: Field[];
   submit: string;
   note?: string;
+  /** A step of the check-in session: a save moves the session on, not the page. */
+  session?: boolean;
+  /** What the session's preview reads, as JSON: where the key result starts, its target and the period's pace. */
+  facts?: string;
 }
 
 const UP_DOWN: Opt[] = [
@@ -603,7 +695,9 @@ function formHtml(s: FormSpec): string {
   const expect = s.expect === undefined ? "" : ` data-expect="${esc(s.expect)}"`;
   const more = s.more?.length ? `<fieldset class="form-more"><legend>More</legend><div class="fields">${s.more.map(fieldHtml).join("")}</div></fieldset>` : "";
   const note = s.note ? `<span class="meta">${esc(s.note)}</span>` : "";
-  return `<form class="save form" data-op="${esc(s.op)}" data-area="${esc(s.area)}" data-target="${esc(JSON.stringify(s.target ?? {}))}"${expect}><div class="fields">${s.fields.map(fieldHtml).join("")}${more}</div><div class="actions"><button type="submit">${esc(s.submit)}</button>${note}<span class="save-msg" role="status"></span></div></form>`;
+  const session = s.session ? " data-session" : "";
+  const facts = s.facts ? ` data-facts="${esc(s.facts)}"` : "";
+  return `<form class="save form" data-op="${esc(s.op)}" data-area="${esc(s.area)}" data-target="${esc(JSON.stringify(s.target ?? {}))}"${expect}${session}${facts}><div class="fields">${s.fields.map(fieldHtml).join("")}${more}</div><div class="actions"><button type="submit">${esc(s.submit)}</button>${note}<span class="save-msg" role="status"></span></div></form>`;
 }
 
 /** A named part of an edit section, with its form under it. */
@@ -839,7 +933,43 @@ function betForms(b: DashBet, page: AreaPage): { edit: string[]; review: string 
 }
 
 /** The key results: a summary, then a card for each, grouped by objective. Company and departments only. */
-function renderKeys(page: AreaPage, live: boolean): string {
+/** A key result's status as a filter reads it: on-track, at-risk, off-track, or not-started before its first check-in. */
+const statusKey = (k: KrRef, today: string) => krStatus(k, today)?.label.toLowerCase().replace(" ", "-") ?? "not-started";
+
+/** What the filters read off a key result's card or row: the words it is found by, its status and its owner. */
+const krData = (k: DashKr, page: AreaPage) =>
+  ` data-kr data-text="${esc([k.title, k.id, k.objective, k.owner].join(" ").toLowerCase())}" data-status="${statusKey(k, page.today)}" data-owner="${esc(k.owner)}"`;
+
+/** Whether a key result passes the filters. The live script applies the same rule as they change (krShown). */
+function krShown(k: DashKr, page: AreaPage, f: KrFilter): boolean {
+  const text = [k.title, k.id, k.objective, k.owner].join(" ").toLowerCase();
+  return (!f.q || f.q.toLowerCase().split(/\s+/).every((w) => text.includes(w))) && (!f.status || statusKey(k, page.today) === f.status) && (!f.owner || k.owner === f.owner);
+}
+
+/**
+ * The key results' filters, as a form. It works with no script: it sends the query, and the page comes back
+ * narrowed. With the script the page narrows as you type, and the query in the address bar follows.
+ */
+function filterBar(page: AreaPage, f: KrFilter): string {
+  const owners = [...new Set(page.krs.map((k) => k.owner).filter(Boolean))].sort();
+  const keep = [hidden("at", page.plan.rel), hidden("view", "keys"), page.period ? hidden("period", page.period) : ""].join("");
+  const opt = (o: Opt, on: string) => `<option value="${esc(o.value)}"${o.value === on ? " selected" : ""}>${esc(o.label)}</option>`;
+  const layout = (["cards", "list"] as const).map((l) => `<label class="seg"><input type="radio" name="layout" value="${l}"${f.layout === l ? " checked" : ""}><span>${l === "cards" ? "Cards" : "List"}</span></label>`).join("");
+  return `<form class="filters" role="search" method="get" data-filters>${keep}<label class="f-search"><span class="sr">Find</span><input type="search" name="q" value="${esc(f.q)}" placeholder="Find a key result"></label><label><span class="sr">Status</span><select name="status"><option value="">Any status</option>${STATUS_KEYS.map((o) => opt(o, f.status)).join("")}</select></label><label><span class="sr">Owner</span><select name="owner"><option value="">Any owner</option>${owners.map((o) => opt({ value: o, label: o }, f.owner)).join("")}</select></label><div class="segs" role="group" aria-label="Layout">${layout}</div><noscript><button type="submit" class="btn">Apply</button></noscript><span class="meta" data-count aria-live="polite"></span></form>`;
+}
+
+const hidden = (name: string, value: string) => `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
+
+/** The key results as a list: one row each, with its owner, status, progress, last check-in and due date. */
+function krList(page: AreaPage, f: KrFilter): string {
+  const rows = page.krs.map((k) => {
+    const last = k.kind === "milestone" ? stepsOf(k) : k.latest ? `${withUnit(k.latest.value, k.unit)} on ${shortDate(k.latest.date)}` : "None yet";
+    return `<tr${krData(k, page)}${krShown(k, page, f) ? "" : " hidden"}><td><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a><div class="meta">${esc(k.objective)}</div></td><td>${esc(k.owner)}</td><td>${statusPill(k, page.today)}</td><td class="num">${esc(k.kind === "milestone" ? `${Math.round(k.progress * 100)}%` : pct(k.progress))}</td><td>${esc(last)}</td><td>${esc(shortDate(k.by))}</td></tr>`;
+  });
+  return `<div class="tbl"><table class="kr-list"><thead><tr><th>Key result</th><th>Owner</th><th>Status</th><th>Progress</th><th>Last check-in</th><th>Due</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+function renderKeys(page: AreaPage, live: boolean, f: KrFilter = { q: "", status: "", owner: "", layout: "cards" }): string {
   if (!page.krs.length) return krEmpty(page, live);
   const st = page.krs.map((k) => krStatus(k, page.today)?.label);
   const n = (l: string) => st.filter((x) => x === l).length;
@@ -847,11 +977,14 @@ function renderKeys(page: AreaPage, live: boolean): string {
   const strip = `<div class="strip"><div><span class="eyebrow">Key results</span><span class="big num">${page.krs.length}</span><span class="parts"><span>${n("On track")} on track</span><span>${n("At risk")} at risk</span><span>${n("Off track")} off track</span></span></div><div><span class="eyebrow">Bets</span><span class="big num">${page.bets.length}</span><span class="parts"><span>${ds.filter((x) => x === "Building").length} building</span><span>${ds.filter((x) => x === "Shipped").length} shipped</span><span>${page.bets.filter((b) => b.outcome === "won").length} won</span></span></div></div>`;
   const byObjective = new Map<string, DashKr[]>();
   for (const k of page.krs) byObjective.set(k.objective, [...(byObjective.get(k.objective) ?? []), k]);
-  const sections = [...byObjective].map(([objective, krs]) => `<section>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live)).join("")}</div></section>`);
-  return `${strip}${sections.join("")}`;
+  const sections = [...byObjective].map(
+    ([objective, krs]) =>
+      `<section data-group${krs.some((k) => krShown(k, page, f)) ? "" : " hidden"}>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live, !krShown(k, page, f))).join("")}</div></section>`,
+  );
+  const none = `<p class="meta" data-none${page.krs.some((k) => krShown(k, page, f)) ? " hidden" : ""}>No key results match. <a href="${esc(hrefOf({ at: page.plan.rel, view: "keys", period: page.period }))}">Clear the filters</a></p>`;
+  return `${strip}${filterBar(page, f)}${none}<div data-layout="cards"${f.layout === "cards" ? "" : " hidden"}>${sections.join("")}</div><div data-layout="list"${f.layout === "list" ? "" : " hidden"}>${krList(page, f)}</div>`;
 }
 
-/** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
 /** A key result's figure: steps done for a milestone, else its latest value against where it started and its target. */
 function krFigure(k: DashKr): string {
   return k.kind === "milestone"
@@ -859,10 +992,11 @@ function krFigure(k: DashKr): string {
       : `<div class="figure"><span class="now num">${esc(k.latest ? withUnit(k.latest.value, k.unit) : "—")}</span><span class="of">from ${esc(withUnit(k.baseline, k.unit))} to ${esc(withUnit(k.target, k.unit))}${k.direction === "down" ? ", going down" : ""}</span></div>`;
 }
 
-function krCard(k: DashKr, page: AreaPage, live: boolean): string {
+/** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
+function krCard(k: DashKr, page: AreaPage, live: boolean, hidden = false): string {
   const figure = krFigure(k);
   const when = k.latest ? `Checked in ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "" : "No check-ins yet";
-  return `<article class="card kr-card"><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}${editKrBlock(k, live)}</article>`;
+  return `<article class="card kr-card"${krData(k, page)}${hidden ? " hidden" : ""}><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}${editKrBlock(k, live)}</article>`;
 }
 
 /** The empty state of an area's key results: the year for the company, the quarter for a department. */
@@ -1066,15 +1200,49 @@ function deliveryBar(d: BetDelivery | undefined): string {
   return `<div class="stack" role="img" aria-label="${f.done} of ${f.total} stories done, ${f.inProgress} in progress"><i class="d" style="width:${w(f.done)}"></i><i class="b" style="width:${w(f.inProgress)}"></i></div>`;
 }
 
-function renderBets(page: AreaPage, live: boolean): string {
-  if (!page.bets.length) return emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
-  const body = page.bets
-    .map((b: DashBet) => {
-      const facts = betFacts(b, page);
-      return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, live)}</article>`;
-    })
-    .join("");
-  return `<div class="bet-cards">${body}</div>`;
+/** The bets board's columns, left to right. */
+const COLUMNS = ["Not started", "Building", "Shipped", "Decided"] as const;
+type Column = (typeof COLUMNS)[number];
+
+/**
+ * Where a bet sits on the board. Decided once a review closed it (won, lost or stopped); else from its stories:
+ * its own maps' status, or for a bet delivered by the bets below it, Shipped when all of theirs shipped and
+ * Building once any has started. A bet with no map has not started. Nothing is dragged: the code and the reviews move it.
+ */
+function columnOf(b: BetRef): Column {
+  if (b.outcome && b.outcome !== "open") return "Decided";
+  const d = b.delivery;
+  if (d?.source === "own" && d.delivery) return d.delivery.status;
+  if (d?.source === "via" && d.via.length) {
+    const st = d.via.map((v) => v.delivery.status);
+    if (st.every((x) => x === "Shipped")) return "Shipped";
+    if (st.some((x) => x !== "Not started")) return "Building";
+  }
+  return "Not started";
+}
+
+/** One bet on the board: its name and area, its delivery, owner and review, and for the area's own bets the Edit button. */
+function boardCard(b: BetRef | DashBet, page: AreaPage, live: boolean): string {
+  const own = "version" in b && b.rel === page.plan.rel ? (b as DashBet) : undefined;
+  const review = own?.review_on ? ` · review ${esc(shortDate(own.review_on))}${own.review_on < page.today && own.outcome === "open" ? ' <strong class="due">due</strong>' : ""}` : "";
+  return `<article class="card bet-card board-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)}${b.rel === page.plan.rel ? "" : ` <span class="where">${esc(areaName(page, b.rel))}</span>`}</h3>${b.outcome && b.outcome !== "open" ? outcomePill(b.outcome) : ""}</div><div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<p class="meta">${b.owner ? esc(b.owner) : "No owner"}${review}</p>${own ? editBetBlock(own, live) : ""}</article>`;
+}
+
+/**
+ * The bets as a board, in four columns by where each one is. A switch adds every bet in the areas below, each
+ * with the area it is in. The board is read from the code and the reviews, so it has nothing to drag.
+ */
+function renderBets(page: AreaPage, live: boolean, scope: "own" | "below" = "own"): string {
+  const hasBelow = page.tree.some((n) => n.parent === page.plan.rel);
+  const shown: (BetRef | DashBet)[] = [...page.bets, ...(scope === "below" && hasBelow ? page.belowAreaBets : [])];
+  const link = (to: "own" | "below", label: string) => `<a href="${esc(hrefOf({ at: page.plan.rel, view: "bets", period: page.period, scope: to === "below" ? "below" : undefined }))}"${scope === to ? ' class="on" aria-current="true"' : ""}>${esc(label)}</a>`;
+  const switcher = hasBelow ? `<nav class="scope" aria-label="Which bets">${link("own", `${page.plan.name} only`)}${link("below", `With the areas below (${page.belowAreaBets.length})`)}</nav>` : "";
+  if (!shown.length) return `${switcher}${emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND))}`;
+  const cols = COLUMNS.map((c) => {
+    const here = shown.filter((b) => columnOf(b) === c);
+    return `<section class="col" aria-label="${c}"><h2 class="col-head">${c} <span class="count">${here.length}</span></h2>${here.map((b) => boardCard(b, page, live)).join("") || '<p class="meta col-empty">None</p>'}</section>`;
+  });
+  return `${switcher}<p class="meta board-note">Bets move across as their stories move in the code, or when a review decides them.</p><div class="board">${cols.join("")}</div>`;
 }
 
 /** A bet's facts, as the rows of a list: owner, team, review, what it aims at and aligns to, delivery and stories. */
@@ -1166,6 +1334,223 @@ function renderTimeline(page: AreaPage): string {
   }
   rows.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
   return `<p class="tl-legend"><span>Bar: a bet from its start to its deadline</span><span>Diamond: a review, or a key result's due date</span><span>Red line: today, ${esc(shortDate(page.today))}</span><span>${esc(MON[new Date(start).getUTCMonth()]!)} ${new Date(start).getUTCFullYear()} to ${esc(MON[new Date(end - DAY).getUTCMonth()]!)} ${new Date(end - DAY).getUTCFullYear()}</span></p><div class="tl">${head}${rows.map((r) => r.html).join("")}</div>`;
+}
+
+/** How many days from one date to another: negative when the second is earlier. */
+const daysBetween = (from: string, to: string) => Math.round((dayOf(to) - dayOf(from)) / DAY);
+
+/** A bet's review is due when it is open and its date is within this many days, or past. */
+const REVIEW_SOON = 14;
+
+/** The key results an area holds itself: the company's and departments' own. A group or team holds none. */
+const ownKrs = (page: AreaPage) => (page.plan.level === "company" || page.plan.level === "department" ? page.krs.filter((k) => k.rel === page.plan.rel) : []);
+
+/** A key result that waits for a check-in: one gone stale, or a list of steps with some still to do and none done for a while. */
+const needsCheckin = (k: DashKr) => k.stale && !(k.kind === "milestone" && k.steps.every((st) => st.done));
+
+/** Whether a bet has a story map of its own, or bets below it that do. */
+const hasMap = (b: DashBet) => !!b.delivery && b.delivery.source !== "none";
+
+/** One row of the overview's list of what needs attention: what it is, a link to it, and why. */
+interface Attention {
+  kind: string;
+  html: string;
+  why: string;
+}
+
+/**
+ * The overview: three tiles (key results, bets, and what is due), then what needs attention. Late check-ins,
+ * reviews due, bets with no story map and key results nothing aims at, each linked so it opens its drawer.
+ */
+function renderOverview(page: AreaPage, live: boolean): string {
+  if (!page.krs.length && !page.bets.length) {
+    const holds = page.plan.level === "company" || page.plan.level === "department";
+    return holds ? krEmpty(page, live) : emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
+  }
+  const own = ownKrs(page);
+  const st = page.krs.map((k) => krStatus(k, page.today)?.label);
+  const n = (l: string) => st.filter((x) => x === l).length;
+  const ds = page.bets.map((b) => (b.delivery?.source === "own" ? b.delivery.delivery?.status : undefined));
+  const late = own.filter(needsCheckin);
+  const reviews = page.bets.filter((b) => b.outcome === "open" && b.review_on && daysBetween(page.today, b.review_on) <= REVIEW_SOON);
+  const krTile = `<div><span class="eyebrow">${own.length || page.plan.level === "company" || page.plan.level === "department" ? "Key results" : "Key results its bets aim at"}</span><span class="big num">${page.krs.length}</span><span class="parts"><span>${n("On track")} on track</span><span>${n("At risk")} at risk</span><span>${n("Off track")} off track</span></span></div>`;
+  const betTile = `<div><span class="eyebrow">Bets</span><span class="big num">${page.bets.length}</span><span class="parts"><span>${ds.filter((x) => x === "Building").length} building</span><span>${ds.filter((x) => x === "Shipped").length} shipped</span><span>${page.bets.filter((b) => b.outcome === "won").length} won</span></span></div>`;
+  const dueTile = `<div><span class="eyebrow">Due</span><span class="big num">${late.length + reviews.length}</span><span class="parts"><span>${late.length} check-in${late.length === 1 ? "" : "s"}</span><span>${reviews.length} review${reviews.length === 1 ? "" : "s"}</span></span></div>`;
+  const items: Attention[] = [];
+  for (const k of late) {
+    const why = k.kind === "milestone" ? `No step done since ${shortDate(k.steps.filter((x) => x.done).map((x) => x.done!).sort().pop() ?? "")}` : k.latest ? `Last checked in ${shortDate(k.latest.date)}` : "No check-ins yet";
+    items.push({ kind: "Check-in late", html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`, why });
+  }
+  for (const b of reviews) {
+    const d = daysBetween(page.today, b.review_on);
+    items.push({ kind: d < 0 ? "Review overdue" : "Review due", html: betLink(b, page.period), why: d < 0 ? `Was due ${shortDate(b.review_on)}` : d === 0 ? "Due today" : `Due ${shortDate(b.review_on)}` });
+  }
+  for (const b of page.bets.filter((x) => x.outcome === "open" && !hasMap(x))) items.push({ kind: "No story map", html: betLink(b, page.period), why: "Nothing in the code delivers it yet" });
+  for (const k of own) {
+    const aimed = page.bets.some((b) => b.krs.primary === k.id || b.krs.also.includes(k.id)) || page.aimingBets.some((b) => b.of === k.id);
+    if (!aimed) items.push({ kind: "Nothing aims at it", html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`, why: "No bet aims at this key result" });
+  }
+  const list = items.length
+    ? `<ul class="attention">${items.map((i) => `<li><span class="att-kind">${esc(i.kind)}</span><span class="att-what">${i.html}</span><span class="meta">${esc(i.why)}</span></li>`).join("")}</ul>`
+    : '<p class="meta">Nothing needs attention.</p>';
+  const rows = own.length
+    ? `<h2>Key results</h2><ul class="kr-rows">${own.map((k) => `<li><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}${krBar(k, page.today)}</li>`).join("")}</ul>`
+    : "";
+  return `<div class="strip">${krTile}${betTile}${dueTile}</div><h2>Needs attention</h2>${list}${rows}`;
+}
+
+/**
+ * The check-in session: the area's own key results one at a time, the late ones first. Each step saves its
+ * check-in (or a step done) on its own, and shows where a new value lands before it is saved. The page loads
+ * again when the session closes, so the figures are the new ones.
+ */
+function checkinSession(page: AreaPage): string {
+  const own = ownKrs(page).filter((k) => !(k.kind === "milestone" && k.steps.every((st) => st.done)));
+  if (!own.length) return "";
+  const queue = [...own.filter(needsCheckin), ...own.filter((k) => !needsCheckin(k))];
+  const late = queue.filter(needsCheckin).length;
+  const intro = `<section data-step="intro"><p>${late ? `${late} of ${queue.length} key result${queue.length === 1 ? " needs" : "s need"} a check-in.` : "Every key result is up to date. You can still check in on any of them."} You go through them one at a time, the late ones first. Each one saves when you press Save and next, and you can skip any.</p><ol class="queue">${queue
+    .map((k) => `<li>${esc(k.title)} <span class="meta">${needsCheckin(k) ? (k.latest ? `late, last ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "late" : "no check-ins yet") : k.latest ? `last ${esc(shortDate(k.latest.date))}` : ""}</span></li>`)
+    .join("")}</ol><div class="session-nav"><button type="button" class="btn primary" data-session-next>Start</button></div></section>`;
+  const steps = queue.map((k, i) => {
+    const pace = paceOf(k, page.today);
+    const facts = { baseline: k.baseline, target: k.target, unit: k.unit, latest: k.latest?.value ?? null, pace: pace ?? null };
+    const form =
+      k.kind === "milestone"
+        ? formHtml({
+            op: "kr.step",
+            area: k.rel,
+            target: { kr: k.id },
+            expect: k.version,
+            session: true,
+            submit: "Save and next",
+            fields: [
+              { name: "name", label: "Which step is done?", kind: "choice", options: k.steps.filter((x) => !x.done).map((x) => ({ value: x.name, label: x.name })), wide: true },
+              { name: "date", label: "Done on", kind: "date", hint: "Leave blank for today." },
+            ],
+          })
+        : formHtml({
+            op: "checkin",
+            area: k.rel,
+            target: { kr: k.id },
+            expect: k.version,
+            session: true,
+            facts: JSON.stringify(facts),
+            submit: "Save and next",
+            fields: [
+              { name: "value", label: `New value${k.unit ? ` (${k.unit})` : ""}`, kind: "number", required: true },
+              { name: "date", label: "On", kind: "date", hint: "Leave blank for today." },
+              { name: "note", label: "Note", wide: true, placeholder: "What moved it, or what's in the way" },
+            ],
+          });
+    return `<section data-step="${i + 1}" hidden><p class="eyebrow">${i + 1} of ${queue.length}</p><h3>${esc(k.title)} ${statusPill(k, page.today)}</h3>${krFigure(k)}${krBar(k, page.today)}${form}<p class="preview" data-preview aria-live="polite"></p><div class="session-nav"><button type="button" class="btn" data-session-skip>Skip</button></div></section>`;
+  });
+  const done = `<section data-step="done" hidden><p><strong data-session-count>No check-ins saved.</strong> Saves go on the save bar's branch, and nothing is pushed until you press Push.</p><div class="session-nav"><button type="button" class="btn primary" data-close>Done</button></div></section>`;
+  return `<dialog class="sheet-dialog session" id="checkin-session" aria-labelledby="checkin-session-title"><div class="box"><div class="drawer-head"><h2 id="checkin-session-title">Check in</h2><button type="button" class="btn" data-close>Close</button></div>${intro}${steps.join("")}${done}</div></dialog>`;
+}
+
+/** One node of the alignment tree: what it shows, and the nodes under it. */
+interface TreeNode {
+  html: string;
+  own: boolean;
+  kind: "kr" | "bet";
+  children: TreeNode[];
+}
+
+/**
+ * The alignment tree: the key results above at the top, the area's key results under the ones they align to,
+ * then the bets that aim at each, and under each bet the bets that align to it, at any depth. The area's own
+ * key results and bets are outlined. A bet the area holds that is under none of these is listed at the end.
+ */
+function alignmentTree(page: AreaPage): TreeNode[] {
+  const placed = new Set<string>();
+  // Every bet the page knows, once: the area's own, the ones elsewhere that aim at its key results, and all below it.
+  const bets = new Map<string, BetRef | DashBet>();
+  for (const b of [...page.bets, ...page.aimingBets, ...page.belowAreaBets]) if (!bets.has(b.id)) bets.set(b.id, b);
+  const aimsAt = (b: BetRef | DashBet, kr: string) => ("krs" in b ? b.krs.primary === kr || b.krs.also.includes(kr) : page.aimingBets.some((x) => x.id === b.id && x.of === kr));
+  const krMetaHtml = (k: KrRef) => `<span class="where">${esc(areaName(page, k.rel))}</span> ${statusPill(k, page.today)} <span class="meta">${esc(k.kind === "milestone" ? stepsOf(k) : pct(k.progress))}</span>`;
+  const betNode = (b: BetRef | DashBet, seen: Set<string>): TreeNode => {
+    placed.add(b.id);
+    const next = new Set([...seen, b.id]);
+    const under = [...bets.values()].filter((c) => c.aligns.includes(b.id) && !next.has(c.id));
+    return {
+      kind: "bet",
+      own: b.rel === page.plan.rel,
+      html: `${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span> ${deliveryPill(b.delivery)}${b.outcome && b.outcome !== "open" ? ` ${outcomePill(b.outcome)}` : ""}`,
+      children: under.map((c) => betNode(c, next)),
+    };
+  };
+  const krNode = (k: KrRef, below: TreeNode[] = []): TreeNode => ({
+    kind: "kr",
+    own: k.rel === page.plan.rel,
+    html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> ${krMetaHtml(k)}`,
+    children: [...below, ...[...bets.values()].filter((b) => aimsAt(b, k.id) && !b.aligns.some((a) => bets.has(a) && aimsAt(bets.get(a)!, k.id))).map((b) => betNode(b, new Set()))],
+  });
+  const roots: TreeNode[] = [];
+  const under = new Set<string>();
+  for (const a of page.aboveKrs) {
+    const mine = page.krs.filter((k) => k.aligns.includes(a.id));
+    for (const k of mine) under.add(k.id);
+    roots.push(krNode(a, mine.map((k) => krNode(k))));
+  }
+  for (const k of page.krs) if (!under.has(k.id)) roots.push(krNode(k));
+  const loose = page.bets.filter((b) => !placed.has(b.id));
+  if (loose.length) roots.push({ kind: "bet", own: false, html: '<span class="meta">Bets under no key result here</span>', children: loose.map((b) => betNode(b, new Set())) });
+  return roots;
+}
+
+/** A tree's nodes as nested lists, each with the button that folds it when it has nodes under it. */
+function treeHtml(nodes: TreeNode[], top = true): string {
+  const items = nodes.map((n) => {
+    const fold = n.children.length ? `<button type="button" class="twisty" data-fold aria-expanded="true" aria-label="Fold"></button>` : '<span class="twisty-gap"></span>';
+    return `<li><div class="node ${n.kind}${n.own ? " own" : ""}">${fold}<span class="node-body">${n.html}</span></div>${n.children.length ? treeHtml(n.children, false) : ""}</li>`;
+  });
+  return `<ul class="${top ? "tree" : "branch"}">${items.join("")}</ul>`;
+}
+
+/** The alignment view: the tree, with buttons to fold or open every branch at once. */
+function renderAlignment(page: AreaPage, live: boolean): string {
+  const nodes = alignmentTree(page);
+  if (!nodes.length) return emptyState(`Nothing in ${page.plan.name} to align yet.`, "Key results and bets show here, each under what it aligns to.", addAction(live, "add-bet", "Add a bet", BET_COMMAND));
+  return `<p class="tree-tools"><button type="button" class="btn" data-fold-all="close">Fold all</button><button type="button" class="btn" data-fold-all="open">Open all</button><span class="meta">Outlined: ${esc(page.plan.name)}'s own.</span></p>${treeHtml(nodes)}`;
+}
+
+/** One thing that happened, for the activity feed: when, what kind, and what it says. */
+interface Happening {
+  date: string;
+  kind: "checkin" | "review";
+  html: string;
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * The activity feed: the area's check-ins, steps done and bet reviews, newest first, by month. It is read from
+ * the plan's files, so it shows what they record and nothing else.
+ */
+function renderActivity(page: AreaPage): string {
+  const events: Happening[] = [];
+  const krLinkOf = (k: DashKr) => `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`;
+  for (const k of ownKrs(page)) {
+    for (const c of k.checkins) events.push({ date: c.date, kind: "checkin", html: `${krLinkOf(k)} checked in at <strong>${esc(withUnit(c.value, k.unit))}</strong>${c.note ? ` · ${esc(c.note)}` : ""}` });
+    for (const st of k.steps) if (st.done) events.push({ date: st.done, kind: "checkin", html: `${krLinkOf(k)}: step done, ${esc(st.name)}` });
+  }
+  for (const b of page.bets) {
+    for (const r of b.reviews) events.push({ date: r.date, kind: "review", html: `${betLink(b, page.period)} reviewed: <strong>${esc(r.decision.charAt(0).toUpperCase() + r.decision.slice(1))}</strong>${r.outcome ? `, ${esc(r.outcome)}` : ""}${r.reason ? ` · ${esc(r.reason)}` : ""}` });
+  }
+  if (!events.length) return emptyState("Nothing has happened here yet.", "Check-ins, steps done and bet reviews show here as they are saved.");
+  events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const n = (k: Happening["kind"]) => events.filter((e) => e.kind === k).length;
+  const chips = `<div class="segs chips" role="group" aria-label="Show"><button type="button" class="chip" data-activity="" aria-pressed="true">All ${events.length}</button><button type="button" class="chip" data-activity="checkin" aria-pressed="false">Check-ins ${n("checkin")}</button><button type="button" class="chip" data-activity="review" aria-pressed="false">Reviews ${n("review")}</button></div>`;
+  const months = new Map<string, Happening[]>();
+  for (const e of events) {
+    const key = e.date.slice(0, 7);
+    months.set(key, [...(months.get(key) ?? []), e]);
+  }
+  const body = [...months]
+    .map(([key, list]) => `<section data-month><h2>${MONTHS[Number(key.slice(5, 7)) - 1] ?? key} ${key.slice(0, 4)}</h2><ol class="history feed">${list.map((e) => `<li data-kind="${e.kind}"><time datetime="${esc(e.date)}">${esc(shortDate(e.date))}</time><span><span class="feed-kind">${e.kind === "review" ? "Review" : "Check-in"}</span> ${e.html}</span></li>`).join("")}</ol></section>`)
+    .join("");
+  return `${chips}<p class="meta">From the plan's files: each key result's check-ins and steps, and each bet's reviews.</p>${body}`;
 }
 
 /** A text-only item's line on its own drill-down: what it says, and that no figure counts it. Nothing once a link backs it. */
@@ -1301,10 +1686,69 @@ document.addEventListener("click", function (e) {
     openDrawer(shown);
     return;
   }
+  var session = t.closest("dialog.session");
+  if (session && t.closest("[data-session-next], [data-session-skip]")) { sessionNext(session); return; }
   var opener = t.closest("[data-open]");
   if (!opener) return;
   var box = document.getElementById(opener.getAttribute("data-open"));
-  if (box) openDrawer(box, opener.getAttribute("data-tab"));
+  if (!box) return;
+  if (box.classList.contains("session")) sessionStart(box);
+  openDrawer(box, opener.getAttribute("data-tab"));
+});
+// The check-in session: its intro, one step per key result, then done. A step saves on its own and moves on; a
+// skip moves on. Closing it after any save loads the page again, so its figures are the new ones.
+var sessionSaved = 0;
+function sessionStart(box) {
+  sessionSaved = 0;
+  var steps = box.querySelectorAll("[data-step]");
+  for (var i = 0; i < steps.length; i++) steps[i].hidden = i !== 0;
+}
+function sessionNext(box) {
+  var steps = Array.prototype.slice.call(box.querySelectorAll("[data-step]"));
+  var at = steps.filter(function (x) { return !x.hidden; })[0];
+  var next = steps[steps.indexOf(at) + 1];
+  if (!next) return;
+  at.hidden = true;
+  next.hidden = false;
+  if (next.getAttribute("data-step") === "done") {
+    var count = next.querySelector("[data-session-count]");
+    if (count) count.textContent = sessionSaved ? sessionSaved + (sessionSaved === 1 ? " check-in saved." : " check-ins saved.") : "No check-ins saved.";
+  }
+  var first = next.querySelector("input:not([type=radio]), button");
+  if (first) first.focus();
+}
+document.addEventListener("close", function (e) {
+  if (!e.target.classList || !e.target.classList.contains("session") || !sessionSaved) return;
+  remember({ toast: sessionSaved + (sessionSaved === 1 ? " check-in saved" : " check-ins saved") });
+  location.reload();
+}, true);
+// What a new value would mean, before it is saved: the change from the last check-in, how far it is toward the
+// target, and against the period's pace, the same status the page gives.
+function previewOf(facts, raw) {
+  var v = Number(raw);
+  if (raw === "" || !isFinite(v)) return "";
+  var fmt = function (n) { n = Number(n.toFixed(4)); return n + (facts.unit ? (facts.unit === "%" ? "%" : " " + facts.unit) : ""); };
+  var span = facts.target - facts.baseline;
+  var p = span === 0 ? 1 : (v - facts.baseline) / span;
+  var parts = [];
+  if (facts.latest !== null) {
+    var d = v - facts.latest;
+    parts.push(d === 0 ? "No change from " + fmt(facts.latest) : (d > 0 ? "Up " : "Down ") + fmt(Math.abs(d)) + " from " + fmt(facts.latest));
+  }
+  parts.push(p < 0 ? "moved the wrong way" : Math.round(p * 100) + "% of the way to " + fmt(facts.target));
+  // A value that moved the wrong way gets no status: with the period only begun, it would read as on track.
+  if (facts.pace !== null && p >= 0) {
+    var gap = facts.pace - Math.max(0, p);
+    parts.push((gap <= 0.1 ? "on track" : gap <= 0.25 ? "at risk" : "off track") + ", with " + Math.round(facts.pace * 100) + "% of the period gone");
+  }
+  var text = parts.join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1) + ".";
+}
+document.addEventListener("input", function (e) {
+  var form = e.target && e.target.form;
+  if (!form || !form.hasAttribute("data-facts") || e.target.name !== "value") return;
+  var out = form.parentNode.querySelector("[data-preview]");
+  if (out) out.textContent = previewOf(JSON.parse(form.getAttribute("data-facts")), e.target.value.trim());
 });
 // The arrow keys move between a drawer's tabs.
 document.addEventListener("keydown", function (e) {
@@ -1349,6 +1793,12 @@ document.addEventListener("submit", function (e) {
     if (res.ok) {
       var said = res.body.message + (res.body.branch ? " on " + res.body.branch : "");
       if (out) out.textContent = said;
+      // A step of the check-in session moves the session on; the page loads again when it closes.
+      if (form.hasAttribute("data-session")) {
+        sessionSaved++;
+        sessionNext(form.closest("dialog"));
+        return;
+      }
       // Saved: load the page again so its figures and versions are the new ones. The message shows again as a toast,
       // and a key result's or bet's drawer opens again where it was.
       var box = form.closest("dialog.drawer");
@@ -1422,6 +1872,80 @@ function shareDialog(page: AreaPage, offline: boolean): string {
   return `<dialog class="sheet-dialog" id="share" aria-labelledby="share-title"><div class="box"><h2 id="share-title">Share the plan</h2>${body}<div><button class="btn" type="button" data-share-close>Close</button></div></div></dialog>`;
 }
 
+/**
+ * The key results' filters, as they change: each card and row shows when it passes them (the rule krShown
+ * applies on the server), an objective with none showing hides, and the layout switches. The live page puts
+ * the filters in its address, so a reload or a link keeps them; the export, which swaps pages itself, does not.
+ * Both carry it, and it listens on the document, so it works on a page the export swaps in.
+ */
+export const FILTER_JS = `(function () {
+function passes(el, words, status, owner) {
+  var text = el.getAttribute("data-text") || "";
+  for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) < 0) return false;
+  return (!status || el.getAttribute("data-status") === status) && (!owner || el.getAttribute("data-owner") === owner);
+}
+function apply(form) {
+  var q = form.elements.namedItem("q").value.trim();
+  var status = form.elements.namedItem("status").value;
+  var owner = form.elements.namedItem("owner").value;
+  var picked = form.querySelector("input[name=layout]:checked");
+  var layout = picked ? picked.value : "cards";
+  var words = q.toLowerCase().split(" ").filter(function (w) { return w !== ""; });
+  var all = document.querySelectorAll("[data-kr]");
+  for (var i = 0; i < all.length; i++) all[i].hidden = !passes(all[i], words, status, owner);
+  var groups = document.querySelectorAll("[data-group]");
+  for (var g = 0; g < groups.length; g++) groups[g].hidden = !groups[g].querySelector("[data-kr]:not([hidden])");
+  var layouts = document.querySelectorAll("[data-layout]");
+  for (var l = 0; l < layouts.length; l++) layouts[l].hidden = layouts[l].getAttribute("data-layout") !== layout;
+  var cards = document.querySelectorAll(".kr-card[data-kr]");
+  var showing = document.querySelectorAll(".kr-card[data-kr]:not([hidden])").length;
+  var none = document.querySelector("[data-none]");
+  if (none) none.hidden = showing > 0;
+  var count = form.querySelector("[data-count]");
+  if (count) count.textContent = showing === cards.length ? "" : showing + " of " + cards.length;
+  if (!document.querySelector('meta[name="nikos-token"]')) return;
+  var query = new URLSearchParams(location.search);
+  var set = { q: q, status: status, owner: owner, layout: layout === "cards" ? "" : layout };
+  for (var k in set) if (set[k]) query.set(k, set[k]); else query.delete(k);
+  history.replaceState(null, "", "?" + query.toString());
+}
+function formOf(e) { return e.target && e.target.closest ? e.target.closest("[data-filters]") : null; }
+document.addEventListener("input", function (e) { var f = formOf(e); if (f) apply(f); });
+document.addEventListener("change", function (e) { var f = formOf(e); if (f) apply(f); });
+document.addEventListener("submit", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-filters")) { e.preventDefault(); apply(e.target); } });
+// The alignment tree: a node's button folds the branch under it; Fold all and Open all do every branch.
+function fold(button, open) {
+  button.setAttribute("aria-expanded", String(open));
+  button.setAttribute("aria-label", open ? "Fold" : "Open");
+  var branch = button.closest("li").querySelector(":scope > .branch");
+  if (branch) branch.hidden = !open;
+}
+// The activity feed: a chip shows one kind of happening, or all; a month with none showing hides.
+function showKind(kind) {
+  var chips = document.querySelectorAll("[data-activity]");
+  for (var c = 0; c < chips.length; c++) chips[c].setAttribute("aria-pressed", String(chips[c].getAttribute("data-activity") === kind));
+  var items = document.querySelectorAll("li[data-kind]");
+  for (var i = 0; i < items.length; i++) items[i].hidden = !!kind && items[i].getAttribute("data-kind") !== kind;
+  var months = document.querySelectorAll("[data-month]");
+  for (var m = 0; m < months.length; m++) months[m].hidden = !months[m].querySelector("li[data-kind]:not([hidden])");
+}
+document.addEventListener("click", function (e) {
+  var t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  var one = t.closest("[data-fold]");
+  if (one) { fold(one, one.getAttribute("aria-expanded") !== "true"); return; }
+  var all = t.closest("[data-fold-all]");
+  if (all) {
+    var open = all.getAttribute("data-fold-all") === "open";
+    var buttons = document.querySelectorAll("[data-fold]");
+    for (var b = 0; b < buttons.length; b++) fold(buttons[b], open);
+    return;
+  }
+  var chip = t.closest("[data-activity]");
+  if (chip) showKind(chip.getAttribute("data-activity"));
+});
+})();`;
+
 /** Opens the Share dialog. The live page and the export both carry it. */
 export const SHARE_JS = `document.addEventListener("click",function(e){var t=e.target&&e.target.closest?e.target:null;if(!t)return;var d=document.getElementById("share");if(!d)return;if(t.closest("[data-share]")&&d.showModal)d.showModal();else if(t.closest("[data-share-close]")||t===d)d.close();});`;
 
@@ -1444,10 +1968,13 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   let body: string;
   if (state.drill?.kind === "kr") body = renderKrDrill(state.drill.kr, page, live);
   else if (state.drill?.kind === "bet") body = renderBetDrill(state.drill.bet, state.drill.up, page, live);
-  else if (current === "keys") body = renderKeys(page, live);
+  else if (current === "overview") body = renderOverview(page, live);
+  else if (current === "keys") body = renderKeys(page, live, state.view.filter);
   else if (current === "okrs") body = renderOkrs(page, live);
   else if (current === "ladder") body = renderLadderPage(page, state.view);
-  else if (current === "bets") body = renderBets(page, live);
+  else if (current === "alignment") body = renderAlignment(page, live);
+  else if (current === "activity") body = renderActivity(page);
+  else if (current === "bets") body = renderBets(page, live, state.view.scope);
   else body = renderTimeline(page);
   const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current, period: page.period }))}">← Back to ${esc(name)}</a></p>` : "";
   const reads = page.repos.map((r) => `<li>${esc(repoLabel(r))}: ${esc(r.age)}</li>`);
@@ -1458,8 +1985,10 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   const eyebrow = state.drill ? LEVEL_LABEL[page.plan.level] : VIEW_LABEL[current];
   // What the page adds, as buttons in its head: each opens its drawer, from any view. Key results only where they live.
   const ownsKrs = page.plan.level === "company" || page.plan.level === "department";
+  const late = ownKrs(page).filter(needsCheckin).length;
+  const checkin = live && ownKrs(page).some((k) => !(k.kind === "milestone" && k.steps.every((st) => st.done))) ? `<button type="button" class="btn" data-open="checkin-session">Check in${late ? ` (${late})` : ""}</button>` : "";
   const actions = live
-    ? `<div class="head-actions">${ownsKrs ? '<button type="button" class="btn" data-open="add-kr">New key result</button>' : ""}<button type="button" class="btn primary" data-open="add-bet">New bet</button></div>`
+    ? `<div class="head-actions">${checkin}${ownsKrs ? '<button type="button" class="btn" data-open="add-kr">New key result</button>' : ""}<button type="button" class="btn primary" data-open="add-bet">New bet</button></div>`
     : "";
   return `${datalist}<a class="skip" href="#main">Skip to the page</a>
 <div class="app">
@@ -1488,7 +2017,7 @@ ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map
 </main>
 </div>
 </div>
-${addKrForm(page, live)}${addBetForm(page, live)}
+${addKrForm(page, live)}${addBetForm(page, live)}${live ? checkinSession(page) : ""}
 ${live ? [...page.krs.map((k) => krDrawer(k, page)), ...page.bets.map((b) => betDrawer(b, page))].join("") : ""}
 ${shareDialog(page, !!opts.offline)}
 `;
@@ -1524,6 +2053,7 @@ export function renderPlanPage(page: AreaPage, state: PageState, opts: { token: 
 ${renderPlanBody(page, state, { live: true })}<script>
 ${LIVE_SCRIPT}
 ${SHARE_JS}
+${FILTER_JS}
 var hostEl = document.querySelector("[data-host]");
 if (hostEl) hostEl.textContent = location.host;
 </script></body></html>

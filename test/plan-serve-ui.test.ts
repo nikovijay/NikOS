@@ -84,7 +84,7 @@ describe("breadcrumbs and the place in the URL", () => {
     const r = (await get(srv.port, "/?at=departments/finance")).text;
     const views = [...r.matchAll(/<nav class="views"[^>]*>(.*?)<\/nav>/gs)][0][1];
     const hrefs = [...views.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-    expect(hrefs.length).toBe(5);
+    expect(hrefs.length).toBe(8);
     for (const h of hrefs) expect(h).toContain(FINANCE);
   });
 });
@@ -93,7 +93,7 @@ describe("the views each level has", () => {
   it("shows key results for a department and not for a group or team", async () => {
     const { srv } = await start(acmePlan());
     const dept = (await get(srv.port, `/?${FINANCE}&view=keys`)).text;
-    expect(dept).toContain('<article class="card kr-card">');
+    expect(dept).toContain('<article class="card kr-card" data-kr data-text="close days close-days  mira" data-status="on-track" data-owner="Mira">');
     expect(dept).toContain(`href="?${FINANCE}&amp;kr=close-days&amp;period=2027-Q1"`);
     const group = (await get(srv.port, "/?at=groups/payments")).text;
     expect(group).not.toContain('class="card kr-card"');
@@ -102,9 +102,12 @@ describe("the views each level has", () => {
     expect(asked).toContain("Key results its bets aim at");
   });
 
-  it("opens on the OKRs and bets page by default, with each key result's bets under it", async () => {
+  it("opens on the overview by default, and the OKRs and bets page shows each key result's bets under it", async () => {
     const { srv } = await start(acmePlan());
-    const r = (await get(srv.port, `/?${FINANCE}`)).text;
+    const first = (await get(srv.port, `/?${FINANCE}`)).text;
+    expect(first).toContain('<a href="?at=departments%2Ffinance&amp;view=overview&amp;period=2027-Q1" class="on"');
+    expect(first).toContain("<h2>Needs attention</h2>");
+    const r = (await get(srv.port, `/?${FINANCE}&view=okrs`)).text;
     expect(r).toContain('<a href="?at=departments%2Ffinance&amp;view=okrs&amp;period=2027-Q1" class="on"');
     expect(r).toContain("Key results and the bets that aim at them");
     expect(r).toContain("Close days");
@@ -232,7 +235,7 @@ describe("the drill-downs", () => {
     const { srv } = await start(acmePlan());
     const kr = (await get(srv.port, `/?${FINANCE}&kr=nope`)).text;
     expect(kr).toContain("There&#39;s no key result called &#39;nope&#39;.");
-    expect(kr).toContain("Key results and the bets that aim at them");
+    expect(kr).toContain("<h2>Needs attention</h2>");
     const bet = (await get(srv.port, `/?${FINANCE}&bet=nope`)).text;
     expect(bet).toContain("There&#39;s no bet called &#39;nope&#39;.");
   });
@@ -242,8 +245,8 @@ describe("what the page is made of", () => {
   it("has no form on the ladder outside its drawers, no script from another place, and an inline script that parses", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&view=ladder&widen=all`)).text;
-    // The ladder's only forms are in the drawers that add a key result or a bet.
-    expect(r.replace(/<dialog class="drawer"[\s\S]*?<\/dialog>/g, "")).not.toContain("<form");
+    // The ladder's only forms are in the drawers and the check-in session.
+    expect(r.replace(/<dialog class="(drawer|sheet-dialog session)"[\s\S]*?<\/dialog>/g, "")).not.toContain("<form");
     expect(r).not.toMatch(/<script\s+src=/);
     expect(r).not.toMatch(/https?:\/\//);
     const onchange = /onchange="([^"]*)"/.exec(r)![1].replace(/&amp;/g, "&");
@@ -263,7 +266,7 @@ describe("what the page is made of", () => {
   it("gives the same page's data as JSON, with the view and the drill", async () => {
     const { srv } = await start(acmePlan());
     const data = JSON.parse((await get(srv.port, `/api/data?${FINANCE}&kr=close-days`)).text);
-    expect(data.view).toEqual({ view: "okrs", widen: { up: false, down: false }, more: false });
+    expect(data.view).toEqual({ view: "overview", widen: { up: false, down: false }, more: false, filter: { q: "", status: "", owner: "", layout: "cards" }, scope: "own" });
     expect(data.drill.kind).toBe("kr");
     expect(data.drill.kr.areas.map((a: { rel: string }) => a.rel)).toEqual(["departments/finance", "groups/payments", "teams/WEB"]);
     expect(data.belowBets).toEqual([]);

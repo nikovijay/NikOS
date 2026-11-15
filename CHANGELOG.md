@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **An Overview for each area.** The dashboard now opens on it. It has three tiles (key results by status, bets by delivery, and check-ins and reviews due) and a list of what needs attention: late check-ins, bet reviews due within two weeks or overdue, open bets with no story map, and key results no bet aims at. Each one opens its drawer. A company or department also lists its key results with their status and progress.
+- **Check in, one key result at a time.** The Check in button shows how many key results are late. It opens a session that goes through the area's key results, the late ones first. For each one you type the new value, with a date and a note if you like, and it shows what the value would mean before you save: the change from the last check-in, how far it is toward the target, and whether that is on track for how much of the period has gone. A list of steps asks which step is done. Each saves on its own, and you can skip any.
+
+- **An Alignment tree.** A new view shows the key results above, the area's own key results under the ones they align to, the bets that aim at each, and the bets below each bet, at any depth. Any branch folds, and the area's own items are outlined. The Ladder stays as it was.
+- **Activity.** A new view lists the area's check-ins, steps done and bet reviews, newest first and by month, with chips to show one kind. It reads only what the plan's files record.
+- **Filter the key results.** The Key results view has a search box, a status and an owner filter, and a switch between cards and a list. The filters go in the page's address, so a link or a reload keeps them, and they work in an exported page too.
+
 ### Changed
 
+- **Bets is a board.** The Bets view has four columns: Not started, Building, Shipped and Decided. A bet moves across as its stories move in the code, or when a review decides it, so there is nothing to drag. A switch adds every bet in the areas below, each marked with its area.
 - **The plan dashboard's forms open in drawers.** "New key result" and "New bet" are buttons at the top of every view, and each opens a drawer from the side of the page. "Edit this key result" and "Edit this bet" open a drawer with that item's forms, in place of a section that folded open on the page. Choices with a few options, such as a key result's kind and direction or a review's decision, are rows of buttons. What a key result or bet aligns to or also aims at is a list of tick boxes. The saves and what they write are the same as before. Check-ins stay on the cards.
 - **Each key result and bet has a drawer.** Clicking one anywhere on the dashboard, from a card, the ladder or the timeline, opens it in a drawer with three tabs. Overview has its figure, the check-in and the bets that aim at it, or a bet's delivery and facts. History has the check-ins with their notes, steps done and a moved target, or a bet's reviews with the form to record one. Edit has the forms. Ctrl-click or Cmd-click still opens its full page. The Key results view's cards have an Edit button too.
 - **The save bar sits at the bottom of the page,** and a save shows a short message at the top when the page reloads. A drawer you saved from opens again where you were.

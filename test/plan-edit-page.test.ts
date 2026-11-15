@@ -11,6 +11,7 @@ import { exportPlanPage, startPlanServe, type PlanServe } from "../src/plan/serv
 import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
 import { newBet, reviewBet } from "../src/planning/bets";
 import { checkIn, newKr, reviseTarget } from "../src/planning/krs";
+import { setAligns } from "../src/planning/aligns";
 import { hash } from "../src/planning/model";
 import { idFromTitle } from "../src/planning/rules";
 import { acmePlan } from "./plan-serve-fixture";
@@ -245,7 +246,9 @@ describe("names, not ids of areas", () => {
     const { srv } = await start(repo);
     const bets = await get(srv.port, "/?at=groups%2Fpayments&view=bets");
     expect(bets).toContain('>Speed up checkout</a> <span class="id">speed-up</span>');
-    expect(bets).toContain('<span class="where">Payments</span>');
+    // A bet from an area below carries its area's name on the board.
+    const below = await get(srv.port, `/?${FINANCE}&view=bets&scope=below`);
+    expect(below).toContain('>Speed up checkout</a> <span class="id">speed-up</span> <span class="where">Payments</span>');
     const okrs = await get(srv.port, `/?${FINANCE}&view=okrs`);
     expect(okrs).toContain('>Speed up checkout</a> <span class="id">speed-up</span>');
   });
@@ -267,7 +270,9 @@ describe("names, not ids of areas", () => {
   it("a bet without a title keeps its id as its name, with no second id after it", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, "/?at=teams%2FWEB&view=bets");
-    expect(html).toContain('>web-bet</a> <span class="where">Checkout web</span>');
+    expect(html).toMatch(/>web-bet<\/a><\/h3>/);
+    const below = await get(srv.port, "/?at=groups%2Fpayments&view=bets&scope=below");
+    expect(below).toContain('>web-bet</a> <span class="where">Checkout web</span>');
   });
 
   it("no page reads an area's rel in its text: the names are shown, the rels only in links and forms", async () => {
@@ -487,7 +492,203 @@ describe("the offline export", () => {
     const html = readFileSync(out, "utf8");
     expect(html).toContain("Checkout web");
     expect(html).toContain(".field{display:flex");
-    expect(html).toContain('<a href="?at=groups%2Fpayments&amp;bet=faster-checkout');
+    expect(html).toContain('<a href="?at=departments%2Ffinance&amp;bet=inbox-match');
+  });
+});
+
+describe("the overview", () => {
+  it("opens an area with three tiles and what needs attention: a late check-in, a review due, a bet with no map, a key result nothing aims at", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
+    newBet({ id: "soon", title: "Soon", owner: "Sam", hypothesis: "It helps.", reviewOn: "2026-01-01", primary: "close-days" }, fin);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}`);
+    expect(html.match(/<span class="eyebrow">(Key results|Bets|Due)<\/span><span class="big num">/g)).toHaveLength(3);
+    const list = /<ul class="attention">([\s\S]*?)<\/ul>/.exec(html)![1];
+    const kinds = [...list.matchAll(/<span class="att-kind">([^<]+)<\/span>/g)].map((m) => m[1]);
+    expect(kinds).toContain("Check-in late");
+    expect(kinds).toContain("Review overdue");
+    expect(kinds).toContain("No story map");
+    expect(kinds).toContain("Nothing aims at it");
+    expect(list).toContain(`<a href="?${FINANCE}&amp;kr=aimless&amp;period=2027-Q1">Aimless</a>`);
+    expect(list).toContain("No check-ins yet");
+  });
+
+  it("a team's overview has no key results of its own to check in on", async () => {
+    const { srv } = await start(acmePlan());
+    const html = await get(srv.port, "/?at=teams%2FWEB");
+    expect(html).toContain("Key results its bets aim at");
+    expect(html).not.toContain('data-open="checkin-session"');
+    expect(html).not.toContain('id="checkin-session"');
+  });
+});
+
+describe("the key results' filters", () => {
+  /** A department with three key results, owned by two people, one of them on track. */
+  function threeKrs(): string {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Ola", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
+    newKr({ id: "invoices", title: "Invoices matched", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
+    return repo;
+  }
+  const shownCards = (html: string) => [...html.matchAll(/<article class="card kr-card" data-kr data-text="[^"]*" data-status="[^"]*" data-owner="[^"]*"( hidden)?>[\s\S]*?<a href="[^"]*">([^<]+)<\/a>/g)].filter((m) => !m[1]).map((m) => m[2]);
+
+  it("narrow the cards on the server from the query, so a link keeps them, and say when none match", async () => {
+    const { srv } = await start(threeKrs());
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys`))).toEqual(["Aimless", "Invoices matched", "Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&owner=Mira`))).toEqual(["Invoices matched", "Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&status=on-track`))).toEqual(["Close days"]);
+    expect(shownCards(await get(srv.port, `/?${FINANCE}&view=keys&q=invoices+match`))).toEqual(["Invoices matched"]);
+    const none = await get(srv.port, `/?${FINANCE}&view=keys&q=nothing`);
+    expect(none).toContain('<p class="meta" data-none>No key results match.');
+    // The form keeps the place and works with no script.
+    expect(none).toContain('<form class="filters" role="search" method="get" data-filters><input type="hidden" name="at" value="departments/finance"><input type="hidden" name="view" value="keys">');
+    expect(none).toContain('<input type="search" name="q" value="nothing"');
+    expect(none).toContain("<noscript><button type=\"submit\" class=\"btn\">Apply</button></noscript>");
+  });
+
+  it("an objective with no key result showing is hidden, and the list layout is one row each", async () => {
+    const { srv } = await start(threeKrs());
+    const html = await get(srv.port, `/?${FINANCE}&view=keys&owner=Ola&layout=list`);
+    expect(html).toMatch(/<section data-group hidden><h2>Key results<\/h2>/);
+    expect(html).toContain('<div data-layout="cards" hidden>');
+    expect(html).toContain('<div data-layout="list"><div class="tbl"><table class="kr-list">');
+    expect(html).toContain('<input type="radio" name="layout" value="list" checked>');
+    expect(html.match(/<tr data-kr [^>]*>/g)).toHaveLength(3);
+    expect(html.match(/<tr data-kr [^>]* hidden>/g)).toHaveLength(2);
+  });
+
+  it("the filter script narrows the same way, and is in the live page and the export", async () => {
+    const repo = threeKrs();
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=keys`);
+    const source = /function passes\(el, words, status, owner\) \{[\s\S]*?\n\}/.exec(html)?.[0];
+    expect(source).toBeDefined();
+    const passes = new Function(`${source}; return passes;`)() as (el: object, w: string[], s: string, o: string) => boolean;
+    const el = (text: string, status: string, owner: string) => ({ getAttribute: (n: string) => ({ "data-text": text, "data-status": status, "data-owner": owner })[n] ?? null });
+    expect(passes(el("invoices matched invoices mira", "not-started", "Mira"), ["invoices", "match"], "", "")).toBe(true);
+    expect(passes(el("invoices matched invoices mira", "not-started", "Mira"), ["close"], "", "")).toBe(false);
+    expect(passes(el("x", "on-track", "Mira"), [], "at-risk", "")).toBe(false);
+    expect(passes(el("x", "on-track", "Mira"), [], "", "Ola")).toBe(false);
+    const out = join(tmp("nikos-export-"), "plan.html");
+    await exportPlanPage(repo, out, { offline: true, at: "departments/finance" });
+    expect(readFileSync(out, "utf8")).toContain("function passes(el, words, status, owner)");
+  });
+});
+
+describe("the bets board", () => {
+  it("puts each bet in a column: not started without a map, decided once a review closes it", async () => {
+    const repo = acmePlan();
+    reviewBet(findArea(repo, "finance").dir, "inbox-match", { decision: "stop", reason: "Not worth it." });
+    newBet({ id: "next-up", title: "Next up", owner: "Sam", hypothesis: "It helps.", reviewOn: "2027-02-14", primary: "close-days" }, findArea(repo, "finance").dir);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=bets`);
+    const col = (name: string) => new RegExp(`<section class="col" aria-label="${name}">([\\s\\S]*?)</section>`).exec(html)![1];
+    expect(col("Not started")).toContain(">Next up</a>");
+    expect(col("Decided")).toContain(">inbox-match</a>");
+    expect(col("Building")).toContain("None");
+    expect(html).toContain("Bets move across as their stories move in the code, or when a review decides them.");
+  });
+
+  it("a switch adds every bet in the areas below, each with its area; a team has no switch", async () => {
+    const { srv } = await start(acmePlan());
+    const own = await get(srv.port, `/?${FINANCE}&view=bets`);
+    expect(own).toContain('<nav class="scope" aria-label="Which bets"><a href="?at=departments%2Ffinance&amp;view=bets&amp;period=2027-Q1" class="on" aria-current="true">Finance only</a><a href="?at=departments%2Ffinance&amp;view=bets&amp;period=2027-Q1&amp;scope=below">With the areas below (2)</a></nav>');
+    // The board alone: from its start to the next heading, before the drawers at the end of the page.
+    const board = (html: string) => html.slice(html.indexOf('<div class="board">'), html.indexOf("<h2>Code repos read</h2>"));
+    expect(board(own)).toContain(">inbox-match</a>");
+    expect(board(own)).not.toContain(">web-bet</a>");
+    const below = await get(srv.port, `/?${FINANCE}&view=bets&scope=below`);
+    expect(board(below)).toContain('>web-bet</a> <span class="where">Checkout web</span>');
+    expect(below).toContain('>faster-checkout</a> <span class="where">Payments</span>');
+    // Bets from below have no Edit button here: they are changed in their own area.
+    expect(below).not.toContain('data-open="detail-bet-teams-WEB-web-bet"');
+    const team = await get(srv.port, "/?at=teams%2FWEB&view=bets");
+    expect(team).not.toContain('class="scope"');
+  });
+});
+
+describe("the alignment tree", () => {
+  it("puts the area's key results under the ones they align to, the bets that aim at each under it, and the bets below under those", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    setAligns(fin, "kr", "close-days", ["revenue"]);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=alignment`);
+    const tree = html.slice(html.indexOf('<ul class="tree">'), html.indexOf("<h2>Code repos read</h2>"));
+    // Revenue, then Close days under it, then inbox-match aiming at that, then faster-checkout and web-bet down the chain.
+    const order = ["Revenue", "Close days", ">inbox-match<", ">faster-checkout<", ">web-bet<"].map((t) => tree.indexOf(t));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(tree).toMatch(/<div class="node kr own"><button type="button" class="twisty" data-fold aria-expanded="true" aria-label="Fold"><\/button><span class="node-body"><a href="[^"]*kr=close-days/);
+    expect(tree).toMatch(/<div class="node kr"><button[^>]*><\/button><span class="node-body"><a href="[^"]*kr=revenue/);
+    // Each bet shows once, at its place in the chain.
+    expect(tree.match(/>web-bet</g)).toHaveLength(1);
+    expect(html).toContain('<button type="button" class="btn" data-fold-all="close">Fold all</button>');
+  });
+});
+
+describe("the activity feed", () => {
+  it("lists check-ins and reviews newest first, by month, with chips for each kind", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    checkIn(fin, "close-days", { value: 8, date: "2026-12-03", note: "Two banks reconciled" });
+    reviewBet(fin, "inbox-match", { decision: "change", reason: "Smaller first.", date: "2026-12-05" });
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=activity`);
+    expect(html).toContain('<button type="button" class="chip" data-activity="" aria-pressed="true">All 3</button>');
+    expect(html).toContain('data-activity="checkin" aria-pressed="false">Check-ins 2</button>');
+    expect(html.indexOf("<h2>December 2026</h2>")).toBeLessThan(html.indexOf("<h2>November 2026</h2>"));
+    expect(html.indexOf('datetime="2026-12-05"')).toBeLessThan(html.indexOf('datetime="2026-12-03"'));
+    expect(html).toContain("checked in at <strong>8</strong> · Two banks reconciled");
+    expect(html).toMatch(/<li data-kind="review">[\s\S]*?reviewed: <strong>Change<\/strong> · Smaller first\./);
+  });
+
+  it("says when nothing has happened, and its script and the tree's are in the export too", async () => {
+    const dir = tmp("nikos-empty-");
+    initPlanRepo(dir, { name: "Acme", year: "2027" });
+    const { srv } = await start(dir);
+    expect(await get(srv.port, "/?at=company&view=activity")).toContain("Nothing has happened here yet.");
+    const out = join(tmp("nikos-export-"), "plan.html");
+    await exportPlanPage(acmePlan(), out, { offline: true, at: "departments/finance" });
+    const exported = readFileSync(out, "utf8");
+    expect(exported).toContain("function fold(button, open)");
+    expect(exported).toContain("function showKind(kind)");
+  });
+});
+
+describe("the check-in session", () => {
+  it("Check in counts the late key results, and the session takes them one at a time, the late ones first", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
+    checkIn(fin, "close-days", { value: 9, date: new Date().toISOString().slice(0, 10) });
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=keys`);
+    expect(html).toContain('<button type="button" class="btn" data-open="checkin-session">Check in (1)</button>');
+    const session = /<dialog class="sheet-dialog session" id="checkin-session"[\s\S]*?<\/dialog>/.exec(html)![0];
+    expect(session).toContain("1 of 2 key results need a check-in.");
+    expect(session.indexOf("<h3>Aimless")).toBeLessThan(session.indexOf("<h3>Close days"));
+    const forms = saveForms(session);
+    expect(forms.map((f) => [f.op, f.target.kr])).toEqual([["checkin", "aimless"], ["checkin", "close-days"]]);
+    expect(session).toContain("data-session");
+    expect(session).toContain('<input name="note" placeholder="What moved it, or what&#39;s in the way" type="text" value="">');
+  });
+
+  it("previews a value before it is saved: the change, the way to the target, and the status against the pace", async () => {
+    const { srv } = await start(acmePlan());
+    const script = scriptOf(await get(srv.port, `/?${FINANCE}&view=keys`));
+    const source = /function previewOf\(facts, raw\) \{[\s\S]*?\n\}/.exec(script)?.[0];
+    expect(source).toBeDefined();
+    const previewOf = new Function(`${source}; return previewOf;`)() as (f: object, raw: string) => string;
+    const facts = { baseline: 11, target: 7, unit: "days", latest: 9, pace: 0.5 };
+    expect(previewOf(facts, "8")).toBe("Down 1 days from 9 days · 75% of the way to 7 days · on track, with 50% of the period gone.");
+    expect(previewOf(facts, "10.5")).toBe("Up 1.5 days from 9 days · 13% of the way to 7 days · off track, with 50% of the period gone.");
+    expect(previewOf({ ...facts, latest: null, pace: null, unit: "%" }, "12")).toBe("Moved the wrong way.");
+    expect(previewOf(facts, "")).toBe("");
+    expect(previewOf(facts, "12")).toBe("Up 3 days from 9 days · moved the wrong way.");
   });
 });
 
