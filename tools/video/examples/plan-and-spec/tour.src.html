@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- nikOS Plan and Spec: one bet from the company's plan to proven code and back (product-tour-video skill).
+     The window shows nikOS's real pages, saved by sample/build.mjs and put in by assemble.mjs. Every frame is a
+     pure function of time: window.renderAt(seconds) draws it, window.TOTAL is the length. -->
+<meta charset="utf-8">
+<title>nikOS Plan and Spec</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500&display=block">
+<style>
+/* nikOS's own tokens (src/lib/design.ts), light. */
+:root { --ground: #eeecf4; --bg: #f5f4f8; --fg: #1a1922; --muted: #5f5c6d; --line: #dcd9e6; --accent: #5b3fb0; --accent-weak: #ebe6fa;
+  --good: #1d6a42; --bad: #b02e29; --plate: #2a1d5c; --term: #17161d; --term-fg: #e6e4ee; --term-muted: #8d8a9c; --term-bad: #ff9c94; --term-good: #8ed6ac; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; color: var(--fg); -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { background-color: var(--ground);
+  background-image: linear-gradient(rgba(26,25,34,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(26,25,34,.045) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+#cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+#win { position: absolute; left: 154px; top: 56px; width: 1240px; height: 680px; transform: scale(1.3); transform-origin: 0 0; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(26,25,34,.06), 0 18px 48px rgba(26,25,34,.12); }
+#win iframe { position: absolute; left: 0; top: 0; width: 1240px; height: 680px; border: 0; background: var(--bg); }
+
+/* The terminal and the agent's question, drawn plainly over the page (no particular tool). */
+#term { position: absolute; left: 520px; top: 300px; width: 690px; height: 352px; background: var(--term); color: var(--term-fg); border-radius: 10px;
+  box-shadow: 0 20px 50px rgba(10,8,20,.35); padding: 0; overflow: hidden; z-index: 20; font: 13.5px/1.55 'JetBrains Mono', monospace; }
+#term .bar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #24222e; color: var(--term-muted); font-size: 12px; }
+#term .bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3746; display: inline-block; }
+#term .bar span { margin-left: 8px; }
+#tbody { padding: 12px 16px; white-space: pre-wrap; }
+#tbody .p { color: var(--term-muted); }
+#tbody .bad { color: var(--term-bad); }
+#tbody .good { color: var(--term-good); }
+#tbody .note { color: #c9b8ff; }
+#caret { display: inline-block; width: 8px; height: 15px; background: var(--term-fg); vertical-align: -2px; }
+#chat { position: absolute; left: 470px; top: 150px; width: 520px; background: #fff; border: 1px solid var(--line); border-radius: 14px; z-index: 21;
+  box-shadow: 0 20px 60px rgba(26,25,34,.22); padding: 18px 20px; font-size: 15px; line-height: 1.5; }
+#chat .who { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
+#chat .q { font-weight: 600; margin-top: 8px; }
+#chat .acts { display: flex; gap: 10px; margin-top: 14px; }
+#chat .acts span { border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; font-weight: 600; font-size: 14px; }
+#chat .acts .yes { background: var(--accent); color: #fff; border-color: var(--accent); }
+#chat .ans { margin-top: 12px; font: 13px/1.5 'JetBrains Mono', monospace; color: var(--good); }
+
+#ripple { position: absolute; border-radius: 50%; background: rgba(91,63,176,.28); pointer-events: none; }
+#cursor { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform-origin: 3px 3px; z-index: 50; }
+#mark { position: absolute; left: 154px; top: 986px; z-index: 60; }
+#label { position: absolute; right: 154px; top: 986px; z-index: 65; text-align: right; font: 500 17px 'JetBrains Mono', monospace; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+#label b { color: var(--accent); font-weight: 600; margin-right: 14px; }
+#end { position: absolute; inset: 0; z-index: 70; background-color: var(--plate); color: #fff;
+  background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 32px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+</style>
+<!-- SCREENS -->
+</head>
+<body>
+
+<div id="cam">
+  <div id="win">
+    <div id="term"><div class="bar"><i></i><i></i><i></i><span>shop-web</span></div><div id="tbody"></div></div>
+    <div id="chat">
+      <div class="who">Your agent</div>
+      <div>WEB-CHK-5 is done: its scenario passes, at commit <span class="mono" style="font-size:13px" id="commit"></span>.</div>
+      <div class="q">Do you want to approve WEB-CHK-5: Pay by card on the same page?</div>
+      <div class="acts"><span class="yes" id="approveBtn">Approve</span><span>Not yet</span></div>
+      <div class="ans" id="chatAns"></div>
+    </div>
+  </div>
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 30 30" aria-hidden="true"><path d="M3 2 L3 23 L8.5 17.8 L12.2 26.2 L15.8 24.6 L12.2 16.4 L19.6 16.4 Z" fill="#1a1922" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div>
+
+<!-- The author's N mark, from assets/icon.svg. -->
+<div id="mark"><svg width="34" height="26" viewBox="170 245 340 245" aria-hidden="true"><path fill="#1a1922" d="M287 252 L324 331 L312.1 356.7 L275.1 277.7 Z M269.1 290.5 L306.1 369.6 L253 484 L179 484 Z"/><path fill="#1a1922" d="M431 251 L504 251 L450.2 366.6 L413.6 288.5 Z M407.6 301.3 L444.2 379.4 L432.3 405 L395.7 327 Z M389.8 339.8 L426.3 417.9 L414.4 443.5 L377.9 365.5 Z M371.9 378.3 L408.4 456.3 L396.5 481.9 L360 404 Z"/></svg></div>
+<div id="end">
+  <svg class="e0" width="92" height="66" viewBox="170 245 340 245" aria-hidden="true"><path fill="#fff" d="M287 252 L324 331 L312.1 356.7 L275.1 277.7 Z M269.1 290.5 L306.1 369.6 L253 484 L179 484 Z"/><path fill="#fff" d="M431 251 L504 251 L450.2 366.6 L413.6 288.5 Z M407.6 301.3 L444.2 379.4 L432.3 405 L395.7 327 Z M389.8 339.8 L426.3 417.9 L414.4 443.5 L377.9 365.5 Z M371.9 378.3 L408.4 456.3 L396.5 481.9 L360 404 Z"/></svg>
+  <span class="e1" style="font-family:'Source Serif 4',Georgia,serif;font-weight:500;font-size:84px;letter-spacing:-.025em">Plan the bets. Prove the build.</span>
+  <span class="mono e2" style="font-size:28px;color:rgba(255,255,255,.85)">nikos.tools</span>
+  <span class="mono e3" style="font-size:24px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);padding:10px 20px;border-radius:8px">npx -y nikos@latest start</span>
+</div>
+<div id="label"></div>
+
+<script>
+// ── Time helpers (from the starter) ─────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const span = (t, s, d) => clamp((t - s) / d);
+const bezier = (x1, y1, x2, y2) => (x) => {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let u = x;
+  for (let i = 0; i < 8; i++) {
+    const bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u * u * (1 - u) + u ** 3 - x;
+    const dx = 3 * x1 * (1 - u) ** 2 + 6 * (x2 - x1) * u * (1 - u) + 3 * (1 - x2) * u * u;
+    if (Math.abs(dx) < 1e-6) break;
+    u = clamp(u - bx / dx);
+  }
+  return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u * u * (1 - u) + u ** 3;
+};
+const std = bezier(0.4, 0, 0.2, 1); // Material standard: most moves
+const dec = bezier(0, 0, 0.2, 1);   // Material decelerate: things arriving
+const $ = (id) => document.getElementById(id);
+const put = (n, s) => n && Object.assign(n.style, s);
+const typeOut = (text, t, from, cps = 30) => text.slice(0, Math.max(0, Math.min(text.length, Math.floor((t - from) * cps))));
+
+// ── The pages: one iframe each, built once ──────────────────────────────
+const S = 1.3, WX = 154, WY = 56;
+const FR = {};
+for (const [key, html] of Object.entries(window.SCREENS)) {
+  const f = document.createElement("iframe");
+  f.srcdoc = html;
+  f.setAttribute("aria-hidden", "true");
+  $("win").insertBefore(f, $("term"));
+  FR[key] = f;
+}
+const doc = (key) => FR[key].contentDocument;
+const q = (key, sel) => doc(key)?.querySelector(sel);
+/** An element's centre (or a point in it) in frame pixels, before the camera. */
+function at(key, sel, fx = 0.5, fy = 0.5) {
+  const e = typeof sel === "string" ? q(key, sel) : sel;
+  if (!e) return [960, 540];
+  const r = e.getBoundingClientRect();
+  return [WX + S * (r.left + r.width * fx), WY + S * (r.top + r.height * fy)];
+}
+/** The innermost element whose text starts with `text`. */
+const deepest = (key, text) => [...(doc(key)?.body.querySelectorAll("*") ?? [])].filter((e) => e.textContent.trim().startsWith(text)).pop();
+const byText = (key, sel, text) => [...(doc(key)?.querySelectorAll(sel) ?? [])].find((e) => e.textContent.trim().startsWith(text));
+/** Scroll a page so an element sits `top` px from the window's top. */
+function scrollTo(key, sel, top, p = 1) {
+  const w = FR[key].contentWindow, e = typeof sel === "string" ? q(key, sel) : sel;
+  if (!w || !e) return;
+  w.scrollTo(0, 0);
+  const y = e.getBoundingClientRect().top - top;
+  w.scrollTo(0, Math.max(0, y * p));
+}
+/** The scroll that puts an element `top` px from the window's top. */
+function yFor(key, sel, top) {
+  const w = FR[key].contentWindow, e = typeof sel === "string" ? q(key, sel) : sel;
+  if (!w || !e) return 0;
+  w.scrollTo(0, 0);
+  return Math.max(0, e.getBoundingClientRect().top - top);
+}
+const scrollY = (key, y) => FR[key].contentWindow?.scrollTo(0, y);
+/** The card a key result or bet title sits in. */
+const cardOf = (key, text) => byText(key, "a", text)?.closest("article, li, section, .kr, .card") ?? byText(key, "a", text);
+function setField(key, form, name, value) {
+  const e = q(key, `${form} [name="${name}"]`);
+  if (e) e.value = value;
+}
+
+// ── The timeline: every time in one place ──────────────────────────────
+const P = {
+  // 01 company
+  winIn: 0, push1: [1.6, 0.9, 1.22], pull1: 4.4, toDept: 5.4,
+  // 02 department key result
+  openKr: 7.0, type: 7.5, saveKr: 11.2, showKr: 11.4,
+  // 03 team bet
+  toTeam: 13.2, openBet: 14.5, typeBet: 14.9, saveBet: 18.4, showBet: 18.6,
+  // 04 ladder
+  toLadder: 20.4, push4: [21.6, 1.0, 1.28], pull4: 25.6,
+  // 05 story map
+  toMap: 27.0, push5: [28.2, 0.9, 1.3], pull5: 32.0,
+  // 06 a story's criteria
+  openStory: 34.4, openAc: 36.0, push6: [36.5, 0.9, 1.3], pull6: 40.8,
+  // 07 the done gate
+  closeStory: 41.6, termIn: 42.0, done: 49.4,
+  // 08 approval
+  chatIn: 51.2, approve: 53.6, chatOut: 56.4,
+  // 09 delivery back in the plan
+  toPlan: 57.2, push9: [58.2, 0.9, 1.25], pull9: 60.6, checkin: 62.4, after: 62.6,
+  // 10 the save bar
+  bar: 65.2, push10: [65.8, 0.9, 1.3], pull10: 70.4, end: 72.2,
+};
+window.TOTAL = 79;
+const LABELS = [
+  [0.6, 5.6, "01", "Company goals live in one repo"],
+  [6.0, 13.0, "02", "Departments set key results each quarter"],
+  [13.4, 20.2, "03", "Teams make bets on them"],
+  [20.6, 26.8, "04", "The ladder shows how it all connects"],
+  [27.2, 34.0, "05", "The bet becomes a story map in the code"],
+  [34.2, 41.4, "06", "Every story has criteria that run as tests"],
+  [41.8, 50.8, "07", "Done only when its scenarios pass"],
+  [51.0, 56.8, "08", "You sign off every story"],
+  [57.0, 64.8, "09", "Delivery flows back to the plan"],
+  [65.0, 72.0, "10", "Every change goes on a branch you review"],
+];
+
+// Which page shows when: [key, from, to]. Neighbours cross-fade over FADE seconds.
+const FADE = 0.4;
+const SHOWS = [
+  ["01-company", -1, P.toDept + 0.2],
+  ["02-commerce-empty", P.toDept + 0.2, P.showKr],
+  ["03-commerce-kr", P.showKr, P.toTeam + 0.2],
+  ["04-web-empty", P.toTeam + 0.2, P.showBet],
+  ["05-web-bet", P.showBet, P.toLadder + 0.2],
+  ["06-ladder", P.toLadder + 0.2, P.toMap],
+  ["07-map", P.toMap, P.done],
+  ["08-map-done", P.done, P.approve + 0.4],
+  ["08b-map-approved", P.approve + 0.4, P.toPlan],
+  ["09-commerce-before", P.toPlan, P.after],
+  ["10-commerce-after", P.after, 99],
+];
+
+// What the page's script would do: the milestone fields stay hidden for a number key result, and the
+// save bar is empty until something is saved.
+function settle() {
+  for (const key of Object.keys(FR)) {
+    for (const e of doc(key)?.querySelectorAll('textarea[name="steps"]') ?? []) put(e.closest("label") ?? e, { display: "none" });
+  }
+}
+
+let ready = false;
+function measure() {
+  settle();
+  window.CLICK_TIMES = CLICKS.map(([c]) => c);
+  window.LABEL_TIMES = LABELS.map(([a]) => a);
+  window.END_AT = P.end;
+  window.MUSIC = { arpIn: 0.6, bassIn: 6.0, drums: [[P.toMap, P.done + 1], [P.toPlan, P.end - 0.2]], end: P.end };
+  ready = true;
+}
+
+// ── The cursor: keyframes [t, where], where is [x, y] or [page, selector or element getter] ──
+const C = {
+  rest: [1500, 860],
+  deptTab: () => at("01-company", byText("01-company", "nav a, .seg a, a", "Departments")),
+  addKrBtn: () => at("02-commerce-empty", '[data-open="add-kr"]'),
+  krTitle: () => at("02-commerce-empty", '#add-kr [name="title"]'),
+  krSave: () => at("02-commerce-empty", '#add-kr button[type="submit"]'),
+  teamTab: () => at("03-commerce-kr", byText("03-commerce-kr", "nav a, .seg a, a", "Teams")),
+  addBet: () => at("04-web-empty", "#add-bet > summary"),
+  betSave: () => at("04-web-empty", '#add-bet button[type="submit"]'),
+  ladderLink: () => at("05-web-bet", byText("05-web-bet", "aside a, nav a", "Ladder")),
+  storyCard: (key = "07-map") => at(key, '.cell a.card[href="#story-WEB-CHK-5"]'),
+  ac: () => at("07-map", "#story-WEB-CHK-5 details.edit-ac > summary", 0.3, 0.5),
+  approve: () => { const r = $("approveBtn").getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; },
+  checkIn: () => at("09-commerce-before", 'form[data-op="checkin"] [name="value"]'),
+  checkBtn: () => at("09-commerce-before", 'form[data-op="checkin"] button[type="submit"]'),
+  push: () => at("10-commerce-after", "#pending button:nth-of-type(2)"),
+};
+const K = [
+  [0, C.rest], [4.4, C.rest], [5.1, C.deptTab], [5.9, C.deptTab],
+  [6.6, C.addKrBtn], [7.2, C.addKrBtn], [7.5, C.krTitle], [10.4, C.krTitle], [10.9, C.krSave], [11.6, C.krSave],
+  [12.6, C.teamTab], [13.5, C.teamTab], [14.1, C.addBet], [14.7, C.addBet], [15.4, [1290, 700]], [17.8, [1290, 700]], [18.1, C.betSave], [18.8, C.betSave],
+  [19.8, C.ladderLink], [20.7, C.ladderLink], [21.4, [1500, 880]], [33.4, [1500, 880]],
+  [34.1, () => C.storyCard()], [34.8, () => C.storyCard()], [35.5, C.ac], [36.3, C.ac], [37.2, [1640, 860]],
+  [52.8, [1640, 860]], [53.3, C.approve], [54.2, C.approve], [55.2, [1640, 860]],
+  [61.2, [1640, 860]], [61.6, C.checkIn], [62.0, C.checkIn], [62.2, C.checkBtn], [63.2, C.checkBtn], [64.2, [1640, 900]],
+  [68.6, [1640, 900]], [69.6, C.push], [99, C.push],
+];
+const CLICKS = [[P.toDept], [P.openKr], [P.saveKr], [P.toTeam], [P.openBet], [P.saveBet], [P.toLadder], [P.openStory], [P.openAc], [P.approve], [P.checkin - 0.4], [P.checkin]];
+const where = (w) => (typeof w === "function" ? w() : w);
+function along(t) {
+  if (t <= K[0][0]) return where(K[0][1]);
+  for (let i = 0; i < K.length - 1; i++) {
+    const [t0, a] = K[i], [t1, b] = K[i + 1];
+    if (t < t1) { const p = std(span(t, t0, t1 - t0)), A = where(a), B = where(b); return [lerp(A[0], B[0], p), lerp(A[1], B[1], p)]; }
+  }
+  return where(K[K.length - 1][1]);
+}
+
+// ── The terminal: what was really run, and what it really printed (screens/terminal.json) ──
+const T = window.TERMINAL;
+const TERM = [
+  // [start, kind, text]: "cmd" types at 30 characters a second, "out" appears whole.
+  [42.6, "cmd", T.refused.command],
+  [44.0, "bad", T.refused.output],
+  [45.0, "note", "Agent: the charge leaves out delivery. Fixing src/pay.mjs, then running it again."],
+  [46.4, "cmd", T.verify.command],
+  [47.4, "good", T.verify.output.split("\n").filter((l) => /passed/.test(l)).join("\n")],
+  [48.0, "cmd", T.done.command],
+  [49.2, "good", `✓ ${T.done.output}`],
+];
+function termAt(t) {
+  let html = "", caret = false;
+  for (const [s, kind, text] of TERM) {
+    if (t < s) break;
+    if (kind === "cmd") {
+      const shown = typeOut(text, t, s);
+      caret = shown.length < text.length || t < s + text.length / 30 + 0.2;
+      html += `<span class="p">$ </span>${shown}`;
+      if (!caret) html += "\n";
+    } else html += `<span class="${kind}">${text}</span>\n`;
+  }
+  if (caret || (t > 49.6)) html += `<span id="caret"></span>`;
+  if (!caret && t <= 49.6) html += `<span class="p">$ </span>`;
+  return html;
+}
+
+const Z = [P.push1, P.push4, P.push5, P.push6, P.push9, P.push10];
+const PULLS = [P.pull1, P.pull4, P.pull5, P.pull6, P.pull9, P.pull10];
+// Where each push-in looks.
+const FOCUS = [
+  () => at("01-company", cardOf("01-company", "Online revenue"), 0.5, 0.35),
+  () => at("06-ladder", ".ladder-scroll", 0.42, 0.45),
+  () => at(t5key, ".title .bet, .bet", 0.3, 0.5),
+  () => at("07-map", "#story-WEB-CHK-5 details.edit-ac", 0.5, 0.45),
+  () => at("09-commerce-before", deepest("09-commerce-before", "Owner: Sam"), 0.5, 0.2),
+  () => at("10-commerce-after", "#pending", 0.5, 0.5),
+];
+let t5key = "07-map";
+
+window.renderAt = (t) => {
+  if (!ready) measure();
+
+  // Pages: cross-fade, with a small shared-axis slide when the window changes product.
+  for (const [key, a, b] of SHOWS) {
+    const o = Math.min(span(t, a, FADE), 1 - span(t, b, FADE));
+    const slide = key === "07-map" ? lerp(40, 0, dec(span(t, a, 0.6))) : key === "09-commerce-before" ? lerp(-40, 0, dec(span(t, a, 0.6))) : 0;
+    put(FR[key], { opacity: o, visibility: o > 0 ? "visible" : "hidden", transform: `translateX(${slide}px)` });
+  }
+
+  // 01: the company's key result, with the page at its top so the area tabs show.
+
+  // 02: open the form, fill it in as typed, and save.
+  const kr = q("02-commerce-empty", "#add-kr");
+  if (kr) kr.open = t >= P.openKr;
+  // The form's top comes into view as it opens, then its button as the typing ends.
+  const y0 = yFor("02-commerce-empty", "#add-kr", 70), y1 = yFor("02-commerce-empty", '#add-kr button[type="submit"]', 560);
+  scrollY("02-commerce-empty", t < P.openKr ? 0 : lerp(lerp(0, y0, std(span(t, P.openKr, 0.5))), y1, std(span(t, P.type + 3.1, 0.6))));
+  const F2 = "#add-kr";
+  setField("02-commerce-empty", F2, "title", typeOut("Checkout conversion reaches 3%", t, P.type));
+  setField("02-commerce-empty", F2, "owner", typeOut("Priya", t, P.type + 1.2));
+  setField("02-commerce-empty", F2, "objective", typeOut("Make buying easy", t, P.type + 1.5));
+  setField("02-commerce-empty", F2, "baseline", typeOut("2.1", t, P.type + 2.1));
+  setField("02-commerce-empty", F2, "target", typeOut("3", t, P.type + 2.3));
+  setField("02-commerce-empty", F2, "unit", typeOut("%", t, P.type + 2.4));
+  const align = q("02-commerce-empty", `${F2} [name="aligns_to"] option`);
+  if (align) align.selected = t >= P.type + 2.8;
+  scrollY("03-commerce-kr", 0);
+
+  // 03: the team's bet.
+  const bet = q("04-web-empty", "#add-bet");
+  if (bet) bet.open = t >= P.openBet;
+  const b0 = yFor("04-web-empty", "#add-bet", 70), b1 = yFor("04-web-empty", '#add-bet button[type="submit"]', 560);
+  scrollY("04-web-empty", t < P.openBet ? 0 : lerp(lerp(0, b0, std(span(t, P.openBet, 0.5))), b1, std(span(t, P.typeBet + 3.1, 0.5))));
+  const F3 = "#add-bet";
+  setField("04-web-empty", F3, "title", typeOut("One-page checkout", t, P.typeBet));
+  setField("04-web-empty", F3, "hypothesis", typeOut("We think a one-page checkout will lift conversion, because most people who leave do it between steps.", t, P.typeBet + 0.8, 70));
+  setField("04-web-empty", F3, "owner", typeOut("Sam", t, P.typeBet + 2.4));
+  setField("04-web-empty", F3, "review_on", t >= P.typeBet + 2.7 ? "2026-12-10" : "");
+  const prim = q("04-web-empty", `${F3} [name="primary"]`);
+  if (prim) prim.value = t >= P.typeBet + 3.0 ? "checkout-conversion-reaches-3" : "";
+  scrollY("05-web-bet", 0);
+
+  // 04: the ladder, scrolled so all three columns show.
+  const lad = q("06-ladder", ".ladder-scroll");
+  if (lad) lad.scrollLeft = 0;
+
+  // 05–07: the story map, the story's panel, and the gate.
+  const sheetOpen = t >= P.openStory && t < P.closeStory;
+  const sheet = q("07-map", "#story-WEB-CHK-5");
+  put(sheet, sheetOpen ? { display: "block", position: "fixed", inset: "0", zIndex: 10, opacity: std(span(t, P.openStory, 0.35)) } : { display: "none" });
+  // The criterion opens to its Given, When and Then; its edit form stays shut, as it is until Edit.
+  const panel = q("07-map", "#story-WEB-CHK-5 .sheet"), acd = q("07-map", "#story-WEB-CHK-5 details.edit-ac");
+  if (acd) { acd.open = t >= P.openAc; for (const c of acd.children) if (c.tagName !== "SUMMARY" && !c.matches("dl.gwt")) put(c, { display: "none" }); }
+  if (panel && sheetOpen && acd) {
+    panel.scrollTop = 0;
+    panel.scrollTop = lerp(0, Math.max(0, acd.getBoundingClientRect().top - 260), std(span(t, P.openStory + 0.5, 0.6)));
+  }
+  t5key = t < P.done ? "07-map" : "08-map-done";
+  const doneCard = q("08-map-done", '.cell a.card[href="#story-WEB-CHK-5"]');
+  if (doneCard) { const b = span(t, P.done + 0.1, 0.18), u = span(t, P.done + 0.28, 0.25); put(doneCard, { transform: `scale(${1 + 0.06 * b - 0.06 * u})`, transformOrigin: "50% 50%", position: "relative", zIndex: 2 }); }
+  const tin = std(span(t, P.termIn, 0.5)), tout = std(span(t, P.chatIn - 0.6, 0.5));
+  put($("term"), { opacity: tin * (1 - tout), transform: `translateY(${lerp(40, 0, tin)}px)`, visibility: tin * (1 - tout) > 0 ? "visible" : "hidden" });
+  $("tbody").innerHTML = t >= P.termIn ? termAt(t) : "";
+
+  // 08: the agent asks, and the answer is the sign-off.
+  const cin = dec(span(t, P.chatIn, 0.5)), cout = std(span(t, P.chatOut, 0.4));
+  put($("chat"), { opacity: cin * (1 - cout), transform: `translateY(${lerp(24, 0, cin)}px) scale(${lerp(0.97, 1, cin)})`, visibility: cin * (1 - cout) > 0 ? "visible" : "hidden" });
+  put($("approveBtn"), { transform: `scale(${t >= P.approve && t < P.approve + 0.12 ? 0.94 : 1})` });
+  $("commit").textContent = T.commit;
+  $("chatAns").textContent = t >= P.approve + 0.4 ? `✓ ${T.approve.output}` : "";
+
+  // 09: the plan shows the bet's delivery; a check-in moves the key result.
+  scrollTo("09-commerce-before", byText("09-commerce-before", "h2, h3", "Key results"), 40);
+  // The save bar sits at the top of the page: scroll up to it as it appears.
+  const y10 = yFor("10-commerce-after", byText("10-commerce-after", "h2, h3", "Key results"), 40);
+  scrollY("10-commerce-after", lerp(y10, 0, std(span(t, P.bar - 0.4, 0.6))));
+  setField("09-commerce-before", 'form[data-op="checkin"]', "value", typeOut("2.6", t, P.checkin - 0.35, 12));
+
+  // 10: the save bar, as the page's script fills it from /api/pending.
+  const bar = q("10-commerce-after", "#pending");
+  if (bar) {
+    const pend = T.pending, on = t >= P.bar;
+    bar.hidden = !on;
+    if (on && !bar.firstChild) {
+      bar.innerHTML = `<span>${pend.files.length} saved change${pend.files.length === 1 ? "" : "s"} on ${pend.branch}. Nothing is pushed until you press Push. </span><button>Commit</button><button>Push</button><span class="save-msg"></span>`;
+    }
+    if (!on) bar.innerHTML = "";
+    put(bar, { opacity: span(t, P.bar, 0.3) });
+    const pb = q("10-commerce-after", "#pending button:nth-of-type(2)");
+    put(pb, { outline: t >= 69.8 ? "2px solid currentColor" : "none", outlineOffset: "2px" });
+  }
+
+  // Camera: push in where the reading happens, then pull back.
+  let cs = 1, fx = 960, fy = 540;
+  Z.forEach(([z0, zd, zs], i) => {
+    const p = std(span(t, z0, zd)) * (1 - std(span(t, PULLS[i], 0.8)));
+    if (p > 0) { const [x, y] = FOCUS[i](); cs = lerp(1, zs, p); fx = lerp(960, x, p); fy = lerp(540, y, p); }
+  });
+  put($("cam"), { transform: `translate(${960 - cs * fx}px, ${540 - cs * fy}px) scale(${cs})` });
+
+  // A hand on the product: the cursor, its press and a ripple.
+  const [cx, cy] = along(t);
+  const click = CLICKS.find(([c]) => t >= c && t < c + 0.45);
+  put($("cursor"), { transform: `translate(${cx - 3}px, ${cy - 3}px) scale(${click && t < click[0] + 0.12 ? 0.86 : 1})`, opacity: 1 - span(t, P.end - 0.3, 0.3) });
+  if (click) {
+    const p = dec(span(t, click[0], 0.45)), r = lerp(6, 34, p);
+    put($("ripple"), { display: "block", left: `${cx - r}px`, top: `${cy - r}px`, width: `${2 * r}px`, height: `${2 * r}px`, opacity: 1 - p });
+  } else put($("ripple"), { display: "none" });
+
+  put($("win"), { opacity: dec(span(t, P.winIn, 0.8)) });
+
+  // Close: the plate opens as a circle from the Push button.
+  const er = std(span(t, P.end, 0.9));
+  const [ox, oy] = C.push();
+  put($("end"), { visibility: t >= P.end ? "visible" : "hidden", clipPath: er >= 1 ? "none" : `circle(${lerp(0, 2300, er)}px at ${ox}px ${oy}px)` });
+  [".e0", ".e1", ".e2", ".e3"].forEach((sel, i) => { const s0 = P.end + 0.9 + i * 0.35; put(document.querySelector(sel), { opacity: span(t, s0, 0.4), transform: `translateY(${lerp(14, 0, dec(span(t, s0, 0.5)))}px)` }); });
+
+  // One label per beat, set whole.
+  const L = LABELS.find(([a, b]) => t >= a && t < b), lab = $("label");
+  if (L) { lab.innerHTML = `<b>${L[2]}</b>${L[3]}`; put(lab, { opacity: Math.min(span(t, L[0], 0.2), 1 - span(t, L[1] - 0.2, 0.2)) }); }
+  else put(lab, { opacity: 0 });
+};
+</script>
+</body>
+</html>
