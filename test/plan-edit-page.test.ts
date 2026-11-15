@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { exportPlanPage, startPlanServe, type PlanServe } from "../src/plan/serve";
 import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
-import { newBet } from "../src/planning/bets";
-import { newKr } from "../src/planning/krs";
+import { newBet, reviewBet } from "../src/planning/bets";
+import { checkIn, newKr, reviseTarget } from "../src/planning/krs";
 import { hash } from "../src/planning/model";
 import { idFromTitle } from "../src/planning/rules";
 import { acmePlan } from "./plan-serve-fixture";
@@ -161,7 +161,8 @@ describe("the forms on the live page", () => {
     const { srv } = await start(repo);
     const version = hash(readFileSync(join(repo, "planning/teams/WEB/bets/web-bet.md"), "utf8"));
     const forms = saveForms(await get(srv.port, "/?at=teams%2FWEB&view=bets")).filter((f) => f.target.bet === "web-bet");
-    expect(forms.map((f) => f.op)).toEqual(["bet.edit", "bet.krs", "bet.align", "bet.review"]);
+    // The review is on the drawer's History tab, which comes before its Edit tab.
+    expect(forms.map((f) => f.op)).toEqual(["bet.review", "bet.edit", "bet.krs", "bet.align"]);
     for (const f of forms) {
       expect(f.expect).toBe(version);
       expect(f.area).toBe("teams/WEB");
@@ -350,14 +351,52 @@ describe("the empty states", () => {
     }
   });
 
-  it("each key result and bet has its own edit drawer and the button that opens it", async () => {
+  it("each key result and bet has its own drawer, once a page, with Overview, History and Edit, and buttons that open it on Edit", async () => {
     const { srv } = await start(acmePlan());
-    const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
-    expect(html).toContain('<button type="button" class="btn" data-open="edit-kr-departments-finance-close-days">Edit this key result</button>');
-    expect(html).toContain('<dialog class="drawer" id="edit-kr-departments-finance-close-days" aria-labelledby="edit-kr-departments-finance-close-days-title">');
-    expect(html).toContain('<h2 id="edit-kr-departments-finance-close-days-title">Edit this key result</h2><p class="meta">Close days</p>');
+    const id = "detail-kr-departments-finance-close-days";
+    for (const view of ["okrs", "keys"]) {
+      const html = await get(srv.port, `/?${FINANCE}&view=${view}`);
+      expect(html, view).toContain(`<button type="button" class="btn" data-open="${id}" data-tab="edit">Edit this key result</button>`);
+      expect(html.match(new RegExp(`<dialog class="drawer" id="${id}"`, "g")), view).toHaveLength(1);
+    }
+    const html = await get(srv.port, `/?${FINANCE}&view=timeline`);
+    expect(html).toContain(`<h2 id="${id}-title">Close days</h2><p class="meta">Key result in Finance · close-days</p>`);
+    expect(html).toContain(`<button type="button" role="tab" id="${id}-tab-overview" aria-controls="${id}-overview" aria-selected="true" data-tab="overview">Overview</button>`);
+    expect(html).toContain(`<section role="tabpanel" id="${id}-history" aria-labelledby="${id}-tab-history" data-panel="history" hidden>`);
+    // History: the check-in, newest first.
+    expect(html).toMatch(/<ol class="history"><li><time datetime="2026-11-09">9 Nov 2026<\/time><span>Checked in at <strong>9<\/strong><\/span><\/li><\/ol>/);
     const bets = await get(srv.port, "/?at=teams%2FWEB&view=bets");
-    expect(bets).toContain('data-open="edit-bet-teams-WEB-web-bet">Edit this bet</button>');
+    expect(bets).toContain('data-open="detail-bet-teams-WEB-web-bet" data-tab="edit">Edit this bet</button>');
+    expect(bets).toContain("No reviews yet.");
+  });
+
+  it("a key result's history says when its target moved, with each check-in's note, and a bet's lists its reviews", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    checkIn(fin, "close-days", { value: 8, date: "2026-12-01", note: "Two banks reconciled" });
+    reviseTarget(fin, "close-days", 6);
+    reviewBet(findArea(repo, "WEB").dir, "web-bet", { decision: "change", reason: "Mobile first.", date: "2026-12-02" });
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=keys`);
+    expect(html).toContain("The target moved from 7 to 6.");
+    expect(html).toContain("Checked in at <strong>8</strong> · Two banks reconciled");
+    expect(html.indexOf('datetime="2026-12-01"')).toBeLessThan(html.indexOf('datetime="2026-11-09"'));
+    const bets = await get(srv.port, "/?at=teams%2FWEB&view=bets");
+    expect(bets).toContain('<time datetime="2026-12-02">2 Dec 2026</time><span><strong>Change</strong> · Mobile first.</span>');
+  });
+
+  it("the script opens a drawer from a link to a key result or bet the page has, and leaves other links alone", async () => {
+    const { srv } = await start(acmePlan());
+    const script = scriptOf(await get(srv.port, `/?${FINANCE}&view=okrs`));
+    const source = /function detailOf\(a\) \{[\s\S]*?\n\}/.exec(script)?.[0];
+    expect(source).toBeDefined();
+    const asked: string[] = [];
+    const detailOf = new Function("location", "document", `${source}; return detailOf;`)({ origin: "http://x" }, { getElementById: (id: string) => (asked.push(id), { id }) }) as (a: object) => { id: string } | null;
+    const link = (search: string, origin = "http://x") => ({ href: `${origin}/${search}`, origin, search });
+    expect(detailOf(link("?at=departments%2Ffinance&kr=close-days"))?.id).toBe("detail-kr-departments-finance-close-days");
+    expect(detailOf(link("?at=teams%2FWEB&bet=web-bet"))?.id).toBe("detail-bet-teams-WEB-web-bet");
+    expect(detailOf(link("?at=company&view=ladder"))).toBeNull();
+    expect(detailOf(link("?at=company&kr=revenue", "https://elsewhere.example"))).toBeNull();
   });
 
   it("the key result form's Starts at and Target are required only while the kind shows them", async () => {
@@ -409,7 +448,7 @@ describe("the drill-downs", () => {
     const own = await get(srv.port, "/?at=groups%2Fpayments&bet=faster-checkout");
     expect(saveForms(own).some((f) => f.op === "bet.edit" && f.target.bet === "faster-checkout")).toBe(true);
     const elsewhere = await get(srv.port, "/?at=company&bet=faster-checkout");
-    expect(saveForms(elsewhere).some((f) => f.op === "bet.edit")).toBe(false);
+    expect(saveForms(elsewhere).some((f) => f.op === "bet.edit" && f.target.bet === "faster-checkout")).toBe(false);
     expect(elsewhere).toContain('To change this bet, open it in <a href="?at=groups%2Fpayments&amp;bet=faster-checkout">Payments</a>.');
   });
 
@@ -418,7 +457,7 @@ describe("the drill-downs", () => {
     const own = await get(srv.port, `/?${FINANCE}&kr=close-days`);
     expect(saveForms(own).some((f) => f.op === "kr.edit" && f.target.kr === "close-days")).toBe(true);
     const elsewhere = await get(srv.port, "/?at=company&kr=close-days");
-    expect(saveForms(elsewhere).some((f) => f.op === "kr.edit")).toBe(false);
+    expect(saveForms(elsewhere).some((f) => f.op === "kr.edit" && f.target.kr === "close-days")).toBe(false);
     expect(elsewhere).toContain("To change this key result, open it in");
   });
 });
@@ -453,6 +492,20 @@ describe("the offline export", () => {
 });
 
 describe("the look of the forms", () => {
+  it("the save bar is pinned to the bottom of the page, and a save comes back as a toast after the reload", async () => {
+    const { srv } = await start(acmePlan());
+    const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
+    expect(html).toContain(".pending{position:fixed;z-index:40;left:50%;bottom:16px;");
+    expect(html).toContain("body:has(.pending:not([hidden])){padding-bottom:96px}");
+    const script = scriptOf(html);
+    expect(script).toContain('sessionStorage.setItem("nikos-after-save"');
+    expect(script).toContain("if (after.toast) toast(after.toast);");
+    // Storage that throws (a private window, say) is no error: nothing is kept.
+    const source = /function recall\(\) \{[\s\S]*?\n\}/.exec(script)?.[0];
+    const recall = new Function("sessionStorage", `${source}; return recall;`)({ getItem: () => { throw new Error("blocked"); } }) as () => unknown;
+    expect(recall()).toBeNull();
+  });
+
   it("the error colour has a value in light, and one in each dark block", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, `/?${FINANCE}&view=okrs`);

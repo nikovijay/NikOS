@@ -347,6 +347,18 @@ dialog.drawer::backdrop{background:rgba(20,16,40,.4)}
 .drawer-body .sub{background:transparent;padding:14px 0 4px;margin:0;border-radius:0;border-bottom:1px solid var(--line)}
 .drawer-body .sub:last-child{border-bottom:0}
 .drawer-body .sub h4{margin:0 0 4px}
+.drawer-head .row{margin-top:8px}
+.tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--line)}
+.tabs [role=tab]{font:inherit;font-weight:600;font-size:.9rem;padding:10px 12px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;color:var(--muted);cursor:pointer}
+.tabs [role=tab][aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs [role=tab]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px}
+.drawer-body [role=tabpanel]{padding-top:14px}
+.drawer-body [role=tabpanel]>h3{font-size:.95rem;margin:18px 0 6px}
+.drawer-body .kv{margin:12px 0}
+.history{list-style:none;margin:8px 0;padding:0;display:grid;gap:0}
+.history li{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
+.history li:first-child{border-top:0}
+.history time{color:var(--muted);font-variant-numeric:tabular-nums}
 fieldset.field{border:0;margin:0;padding:0}
 fieldset.field legend{padding:0;margin-bottom:4px}
 .segs{display:flex;flex-wrap:wrap;gap:6px}
@@ -605,13 +617,28 @@ function drawer(id: string, title: string, lede: string, body: string): string {
   return `<dialog class="drawer" id="${esc(id)}" aria-labelledby="${esc(id)}-title"><div class="drawer-head"><div><h2 id="${esc(id)}-title">${esc(title)}</h2>${lede ? `<p class="meta">${esc(lede)}</p>` : ""}</div><button type="button" class="btn" data-close>Close</button></div><div class="drawer-body">${body}</div></dialog>`;
 }
 
-/** The id of the drawer that edits one key result or bet: its kind, its area and its id, so two never share one. */
-const editId = (what: "kr" | "bet", rel: string, id: string) => `edit-${what}-${rel.replace(/\//g, "-")}-${id}`;
+/**
+ * The id of the drawer that shows one key result or bet: its kind, its area and its id, so two never share one.
+ * The live script makes the same id from a link to it (detailOf), so the link opens the drawer.
+ */
+const detailId = (what: "kr" | "bet", rel: string, id: string) => `detail-${what}-${rel.replace(/\//g, "-")}-${id}`;
 
-/** The button that opens an edit drawer, and the drawer: the thing's forms, one under another, each saving on its own. */
-function editDrawer(id: string, label: string, name: string, forms: string[]): string {
-  return `<p class="edit-line"><button type="button" class="btn" data-open="${esc(id)}">${esc(label)}</button></p>${drawer(id, label, name, forms.join(""))}`;
+/** One tab of a detail drawer: its name and what it shows. */
+interface Tab {
+  key: string;
+  label: string;
+  html: string;
 }
+
+/** A drawer with tabs: the first shows, and the rest are a click away. Overview, History and Edit, for a key result or bet. */
+function tabbedDrawer(id: string, title: string, lede: string, badges: string, tabs: Tab[]): string {
+  const tablist = tabs.map((t, i) => `<button type="button" role="tab" id="${esc(id)}-tab-${t.key}" aria-controls="${esc(id)}-${t.key}" aria-selected="${i === 0}" data-tab="${t.key}">${esc(t.label)}</button>`).join("");
+  const panels = tabs.map((t, i) => `<section role="tabpanel" id="${esc(id)}-${t.key}" aria-labelledby="${esc(id)}-tab-${t.key}" data-panel="${t.key}"${i ? " hidden" : ""}>${t.html}</section>`).join("");
+  return `<dialog class="drawer" id="${esc(id)}" aria-labelledby="${esc(id)}-title"><div class="drawer-head"><div><h2 id="${esc(id)}-title">${esc(title)}</h2><p class="meta">${esc(lede)}</p>${badges ? `<div class="row">${badges}</div>` : ""}</div><button type="button" class="btn" data-close>Close</button></div><div class="tabs" role="tablist" aria-label="${esc(title)}">${tablist}</div><div class="drawer-body">${panels}</div></dialog>`;
+}
+
+/** The button that opens a key result's or bet's drawer on its Edit tab. The drawer itself is rendered once, at the end of the page. */
+const editButton = (id: string, label: string) => `<p class="edit-line"><button type="button" class="btn" data-open="${esc(id)}" data-tab="edit">${esc(label)}</button></p>`;
 
 /** The line that says how to add something: a button that opens the form on this page, or the command when there is no form. */
 function addAction(live: boolean, open: string, label: string, command: string): string {
@@ -672,9 +699,11 @@ function addBetForm(page: AreaPage, live: boolean): string {
   return drawer("add-bet", "New bet", `In ${page.plan.name}.`, formHtml({ op: "bet.new", area: page.plan.rel, fields, more, submit: "Add bet" }));
 }
 
-/** A key result's edit forms in a drawer, with the button that opens it, live only: its details, its target and what it aligns to. Each saves with the version the page read. */
-function editKrBlock(k: DashKr, page: AreaPage, live: boolean): string {
-  if (!live) return "";
+/** The button that opens a key result's drawer on its Edit tab, live only. */
+const editKrBlock = (k: DashKr, live: boolean) => (live ? editButton(detailId("kr", k.rel, k.id), "Edit this key result") : "");
+
+/** A key result's edit forms, for its drawer: its details, its target and what it aligns to. Each saves with the version the page read. */
+function krEditForms(k: DashKr, page: AreaPage): string[] {
   const number = k.kind === "number";
   const forms = [
     sub(
@@ -729,12 +758,14 @@ function editKrBlock(k: DashKr, page: AreaPage, live: boolean): string {
         }),
       ),
     );
-  return editDrawer(editId("kr", k.rel, k.id), "Edit this key result", k.title, forms);
+  return forms;
 }
 
-/** A bet's edit forms in a drawer, with the button that opens it, live only: its details, what it aims at, what it aligns to, and a review. Each saves with the version the page read. */
-function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
-  if (!live) return "";
+/** The button that opens a bet's drawer on its Edit tab, live only. */
+const editBetBlock = (b: DashBet, live: boolean) => (live ? editButton(detailId("bet", b.rel, b.id), "Edit this bet") : "");
+
+/** A bet's forms, for its drawer: its details, what it aims at and what it aligns to, then a review. Each saves with the version the page read. */
+function betForms(b: DashBet, page: AreaPage): { edit: string[]; review: string } {
   const aims = choiceOptions(page, page.choices.aimKrs);
   const alignOptions = offered(choiceOptions(page, page.choices.alignBets), b.aligns);
   const forms = [
@@ -787,7 +818,7 @@ function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
         }),
       ),
     );
-  forms.push(
+  const review =
     sub(
       "Record a review",
       formHtml({
@@ -803,9 +834,8 @@ function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
           { name: "reason", label: "Reason", kind: "textarea", required: true, wide: true },
         ],
       }),
-    ),
-  );
-  return editDrawer(editId("bet", b.rel, b.id), "Edit this bet", betName(b), forms);
+    );
+  return { edit: forms, review };
 }
 
 /** The key results: a summary, then a card for each, grouped by objective. Company and departments only. */
@@ -822,13 +852,17 @@ function renderKeys(page: AreaPage, live: boolean): string {
 }
 
 /** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
-function krCard(k: DashKr, page: AreaPage, live: boolean): string {
-  const figure =
-    k.kind === "milestone"
+/** A key result's figure: steps done for a milestone, else its latest value against where it started and its target. */
+function krFigure(k: DashKr): string {
+  return k.kind === "milestone"
       ? `<div class="figure"><span class="now num">${k.steps.filter((x) => x.done).length}/${k.steps.length}</span><span class="of">steps done</span></div>`
       : `<div class="figure"><span class="now num">${esc(k.latest ? withUnit(k.latest.value, k.unit) : "—")}</span><span class="of">from ${esc(withUnit(k.baseline, k.unit))} to ${esc(withUnit(k.target, k.unit))}${k.direction === "down" ? ", going down" : ""}</span></div>`;
+}
+
+function krCard(k: DashKr, page: AreaPage, live: boolean): string {
+  const figure = krFigure(k);
   const when = k.latest ? `Checked in ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "" : "No check-ins yet";
-  return `<article class="card kr-card"><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}</article>`;
+  return `<article class="card kr-card"><div class="head"><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}</div><span class="id">${esc(k.id)}${k.owner ? ` · ${esc(k.owner)}` : ""} · due ${esc(shortDate(k.by))}</span>${figure}${krBar(k, page.today)}<div class="card-foot"><span>${when}${k.stale ? `${when ? " · " : ""}<strong>stale</strong>` : ""}</span>${k.kind === "number" ? sparkOf(k) : ""}</div><p class="meta">${esc(krMeta(k))}</p>${checkinForm(k, live)}${editKrBlock(k, live)}</article>`;
 }
 
 /** The empty state of an area's key results: the year for the company, the quarter for a department. */
@@ -855,7 +889,7 @@ function renderOkrs(page: AreaPage, live: boolean): string {
       parts.push(
         `<div class="card okr"><div class="okr-head"><div><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> <span class="id">${esc(k.id)}</span><div class="meta">${esc(krMeta(k))}${k.aligns_to.length ? `. Aligns to ${esc(k.aligns_to.map((id) => labelOf(page, id)).join(", "))}` : ""}</div></div>${statusPill(k, page.today)}</div><div class="okr-body">${checkinForm(k, live)}${
           lines.length ? `<ul class="rows">${lines.join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'
-        }${editKrBlock(k, page, live)}</div></div>`,
+        }${editKrBlock(k, live)}</div></div>`,
       );
     }
     parts.push("</section>");
@@ -1036,19 +1070,73 @@ function renderBets(page: AreaPage, live: boolean): string {
   if (!page.bets.length) return emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
   const body = page.bets
     .map((b: DashBet) => {
-      const facts: string[] = [];
-      if (b.owner) facts.push(`<dt>Owner</dt><dd>${esc(b.owner)}</dd>`);
-      if (b.team) facts.push(`<dt>Team</dt><dd>${esc(b.team)}</dd>`);
-      if (b.review_on) facts.push(`<dt>Review</dt><dd>${esc(shortDate(b.review_on))}${b.review_on < page.today && b.outcome === "open" ? ' · <strong style="color:var(--bad)">due</strong>' : ""}</dd>`);
-      const aims = [b.krs.primary, ...b.krs.also].filter((x): x is string => !!x);
-      if (aims.length) facts.push(`<dt>Aims at</dt><dd>${aims.map((id) => `<a href="${esc(krHref(page.plan.rel, id, page.period))}">${esc(labelOf(page, id))}</a>`).join(", ")}</dd>`);
-      if (b.aligns_to.length) facts.push(`<dt>Aligns to</dt><dd>${b.aligns_to.map((x) => betLink(x, page.period)).join(", ")}</dd>`);
-      facts.push(`<dt>Delivery</dt><dd>${esc(deliveryText(b.delivery))}</dd>`);
-      if (b.stories.length) facts.push(`<dt>Stories</dt><dd>${b.stories.map((s) => `${esc(s.id)} (${esc(s.status ?? "no summary yet")})`).join(", ")}</dd>`);
-      return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, page, live)}</article>`;
+      const facts = betFacts(b, page);
+      return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, live)}</article>`;
     })
     .join("");
   return `<div class="bet-cards">${body}</div>`;
+}
+
+/** A bet's facts, as the rows of a list: owner, team, review, what it aims at and aligns to, delivery and stories. */
+function betFacts(b: DashBet, page: AreaPage): string[] {
+  const facts: string[] = [];
+  if (b.owner) facts.push(`<dt>Owner</dt><dd>${esc(b.owner)}</dd>`);
+  if (b.team) facts.push(`<dt>Team</dt><dd>${esc(b.team)}</dd>`);
+  if (b.review_on) facts.push(`<dt>Review</dt><dd>${esc(shortDate(b.review_on))}${b.review_on < page.today && b.outcome === "open" ? ' · <strong style="color:var(--bad)">due</strong>' : ""}</dd>`);
+  const aims = [b.krs.primary, ...b.krs.also].filter((x): x is string => !!x);
+  if (aims.length) facts.push(`<dt>Aims at</dt><dd>${aims.map((id) => `<a href="${esc(krHref(page.plan.rel, id, page.period))}">${esc(labelOf(page, id))}</a>`).join(", ")}</dd>`);
+  if (b.aligns_to.length) facts.push(`<dt>Aligns to</dt><dd>${b.aligns_to.map((x) => betLink(x, page.period)).join(", ")}</dd>`);
+  facts.push(`<dt>Delivery</dt><dd>${esc(deliveryText(b.delivery))}</dd>`);
+  if (b.stories.length) facts.push(`<dt>Stories</dt><dd>${b.stories.map((s) => `${esc(s.id)} (${esc(s.status ?? "no summary yet")})`).join(", ")}</dd>`);
+  return facts;
+}
+
+/** A line of a history: its date, then what happened. */
+const historyLine = (date: string, html: string) => `<li><time datetime="${esc(date)}">${esc(shortDate(date))}</time><span>${html}</span></li>`;
+
+/**
+ * A key result's drawer. Overview: its figure, the check-in, and the bets that aim at it. History: its check-ins
+ * and steps, newest first, and a moved target. Edit: its forms.
+ */
+function krDrawer(k: DashKr, page: AreaPage): string {
+  const aimed = page.bets.filter((b) => b.krs.primary === k.id || b.krs.also.includes(k.id));
+  const elsewhere = page.aimingBets.filter((b) => b.of === k.id);
+  const lines = [...aimed.map((b) => betLine(b, page)), ...elsewhere.map((b) => betLine(b, page, areaName(page, b.rel)))];
+  const facts = [
+    k.owner ? `<dt>Owner</dt><dd>${esc(k.owner)}</dd>` : "",
+    k.by ? `<dt>Due</dt><dd>${esc(shortDate(k.by))}</dd>` : "",
+    k.objective ? `<dt>Objective</dt><dd>${esc(k.objective)}</dd>` : "",
+    k.aligns_to.length ? `<dt>Aligns to</dt><dd>${esc(k.aligns_to.map((id) => labelOf(page, id)).join(", "))}</dd>` : "",
+  ].join("");
+  const checkin = checkinForm(k, true);
+  const overview = `${krFigure(k)}${krBar(k, page.today)}<p class="meta">${esc(krMeta(k))}</p>${facts ? `<dl class="kv">${facts}</dl>` : ""}${
+    checkin ? `<h3>${k.kind === "milestone" ? "Mark a step done" : "Check in"}</h3>${checkin}` : ""
+  }<h3>Bets that aim at it</h3>${lines.length ? `<ul class="rows">${lines.join("")}</ul>` : '<p class="meta">No bets aim at this yet.</p>'}<p><a href="${esc(krHref(k.rel, k.id, page.period))}">Open its page</a></p>`;
+  const events: { date: string; html: string }[] = [];
+  for (const c of k.checkins) events.push({ date: c.date, html: `Checked in at <strong>${esc(withUnit(c.value, k.unit))}</strong>${c.note ? ` · ${esc(c.note)}` : ""}` });
+  for (const st of k.steps) if (st.done) events.push({ date: st.done, html: `Step done: ${esc(st.name)}` });
+  events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const moved = k.kind === "number" && k.originalTarget !== k.target ? `<p class="meta">The target moved from ${esc(withUnit(k.originalTarget, k.unit))} to ${esc(withUnit(k.target, k.unit))}.</p>` : "";
+  const history = `${moved}${events.length ? `<ol class="history">${events.map((e) => historyLine(e.date, e.html)).join("")}</ol>` : `<p class="meta">${k.kind === "milestone" ? "No step is done yet." : "No check-ins yet."}</p>`}`;
+  return tabbedDrawer(detailId("kr", k.rel, k.id), k.title, `Key result in ${areaName(page, k.rel)} · ${k.id}`, statusPill(k, page.today), [
+    { key: "overview", label: "Overview", html: overview },
+    { key: "history", label: "History", html: history },
+    { key: "edit", label: "Edit", html: krEditForms(k, page).join("") },
+  ]);
+}
+
+/** A bet's drawer. Overview: what it believes, its delivery and its facts. History: a review to record, then its reviews. Edit: its forms. */
+function betDrawer(b: DashBet, page: AreaPage): string {
+  const forms = betForms(b, page);
+  const overview = `${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}${deliveryBar(b.delivery)}<dl class="kv">${betFacts(b, page).join("")}</dl><p><a href="${esc(betHref(b.rel, b.id, page.period))}">Open its page</a></p>`;
+  const reviews = [...b.reviews].sort((x, y) => (x.date < y.date ? 1 : x.date > y.date ? -1 : 0));
+  const said = (r: DashBet["reviews"][number]) => `<strong>${esc(r.decision.charAt(0).toUpperCase() + r.decision.slice(1))}</strong>${r.outcome ? ` · ${esc(r.outcome)}` : ""}${r.reason ? ` · ${esc(r.reason)}` : ""}`;
+  const history = `${forms.review}<h3>Reviews</h3>${reviews.length ? `<ol class="history">${reviews.map((r) => historyLine(r.date, said(r))).join("")}</ol>` : '<p class="meta">No reviews yet.</p>'}`;
+  return tabbedDrawer(detailId("bet", b.rel, b.id), betName(b), `Bet in ${areaName(page, b.rel)}${b.title ? ` · ${b.id}` : ""}`, `${deliveryPill(b.delivery)} ${outcomePill(b.outcome)}`, [
+    { key: "overview", label: "Overview", html: overview },
+    { key: "history", label: "History", html: history },
+    { key: "edit", label: "Edit", html: forms.edit.join("") },
+  ]);
 }
 
 /** The timeline: each bet from its start to its deadline with its review, and each key result's due date, against the months. */
@@ -1093,7 +1181,7 @@ function renderKrDrill(d: KrDrill, page: AreaPage, live: boolean): string {
   const k = d.kr;
   const head = `<h2>Key result: ${esc(k.title)}</h2><p>${statusPill(k, page.today)}</p><p class="meta"><span class="id">${esc(k.id)}</span> in ${esc(areaName(page, k.rel))} · ${esc(k.kind === "milestone" ? stepsOf(k) : `${pct(k.progress)}, ${checkinOf(k)}`)}${k.stale ? " · stale" : ""}</p>${notLinkedLine(k.laddersUp)}`;
   const own = page.krs.find((x) => x.id === k.id && x.rel === k.rel);
-  const editing = own ? editKrBlock(own, page, live) : k.rel === page.plan.rel ? "" : elsewhereLine("key result", k.rel, krHref(k.rel, k.id, page.period), page);
+  const editing = own ? editKrBlock(own, live) : k.rel === page.plan.rel ? "" : elsewhereLine("key result", k.rel, krHref(k.rel, k.id, page.period), page);
   if (!d.areas.length) return `<div class="drill">${head}<p>No bets aim at this key result yet.</p>${editing}</div>`;
   const areas = d.areas.map((a) => {
     const items = a.bets.map((b: DrillBet) => {
@@ -1110,7 +1198,7 @@ function renderBetDrill(d: BetDrill, up: UpChain, page: AreaPage, live: boolean)
   const b = d.bet;
   const head = `<h2>Bet: ${esc(betName(b))}${betId(b)}</h2><p class="row">${deliveryPill(b.delivery)} ${outcomePill(b.outcome)}</p><p class="meta">In ${esc(areaName(page, b.rel))}${b.owner ? ` · Owner: ${esc(b.owner)}` : ""}</p><p>Delivery: ${esc(deliveryText(b.delivery))}</p><p class="meta">Delivery comes from the story maps. The outcome is called at review, from key result evidence.</p>${notLinkedLine(b.laddersUp)}`;
   const own = page.bets.find((x) => x.id === b.id && x.rel === b.rel);
-  const editing = own ? editBetBlock(own, page, live) : b.rel === page.plan.rel ? "" : elsewhereLine("bet", b.rel, betHref(b.rel, b.id, page.period), page);
+  const editing = own ? editBetBlock(own, live) : b.rel === page.plan.rel ? "" : elsewhereLine("bet", b.rel, betHref(b.rel, b.id, page.period), page);
   const maps = d.maps.length ? `<h3>Story maps that deliver it</h3><ul>${d.maps.map((m) => `<li>${esc(mapText(m))}</li>`).join("")}</ul>${SERVE_HINT}` : "";
   const chain = up.levels.length
     ? up.levels.map((lvl) => `<h3>${lvl.depth === 1 ? "Aligns to" : `Level ${lvl.depth} up`}</h3><ul>${lvl.bets.map((x) => `<li>${betLink(x, page.period)}${betId(x)} (${esc(areaName(page, x.rel))}) — ${esc(x.outcome)}</li>`).join("")}</ul>`).join("")
@@ -1162,23 +1250,71 @@ document.addEventListener("change", function (e) {
   var form = e.target && e.target.form;
   if (form && form.getAttribute("data-op") !== null) syncKinds(form);
 });
-// A button with data-open opens the drawer it names, on its first field; a drawer's Close button closes it.
-document.addEventListener("click", function (e) {
-  var t = e.target && e.target.closest ? e.target : null;
-  if (!t) return;
-  var closer = t.closest("[data-close]");
-  if (closer) { var d = closer.closest("dialog"); if (d) d.close(); return; }
-  var opener = t.closest("[data-open]");
-  if (!opener) return;
-  var box = document.getElementById(opener.getAttribute("data-open"));
-  if (!box) return;
+// The drawer a link shows, when the page has it: a key result's or bet's, made from the link's area and id as
+// detailId makes it on the server. Null for any other link.
+function detailOf(a) {
+  if (!a.href || a.origin !== location.origin) return null;
+  var q = new URLSearchParams(a.search);
+  var kind = q.get("kr") ? "kr" : q.get("bet") ? "bet" : "";
+  if (!kind || !q.get("at")) return null;
+  return document.getElementById("detail-" + kind + "-" + q.get("at").replace(/\\//g, "-") + "-" + q.get(kind));
+}
+// Shows one tab of a drawer with tabs, and hides the others.
+function showTab(box, key) {
+  var tabs = box.querySelectorAll("[role=tab]");
+  for (var i = 0; i < tabs.length; i++) {
+    var on = tabs[i].getAttribute("data-tab") === key;
+    tabs[i].setAttribute("aria-selected", String(on));
+    var panel = document.getElementById(tabs[i].getAttribute("aria-controls"));
+    if (panel) panel.hidden = !on;
+  }
+}
+// Opens a drawer on a tab (its first when none is named), with the focus on its first field when it has no tabs.
+function openDrawer(box, tab) {
+  var tabs = box.querySelectorAll("[role=tab]");
+  if (tabs.length) showTab(box, tab || tabs[0].getAttribute("data-tab"));
   if (box.showModal) { if (!box.open) box.showModal(); } else box.setAttribute("open", "");
+  if (tabs.length) { (box.querySelector("[role=tab][aria-selected=true]") || tabs[0]).focus(); return; }
   var fields = box.querySelectorAll("input, select, textarea");
   for (var i = 0; i < fields.length; i++) {
     if (!showing(fields[i]) || fields[i].type === "hidden") continue;
     fields[i].focus();
     break;
   }
+}
+// A button with data-open opens the drawer it names; a link to a key result or bet the page has a drawer for opens
+// that, unless a modifier key asks for the page itself. A tab shows its panel, and Close closes the drawer.
+document.addEventListener("click", function (e) {
+  var t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  var closer = t.closest("[data-close]");
+  if (closer) { var d = closer.closest("dialog"); if (d) d.close(); return; }
+  var tab = t.closest("[role=tab]");
+  if (tab) { showTab(tab.closest("dialog"), tab.getAttribute("data-tab")); return; }
+  var link = t.closest("a[href]");
+  if (link && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) && e.button === 0) {
+    var shown = detailOf(link);
+    if (!shown || shown.contains(link)) return;
+    e.preventDefault();
+    var openNow = document.querySelector("dialog[open]");
+    if (openNow && openNow !== shown) openNow.close();
+    openDrawer(shown);
+    return;
+  }
+  var opener = t.closest("[data-open]");
+  if (!opener) return;
+  var box = document.getElementById(opener.getAttribute("data-open"));
+  if (box) openDrawer(box, opener.getAttribute("data-tab"));
+});
+// The arrow keys move between a drawer's tabs.
+document.addEventListener("keydown", function (e) {
+  var tab = e.target && e.target.getAttribute && e.target.getAttribute("role") === "tab" ? e.target : null;
+  if (!tab || (e.key !== "ArrowRight" && e.key !== "ArrowLeft")) return;
+  var all = Array.prototype.slice.call(tab.parentNode.querySelectorAll("[role=tab]"));
+  var next = all[(all.indexOf(tab) + (e.key === "ArrowRight" ? 1 : all.length - 1)) % all.length];
+  showTab(tab.closest("dialog"), next.getAttribute("data-tab"));
+  next.focus();
+  e.preventDefault();
 });
 document.addEventListener("submit", function (e) {
   var form = e.target;
@@ -1211,9 +1347,14 @@ document.addEventListener("submit", function (e) {
   if (sendBtn) sendBtn.disabled = true;
   call("POST", "/api/op", { op: form.getAttribute("data-op"), area: form.getAttribute("data-area"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
     if (res.ok) {
-      if (out) out.textContent = res.body.message + (res.body.branch ? " on " + res.body.branch : "");
-      // Saved: show the message for a moment, then load the page again so its figures and versions are the new ones.
-      setTimeout(function () { location.reload(); }, 800);
+      var said = res.body.message + (res.body.branch ? " on " + res.body.branch : "");
+      if (out) out.textContent = said;
+      // Saved: load the page again so its figures and versions are the new ones. The message shows again as a toast,
+      // and a key result's or bet's drawer opens again where it was.
+      var box = form.closest("dialog.drawer");
+      var on = box ? box.querySelector("[role=tab][aria-selected=true]") : null;
+      remember({ toast: said, open: box && box.id.indexOf("detail-") === 0 ? box.id : "", tab: on ? on.getAttribute("data-tab") : "" });
+      setTimeout(function () { location.reload(); }, 300);
       return;
     }
     if (sendBtn) sendBtn.disabled = false;
@@ -1246,6 +1387,13 @@ for (var b = 0; b < boxes.length; b++) (function (box) {
 var forms = document.querySelectorAll("form[data-op]");
 for (var k = 0; k < forms.length; k++) syncKinds(forms[k]);
 pendingBar();
+var after = recall();
+if (after) {
+  // The drawer first, so the toast shows above it.
+  var again = after.open ? document.getElementById(after.open) : null;
+  if (again) openDrawer(again, after.tab);
+  if (after.toast) toast(after.toast);
+}
 })();`;
 
 /** What the page renders: the live page's forms and bar, or none for the offline export. */
@@ -1341,6 +1489,7 @@ ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map
 </div>
 </div>
 ${addKrForm(page, live)}${addBetForm(page, live)}
+${live ? [...page.krs.map((k) => krDrawer(k, page)), ...page.bets.map((b) => betDrawer(b, page))].join("") : ""}
 ${shareDialog(page, !!opts.offline)}
 `;
 }

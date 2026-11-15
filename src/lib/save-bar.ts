@@ -3,7 +3,11 @@
 // so it names the command that runs that server, for the message when the server can't be reached.
 
 /** The bar's style: the notice box it sits in, and its buttons. */
-export const SAVE_BAR_CSS = `.pending{background:var(--accent);color:var(--accent-fg);padding:10px 12px 10px 16px;border-radius:var(--r,10px);margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:.92rem}
+export const SAVE_BAR_CSS = `.pending{position:fixed;z-index:40;left:50%;bottom:16px;transform:translateX(-50%);width:max-content;max-width:min(960px,calc(100vw - 32px));max-height:60vh;overflow-y:auto;box-sizing:border-box;box-shadow:0 10px 32px rgba(20,16,40,.28);background:var(--accent);color:var(--accent-fg);padding:10px 12px 10px 16px;border-radius:var(--r,10px);margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:.92rem}
+body:has(.pending:not([hidden])){padding-bottom:96px}
+.toast{position:fixed;z-index:60;inset:16px auto auto 50%;margin:0;border:0;transform:translateX(-50%);width:max-content;max-width:min(560px,calc(100vw - 32px));box-sizing:border-box;background:var(--fg);color:var(--bg,#fff);padding:9px 16px;border-radius:10px;font-size:.9rem;font-weight:500;box-shadow:0 8px 24px rgba(20,16,40,.25);animation:toast-in .2s ease-out}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,-8px)}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
 .pending button{font:inherit;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid color-mix(in srgb,currentColor 50%,transparent);background:transparent;color:inherit;cursor:pointer}
 .pending button:first-of-type{background:var(--accent-fg);color:var(--accent);border-color:transparent}
 .pending button:disabled{opacity:.6;cursor:progress}
@@ -15,7 +19,7 @@ export const SAVE_BAR_CSS = `.pending{background:var(--accent);color:var(--accen
 /**
  * The bar's script, for a page (named `what`, as the message says) that saves through the server `command` runs.
  * It reads the token from the page's nikos-token meta tag, and defines call (a request with the token), errorOf,
- * gone, pendingBar and button. It loads the bar's list of saves at once, and again after each commit or push.
+ * gone, pendingBar, button, toast, and remember and recall (what a page keeps across the reload after a save). It loads the bar's list of saves at once, and again after each commit or push.
  * See changes shows which files those saves changed, by git's status, and stays open while the bar reloads.
  */
 export function saveBarScript(command: string, what: string): string {
@@ -80,6 +84,28 @@ function changeList(files, paths) {
   }
   return list;
 }
+// A short message at the top of the page, for a few seconds. role=status reads it out. As a popover it shows
+// above an open drawer, which would otherwise cover it.
+function toast(text) {
+  var old = document.querySelector(".toast");
+  if (old) old.remove();
+  var el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "status");
+  el.textContent = text;
+  document.body.appendChild(el);
+  if (el.showPopover) { el.setAttribute("popover", "manual"); el.showPopover(); }
+  setTimeout(function () { el.remove(); }, 4000);
+}
+// What a page keeps across one reload, in this tab only. Without storage it is simply not kept.
+function remember(v) { try { sessionStorage.setItem("nikos-after-save", JSON.stringify(v)); } catch (e) {} }
+function recall() {
+  try {
+    var v = sessionStorage.getItem("nikos-after-save");
+    sessionStorage.removeItem("nikos-after-save");
+    return v ? JSON.parse(v) : null;
+  } catch (e) { return null; }
+}
 function button(label, path, msg) {
   var b = document.createElement("button");
   b.type = "button";
@@ -90,6 +116,7 @@ function button(label, path, msg) {
     call("POST", path, {}).then(function (res) {
       if (!res.ok) { msg.textContent = errorOf(res); b.disabled = false; return; }
       msg.textContent = res.body.committed ? "Committed " + String(res.body.committed).slice(0, 7) : res.body.pushed ? "Pushed " + res.body.pushed : "Done";
+      toast(msg.textContent);
       pendingBar();
     }, function () { msg.textContent = gone(); b.disabled = false; });
   });
