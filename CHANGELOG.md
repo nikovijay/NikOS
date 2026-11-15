@@ -1,14 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-15)
+
+The plan dashboard is redesigned. Each area opens on an Overview of what needs attention. Forms open in drawers from the side, not in sections that fold open on the page, and each key result and bet opens in a drawer with Overview, History and Edit tabs. Check-ins can be done one key result after another, with a preview of what each value means. Key results can be filtered, Bets is a board, and two new views show the Alignment tree and the Activity. The save bar moves to the bottom of the page and lists what your saves changed. The saves and the files they write are the same as in 0.6, so nothing in this release breaks a 0.6 setup. 0.6.1 was not published to npm, so its changes are listed here.
 
 ### Added
 
 - **An Overview for each area.** The dashboard now opens on it. It has three tiles (key results by status, bets by delivery, and check-ins and reviews due) and a list of what needs attention: late check-ins, bet reviews due within two weeks or overdue, open bets with no story map, and key results no bet aims at. Each one opens its drawer. A company or department also lists its key results with their status and progress.
 - **Check in, one key result at a time.** The Check in button shows how many key results are late. It opens a session that goes through the area's key results, the late ones first. For each one you type the new value, with a date and a note if you like, and it shows what the value would mean before you save: the change from the last check-in, how far it is toward the target, and whether that is on track for how much of the period has gone. A list of steps asks which step is done. Each saves on its own, and you can skip any.
-
 - **An Alignment tree.** A new view shows the key results above, the area's own key results under the ones they align to, the bets that aim at each, and the bets below each bet, at any depth. Any branch folds, and the area's own items are outlined. The Ladder stays as it was.
 - **Activity.** A new view lists the area's check-ins, steps done and bet reviews, newest first and by month, with chips to show one kind. It reads only what the plan's files record.
+- **A video example in the Video pack.** `tools/video/examples/plan-and-spec` is an 80-second film of one bet going from the company's plan to proven code, with the brief it was made from and the script that builds its example company.
 - **Filter the key results.** The Key results view has a search box, a status and an owner filter, and a switch between cards and a list. The filters go in the page's address, so a link or a reload keeps them, and they work in an exported page too.
 
 ### Changed
@@ -17,14 +19,14 @@
 - **The plan dashboard's forms open in drawers.** "New key result" and "New bet" are buttons at the top of every view, and each opens a drawer from the side of the page. "Edit this key result" and "Edit this bet" open a drawer with that item's forms, in place of a section that folded open on the page. Choices with a few options, such as a key result's kind and direction or a review's decision, are rows of buttons. What a key result or bet aligns to or also aims at is a list of tick boxes. The saves and what they write are the same as before. Check-ins stay on the cards.
 - **Each key result and bet has a drawer.** Clicking one anywhere on the dashboard, from a card, the ladder or the timeline, opens it in a drawer with three tabs. Overview has its figure, the check-in and the bets that aim at it, or a bet's delivery and facts. History has the check-ins with their notes, steps done and a moved target, or a bet's reviews with the form to record one. Edit has the forms. Ctrl-click or Cmd-click still opens its full page. The Key results view's cards have an Edit button too.
 - **The save bar sits at the bottom of the page,** and a save shows a short message at the top when the page reloads. A drawer you saved from opens again where you were.
-- **See changes in the save bar.** On the plan dashboard and the live story map, the save bar lists the files your saves changed, each marked new, changed or removed, before you commit.
-
-## 0.6.1 (2026-11-15)
-
-### Changed
-
+- **See changes in the save bar.** On the plan dashboard and the live story map, the save bar lists the files your saves changed, each marked new, changed or removed, before you commit. On both pages the bar now sits at the bottom.
+- **The dashboard opens on the Overview.** A link with no `view=` opens it, where it used to open OKRs and bets. Links that name a view open that view, as before.
 - **The README explains how nikOS works now.** It covers how a bet in the company's plan becomes a story map in a code repo and comes back as delivery on the dashboard, what you can change on each page, and how to run nikOS from a terminal, including `nikos plan init --name --year`.
 - **The N mark heads both pages.** The plan dashboard and the story map, live and exported, now show the N mark from `assets/icon.svg` in their header, in place of the placeholder icons.
+
+### Fixed
+
+- **The Video pack's contact sheet** could hold only the last frame, with the other tiles blank, on some ffmpeg builds. It is now laid out in the page and screenshotted, so that step needs only Playwright, not ffmpeg.
 
 ## 0.6.0 (2026-11-13)
 
