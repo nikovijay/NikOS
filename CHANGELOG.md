@@ -7,6 +7,8 @@
 - **An Overview for each area.** The dashboard now opens on it. It has three tiles (key results by status, bets by delivery, and check-ins and reviews due) and a list of what needs attention: late check-ins, bet reviews due within two weeks or overdue, open bets with no story map, and key results no bet aims at. Each one opens its drawer. A company or department also lists its key results with their status and progress.
 - **Check in, one key result at a time.** The Check in button shows how many key results are late. It opens a session that goes through the area's key results, the late ones first. For each one you type the new value, with a date and a note if you like, and it shows what the value would mean before you save: the change from the last check-in, how far it is toward the target, and whether that is on track for how much of the period has gone. A list of steps asks which step is done. Each saves on its own, and you can skip any.
 
+- **An Alignment tree.** A new view shows the key results above, the area's own key results under the ones they align to, the bets that aim at each, and the bets below each bet, at any depth. Any branch folds, and the area's own items are outlined. The Ladder stays as it was.
+- **Activity.** A new view lists the area's check-ins, steps done and bet reviews, newest first and by month, with chips to show one kind. It reads only what the plan's files record.
 - **Filter the key results.** The Key results view has a search box, a status and an owner filter, and a switch between cards and a list. The filters go in the page's address, so a link or a reload keeps them, and they work in an exported page too.
 
 ### Changed

@@ -84,7 +84,7 @@ describe("breadcrumbs and the place in the URL", () => {
     const r = (await get(srv.port, "/?at=departments/finance")).text;
     const views = [...r.matchAll(/<nav class="views"[^>]*>(.*?)<\/nav>/gs)][0][1];
     const hrefs = [...views.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-    expect(hrefs.length).toBe(6);
+    expect(hrefs.length).toBe(8);
     for (const h of hrefs) expect(h).toContain(FINANCE);
   });
 });
