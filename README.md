@@ -59,11 +59,16 @@ can share.
 
 On the **plan dashboard** you can:
 
-- add and edit key results and bets, and record check-ins and reviews;
-- link a bet to the key results it aims at;
-- move between the company, departments, groups and teams;
-- see the ladder from a team's bet up to the company's key results, and a
-  timeline.
+- open each area on an Overview of what needs attention: late check-ins, reviews
+  due, bets with no story map and key results nothing aims at;
+- add key results and bets from drawers that slide in from the side, and open any
+  key result or bet in a drawer with its Overview, History and Edit tabs;
+- check in on each key result in turn, and see what a value means before you save
+  it;
+- filter the key results, and see the bets on a board by how far each has got;
+- see how everything aligns, from the company's key results down to each team's
+  bets, in a tree that folds, and what has happened in an Activity feed;
+- move between the company, departments, groups and teams.
 
 On the **story map** you can:
 
@@ -200,7 +205,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan status [--in <area>] [--json]` | The plan's key results and bets, each bet's delivery from the code repos listed in `planning/repos.yaml`, and how old each copy is ([docs/plan.md](docs/plan.md)) |
 | `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files under `.nikos/delivery/` on this machine (git ignores it, so run it on each machine that reads the plan) |
-| `nikos plan serve [--in <area>] [--export <file>]` | Open the planning dashboard and print its private link. It shows one area at a time: its key results, its bets, the ladder and each bet's delivery. You can add and edit key results and bets there. Saves go on a `nikos/plan-…` branch, and you commit or push them from the page. `--export <file>` writes it as one offline page with no forms: for one area with `--in`, or for every area without ([docs/plan.md](docs/plan.md)) |
+| `nikos plan serve [--in <area>] [--export <file>]` | Open the planning dashboard and print its private link. It shows one area at a time, opening on an Overview: its key results, its bets on a board, how they align, its activity, and each bet's delivery. You can add and edit key results and bets there, and check in on each key result in turn. Saves go on a `nikos/plan-…` branch, and you commit or push them from the page. `--export <file>` writes it as one offline page with no forms: for one area with `--in`, or for every area without ([docs/plan.md](docs/plan.md)) |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |

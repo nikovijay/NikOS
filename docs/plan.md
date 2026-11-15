@@ -190,12 +190,35 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
   Departments, Groups or Teams. The picker beside it chooses the area at that
   level. The breadcrumb shows the way up, for example Company › Finance ›
   Payments › WEB, and each part is a link.
-- **One page per area.** The views are Key results (the company and departments
-  only), OKRs and bets, Ladder, Bets and Timeline. Groups and teams have no key
-  results of their own: their OKRs and bets show the key results their bets aim at.
+- **One page per area.** The views are Overview, Key results (the company and
+  departments only), OKRs and bets, Alignment, Ladder, Bets, Timeline and
+  Activity. An area opens on its Overview. Groups and teams have no key results
+  of their own: their OKRs and bets show the key results their bets aim at.
   Under each key result, OKRs and bets lists the area's own bets that aim at it, then
   other areas' bets that do, each with its area. A company or department lists every
   area's; a group or team lists only the areas below it.
+- **The Overview.** Three tiles: the key results by status, the bets by delivery,
+  and the check-ins and reviews due. Then what needs attention: key results whose
+  check-in is late, open bets whose review is due within two weeks or overdue,
+  open bets with no story map, and the area's key results that no bet aims at.
+- **Key results.** A card for each, grouped by objective, or a list with one row
+  each. Search, a status filter (on track, at risk, off track, not started) and an
+  owner filter narrow them. The filters go in the link, for example
+  `?at=departments/finance&view=keys&owner=Mira`, so a reload or a shared link
+  keeps them.
+- **The bets board.** Four columns: Not started, Building, Shipped and Decided. A
+  bet with no story map has not started. Its own maps' status moves it to Building
+  or Shipped. A bet delivered by the bets below it is Shipped when all of theirs
+  have shipped, and Building once any has started. A review that completes or
+  stops it moves it to Decided. Nothing is dragged. "With the areas below" adds
+  every bet in the areas under this one, each with its area.
+- **Alignment.** A tree of the key results above the area, the area's key results
+  under the ones they align to, the bets that aim at each, and the bets that align
+  to each bet, at any depth. Each branch folds, and the area's own items are
+  outlined.
+- **Activity.** The area's check-ins with their notes, steps done and bet reviews,
+  newest first and by month. Chips show one kind. It shows what the plan's files
+  record, and nothing else.
 - **The ladder.** Four columns: the key results above the area, the area's key
   results grouped by objective, the area's bets, and the bets above them. Each
   bet shows whether it is its own bet or delivered through the bets below it.
@@ -230,17 +253,25 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
 - **Names, not ids.** Areas show their names, and a bet shows its title, with its
   id after it. A new key result or bet made with a title gets its id from the
   title. The id never changes after that.
-- **Add and edit.** The Key results and OKRs views have a form to add a key result
-  (company and departments; a department's takes a quarter). Bets have a form to
-  add a bet, at every level. Each key result and bet has an Edit form with its
-  fields filled in, and a bet has a form to record its review. A key result has a
-  check-in form, with a date that is today unless you pick another. Dropdowns
-  offer only what the plan allows: a bet aims at a key result, and aligns to a bet
-  above it.
+- **Add and edit, in drawers.** New key result (company and departments; a
+  department's takes a quarter) and New bet (every level) are buttons at the top
+  of every view, and each opens a drawer from the side. A link to one of the
+  area's key results or bets opens it in a drawer with three tabs: Overview, with
+  its figure, its check-in and the bets that aim at it, or a bet's delivery;
+  History, with its check-ins and their notes, or a bet's reviews and the form to
+  record one; and Edit, with its fields filled in. Ctrl-click or Cmd-click opens
+  its own page instead. A check-in's date is today unless you pick another. The
+  choices offer only what the plan allows: a bet aims at a key result, and aligns
+  to a bet above it.
+- **Check in, one after another.** Check in, with the number of late key results,
+  opens a session that goes through the area's key results, the late ones first.
+  Before you save a value it shows the change from the last check-in, how far that
+  is toward the target, and whether it is on track for how much of the period has
+  gone. Each one saves on its own, and any can be skipped.
 - **Saves are small and never pushed.** Each save goes in the area's own folder, on
-  a `nikos/plan-<area>-<date>` branch. A bar at the top lists the saved changes:
-  Commit commits only those areas' files, and Push is the only thing that sends
-  them. Anything the forms don't cover is made with the `nikos plan` commands above.
+  a `nikos/plan-<area>-<date>` branch. A bar at the bottom of the page counts the
+  saved changes, and See changes lists each file: Commit commits only those areas'
+  files, and Push is the only thing that sends them. Anything the forms don't cover is made with the `nikos plan` commands above.
 
 A dashboard that can't refresh the code repos on start still opens, and says why
 at the top of every page. `--offline` skips the refresh.
@@ -255,6 +286,10 @@ same page.
 - **Without `--in`**, the file holds every area's pages.
 - **With `--in`**, it holds that area's pages only. A link to another area says
   the page isn't in the file, and `--export` without `--in` includes every area.
+- **Read only.** It has no forms, drawers or check-in session: a key result or bet
+  opens on its own page. The key results' filters, the folding of the Alignment
+  tree and the Activity chips work in it, but the filters are not kept in its
+  address.
 
 The file names the code repos it reads, so share it only with people who may
 see them.
