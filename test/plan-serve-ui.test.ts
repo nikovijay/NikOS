@@ -239,10 +239,11 @@ describe("the drill-downs", () => {
 });
 
 describe("what the page is made of", () => {
-  it("has no form on the ladder, no script from another place, and an inline script that parses", async () => {
+  it("has no form on the ladder outside its drawers, no script from another place, and an inline script that parses", async () => {
     const { srv } = await start(acmePlan());
     const r = (await get(srv.port, `/?${FINANCE}&view=ladder&widen=all`)).text;
-    expect(r).not.toContain("<form");
+    // The ladder's only forms are in the drawers that add a key result or a bet.
+    expect(r.replace(/<dialog class="drawer"[\s\S]*?<\/dialog>/g, "")).not.toContain("<form");
     expect(r).not.toMatch(/<script\s+src=/);
     expect(r).not.toMatch(/https?:\/\//);
     const onchange = /onchange="([^"]*)"/.exec(r)![1].replace(/&amp;/g, "&");

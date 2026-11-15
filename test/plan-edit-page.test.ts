@@ -1,6 +1,6 @@
 // The dashboard's forms, as the page carries them: the live page has the forms to add and edit key results and
-// bets, with the choices drawn from the company and the versions a save sends back; the offline export has none
-// of them. Also the names a page shows instead of area rels, the empty states, and the script's id rule, which is
+// bets, each in a drawer a button opens, with the choices drawn from the company and the versions a save sends
+// back; the offline export has none of them. Also the names a page shows instead of area rels, the empty states, and the script's id rule, which is
 // the rules module's own function, so the id box makes the id the command makes.
 import { request } from "node:http";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -81,14 +81,16 @@ describe("the forms on the live page", () => {
   it("a department's key result form offers its quarter, and the company's key results to align to, by name", async () => {
     const { srv } = await start(acmePlan());
     const html = await get(srv.port, `/?${FINANCE}&view=keys`);
-    expect(html).toContain('<details class="card add" id="add-kr"><summary>Add a key result</summary>');
+    expect(html).toContain('<button type="button" class="btn" data-open="add-kr">New key result</button>');
+    expect(html).toContain('<dialog class="drawer" id="add-kr" aria-labelledby="add-kr-title">');
+    expect(html).toContain('<h2 id="add-kr-title">New key result</h2><p class="meta">In Finance, for a quarter.</p>');
     const form = saveForms(html).find((f) => f.op === "kr.new")!;
     expect(form.area).toBe("departments/finance");
     expect(form.expect).toBeNull();
     expect(form.body).toContain('<select name="period"');
     expect(form.body).toContain('<option value="2027-Q1" selected>2027-Q1</option>');
-    expect(form.body).toContain('<select name="aligns_to" multiple');
-    expect(form.body).toContain('<option value="revenue">Revenue · Acme</option>');
+    expect(form.body).toContain('<fieldset class="field checks wide"><legend>Aligns to</legend>');
+    expect(form.body).toContain('<label class="check"><input type="checkbox" name="aligns_to" value="revenue"><span>Revenue · Acme</span></label>');
   });
 
   it("the company's key result form has no quarter: its key results are for the year", async () => {
@@ -98,7 +100,9 @@ describe("the forms on the live page", () => {
     expect(form.area).toBe("company");
     expect(form.body).not.toContain('name="period"');
     expect(form.body).not.toContain('name="aligns_to"');
-    expect(form.body).toContain('<select name="kind"');
+    // The kind is a row of buttons, with a number picked.
+    expect(form.body).toContain('<label class="seg"><input type="radio" name="kind" value="number" checked><span>A number to move</span></label>');
+    expect(form.body).toContain('<input type="radio" name="kind" value="milestone"><span>A list of steps</span>');
   });
 
   it("the new key result form has a kind that shows its own fields, and an id that follows the title until typed in", async () => {
@@ -117,7 +121,8 @@ describe("the forms on the live page", () => {
     expect(form.body).toContain('<option value="">Not yet</option>');
     expect(form.body).toContain('<option value="close-days">Close days · Finance</option>');
     expect(form.body).toContain('<option value="revenue">Revenue · Acme</option>');
-    expect(form.body).toContain('<option value="faster-checkout">faster-checkout · Payments</option>');
+    expect(form.body).toContain('<input type="checkbox" name="aligns_to" value="faster-checkout"><span>faster-checkout · Payments</span>');
+    expect(form.body).toContain('<input type="checkbox" name="also" value="close-days"><span>Close days · Finance</span>');
     expect(form.body).toContain('<textarea name="hypothesis" required');
     expect(form.body).toContain('<input name="review_on" required type="date"');
   });
@@ -140,14 +145,15 @@ describe("the forms on the live page", () => {
     expect(edit.expect).toBe(version);
     expect(edit.body).toMatch(/<input name="title" required type="text" value="Close days"/);
     expect(edit.body).toMatch(/<input name="by" required type="date" value="2027-03-31"/);
-    expect(edit.body).toContain('<option value="down" selected>Down</option>');
+    expect(edit.body).toContain('<input type="radio" name="direction" value="down" checked><span>Down</span>');
+    expect(edit.body).toContain('<input type="radio" name="direction" value="up"><span>Up</span>');
     const target = forms.find((f) => f.op === "kr.target")!;
     expect(target.expect).toBe(version);
     expect(target.body).toContain('value="7"');
     expect(target.body).toContain("The original target stays on record.");
     const align = forms.find((f) => f.op === "kr.align")!;
     expect(align.expect).toBe(version);
-    expect(align.body).toContain('<option value="revenue">Revenue · Acme</option>');
+    expect(align.body).toContain('<input type="checkbox" name="aligns_to" value="revenue"');
   });
 
   it("an edit of a bet carries the version the page read, on each of its forms", async () => {
@@ -161,7 +167,10 @@ describe("the forms on the live page", () => {
       expect(f.area).toBe("teams/WEB");
     }
     const review = forms.find((f) => f.op === "bet.review")!;
-    expect(review.body).toContain('<option value="complete">Complete</option>');
+    expect(review.body).toContain('<input type="radio" name="decision" value="continue" checked><span>Continue</span>');
+    expect(review.body).toContain('<input type="radio" name="decision" value="complete"><span>Complete</span>');
+    // No outcome yet is the one picked, so a review that is not completing sends none.
+    expect(review.body).toContain('<input type="radio" name="outcome" value="" checked><span>Not yet</span>');
     expect(review.body).toContain('<textarea name="reason" required');
   });
 
@@ -169,15 +178,18 @@ describe("the forms on the live page", () => {
     const repo = acmePlan();
     const { srv } = await start(repo);
     const web = saveForms(await get(srv.port, "/?at=teams%2FWEB&view=bets")).find((f) => f.op === "bet.align" && f.target.bet === "web-bet")!;
-    expect(web.body).toContain('<option value="faster-checkout" selected>');
+    expect(web.body).toContain('<input type="checkbox" name="aligns_to" value="faster-checkout" checked>');
   });
 
-  it("the form's fields are all labelled: each named control sits inside a labelled field", async () => {
+  it("the form's fields are all labelled: each named control sits inside a labelled field, or a group with a legend", async () => {
     const { srv } = await start(acmePlan());
-    for (const form of saveForms(await get(srv.port, "/?at=teams%2FWEB&view=bets"))) {
-      const controls = (form.body.match(/<(input|select|textarea) name="/g) ?? []).length;
-      const labelled = (form.body.match(/<label class="field/g) ?? []).length;
-      expect(labelled).toBeGreaterThanOrEqual(controls);
+    const forms = saveForms(await get(srv.port, `/?${FINANCE}&view=okrs`)).filter((f) => f.body.includes('class="field'));
+    expect(forms.length).toBeGreaterThan(3);
+    for (const form of forms) {
+      expect(form.body).toMatch(/name="/);
+      // Take out every labelled field and every group with its legend: no named control is left outside one.
+      const rest = form.body.replace(/<fieldset class="field[^"]*"[^>]*><legend>[^<]+<\/legend>[\s\S]*?<\/fieldset>/g, "").replace(/<label class="field[^"]*"[^>]*><span>[^<]+<\/span>[\s\S]*?<\/label>/g, "");
+      expect(rest, form.op).not.toMatch(/<(input|select|textarea)[^>]* name="/);
     }
   });
 
@@ -190,6 +202,16 @@ describe("the forms on the live page", () => {
     expect(script).toContain("This changed since the page loaded. Reload to see the latest, then try again.");
     expect(script).toContain("closest(\"[hidden]\")");
     expect(script).toContain("data-open");
+    expect(script).toContain("showModal");
+    expect(script).toContain("data-close");
+  });
+
+  it("the live script sends the ticked boxes as a list, the picked button as one value, and an emptied list on an edit", async () => {
+    const { srv } = await start(acmePlan());
+    const script = scriptOf(await get(srv.port, `/?${FINANCE}&view=okrs`));
+    expect(script).toContain('if (f.type === "checkbox")');
+    expect(script).toContain('if (f.type === "radio" && !f.checked) continue;');
+    expect(script).toContain("for (var name in ticked) if (ticked[name].length || editing) args[name] = ticked[name];");
   });
 
   it("the id box in the script makes the same id as the rules module, for any title", async () => {
@@ -283,7 +305,7 @@ describe("the empty states", () => {
     expect(html).toContain("No key results for 2027 yet.");
     expect(html).not.toContain("this quarter");
     expect(html).toContain('<button type="button" class="primary" data-open="add-kr">Add a key result</button>');
-    expect(html).toContain('<details class="card add" id="add-kr">');
+    expect(html).toContain('<dialog class="drawer" id="add-kr"');
   });
 
   it("a department with no key results yet says its year's first quarter, and the form preselects that quarter", async () => {
@@ -300,15 +322,42 @@ describe("the empty states", () => {
     expect(form.body).not.toMatch(/<option value="2026-Q4"/);
   });
 
-  it("a department's OKRs view has the add-a-bet form at the top, once, with key results or without", async () => {
+  it("every view has the New bet button in its head, and the bet drawer once, with key results or without", async () => {
     const { srv } = await start(acmePlan());
-    const withKrs = await get(srv.port, `/?${FINANCE}&view=okrs`);
-    expect(withKrs.match(/id="add-bet"/g)).toHaveLength(1);
-    expect(withKrs.indexOf('id="add-bet"')).toBeLessThan(withKrs.indexOf("Key results and the bets that aim at them"));
+    for (const view of ["okrs", "keys", "ladder", "bets", "timeline"]) {
+      const html = await get(srv.port, `/?${FINANCE}&view=${view}`);
+      expect(html.match(/id="add-bet"/g), view).toHaveLength(1);
+      const button = html.indexOf('data-open="add-bet">New bet</button>');
+      expect(button, view).toBeGreaterThan(html.indexOf('<div class="page-head">'));
+      expect(button, view).toBeLessThan(html.indexOf("Code repos read"));
+    }
     const repo = acmePlan();
     addArea(repo, "team", "NEW", { name: "New team", home: "payments" });
     const team = await get((await start(repo)).srv.port, "/?at=teams%2FNEW&view=okrs");
     expect(team.match(/id="add-bet"/g)).toHaveLength(1);
+    // A team has no key results, so it has no button or drawer for one.
+    expect(team).not.toContain('id="add-kr"');
+    expect(team).not.toContain("New key result");
+  });
+
+  it("no form opens or folds in place: each sits in a drawer, or is a check-in on its card", async () => {
+    const { srv } = await start(acmePlan());
+    for (const path of [`/?${FINANCE}&view=okrs`, "/?at=teams%2FWEB&view=bets", `/?${FINANCE}&kr=close-days`]) {
+      const html = await get(srv.port, path);
+      expect(html, path).not.toContain("<details");
+      const outside = html.replace(/<dialog class="drawer"[\s\S]*?<\/dialog>/g, "");
+      for (const f of saveForms(outside)) expect(["checkin", "kr.step"], path).toContain(f.op);
+    }
+  });
+
+  it("each key result and bet has its own edit drawer and the button that opens it", async () => {
+    const { srv } = await start(acmePlan());
+    const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
+    expect(html).toContain('<button type="button" class="btn" data-open="edit-kr-departments-finance-close-days">Edit this key result</button>');
+    expect(html).toContain('<dialog class="drawer" id="edit-kr-departments-finance-close-days" aria-labelledby="edit-kr-departments-finance-close-days-title">');
+    expect(html).toContain('<h2 id="edit-kr-departments-finance-close-days-title">Edit this key result</h2><p class="meta">Close days</p>');
+    const bets = await get(srv.port, "/?at=teams%2FWEB&view=bets");
+    expect(bets).toContain('data-open="edit-bet-teams-WEB-web-bet">Edit this bet</button>');
   });
 
   it("the key result form's Starts at and Target are required only while the kind shows them", async () => {
@@ -422,8 +471,8 @@ describe("the look of the forms", () => {
   it("a bet's edit form shows its confidence, and a company bet has no Aligns to form", async () => {
     const { srv } = await start(acmePlan());
     const edit = saveForms(await get(srv.port, `/?${FINANCE}&view=bets`)).find((f) => f.op === "bet.edit" && f.target.bet === "inbox-match")!;
-    expect(edit.body).toContain('<option value="medium" selected>Medium</option>');
-    expect(edit.body).toContain('<option value="high">High</option>');
+    expect(edit.body).toContain('<input type="radio" name="confidence" value="medium" checked><span>Medium</span>');
+    expect(edit.body).toContain('<input type="radio" name="confidence" value="high"><span>High</span>');
     const company = saveForms(await get(srv.port, "/?at=company&view=bets"));
     expect(company.some((f) => f.op === "bet.align")).toBe(false);
   });
