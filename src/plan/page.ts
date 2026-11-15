@@ -332,12 +332,34 @@ thead th{border-top:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.
 .drill>h2:first-child{font-size:1.5rem;margin-top:22px}
 .serve-hint{font-size:.84rem;color:var(--muted)}
 .primary{font:inherit;font-weight:600;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer}
-details.add{padding:0}
-details.add>summary{padding:12px 16px;cursor:pointer;color:var(--accent);font-weight:600}
-details.add[open]>summary{border-bottom:1px solid var(--line)}
-details.add>form{padding:4px 16px 14px}
-details.edit{margin:10px 0 0;border-top:1px dashed var(--line);padding-top:8px}
-details.edit>summary,details.form-more>summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:.9rem}
+.head-row{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;justify-content:space-between}
+.head-actions{display:flex;flex-wrap:wrap;gap:8px}
+.edit-line{margin:10px 0 0}
+dialog.drawer{position:fixed;inset:0 0 0 auto;margin:0;width:min(600px,100vw);max-width:100vw;height:100%;max-height:100%;padding:0;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:-16px 0 48px rgba(0,0,0,.18)}
+dialog.drawer[open]{display:flex;flex-direction:column;animation:drawer-in .18s ease-out}
+dialog.drawer::backdrop{background:rgba(20,16,40,.4)}
+@keyframes drawer-in{from{transform:translateX(32px);opacity:0}}
+@media (prefers-reduced-motion:reduce){dialog.drawer[open]{animation:none}}
+.drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+.drawer-head h2{margin:0;font-size:1.3rem}
+.drawer-head p{margin:3px 0 0}
+.drawer-body{flex:1;overflow-y:auto;padding:4px 22px 24px}
+.drawer-body .sub{background:transparent;padding:14px 0 4px;margin:0;border-radius:0;border-bottom:1px solid var(--line)}
+.drawer-body .sub:last-child{border-bottom:0}
+.drawer-body .sub h4{margin:0 0 4px}
+fieldset.field{border:0;margin:0;padding:0}
+fieldset.field legend{padding:0;margin-bottom:4px}
+.segs{display:flex;flex-wrap:wrap;gap:6px}
+.seg{position:relative;display:inline-flex}
+.field .seg input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:pointer}
+.seg span{padding:6px 13px;border:1px solid var(--line-strong);border-radius:999px;font-weight:500;background:var(--surface);color:var(--fg)}
+.seg input:checked+span{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.check-list{display:grid;gap:2px;max-height:15rem;overflow-y:auto;border:1px solid var(--line-strong);border-radius:7px;padding:6px 10px;background:var(--surface)}
+.check{display:flex;gap:9px;align-items:flex-start;font-weight:400;padding:4px 0;cursor:pointer}
+.field .check input{width:auto;margin:3px 0 0;padding:0;accent-color:var(--accent);flex:none}
+fieldset.form-more{border:0;border-top:1px dashed var(--line);margin:4px 0 0;padding:10px 0 0;min-width:0}
+fieldset.form-more>legend{padding:0 6px 0 0;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
 .sub{margin:10px 0;background:var(--surface-2);border-radius:var(--r);padding:12px 14px}
 form.form{margin:8px 0}
 form.form .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;align-items:start}
@@ -448,11 +470,12 @@ type Opt = { value: string; label: string };
 interface Field {
   name: string;
   label: string;
-  /** Text by default. lines is a textarea whose lines are read as a list. */
-  kind?: "text" | "number" | "date" | "textarea" | "lines";
-  /** Set, the field is a select. blank, when given, is its first option, with that text. */
+  /** Text by default. lines is a textarea whose lines are read as a list. choice shows its options as a row of buttons. */
+  kind?: "text" | "number" | "date" | "textarea" | "lines" | "choice";
+  /** Set, the field is a select, or a row of buttons for a choice. blank, when given, is its first option, with that text. */
   options?: Opt[];
   blank?: string;
+  /** With options, a list of tick boxes: any number of them, or none. */
   multiple?: boolean;
   value?: string | number | string[];
   required?: boolean;
@@ -476,7 +499,7 @@ interface FormSpec {
   /** The version the page read, for an edit: the save is refused if the file changed since. New things carry none. */
   expect?: string;
   fields: Field[];
-  /** Fields in a closed "More" section: the id, and the rest a person seldom needs. */
+  /** Fields in a "More" section at the end: the id, and the rest a person seldom needs. */
   more?: Field[];
   submit: string;
   note?: string;
@@ -520,20 +543,36 @@ function offered(options: Opt[], current: (string | null | undefined)[]): Opt[] 
 /** Key results and bets as options: each labelled with its title and the area that holds it, by name. */
 const choiceOptions = (page: AreaPage, list: Choice[]): Opt[] => list.map((c) => ({ value: c.value, label: `${c.label} · ${areaName(page, c.area)}` }));
 
+/**
+ * A field of buttons: a choice as a row of them, where one is picked, or a multiple as a list of tick boxes. A
+ * choice with nothing picked picks its first option, as a select would.
+ */
+function groupHtml(f: Field, when: string, hint: string): string {
+  const chosen = Array.isArray(f.value) ? f.value : f.value === undefined ? [] : [String(f.value)];
+  const opts = [...(f.blank !== undefined && !f.multiple ? [{ value: "", label: f.blank }] : []), ...(f.options ?? [])];
+  const picked = f.multiple || opts.some((o) => chosen.includes(o.value)) ? chosen : opts.slice(0, 1).map((o) => o.value);
+  const type = f.multiple ? "checkbox" : "radio";
+  const items = opts.map((o) => `<label class="${f.multiple ? "check" : "seg"}"><input type="${type}" name="${esc(f.name)}" value="${esc(o.value)}"${picked.includes(o.value) ? " checked" : ""}><span>${esc(o.label)}</span></label>`);
+  const cls = f.multiple ? "checks" : "choice";
+  return `<fieldset class="field ${cls}${f.wide ? " wide" : ""}"${when}><legend>${esc(f.label)}</legend><div class="${f.multiple ? "check-list" : "segs"}">${items.join("")}</div>${hint}</fieldset>`;
+}
+
 function fieldHtml(f: Field): string {
+  const when = f.when ? ` data-when="${esc(`${f.when.name}=${f.when.value}`)}"` : "";
+  const hint = f.hint ? `<small class="hint">${esc(f.hint)}</small>` : "";
+  if (f.options && (f.multiple || f.kind === "choice")) return groupHtml(f, when, hint);
   const attrs: string[] = [`name="${esc(f.name)}"`];
   if (f.target) attrs.push('data-to="target"');
   // A field shown only for some kind is required only while it shows: the script sets required then, since a
   // hidden required field would stop the form from submitting.
   if (f.required) attrs.push(f.when ? "data-required" : "required");
-  if (f.multiple) attrs.push("multiple");
   if (f.idFrom) attrs.push(`data-id-from="${esc(f.idFrom)}"`);
   if (f.list) attrs.push(`list="${esc(f.list)}"`);
   if (f.placeholder) attrs.push(`placeholder="${esc(f.placeholder)}"`);
   let control: string;
   if (f.options) {
     const chosen = Array.isArray(f.value) ? f.value : f.value === undefined ? [] : [String(f.value)];
-    const blank = f.blank !== undefined && !f.multiple ? `<option value="">${esc(f.blank)}</option>` : "";
+    const blank = f.blank !== undefined ? `<option value="">${esc(f.blank)}</option>` : "";
     const opts = f.options.map((o) => `<option value="${esc(o.value)}"${chosen.includes(o.value) ? " selected" : ""}>${esc(o.label)}</option>`).join("");
     control = `<select ${attrs.join(" ")}>${blank}${opts}</select>`;
   } else if (f.kind === "textarea" || f.kind === "lines") {
@@ -544,21 +583,35 @@ function fieldHtml(f: Field): string {
     const value = f.value === undefined || Array.isArray(f.value) ? "" : String(f.value);
     control = `<input ${attrs.join(" ")} type="${type === "number" ? "number" : type === "date" ? "date" : "text"}"${type === "number" ? ' step="any"' : ""} value="${esc(value)}">`;
   }
-  const when = f.when ? ` data-when="${esc(`${f.when.name}=${f.when.value}`)}"` : "";
-  const hint = f.hint ? `<small class="hint">${esc(f.hint)}</small>` : "";
   return `<label class="field${f.wide ? " wide" : ""}"${when}><span>${esc(f.label)}</span>${control}${hint}</label>`;
 }
 
 /** A form that makes or changes one thing through one op. Its fields are read on submit, and the live script posts them. */
 function formHtml(s: FormSpec): string {
   const expect = s.expect === undefined ? "" : ` data-expect="${esc(s.expect)}"`;
-  const more = s.more?.length ? `<details class="form-more"><summary>More</summary><div class="fields">${s.more.map(fieldHtml).join("")}</div></details>` : "";
+  const more = s.more?.length ? `<fieldset class="form-more"><legend>More</legend><div class="fields">${s.more.map(fieldHtml).join("")}</div></fieldset>` : "";
   const note = s.note ? `<span class="meta">${esc(s.note)}</span>` : "";
   return `<form class="save form" data-op="${esc(s.op)}" data-area="${esc(s.area)}" data-target="${esc(JSON.stringify(s.target ?? {}))}"${expect}><div class="fields">${s.fields.map(fieldHtml).join("")}${more}</div><div class="actions"><button type="submit">${esc(s.submit)}</button>${note}<span class="save-msg" role="status"></span></div></form>`;
 }
 
 /** A named part of an edit section, with its form under it. */
 const sub = (title: string, html: string) => `<div class="sub"><h4>${esc(title)}</h4>${html}</div>`;
+
+/**
+ * A drawer: a dialog that slides in from the side with one thing's forms in it. A button with data-open set to
+ * its id opens it, and its Close button or Escape closes it. Nothing on the page opens or folds in place.
+ */
+function drawer(id: string, title: string, lede: string, body: string): string {
+  return `<dialog class="drawer" id="${esc(id)}" aria-labelledby="${esc(id)}-title"><div class="drawer-head"><div><h2 id="${esc(id)}-title">${esc(title)}</h2>${lede ? `<p class="meta">${esc(lede)}</p>` : ""}</div><button type="button" class="btn" data-close>Close</button></div><div class="drawer-body">${body}</div></dialog>`;
+}
+
+/** The id of the drawer that edits one key result or bet: its kind, its area and its id, so two never share one. */
+const editId = (what: "kr" | "bet", rel: string, id: string) => `edit-${what}-${rel.replace(/\//g, "-")}-${id}`;
+
+/** The button that opens an edit drawer, and the drawer: the thing's forms, one under another, each saving on its own. */
+function editDrawer(id: string, label: string, name: string, forms: string[]): string {
+  return `<p class="edit-line"><button type="button" class="btn" data-open="${esc(id)}">${esc(label)}</button></p>${drawer(id, label, name, forms.join(""))}`;
+}
 
 /** The line that says how to add something: a button that opens the form on this page, or the command when there is no form. */
 function addAction(live: boolean, open: string, label: string, command: string): string {
@@ -570,7 +623,7 @@ function emptyState(title: string, body: string, action = ""): string {
   return `<div class="empty"><p><strong>${esc(title)}</strong></p><p class="meta">${esc(body)}</p>${action ? `<p>${action}</p>` : ""}</div>`;
 }
 
-/** The form that adds a key result. Company and department only, and live only. The quarter is a department's; the year is the company's. */
+/** The drawer with the form that adds a key result. Company and department only, and live only. The quarter is a department's; the year is the company's. */
 function addKrForm(page: AreaPage, live: boolean): string {
   if (!live || (page.plan.level !== "company" && page.plan.level !== "department")) return "";
   const c = page.choices;
@@ -581,11 +634,11 @@ function addKrForm(page: AreaPage, live: boolean): string {
     { name: "title", label: "Title", required: true, placeholder: "e.g. Close days" },
     { name: "owner", label: "Owner", required: true },
     { name: "objective", label: "Objective", list: "objectives", hint: "The goal it serves. Pick one already in use, or write a new one." },
-    { name: "kind", label: "Kind", options: KIND, value: "number" },
+    { name: "kind", label: "Kind", kind: "choice", options: KIND, value: "number", wide: true },
     { name: "baseline", label: "Starts at", kind: "number", when: number, required: true },
     { name: "target", label: "Target", kind: "number", when: number, required: true },
     { name: "unit", label: "Unit", placeholder: "e.g. days", when: number },
-    { name: "direction", label: "Should it go up or down?", options: UP_DOWN, value: "up", when: number },
+    { name: "direction", label: "Should it go up or down?", kind: "choice", options: UP_DOWN, value: "up", when: number },
     { name: "steps", label: "Steps, one per line", kind: "lines", wide: true, when: steps },
   ];
   // The select has no blank option, so the quarter it shows is the one it sends: the page's, else the first offered.
@@ -593,10 +646,11 @@ function addKrForm(page: AreaPage, live: boolean): string {
   fields.push({ name: "by", label: "Due date", kind: "date", hint: "Leave blank for the end of the quarter or year." });
   if (dept && c.alignKrs.length) fields.push({ name: "aligns_to", label: "Aligns to", options: choiceOptions(page, c.alignKrs), multiple: true, wide: true, hint: "Key results above this one. Pick one or more." });
   const more: Field[] = [{ name: "kr", label: "Id", target: true, idFrom: "title", hint: "Made from the title. Change it only when you need another." }];
-  return `<details class="card add" id="add-kr"><summary>Add a key result</summary>${formHtml({ op: "kr.new", area: page.plan.rel, fields, more, submit: "Add key result" })}</details>`;
+  const lede = dept ? `In ${page.plan.name}, for a quarter.` : `For ${page.plan.name}, for the year.`;
+  return drawer("add-kr", "New key result", lede, formHtml({ op: "kr.new", area: page.plan.rel, fields, more, submit: "Add key result" }));
 }
 
-/** The form that adds a bet in this area. Every level, and live only. */
+/** The drawer with the form that adds a bet in this area. Every level, and live only. */
 function addBetForm(page: AreaPage, live: boolean): string {
   if (!live) return "";
   const c = page.choices;
@@ -615,10 +669,10 @@ function addBetForm(page: AreaPage, live: boolean): string {
     { name: "starts", label: "Starts", kind: "date" },
     { name: "deadline", label: "Deadline", kind: "date" },
   ];
-  return `<details class="card add" id="add-bet"><summary>Add a bet</summary>${formHtml({ op: "bet.new", area: page.plan.rel, fields, more, submit: "Add bet" })}</details>`;
+  return drawer("add-bet", "New bet", `In ${page.plan.name}.`, formHtml({ op: "bet.new", area: page.plan.rel, fields, more, submit: "Add bet" }));
 }
 
-/** A key result's edit forms, live only: its details, its target and what it aligns to. Each saves with the version the page read. */
+/** A key result's edit forms in a drawer, with the button that opens it, live only: its details, its target and what it aligns to. Each saves with the version the page read. */
 function editKrBlock(k: DashKr, page: AreaPage, live: boolean): string {
   if (!live) return "";
   const number = k.kind === "number";
@@ -639,7 +693,7 @@ function editKrBlock(k: DashKr, page: AreaPage, live: boolean): string {
           ...(number
             ? [
                 { name: "unit", label: "Unit", value: k.unit },
-                { name: "direction", label: "Should it go up or down?", options: UP_DOWN, value: k.direction },
+                { name: "direction", label: "Should it go up or down?", kind: "choice" as const, options: UP_DOWN, value: k.direction },
               ]
             : []),
         ],
@@ -675,10 +729,10 @@ function editKrBlock(k: DashKr, page: AreaPage, live: boolean): string {
         }),
       ),
     );
-  return `<details class="edit"><summary>Edit this key result</summary>${forms.join("")}</details>`;
+  return editDrawer(editId("kr", k.rel, k.id), "Edit this key result", k.title, forms);
 }
 
-/** A bet's edit forms, live only: its details, what it aims at, what it aligns to, and a review. Each saves with the version the page read. */
+/** A bet's edit forms in a drawer, with the button that opens it, live only: its details, what it aims at, what it aligns to, and a review. Each saves with the version the page read. */
 function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
   if (!live) return "";
   const aims = choiceOptions(page, page.choices.aimKrs);
@@ -700,7 +754,7 @@ function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
           { name: "starts", label: "Starts", kind: "date", value: b.starts },
           { name: "review_on", label: "Review on", kind: "date", value: b.review_on, required: true },
           { name: "deadline", label: "Deadline", kind: "date", value: b.deadline },
-          { name: "confidence", label: "How sure are you?", options: CONFIDENCE, value: b.confidence },
+          { name: "confidence", label: "How sure are you?", kind: "choice", options: CONFIDENCE, value: b.confidence },
         ],
       }),
     ),
@@ -744,20 +798,19 @@ function editBetBlock(b: DashBet, page: AreaPage, live: boolean): string {
         submit: "Record review",
         note: "Dated today.",
         fields: [
-          { name: "decision", label: "Decision", options: DECISIONS, value: "continue" },
-          { name: "outcome", label: "Outcome, when completing", options: OUTCOMES, blank: "Not yet", value: "" },
+          { name: "decision", label: "Decision", kind: "choice", options: DECISIONS, value: "continue", wide: true },
+          { name: "outcome", label: "Outcome, when completing", kind: "choice", options: OUTCOMES, blank: "Not yet", value: "", wide: true },
           { name: "reason", label: "Reason", kind: "textarea", required: true, wide: true },
         ],
       }),
     ),
   );
-  return `<details class="edit"><summary>Edit this bet</summary>${forms.join("")}</details>`;
+  return editDrawer(editId("bet", b.rel, b.id), "Edit this bet", betName(b), forms);
 }
 
 /** The key results: a summary, then a card for each, grouped by objective. Company and departments only. */
 function renderKeys(page: AreaPage, live: boolean): string {
-  const add = addKrForm(page, live);
-  if (!page.krs.length) return `${add}${krEmpty(page, live)}`;
+  if (!page.krs.length) return krEmpty(page, live);
   const st = page.krs.map((k) => krStatus(k, page.today)?.label);
   const n = (l: string) => st.filter((x) => x === l).length;
   const ds = page.bets.map((b) => (b.delivery?.source === "own" ? b.delivery.delivery?.status : undefined));
@@ -765,7 +818,7 @@ function renderKeys(page: AreaPage, live: boolean): string {
   const byObjective = new Map<string, DashKr[]>();
   for (const k of page.krs) byObjective.set(k.objective, [...(byObjective.get(k.objective) ?? []), k]);
   const sections = [...byObjective].map(([objective, krs]) => `<section>${objective ? `<h2><span class="eyebrow">Objective</span><br>${esc(objective)}</h2>` : "<h2>Key results</h2>"}<div class="cards">${krs.map((k) => krCard(k, page, live)).join("")}</div></section>`);
-  return `${add}${strip}${sections.join("")}`;
+  return `${strip}${sections.join("")}`;
 }
 
 /** One key result as a card: its figure against its target, a bar with the period's pace, its check-ins, and the check-in form. */
@@ -813,8 +866,7 @@ function renderOkrs(page: AreaPage, live: boolean): string {
   if (parts.length) body = parts.join("");
   else if (own) body = krEmpty(page, live);
   else body = emptyState("Its bets aim at no key results yet.", "Key results come from the level above. Make a bet that aims at one of them.", addAction(live, "add-bet", "Add a bet", BET_COMMAND));
-  // The bet form sits at the top for every level, so a bet can be added once key results exist too.
-  return `${addKrForm(page, live)}${addBetForm(page, live)}<h2>${esc(heading)}</h2>${body}${loose.length ? `<h2>Bets that aim at no key result shown here</h2><ul class="rows">${loose.map((b) => betLine(b, page)).join("")}</ul>` : ""}`;
+  return `<h2>${esc(heading)}</h2>${body}${loose.length ? `<h2>Bets that aim at no key result shown here</h2><ul class="rows">${loose.map((b) => betLine(b, page)).join("")}</ul>` : ""}`;
 }
 
 /** The four-column ladder: above key results, this area's key results, this area's bets, above bets. */
@@ -981,8 +1033,7 @@ function deliveryBar(d: BetDelivery | undefined): string {
 }
 
 function renderBets(page: AreaPage, live: boolean): string {
-  const add = addBetForm(page, live);
-  if (!page.bets.length) return `${add}${emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND))}`;
+  if (!page.bets.length) return emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
   const body = page.bets
     .map((b: DashBet) => {
       const facts: string[] = [];
@@ -997,7 +1048,7 @@ function renderBets(page: AreaPage, live: boolean): string {
       return `<article class="card bet-card"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span></h3>${outcomePill(b.outcome)}</div>${b.hypothesis ? `<p class="belief">${esc(b.hypothesis)}</p>` : ""}<div class="row">${deliveryPill(b.delivery)}</div>${deliveryBar(b.delivery)}<dl class="kv">${facts.join("")}</dl>${editBetBlock(b, page, live)}</article>`;
     })
     .join("");
-  return `${add}<div class="bet-cards">${body}</div>`;
+  return `<div class="bet-cards">${body}</div>`;
 }
 
 /** The timeline: each bet from its start to its deadline with its review, and each key result's due date, against the months. */
@@ -1072,7 +1123,7 @@ function renderBetDrill(d: BetDrill, up: UpChain, page: AreaPage, live: boolean)
 
 /**
  * The script of the live page. It posts each form to the server with the token and nothing else, and it keeps
- * the forms' small rules: a field is read from a form that shows it, a new form sends only what it has, an edit
+ * the forms' small rules: drawers open and close, a field is read from a form that shows it, a new form sends only what it has, an edit
  * sends a cleared field as blank so the file drops it, an id follows its title, and a kind shows its own fields.
  * idFromTitle is the rules module's own function, so the id box makes the same id as the command does.
  */
@@ -1099,11 +1150,6 @@ function syncKinds(form) {
 function sends(f) { return !(f.hasAttribute("data-id-from") && !f.hasAttribute("data-typed")); }
 // What a field sends. An edit sends a cleared field as blank, so the op drops it; a new thing sends only what has a value.
 function readField(f, editing) {
-  if (f.tagName === "SELECT" && f.multiple) {
-    var picked = [];
-    for (var j = 0; j < f.options.length; j++) if (f.options[j].selected && f.options[j].value !== "") picked.push(f.options[j].value);
-    return picked.length || editing ? picked : undefined;
-  }
   if (f.tagName === "TEXTAREA" && f.getAttribute("data-list") === "lines") {
     var lines = f.value.split(NL).map(function (s) { return s.trim(); }).filter(function (s) { return s !== ""; });
     return lines.length || editing ? lines : undefined;
@@ -1116,19 +1162,23 @@ document.addEventListener("change", function (e) {
   var form = e.target && e.target.form;
   if (form && form.getAttribute("data-op") !== null) syncKinds(form);
 });
+// A button with data-open opens the drawer it names, on its first field; a drawer's Close button closes it.
 document.addEventListener("click", function (e) {
-  var opener = e.target && e.target.closest ? e.target.closest("[data-open]") : null;
+  var t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  var closer = t.closest("[data-close]");
+  if (closer) { var d = closer.closest("dialog"); if (d) d.close(); return; }
+  var opener = t.closest("[data-open]");
   if (!opener) return;
   var box = document.getElementById(opener.getAttribute("data-open"));
   if (!box) return;
-  box.open = true;
+  if (box.showModal) { if (!box.open) box.showModal(); } else box.setAttribute("open", "");
   var fields = box.querySelectorAll("input, select, textarea");
   for (var i = 0; i < fields.length; i++) {
     if (!showing(fields[i]) || fields[i].type === "hidden") continue;
     fields[i].focus();
     break;
   }
-  if (box.scrollIntoView) box.scrollIntoView({ block: "start" });
 });
 document.addEventListener("submit", function (e) {
   var form = e.target;
@@ -1139,15 +1189,24 @@ document.addEventListener("submit", function (e) {
   var editing = form.hasAttribute("data-expect");
   var target = JSON.parse(form.getAttribute("data-target") || "{}");
   var args = {};
+  // Tick boxes of one name send the list of those ticked; of a row of buttons, the one picked sends.
+  var ticked = {};
   var fields = form.querySelectorAll("input[name], select[name], textarea[name]");
   for (var i = 0; i < fields.length; i++) {
     var f = fields[i];
     if (!showing(f) || !sends(f)) continue;
+    if (f.type === "checkbox") {
+      if (!ticked[f.name]) ticked[f.name] = [];
+      if (f.checked) ticked[f.name].push(f.value);
+      continue;
+    }
+    if (f.type === "radio" && !f.checked) continue;
     var value = readField(f, editing);
     if (value === undefined) continue;
     if (f.getAttribute("data-to") === "target") target[f.name] = value;
     else args[f.name] = value;
   }
+  for (var name in ticked) if (ticked[name].length || editing) args[name] = ticked[name];
   if (out) { out.className = "save-msg"; out.textContent = "Saving…"; }
   if (sendBtn) sendBtn.disabled = true;
   call("POST", "/api/op", { op: form.getAttribute("data-op"), area: form.getAttribute("data-area"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
@@ -1249,6 +1308,11 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
     ? `<span class="host"><span class="host-k">Exported page</span><span class="host-v">read-only</span></span>`
     : `<span class="host" title="Only you can open this, while nikos plan serve runs"><span class="host-k">On this computer</span><span class="host-v" data-host>127.0.0.1</span></span>`;
   const eyebrow = state.drill ? LEVEL_LABEL[page.plan.level] : VIEW_LABEL[current];
+  // What the page adds, as buttons in its head: each opens its drawer, from any view. Key results only where they live.
+  const ownsKrs = page.plan.level === "company" || page.plan.level === "department";
+  const actions = live
+    ? `<div class="head-actions">${ownsKrs ? '<button type="button" class="btn" data-open="add-kr">New key result</button>' : ""}<button type="button" class="btn primary" data-open="add-bet">New bet</button></div>`
+    : "";
   return `${datalist}<a class="skip" href="#main">Skip to the page</a>
 <div class="app">
 <aside class="side">
@@ -1265,7 +1329,7 @@ ${subs}
 ${live ? '<div id="pending" class="pending" role="status" hidden></div>' : ""}
 ${page.notices.map((n) => `<p class="notice">${esc(n)}</p>`).join("")}
 <main id="main" tabindex="-1">
-<div class="page-head"><span class="eyebrow">${esc(eyebrow)}</span><h1>${esc(name)} <span class="id">${esc(LEVEL_LABEL[page.plan.level])}${period ? ` · ${esc(period)}` : ""}</span></h1>${quarters(page, state)}</div>
+<div class="page-head"><div class="head-row"><div><span class="eyebrow">${esc(eyebrow)}</span><h1>${esc(name)} <span class="id">${esc(LEVEL_LABEL[page.plan.level])}${period ? ` · ${esc(period)}` : ""}</span></h1></div>${actions}</div>${quarters(page, state)}</div>
 ${back}
 ${body}
 ${state.drill ? "" : renderUnlinked(page)}
@@ -1276,6 +1340,7 @@ ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map
 </main>
 </div>
 </div>
+${addKrForm(page, live)}${addBetForm(page, live)}
 ${shareDialog(page, !!opts.offline)}
 `;
 }
