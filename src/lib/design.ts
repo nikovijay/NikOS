@@ -7,6 +7,9 @@ import { darkRules } from "./theme.js";
 const LIGHT = `:root{--bg:#f5f4f8;--surface:#ffffff;--surface-2:#eeecf4;--line:#dcd9e6;--line-strong:#c4c0d4;--fg:#1a1922;--muted:#5f5c6d;--accent:#5b3fb0;--accent-weak:#ebe6fa;--accent-fg:#ffffff;--good:#1d6a42;--good-bg:#def1e6;--warn:#875700;--warn-bg:#fcefd1;--bad:#b02e29;--bad-bg:#fbe3e1;--idle:#5b5966;--idle-bg:#e9e8ee;--notice:#fff6dc;--notice-fg:#4a3700;--wire:#b9b0dc;--shadow:0 1px 2px rgb(26 25 34 / .06),0 4px 16px rgb(26 25 34 / .06);--r:10px;--f-display:"Avenir Next","Segoe UI Variable Display","Segoe UI",ui-sans-serif,system-ui,sans-serif;--f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--f-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}`;
 const DARK = `:root{--bg:#121118;--surface:#1b1a23;--surface-2:#24222e;--line:#33303f;--line-strong:#4a465a;--fg:#ecebf2;--muted:#a4a1b2;--accent:#b8a5ff;--accent-weak:#2b2447;--accent-fg:#150e2c;--good:#8ed6ac;--good-bg:#17321f;--warn:#f0c46e;--warn-bg:#382a0e;--bad:#ff9c94;--bad-bg:#3c1a19;--idle:#b5b3bf;--idle-bg:#2a2833;--notice:#352b10;--notice-fg:#ffe6a3;--wire:#4f4677;--shadow:0 1px 2px rgb(0 0 0 / .3),0 4px 16px rgb(0 0 0 / .25)}`;
 
+/** The author's N mark, from assets/icon.svg: two strokes cut into Morse code. It takes the text colour. */
+export const BRAND_MARK = `<svg viewBox="170 245 340 245" fill="currentColor" aria-hidden="true"><path d="M287 252 L324 331 L312.1 356.7 L275.1 277.7 Z M269.1 290.5 L306.1 369.6 L253 484 L179 484 Z"/><path d="M431 251 L504 251 L450.2 366.6 L413.6 288.5 Z M407.6 301.3 L444.2 379.4 L432.3 405 L395.7 327 Z M389.8 339.8 L426.3 417.9 L414.4 443.5 L377.9 365.5 Z M371.9 378.3 L408.4 456.3 L396.5 481.9 L360 404 Z"/></svg>`;
+
 /** The base every page starts from: tokens, type, focus, and the shared parts. */
 export const DESIGN_CSS = `${LIGHT}
 ${darkRules(DARK)}

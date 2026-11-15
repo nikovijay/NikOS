@@ -19,7 +19,7 @@ import { KEY } from "../lib/keys.js";
 import { runMapStatus } from "./map-status.js";
 import { SAVE_BAR_CSS } from "../lib/save-bar.js";
 import { EDIT_CSS, EDIT_JS, addActivityBox, addReleaseBox, addStepBox, addStoryBox, addStoryDialog, editDataOf, releaseTools, storyEditArea, type EditData } from "./map-edit.js";
-import { DESIGN_CSS } from "../lib/design.js";
+import { BRAND_MARK, DESIGN_CSS } from "../lib/design.js";
 import { next } from "./next.js";
 
 export interface MapCriterion {
@@ -228,7 +228,7 @@ export function progressBar(stories: MapStory[], legend = true): string {
 
 /** The brand at the top of each page, with the repo it is for. */
 export function brand(repo: string): string {
-  return `<span class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="4" rx="1"/><path d="M6 12h4M6 16h4M14 12h4M14 16h4"/></svg></span><span class="brand-t">nikOS Spec<small>${esc(repo)}</small></span></span>`;
+  return `<span class="brand"><span class="brand-mark" aria-hidden="true">${BRAND_MARK}</span><span class="brand-t">nikOS Spec<small>${esc(repo)}</small></span></span>`;
 }
 
 /** The commands that move a story on, by where it stands. */
@@ -563,9 +563,8 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
 .top .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .spacer { flex: 1; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-display); font-weight: 700; font-size: 16px; }
-.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
 .brand-mark svg { width: 18px; height: 18px; }
-:root[data-theme="dark"] .brand-mark svg, .brand-mark svg { stroke: var(--accent-fg); }
 .brand-t small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: 12px; color: var(--muted); line-height: 1.2; }
 h1 { font-size: 24px; margin: 0; line-height: 1.2; }
 .meta { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; color: var(--muted); }

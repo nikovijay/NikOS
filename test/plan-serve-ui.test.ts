@@ -8,7 +8,7 @@ import { startPlanServe, type PlanServe } from "../src/plan/serve";
 import { newBet } from "../src/planning/bets";
 import { findArea } from "../src/plan/repo";
 import { newKr } from "../src/planning/krs";
-import { acmePlan } from "./plan-serve-fixture";
+import { acmePlan, ladderLines } from "./plan-serve-fixture";
 
 let open: PlanServe[] = [];
 afterEach(async () => {
@@ -297,9 +297,9 @@ describe("the quarter, the labels and the forms", () => {
     const up = (await get(srv.port, "/?at=teams/WEB&view=ladder&widen=up")).text;
     expect((up.match(/class="cell above-bet"/g) ?? []).length).toBe(3);
     // web-bet to faster-checkout, faster-checkout to inbox-match, inbox-match to one-inbox, and close-days to web-bet.
-    expect((up.match(/<path /g) ?? []).length).toBe(4);
+    expect(ladderLines(up)).toBe(4);
     const one = (await get(srv.port, "/?at=teams/WEB&view=ladder")).text;
-    expect((one.match(/<path /g) ?? []).length).toBe(2);
+    expect(ladderLines(one)).toBe(2);
   });
 
   it("has the bet form and the check-in forms on the live page, each with the area it saves to", async () => {
