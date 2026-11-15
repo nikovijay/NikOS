@@ -5,6 +5,8 @@
 ### Changed
 
 - **The plan dashboard's forms open in drawers.** "New key result" and "New bet" are buttons at the top of every view, and each opens a drawer from the side of the page. "Edit this key result" and "Edit this bet" open a drawer with that item's forms, in place of a section that folded open on the page. Choices with a few options, such as a key result's kind and direction or a review's decision, are rows of buttons. What a key result or bet aligns to or also aims at is a list of tick boxes. The saves and what they write are the same as before. Check-ins stay on the cards.
+- **Each key result and bet has a drawer.** Clicking one anywhere on the dashboard, from a card, the ladder or the timeline, opens it in a drawer with three tabs. Overview has its figure, the check-in and the bets that aim at it, or a bet's delivery and facts. History has the check-ins with their notes, steps done and a moved target, or a bet's reviews with the form to record one. Edit has the forms. Ctrl-click or Cmd-click still opens its full page. The Key results view's cards have an Edit button too.
+- **The save bar sits at the bottom of the page,** and a save shows a short message at the top when the page reloads. A drawer you saved from opens again where you were.
 - **See changes in the save bar.** On the plan dashboard and the live story map, the save bar lists the files your saves changed, each marked new, changed or removed, before you commit.
 
 ## 0.6.1 (2026-11-15)

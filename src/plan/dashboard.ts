@@ -53,8 +53,8 @@ export interface KrRef {
   /** A milestone's steps in order, with the date each was done (null while not). Empty for a number. */
   steps: { name: string; done: string | null }[];
   latest: { value: number; date: string } | null;
-  /** Every check-in, oldest first, for the page's small chart. */
-  checkins: { value: number; date: string }[];
+  /** Every check-in, oldest first, for the page's small chart and the key result's history. A note when it has one. */
+  checkins: { value: number; date: string; note?: string }[];
   stale: boolean;
   /** The hash of the key result's file as read: a save from the page sends it back, so a file changed since fails. */
   version: string;
@@ -67,6 +67,8 @@ export interface DashKr extends KrRef {
   objective: string;
   baseline: number;
   target: number;
+  /** The target it was set with. Unlike target when the target was moved since. */
+  originalTarget: number;
   aligns_to: string[];
   /** The key results above it that it aligns to, found in the company. */
   above: KrRef[];
@@ -102,6 +104,16 @@ export interface DashBet extends BetRef {
   krs: { primary: string | null; also: string[] };
   /** The bets above it that it aligns to, found in the company. */
   aligns_to: BetRef[];
+  /** Its reviews, oldest first: each dated decision, why, and the outcome when it completed. */
+  reviews: BetReview[];
+}
+
+/** A bet's review, as its file records it. */
+export interface BetReview {
+  date: string;
+  decision: string;
+  reason: string;
+  outcome?: string;
 }
 
 /** A bet below an area's bets or key results, that delivers them: how it does, and the key result or bet it's of. */
@@ -376,7 +388,7 @@ function krRef(area: Area, id: string, on: string): KrRef {
     steps: (d.steps ?? []).map((s: any) => ({ name: String(s.name), done: s.done ? String(s.done) : null })),
     latest: last ? { value: last.value, date: last.date } : null,
     checkins: (d.checkins ?? [])
-      .map((c: any) => ({ value: Number(c.value), date: dateOf(c.date) }))
+      .map((c: any) => ({ value: Number(c.value), date: dateOf(c.date), ...(typeof c.note === "string" && c.note.trim() ? { note: c.note.trim() } : {}) }))
       .filter((c: { value: number; date: string }) => Number.isFinite(c.value) && c.date)
       .sort((a: { date: string }, b: { date: string }) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     stale: isStale(d, on),
@@ -404,6 +416,7 @@ interface BetRec {
   deadline: string;
   krs: { primary: string | null; also: string[] };
   aligns: string[];
+  reviews: BetReview[];
   /** The ladders_up text, when there is any, and whether a link backs it. */
   laddersUp?: string;
   linked: boolean;
@@ -433,6 +446,12 @@ function betRecords(repo: string): { bets: Map<string, BetRec>; problems: string
           deadline: dateOf(m.deadline),
           krs: { primary: m.krs?.primary ?? null, also: m.krs?.also ?? [] },
           aligns: alignsList(m.aligns_to),
+          reviews: (Array.isArray(m.reviews) ? m.reviews : []).map((r: any) => ({
+            date: dateOf(r.date),
+            decision: String(r.decision ?? ""),
+            reason: String(r.reason ?? ""),
+            ...(r.outcome ? { outcome: String(r.outcome) } : {}),
+          })),
           ...(laddersOf(m) ? { laddersUp: laddersOf(m) } : {}),
           linked: linkedOf("bet", m),
         });
@@ -542,6 +561,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
         objective: d.objective ?? "",
         baseline: d.baseline,
         target: d.target,
+        originalTarget: typeof d.original_target === "number" ? d.original_target : d.target,
         aligns_to: aligns,
         above: aligns.flatMap((r) => {
           const hit = aboveKr(repo, r, today, problems);
@@ -577,6 +597,7 @@ export function areaPage(repo: string, area: Area, opts: { period?: string; noti
       version: b.version,
       krs: b.krs,
       aligns_to: aligns,
+      reviews: b.reviews,
     };
   });
   const aboveBets = new Map<string, BetRef>();
