@@ -11,6 +11,7 @@ import { exportPlanPage, startPlanServe, type PlanServe } from "../src/plan/serv
 import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
 import { newBet, reviewBet } from "../src/planning/bets";
 import { checkIn, newKr, reviseTarget } from "../src/planning/krs";
+import { setAligns } from "../src/planning/aligns";
 import { hash } from "../src/planning/model";
 import { idFromTitle } from "../src/planning/rules";
 import { acmePlan } from "./plan-serve-fixture";
@@ -606,6 +607,55 @@ describe("the bets board", () => {
     expect(below).not.toContain('data-open="detail-bet-teams-WEB-web-bet"');
     const team = await get(srv.port, "/?at=teams%2FWEB&view=bets");
     expect(team).not.toContain('class="scope"');
+  });
+});
+
+describe("the alignment tree", () => {
+  it("puts the area's key results under the ones they align to, the bets that aim at each under it, and the bets below under those", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    setAligns(fin, "kr", "close-days", ["revenue"]);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=alignment`);
+    const tree = html.slice(html.indexOf('<ul class="tree">'), html.indexOf("<h2>Code repos read</h2>"));
+    // Revenue, then Close days under it, then inbox-match aiming at that, then faster-checkout and web-bet down the chain.
+    const order = ["Revenue", "Close days", ">inbox-match<", ">faster-checkout<", ">web-bet<"].map((t) => tree.indexOf(t));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(tree).toMatch(/<div class="node kr own"><button type="button" class="twisty" data-fold aria-expanded="true" aria-label="Fold"><\/button><span class="node-body"><a href="[^"]*kr=close-days/);
+    expect(tree).toMatch(/<div class="node kr"><button[^>]*><\/button><span class="node-body"><a href="[^"]*kr=revenue/);
+    // Each bet shows once, at its place in the chain.
+    expect(tree.match(/>web-bet</g)).toHaveLength(1);
+    expect(html).toContain('<button type="button" class="btn" data-fold-all="close">Fold all</button>');
+  });
+});
+
+describe("the activity feed", () => {
+  it("lists check-ins and reviews newest first, by month, with chips for each kind", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    checkIn(fin, "close-days", { value: 8, date: "2026-12-03", note: "Two banks reconciled" });
+    reviewBet(fin, "inbox-match", { decision: "change", reason: "Smaller first.", date: "2026-12-05" });
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=activity`);
+    expect(html).toContain('<button type="button" class="chip" data-activity="" aria-pressed="true">All 3</button>');
+    expect(html).toContain('data-activity="checkin" aria-pressed="false">Check-ins 2</button>');
+    expect(html.indexOf("<h2>December 2026</h2>")).toBeLessThan(html.indexOf("<h2>November 2026</h2>"));
+    expect(html.indexOf('datetime="2026-12-05"')).toBeLessThan(html.indexOf('datetime="2026-12-03"'));
+    expect(html).toContain("checked in at <strong>8</strong> · Two banks reconciled");
+    expect(html).toMatch(/<li data-kind="review">[\s\S]*?reviewed: <strong>Change<\/strong> · Smaller first\./);
+  });
+
+  it("says when nothing has happened, and its script and the tree's are in the export too", async () => {
+    const dir = tmp("nikos-empty-");
+    initPlanRepo(dir, { name: "Acme", year: "2027" });
+    const { srv } = await start(dir);
+    expect(await get(srv.port, "/?at=company&view=activity")).toContain("Nothing has happened here yet.");
+    const out = join(tmp("nikos-export-"), "plan.html");
+    await exportPlanPage(acmePlan(), out, { offline: true, at: "departments/finance" });
+    const exported = readFileSync(out, "utf8");
+    expect(exported).toContain("function fold(button, open)");
+    expect(exported).toContain("function showKind(kind)");
   });
 });
 

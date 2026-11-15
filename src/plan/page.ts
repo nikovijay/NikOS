@@ -12,7 +12,7 @@ import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
 import { figuresText, readsText, repoLabel } from "./words.js";
 
-export type ViewName = "overview" | "keys" | "okrs" | "ladder" | "bets" | "timeline";
+export type ViewName = "overview" | "keys" | "okrs" | "alignment" | "ladder" | "bets" | "timeline" | "activity";
 
 /** The view a page shows, and what the ladder widens to. more lifts the ladder's cap of rows per column. */
 export interface PlanView {
@@ -46,14 +46,16 @@ export interface PlanRenderOptions {
   live?: boolean;
 }
 
-const VIEW_LABEL: Record<ViewName, string> = { overview: "Overview", keys: "Key results", okrs: "OKRs and bets", ladder: "Ladder", bets: "Bets", timeline: "Timeline" };
+const VIEW_LABEL: Record<ViewName, string> = { overview: "Overview", keys: "Key results", okrs: "OKRs and bets", alignment: "Alignment", ladder: "Ladder", bets: "Bets", timeline: "Timeline", activity: "Activity" };
 const LEVEL_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team" };
 const ALTITUDE_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Departments", group: "Groups", team: "Teams" };
 const ALTITUDES: AreaLevel[] = ["company", "department", "group", "team"];
 
 /** The views an area has: the overview first, and key results only for the company and departments, which own the key results. */
 export function viewsFor(level: AreaLevel): ViewName[] {
-  return level === "company" || level === "department" ? ["overview", "keys", "okrs", "ladder", "bets", "timeline"] : ["overview", "okrs", "ladder", "bets", "timeline"];
+  return level === "company" || level === "department"
+    ? ["overview", "keys", "okrs", "alignment", "ladder", "bets", "timeline", "activity"]
+    : ["overview", "okrs", "alignment", "ladder", "bets", "timeline", "activity"];
 }
 
 /** What the query asks for. An unknown view is the overview; keys is refused for a group or team. */
@@ -423,6 +425,26 @@ dialog.session h3{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:
 .board-card h3{font-size:.98rem;margin:0}
 .board-card p{margin:6px 0 0}
 .board-card .due{color:var(--bad)}
+.tree-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+.tree,.branch{list-style:none;margin:0;padding:0}
+.tree>li{margin:8px 0}
+.branch{margin-left:16px}
+.branch>li{position:relative;padding:6px 0 0 22px;border-left:1.5px solid var(--wire)}
+.branch>li:last-child{border-left-color:transparent}
+.branch>li::before{content:"";position:absolute;left:-1.5px;top:0;width:20px;height:25px;border-left:1.5px solid var(--wire);border-bottom:1.5px solid var(--wire);border-bottom-left-radius:8px}
+.node{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);max-width:760px}
+.node.own{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.node.kr{border-left:3px solid var(--accent)}
+.node-body{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;min-width:0}
+.node-body a{font-weight:600}
+.twisty{flex:none;width:22px;height:22px;margin-top:1px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface-2);color:var(--fg);cursor:pointer;font:inherit;line-height:1;padding:0}
+.twisty::before{content:"−"}
+.twisty[aria-expanded=false]::before{content:"+"}
+.twisty-gap{flex:none;width:22px}
+.chips{margin:4px 0 8px}
+.chip{font:inherit;font-size:.86rem;font-weight:600;padding:5px 12px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--fg);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.feed-kind{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--muted);margin-right:4px}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
 fieldset.field{border:0;margin:0;padding:0}
 fieldset.field legend{padding:0;margin-bottom:4px}
@@ -1427,6 +1449,110 @@ function checkinSession(page: AreaPage): string {
   return `<dialog class="sheet-dialog session" id="checkin-session" aria-labelledby="checkin-session-title"><div class="box"><div class="drawer-head"><h2 id="checkin-session-title">Check in</h2><button type="button" class="btn" data-close>Close</button></div>${intro}${steps.join("")}${done}</div></dialog>`;
 }
 
+/** One node of the alignment tree: what it shows, and the nodes under it. */
+interface TreeNode {
+  html: string;
+  own: boolean;
+  kind: "kr" | "bet";
+  children: TreeNode[];
+}
+
+/**
+ * The alignment tree: the key results above at the top, the area's key results under the ones they align to,
+ * then the bets that aim at each, and under each bet the bets that align to it, at any depth. The area's own
+ * key results and bets are outlined. A bet the area holds that is under none of these is listed at the end.
+ */
+function alignmentTree(page: AreaPage): TreeNode[] {
+  const placed = new Set<string>();
+  // Every bet the page knows, once: the area's own, the ones elsewhere that aim at its key results, and all below it.
+  const bets = new Map<string, BetRef | DashBet>();
+  for (const b of [...page.bets, ...page.aimingBets, ...page.belowAreaBets]) if (!bets.has(b.id)) bets.set(b.id, b);
+  const aimsAt = (b: BetRef | DashBet, kr: string) => ("krs" in b ? b.krs.primary === kr || b.krs.also.includes(kr) : page.aimingBets.some((x) => x.id === b.id && x.of === kr));
+  const krMetaHtml = (k: KrRef) => `<span class="where">${esc(areaName(page, k.rel))}</span> ${statusPill(k, page.today)} <span class="meta">${esc(k.kind === "milestone" ? stepsOf(k) : pct(k.progress))}</span>`;
+  const betNode = (b: BetRef | DashBet, seen: Set<string>): TreeNode => {
+    placed.add(b.id);
+    const next = new Set([...seen, b.id]);
+    const under = [...bets.values()].filter((c) => c.aligns.includes(b.id) && !next.has(c.id));
+    return {
+      kind: "bet",
+      own: b.rel === page.plan.rel,
+      html: `${betLink(b, page.period)}${betId(b)} <span class="where">${esc(areaName(page, b.rel))}</span> ${deliveryPill(b.delivery)}${b.outcome && b.outcome !== "open" ? ` ${outcomePill(b.outcome)}` : ""}`,
+      children: under.map((c) => betNode(c, next)),
+    };
+  };
+  const krNode = (k: KrRef, below: TreeNode[] = []): TreeNode => ({
+    kind: "kr",
+    own: k.rel === page.plan.rel,
+    html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a> ${krMetaHtml(k)}`,
+    children: [...below, ...[...bets.values()].filter((b) => aimsAt(b, k.id) && !b.aligns.some((a) => bets.has(a) && aimsAt(bets.get(a)!, k.id))).map((b) => betNode(b, new Set()))],
+  });
+  const roots: TreeNode[] = [];
+  const under = new Set<string>();
+  for (const a of page.aboveKrs) {
+    const mine = page.krs.filter((k) => k.aligns.includes(a.id));
+    for (const k of mine) under.add(k.id);
+    roots.push(krNode(a, mine.map((k) => krNode(k))));
+  }
+  for (const k of page.krs) if (!under.has(k.id)) roots.push(krNode(k));
+  const loose = page.bets.filter((b) => !placed.has(b.id));
+  if (loose.length) roots.push({ kind: "bet", own: false, html: '<span class="meta">Bets under no key result here</span>', children: loose.map((b) => betNode(b, new Set())) });
+  return roots;
+}
+
+/** A tree's nodes as nested lists, each with the button that folds it when it has nodes under it. */
+function treeHtml(nodes: TreeNode[], top = true): string {
+  const items = nodes.map((n) => {
+    const fold = n.children.length ? `<button type="button" class="twisty" data-fold aria-expanded="true" aria-label="Fold"></button>` : '<span class="twisty-gap"></span>';
+    return `<li><div class="node ${n.kind}${n.own ? " own" : ""}">${fold}<span class="node-body">${n.html}</span></div>${n.children.length ? treeHtml(n.children, false) : ""}</li>`;
+  });
+  return `<ul class="${top ? "tree" : "branch"}">${items.join("")}</ul>`;
+}
+
+/** The alignment view: the tree, with buttons to fold or open every branch at once. */
+function renderAlignment(page: AreaPage, live: boolean): string {
+  const nodes = alignmentTree(page);
+  if (!nodes.length) return emptyState(`Nothing in ${page.plan.name} to align yet.`, "Key results and bets show here, each under what it aligns to.", addAction(live, "add-bet", "Add a bet", BET_COMMAND));
+  return `<p class="tree-tools"><button type="button" class="btn" data-fold-all="close">Fold all</button><button type="button" class="btn" data-fold-all="open">Open all</button><span class="meta">Outlined: ${esc(page.plan.name)}'s own.</span></p>${treeHtml(nodes)}`;
+}
+
+/** One thing that happened, for the activity feed: when, what kind, and what it says. */
+interface Happening {
+  date: string;
+  kind: "checkin" | "review";
+  html: string;
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * The activity feed: the area's check-ins, steps done and bet reviews, newest first, by month. It is read from
+ * the plan's files, so it shows what they record and nothing else.
+ */
+function renderActivity(page: AreaPage): string {
+  const events: Happening[] = [];
+  const krLinkOf = (k: DashKr) => `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`;
+  for (const k of ownKrs(page)) {
+    for (const c of k.checkins) events.push({ date: c.date, kind: "checkin", html: `${krLinkOf(k)} checked in at <strong>${esc(withUnit(c.value, k.unit))}</strong>${c.note ? ` · ${esc(c.note)}` : ""}` });
+    for (const st of k.steps) if (st.done) events.push({ date: st.done, kind: "checkin", html: `${krLinkOf(k)}: step done, ${esc(st.name)}` });
+  }
+  for (const b of page.bets) {
+    for (const r of b.reviews) events.push({ date: r.date, kind: "review", html: `${betLink(b, page.period)} reviewed: <strong>${esc(r.decision.charAt(0).toUpperCase() + r.decision.slice(1))}</strong>${r.outcome ? `, ${esc(r.outcome)}` : ""}${r.reason ? ` · ${esc(r.reason)}` : ""}` });
+  }
+  if (!events.length) return emptyState("Nothing has happened here yet.", "Check-ins, steps done and bet reviews show here as they are saved.");
+  events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const n = (k: Happening["kind"]) => events.filter((e) => e.kind === k).length;
+  const chips = `<div class="segs chips" role="group" aria-label="Show"><button type="button" class="chip" data-activity="" aria-pressed="true">All ${events.length}</button><button type="button" class="chip" data-activity="checkin" aria-pressed="false">Check-ins ${n("checkin")}</button><button type="button" class="chip" data-activity="review" aria-pressed="false">Reviews ${n("review")}</button></div>`;
+  const months = new Map<string, Happening[]>();
+  for (const e of events) {
+    const key = e.date.slice(0, 7);
+    months.set(key, [...(months.get(key) ?? []), e]);
+  }
+  const body = [...months]
+    .map(([key, list]) => `<section data-month><h2>${MONTHS[Number(key.slice(5, 7)) - 1] ?? key} ${key.slice(0, 4)}</h2><ol class="history feed">${list.map((e) => `<li data-kind="${e.kind}"><time datetime="${esc(e.date)}">${esc(shortDate(e.date))}</time><span><span class="feed-kind">${e.kind === "review" ? "Review" : "Check-in"}</span> ${e.html}</span></li>`).join("")}</ol></section>`)
+    .join("");
+  return `${chips}<p class="meta">From the plan's files: each key result's check-ins and steps, and each bet's reviews.</p>${body}`;
+}
+
 /** A text-only item's line on its own drill-down: what it says, and that no figure counts it. Nothing once a link backs it. */
 const notLinkedLine = (text?: string) => (text ? `<p class="meta">Not linked yet: "${esc(text)}". It counts in no figure.</p>` : "");
 
@@ -1787,6 +1913,37 @@ function formOf(e) { return e.target && e.target.closest ? e.target.closest("[da
 document.addEventListener("input", function (e) { var f = formOf(e); if (f) apply(f); });
 document.addEventListener("change", function (e) { var f = formOf(e); if (f) apply(f); });
 document.addEventListener("submit", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-filters")) { e.preventDefault(); apply(e.target); } });
+// The alignment tree: a node's button folds the branch under it; Fold all and Open all do every branch.
+function fold(button, open) {
+  button.setAttribute("aria-expanded", String(open));
+  button.setAttribute("aria-label", open ? "Fold" : "Open");
+  var branch = button.closest("li").querySelector(":scope > .branch");
+  if (branch) branch.hidden = !open;
+}
+// The activity feed: a chip shows one kind of happening, or all; a month with none showing hides.
+function showKind(kind) {
+  var chips = document.querySelectorAll("[data-activity]");
+  for (var c = 0; c < chips.length; c++) chips[c].setAttribute("aria-pressed", String(chips[c].getAttribute("data-activity") === kind));
+  var items = document.querySelectorAll("li[data-kind]");
+  for (var i = 0; i < items.length; i++) items[i].hidden = !!kind && items[i].getAttribute("data-kind") !== kind;
+  var months = document.querySelectorAll("[data-month]");
+  for (var m = 0; m < months.length; m++) months[m].hidden = !months[m].querySelector("li[data-kind]:not([hidden])");
+}
+document.addEventListener("click", function (e) {
+  var t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  var one = t.closest("[data-fold]");
+  if (one) { fold(one, one.getAttribute("aria-expanded") !== "true"); return; }
+  var all = t.closest("[data-fold-all]");
+  if (all) {
+    var open = all.getAttribute("data-fold-all") === "open";
+    var buttons = document.querySelectorAll("[data-fold]");
+    for (var b = 0; b < buttons.length; b++) fold(buttons[b], open);
+    return;
+  }
+  var chip = t.closest("[data-activity]");
+  if (chip) showKind(chip.getAttribute("data-activity"));
+});
 })();`;
 
 /** Opens the Share dialog. The live page and the export both carry it. */
@@ -1815,6 +1972,8 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   else if (current === "keys") body = renderKeys(page, live, state.view.filter);
   else if (current === "okrs") body = renderOkrs(page, live);
   else if (current === "ladder") body = renderLadderPage(page, state.view);
+  else if (current === "alignment") body = renderAlignment(page, live);
+  else if (current === "activity") body = renderActivity(page);
   else if (current === "bets") body = renderBets(page, live, state.view.scope);
   else body = renderTimeline(page);
   const back = state.drill ? `<p><a href="${esc(hrefOf({ at: page.plan.rel, view: current, period: page.period }))}">← Back to ${esc(name)}</a></p>` : "";
