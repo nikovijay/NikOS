@@ -12,7 +12,7 @@ import type { BetDelivery } from "./delivery.js";
 import type { AreaPage, BelowBet, BetRef, Choice, DashBet, DashKr, DrillBet, DrillMap, KrDrill, KrRef, UpChain, BetDrill } from "./dashboard.js";
 import { figuresText, readsText, repoLabel } from "./words.js";
 
-export type ViewName = "keys" | "okrs" | "ladder" | "bets" | "timeline";
+export type ViewName = "overview" | "keys" | "okrs" | "ladder" | "bets" | "timeline";
 
 /** The view a page shows, and what the ladder widens to. more lifts the ladder's cap of rows per column. */
 export interface PlanView {
@@ -34,21 +34,21 @@ export interface PlanRenderOptions {
   live?: boolean;
 }
 
-const VIEW_LABEL: Record<ViewName, string> = { keys: "Key results", okrs: "OKRs and bets", ladder: "Ladder", bets: "Bets", timeline: "Timeline" };
+const VIEW_LABEL: Record<ViewName, string> = { overview: "Overview", keys: "Key results", okrs: "OKRs and bets", ladder: "Ladder", bets: "Bets", timeline: "Timeline" };
 const LEVEL_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team" };
 const ALTITUDE_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Departments", group: "Groups", team: "Teams" };
 const ALTITUDES: AreaLevel[] = ["company", "department", "group", "team"];
 
-/** The views an area has: key results only for the company and departments, which own the key results. */
+/** The views an area has: the overview first, and key results only for the company and departments, which own the key results. */
 export function viewsFor(level: AreaLevel): ViewName[] {
-  return level === "company" || level === "department" ? ["keys", "okrs", "ladder", "bets", "timeline"] : ["okrs", "ladder", "bets", "timeline"];
+  return level === "company" || level === "department" ? ["overview", "keys", "okrs", "ladder", "bets", "timeline"] : ["overview", "okrs", "ladder", "bets", "timeline"];
 }
 
-/** What the query asks for. An unknown view is the OKRs and bets page; keys is refused for a group or team. */
+/** What the query asks for. An unknown view is the overview; keys is refused for a group or team. */
 export function viewOf(query: URLSearchParams, level: AreaLevel): PlanView {
   const asked = query.get("view") ?? "";
   const widen = query.get("widen") ?? "";
-  const view = (viewsFor(level) as string[]).includes(asked) ? (asked as ViewName) : "okrs";
+  const view = (viewsFor(level) as string[]).includes(asked) ? (asked as ViewName) : "overview";
   return { view, widen: { up: widen === "up" || widen === "all", down: widen === "down" || widen === "all" }, more: query.get("more") === "all" };
 }
 
@@ -358,6 +358,24 @@ dialog.drawer::backdrop{background:rgba(20,16,40,.4)}
 .history{list-style:none;margin:8px 0;padding:0;display:grid;gap:0}
 .history li{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
 .history li:first-child{border-top:0}
+.attention{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.attention li{display:grid;grid-template-columns:10em minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:10px 14px;border-top:1px solid var(--line)}
+.attention li:first-child{border-top:0}
+.att-kind{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--warn)}
+.att-what{font-weight:600}
+.kr-rows{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.kr-rows li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.kr-rows li .bar{grid-column:1/-1;margin:0}
+dialog.session{width:min(620px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg)}
+dialog.session::backdrop{background:rgba(20,16,40,.4)}
+dialog.session .box{padding:0 22px 20px;gap:6px}
+dialog.session .drawer-head{padding:18px 0 12px;margin-bottom:6px}
+dialog.session .bar{margin:8px 0 14px}
+dialog.session h3{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 6px}
+.queue{margin:10px 0;padding-left:1.3em;display:grid;gap:4px}
+.preview{margin:4px 0;padding:8px 12px;border-radius:8px;background:var(--accent-weak);font-size:.9rem}
+.preview:empty{display:none}
+.session-nav{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
 .history time{color:var(--muted);font-variant-numeric:tabular-nums}
 fieldset.field{border:0;margin:0;padding:0}
 fieldset.field legend{padding:0;margin-bottom:4px}
@@ -411,6 +429,7 @@ form.form .fields{grid-template-columns:minmax(0,1fr)}
 .tl-row{grid-template-columns:minmax(0,1fr)}
 .tl-track{border-left:0;border-top:1px dashed var(--line)}
 .tl-head .tl-label{display:none}
+.attention li{grid-template-columns:minmax(0,1fr)}
 }`;
 
 /** The dashboard's whole style: the shared design, the save bar, the light/dark switch, then its own parts. */
@@ -515,6 +534,10 @@ interface FormSpec {
   more?: Field[];
   submit: string;
   note?: string;
+  /** A step of the check-in session: a save moves the session on, not the page. */
+  session?: boolean;
+  /** What the session's preview reads, as JSON: where the key result starts, its target and the period's pace. */
+  facts?: string;
 }
 
 const UP_DOWN: Opt[] = [
@@ -603,7 +626,9 @@ function formHtml(s: FormSpec): string {
   const expect = s.expect === undefined ? "" : ` data-expect="${esc(s.expect)}"`;
   const more = s.more?.length ? `<fieldset class="form-more"><legend>More</legend><div class="fields">${s.more.map(fieldHtml).join("")}</div></fieldset>` : "";
   const note = s.note ? `<span class="meta">${esc(s.note)}</span>` : "";
-  return `<form class="save form" data-op="${esc(s.op)}" data-area="${esc(s.area)}" data-target="${esc(JSON.stringify(s.target ?? {}))}"${expect}><div class="fields">${s.fields.map(fieldHtml).join("")}${more}</div><div class="actions"><button type="submit">${esc(s.submit)}</button>${note}<span class="save-msg" role="status"></span></div></form>`;
+  const session = s.session ? " data-session" : "";
+  const facts = s.facts ? ` data-facts="${esc(s.facts)}"` : "";
+  return `<form class="save form" data-op="${esc(s.op)}" data-area="${esc(s.area)}" data-target="${esc(JSON.stringify(s.target ?? {}))}"${expect}${session}${facts}><div class="fields">${s.fields.map(fieldHtml).join("")}${more}</div><div class="actions"><button type="submit">${esc(s.submit)}</button>${note}<span class="save-msg" role="status"></span></div></form>`;
 }
 
 /** A named part of an edit section, with its form under it. */
@@ -1168,6 +1193,119 @@ function renderTimeline(page: AreaPage): string {
   return `<p class="tl-legend"><span>Bar: a bet from its start to its deadline</span><span>Diamond: a review, or a key result's due date</span><span>Red line: today, ${esc(shortDate(page.today))}</span><span>${esc(MON[new Date(start).getUTCMonth()]!)} ${new Date(start).getUTCFullYear()} to ${esc(MON[new Date(end - DAY).getUTCMonth()]!)} ${new Date(end - DAY).getUTCFullYear()}</span></p><div class="tl">${head}${rows.map((r) => r.html).join("")}</div>`;
 }
 
+/** How many days from one date to another: negative when the second is earlier. */
+const daysBetween = (from: string, to: string) => Math.round((dayOf(to) - dayOf(from)) / DAY);
+
+/** A bet's review is due when it is open and its date is within this many days, or past. */
+const REVIEW_SOON = 14;
+
+/** The key results an area holds itself: the company's and departments' own. A group or team holds none. */
+const ownKrs = (page: AreaPage) => (page.plan.level === "company" || page.plan.level === "department" ? page.krs.filter((k) => k.rel === page.plan.rel) : []);
+
+/** A key result that waits for a check-in: one gone stale, or a list of steps with some still to do and none done for a while. */
+const needsCheckin = (k: DashKr) => k.stale && !(k.kind === "milestone" && k.steps.every((st) => st.done));
+
+/** Whether a bet has a story map of its own, or bets below it that do. */
+const hasMap = (b: DashBet) => !!b.delivery && b.delivery.source !== "none";
+
+/** One row of the overview's list of what needs attention: what it is, a link to it, and why. */
+interface Attention {
+  kind: string;
+  html: string;
+  why: string;
+}
+
+/**
+ * The overview: three tiles (key results, bets, and what is due), then what needs attention. Late check-ins,
+ * reviews due, bets with no story map and key results nothing aims at, each linked so it opens its drawer.
+ */
+function renderOverview(page: AreaPage, live: boolean): string {
+  if (!page.krs.length && !page.bets.length) {
+    const holds = page.plan.level === "company" || page.plan.level === "department";
+    return holds ? krEmpty(page, live) : emptyState(`No bets in ${page.plan.name} yet.`, BET_BODY, addAction(live, "add-bet", "Add a bet", BET_COMMAND));
+  }
+  const own = ownKrs(page);
+  const st = page.krs.map((k) => krStatus(k, page.today)?.label);
+  const n = (l: string) => st.filter((x) => x === l).length;
+  const ds = page.bets.map((b) => (b.delivery?.source === "own" ? b.delivery.delivery?.status : undefined));
+  const late = own.filter(needsCheckin);
+  const reviews = page.bets.filter((b) => b.outcome === "open" && b.review_on && daysBetween(page.today, b.review_on) <= REVIEW_SOON);
+  const krTile = `<div><span class="eyebrow">${own.length || page.plan.level === "company" || page.plan.level === "department" ? "Key results" : "Key results its bets aim at"}</span><span class="big num">${page.krs.length}</span><span class="parts"><span>${n("On track")} on track</span><span>${n("At risk")} at risk</span><span>${n("Off track")} off track</span></span></div>`;
+  const betTile = `<div><span class="eyebrow">Bets</span><span class="big num">${page.bets.length}</span><span class="parts"><span>${ds.filter((x) => x === "Building").length} building</span><span>${ds.filter((x) => x === "Shipped").length} shipped</span><span>${page.bets.filter((b) => b.outcome === "won").length} won</span></span></div>`;
+  const dueTile = `<div><span class="eyebrow">Due</span><span class="big num">${late.length + reviews.length}</span><span class="parts"><span>${late.length} check-in${late.length === 1 ? "" : "s"}</span><span>${reviews.length} review${reviews.length === 1 ? "" : "s"}</span></span></div>`;
+  const items: Attention[] = [];
+  for (const k of late) {
+    const why = k.kind === "milestone" ? `No step done since ${shortDate(k.steps.filter((x) => x.done).map((x) => x.done!).sort().pop() ?? "")}` : k.latest ? `Last checked in ${shortDate(k.latest.date)}` : "No check-ins yet";
+    items.push({ kind: "Check-in late", html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`, why });
+  }
+  for (const b of reviews) {
+    const d = daysBetween(page.today, b.review_on);
+    items.push({ kind: d < 0 ? "Review overdue" : "Review due", html: betLink(b, page.period), why: d < 0 ? `Was due ${shortDate(b.review_on)}` : d === 0 ? "Due today" : `Due ${shortDate(b.review_on)}` });
+  }
+  for (const b of page.bets.filter((x) => x.outcome === "open" && !hasMap(x))) items.push({ kind: "No story map", html: betLink(b, page.period), why: "Nothing in the code delivers it yet" });
+  for (const k of own) {
+    const aimed = page.bets.some((b) => b.krs.primary === k.id || b.krs.also.includes(k.id)) || page.aimingBets.some((b) => b.of === k.id);
+    if (!aimed) items.push({ kind: "Nothing aims at it", html: `<a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>`, why: "No bet aims at this key result" });
+  }
+  const list = items.length
+    ? `<ul class="attention">${items.map((i) => `<li><span class="att-kind">${esc(i.kind)}</span><span class="att-what">${i.html}</span><span class="meta">${esc(i.why)}</span></li>`).join("")}</ul>`
+    : '<p class="meta">Nothing needs attention.</p>';
+  const rows = own.length
+    ? `<h2>Key results</h2><ul class="kr-rows">${own.map((k) => `<li><a href="${esc(krHref(k.rel, k.id, page.period))}">${esc(k.title)}</a>${statusPill(k, page.today)}${krBar(k, page.today)}</li>`).join("")}</ul>`
+    : "";
+  return `<div class="strip">${krTile}${betTile}${dueTile}</div><h2>Needs attention</h2>${list}${rows}`;
+}
+
+/**
+ * The check-in session: the area's own key results one at a time, the late ones first. Each step saves its
+ * check-in (or a step done) on its own, and shows where a new value lands before it is saved. The page loads
+ * again when the session closes, so the figures are the new ones.
+ */
+function checkinSession(page: AreaPage): string {
+  const own = ownKrs(page).filter((k) => !(k.kind === "milestone" && k.steps.every((st) => st.done)));
+  if (!own.length) return "";
+  const queue = [...own.filter(needsCheckin), ...own.filter((k) => !needsCheckin(k))];
+  const late = queue.filter(needsCheckin).length;
+  const intro = `<section data-step="intro"><p>${late ? `${late} of ${queue.length} key result${queue.length === 1 ? " needs" : "s need"} a check-in.` : "Every key result is up to date. You can still check in on any of them."} You go through them one at a time, the late ones first. Each one saves when you press Save and next, and you can skip any.</p><ol class="queue">${queue
+    .map((k) => `<li>${esc(k.title)} <span class="meta">${needsCheckin(k) ? (k.latest ? `late, last ${esc(shortDate(k.latest.date))}` : k.kind === "milestone" ? "late" : "no check-ins yet") : k.latest ? `last ${esc(shortDate(k.latest.date))}` : ""}</span></li>`)
+    .join("")}</ol><div class="session-nav"><button type="button" class="btn primary" data-session-next>Start</button></div></section>`;
+  const steps = queue.map((k, i) => {
+    const pace = paceOf(k, page.today);
+    const facts = { baseline: k.baseline, target: k.target, unit: k.unit, latest: k.latest?.value ?? null, pace: pace ?? null };
+    const form =
+      k.kind === "milestone"
+        ? formHtml({
+            op: "kr.step",
+            area: k.rel,
+            target: { kr: k.id },
+            expect: k.version,
+            session: true,
+            submit: "Save and next",
+            fields: [
+              { name: "name", label: "Which step is done?", kind: "choice", options: k.steps.filter((x) => !x.done).map((x) => ({ value: x.name, label: x.name })), wide: true },
+              { name: "date", label: "Done on", kind: "date", hint: "Leave blank for today." },
+            ],
+          })
+        : formHtml({
+            op: "checkin",
+            area: k.rel,
+            target: { kr: k.id },
+            expect: k.version,
+            session: true,
+            facts: JSON.stringify(facts),
+            submit: "Save and next",
+            fields: [
+              { name: "value", label: `New value${k.unit ? ` (${k.unit})` : ""}`, kind: "number", required: true },
+              { name: "date", label: "On", kind: "date", hint: "Leave blank for today." },
+              { name: "note", label: "Note", wide: true, placeholder: "What moved it, or what's in the way" },
+            ],
+          });
+    return `<section data-step="${i + 1}" hidden><p class="eyebrow">${i + 1} of ${queue.length}</p><h3>${esc(k.title)} ${statusPill(k, page.today)}</h3>${krFigure(k)}${krBar(k, page.today)}${form}<p class="preview" data-preview aria-live="polite"></p><div class="session-nav"><button type="button" class="btn" data-session-skip>Skip</button></div></section>`;
+  });
+  const done = `<section data-step="done" hidden><p><strong data-session-count>No check-ins saved.</strong> Saves go on the save bar's branch, and nothing is pushed until you press Push.</p><div class="session-nav"><button type="button" class="btn primary" data-close>Done</button></div></section>`;
+  return `<dialog class="sheet-dialog session" id="checkin-session" aria-labelledby="checkin-session-title"><div class="box"><div class="drawer-head"><h2 id="checkin-session-title">Check in</h2><button type="button" class="btn" data-close>Close</button></div>${intro}${steps.join("")}${done}</div></dialog>`;
+}
+
 /** A text-only item's line on its own drill-down: what it says, and that no figure counts it. Nothing once a link backs it. */
 const notLinkedLine = (text?: string) => (text ? `<p class="meta">Not linked yet: "${esc(text)}". It counts in no figure.</p>` : "");
 
@@ -1301,10 +1439,69 @@ document.addEventListener("click", function (e) {
     openDrawer(shown);
     return;
   }
+  var session = t.closest("dialog.session");
+  if (session && t.closest("[data-session-next], [data-session-skip]")) { sessionNext(session); return; }
   var opener = t.closest("[data-open]");
   if (!opener) return;
   var box = document.getElementById(opener.getAttribute("data-open"));
-  if (box) openDrawer(box, opener.getAttribute("data-tab"));
+  if (!box) return;
+  if (box.classList.contains("session")) sessionStart(box);
+  openDrawer(box, opener.getAttribute("data-tab"));
+});
+// The check-in session: its intro, one step per key result, then done. A step saves on its own and moves on; a
+// skip moves on. Closing it after any save loads the page again, so its figures are the new ones.
+var sessionSaved = 0;
+function sessionStart(box) {
+  sessionSaved = 0;
+  var steps = box.querySelectorAll("[data-step]");
+  for (var i = 0; i < steps.length; i++) steps[i].hidden = i !== 0;
+}
+function sessionNext(box) {
+  var steps = Array.prototype.slice.call(box.querySelectorAll("[data-step]"));
+  var at = steps.filter(function (x) { return !x.hidden; })[0];
+  var next = steps[steps.indexOf(at) + 1];
+  if (!next) return;
+  at.hidden = true;
+  next.hidden = false;
+  if (next.getAttribute("data-step") === "done") {
+    var count = next.querySelector("[data-session-count]");
+    if (count) count.textContent = sessionSaved ? sessionSaved + (sessionSaved === 1 ? " check-in saved." : " check-ins saved.") : "No check-ins saved.";
+  }
+  var first = next.querySelector("input:not([type=radio]), button");
+  if (first) first.focus();
+}
+document.addEventListener("close", function (e) {
+  if (!e.target.classList || !e.target.classList.contains("session") || !sessionSaved) return;
+  remember({ toast: sessionSaved + (sessionSaved === 1 ? " check-in saved" : " check-ins saved") });
+  location.reload();
+}, true);
+// What a new value would mean, before it is saved: the change from the last check-in, how far it is toward the
+// target, and against the period's pace, the same status the page gives.
+function previewOf(facts, raw) {
+  var v = Number(raw);
+  if (raw === "" || !isFinite(v)) return "";
+  var fmt = function (n) { n = Number(n.toFixed(4)); return n + (facts.unit ? (facts.unit === "%" ? "%" : " " + facts.unit) : ""); };
+  var span = facts.target - facts.baseline;
+  var p = span === 0 ? 1 : (v - facts.baseline) / span;
+  var parts = [];
+  if (facts.latest !== null) {
+    var d = v - facts.latest;
+    parts.push(d === 0 ? "No change from " + fmt(facts.latest) : (d > 0 ? "Up " : "Down ") + fmt(Math.abs(d)) + " from " + fmt(facts.latest));
+  }
+  parts.push(p < 0 ? "moved the wrong way" : Math.round(p * 100) + "% of the way to " + fmt(facts.target));
+  // A value that moved the wrong way gets no status: with the period only begun, it would read as on track.
+  if (facts.pace !== null && p >= 0) {
+    var gap = facts.pace - Math.max(0, p);
+    parts.push((gap <= 0.1 ? "on track" : gap <= 0.25 ? "at risk" : "off track") + ", with " + Math.round(facts.pace * 100) + "% of the period gone");
+  }
+  var text = parts.join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1) + ".";
+}
+document.addEventListener("input", function (e) {
+  var form = e.target && e.target.form;
+  if (!form || !form.hasAttribute("data-facts") || e.target.name !== "value") return;
+  var out = form.parentNode.querySelector("[data-preview]");
+  if (out) out.textContent = previewOf(JSON.parse(form.getAttribute("data-facts")), e.target.value.trim());
 });
 // The arrow keys move between a drawer's tabs.
 document.addEventListener("keydown", function (e) {
@@ -1349,6 +1546,12 @@ document.addEventListener("submit", function (e) {
     if (res.ok) {
       var said = res.body.message + (res.body.branch ? " on " + res.body.branch : "");
       if (out) out.textContent = said;
+      // A step of the check-in session moves the session on; the page loads again when it closes.
+      if (form.hasAttribute("data-session")) {
+        sessionSaved++;
+        sessionNext(form.closest("dialog"));
+        return;
+      }
       // Saved: load the page again so its figures and versions are the new ones. The message shows again as a toast,
       // and a key result's or bet's drawer opens again where it was.
       var box = form.closest("dialog.drawer");
@@ -1444,6 +1647,7 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   let body: string;
   if (state.drill?.kind === "kr") body = renderKrDrill(state.drill.kr, page, live);
   else if (state.drill?.kind === "bet") body = renderBetDrill(state.drill.bet, state.drill.up, page, live);
+  else if (current === "overview") body = renderOverview(page, live);
   else if (current === "keys") body = renderKeys(page, live);
   else if (current === "okrs") body = renderOkrs(page, live);
   else if (current === "ladder") body = renderLadderPage(page, state.view);
@@ -1458,8 +1662,10 @@ export function renderPlanBody(page: AreaPage, state: PageState, opts: RenderBod
   const eyebrow = state.drill ? LEVEL_LABEL[page.plan.level] : VIEW_LABEL[current];
   // What the page adds, as buttons in its head: each opens its drawer, from any view. Key results only where they live.
   const ownsKrs = page.plan.level === "company" || page.plan.level === "department";
+  const late = ownKrs(page).filter(needsCheckin).length;
+  const checkin = live && ownKrs(page).some((k) => !(k.kind === "milestone" && k.steps.every((st) => st.done))) ? `<button type="button" class="btn" data-open="checkin-session">Check in${late ? ` (${late})` : ""}</button>` : "";
   const actions = live
-    ? `<div class="head-actions">${ownsKrs ? '<button type="button" class="btn" data-open="add-kr">New key result</button>' : ""}<button type="button" class="btn primary" data-open="add-bet">New bet</button></div>`
+    ? `<div class="head-actions">${checkin}${ownsKrs ? '<button type="button" class="btn" data-open="add-kr">New key result</button>' : ""}<button type="button" class="btn primary" data-open="add-bet">New bet</button></div>`
     : "";
   return `${datalist}<a class="skip" href="#main">Skip to the page</a>
 <div class="app">
@@ -1488,7 +1694,7 @@ ${page.problems.length ? `<h2>Files that won't load</h2>${list(page.problems.map
 </main>
 </div>
 </div>
-${addKrForm(page, live)}${addBetForm(page, live)}
+${addKrForm(page, live)}${addBetForm(page, live)}${live ? checkinSession(page) : ""}
 ${live ? [...page.krs.map((k) => krDrawer(k, page)), ...page.bets.map((b) => betDrawer(b, page))].join("") : ""}
 ${shareDialog(page, !!opts.offline)}
 `;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **An Overview for each area.** The dashboard now opens on it. It has three tiles (key results by status, bets by delivery, and check-ins and reviews due) and a list of what needs attention: late check-ins, bet reviews due within two weeks or overdue, open bets with no story map, and key results no bet aims at. Each one opens its drawer. A company or department also lists its key results with their status and progress.
+- **Check in, one key result at a time.** The Check in button shows how many key results are late. It opens a session that goes through the area's key results, the late ones first. For each one you type the new value, with a date and a note if you like, and it shows what the value would mean before you save: the change from the last check-in, how far it is toward the target, and whether that is on track for how much of the period has gone. A list of steps asks which step is done. Each saves on its own, and you can skip any.
+
 ### Changed
 
 - **The plan dashboard's forms open in drawers.** "New key result" and "New bet" are buttons at the top of every view, and each opens a drawer from the side of the page. "Edit this key result" and "Edit this bet" open a drawer with that item's forms, in place of a section that folded open on the page. Choices with a few options, such as a key result's kind and direction or a review's decision, are rows of buttons. What a key result or bet aligns to or also aims at is a list of tick boxes. The saves and what they write are the same as before. Check-ins stay on the cards.

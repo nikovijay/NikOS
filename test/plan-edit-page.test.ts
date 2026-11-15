@@ -487,7 +487,68 @@ describe("the offline export", () => {
     const html = readFileSync(out, "utf8");
     expect(html).toContain("Checkout web");
     expect(html).toContain(".field{display:flex");
-    expect(html).toContain('<a href="?at=groups%2Fpayments&amp;bet=faster-checkout');
+    expect(html).toContain('<a href="?at=departments%2Ffinance&amp;bet=inbox-match');
+  });
+});
+
+describe("the overview", () => {
+  it("opens an area with three tiles and what needs attention: a late check-in, a review due, a bet with no map, a key result nothing aims at", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
+    newBet({ id: "soon", title: "Soon", owner: "Sam", hypothesis: "It helps.", reviewOn: "2026-01-01", primary: "close-days" }, fin);
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}`);
+    expect(html.match(/<span class="eyebrow">(Key results|Bets|Due)<\/span><span class="big num">/g)).toHaveLength(3);
+    const list = /<ul class="attention">([\s\S]*?)<\/ul>/.exec(html)![1];
+    const kinds = [...list.matchAll(/<span class="att-kind">([^<]+)<\/span>/g)].map((m) => m[1]);
+    expect(kinds).toContain("Check-in late");
+    expect(kinds).toContain("Review overdue");
+    expect(kinds).toContain("No story map");
+    expect(kinds).toContain("Nothing aims at it");
+    expect(list).toContain(`<a href="?${FINANCE}&amp;kr=aimless&amp;period=2027-Q1">Aimless</a>`);
+    expect(list).toContain("No check-ins yet");
+  });
+
+  it("a team's overview has no key results of its own to check in on", async () => {
+    const { srv } = await start(acmePlan());
+    const html = await get(srv.port, "/?at=teams%2FWEB");
+    expect(html).toContain("Key results its bets aim at");
+    expect(html).not.toContain('data-open="checkin-session"');
+    expect(html).not.toContain('id="checkin-session"');
+  });
+});
+
+describe("the check-in session", () => {
+  it("Check in counts the late key results, and the session takes them one at a time, the late ones first", async () => {
+    const repo = acmePlan();
+    const fin = findArea(repo, "finance").dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
+    checkIn(fin, "close-days", { value: 9, date: new Date().toISOString().slice(0, 10) });
+    const { srv } = await start(repo);
+    const html = await get(srv.port, `/?${FINANCE}&view=keys`);
+    expect(html).toContain('<button type="button" class="btn" data-open="checkin-session">Check in (1)</button>');
+    const session = /<dialog class="sheet-dialog session" id="checkin-session"[\s\S]*?<\/dialog>/.exec(html)![0];
+    expect(session).toContain("1 of 2 key results need a check-in.");
+    expect(session.indexOf("<h3>Aimless")).toBeLessThan(session.indexOf("<h3>Close days"));
+    const forms = saveForms(session);
+    expect(forms.map((f) => [f.op, f.target.kr])).toEqual([["checkin", "aimless"], ["checkin", "close-days"]]);
+    expect(session).toContain("data-session");
+    expect(session).toContain('<input name="note" placeholder="What moved it, or what&#39;s in the way" type="text" value="">');
+  });
+
+  it("previews a value before it is saved: the change, the way to the target, and the status against the pace", async () => {
+    const { srv } = await start(acmePlan());
+    const script = scriptOf(await get(srv.port, `/?${FINANCE}&view=keys`));
+    const source = /function previewOf\(facts, raw\) \{[\s\S]*?\n\}/.exec(script)?.[0];
+    expect(source).toBeDefined();
+    const previewOf = new Function(`${source}; return previewOf;`)() as (f: object, raw: string) => string;
+    const facts = { baseline: 11, target: 7, unit: "days", latest: 9, pace: 0.5 };
+    expect(previewOf(facts, "8")).toBe("Down 1 days from 9 days · 75% of the way to 7 days · on track, with 50% of the period gone.");
+    expect(previewOf(facts, "10.5")).toBe("Up 1.5 days from 9 days · 13% of the way to 7 days · off track, with 50% of the period gone.");
+    expect(previewOf({ ...facts, latest: null, pace: null, unit: "%" }, "12")).toBe("Moved the wrong way.");
+    expect(previewOf(facts, "")).toBe("");
+    expect(previewOf(facts, "12")).toBe("Up 3 days from 9 days · moved the wrong way.");
   });
 });
 
