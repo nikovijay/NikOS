@@ -20,16 +20,57 @@ be marked done until its scenarios pass. Your agent follows a named playbook
 for each request instead of improvising, and every decision is written down
 where the next person (or agent) can find it.
 
-nikOS has two sides. **Spec** is the code side: each repo keeps its story map
-in `maps/<key>/`. **Plan** is the company's objectives, key results and bets,
-in one planning repo with a folder for each department, group and team. A code
-repo can be linked to the plan, and the plan reads each one's delivery.
+nikOS is two products in one package:
+
+- **nikOS Plan** keeps the company's objectives, key results and bets in one
+  planning repo, with a folder for each department, group and team.
+- **nikOS Spec** keeps each code repo's story map in `maps/<key>/`, next to the
+  code that builds it.
+
+Each has a page you open in the browser, where you can read and change it:
+the plan dashboard (`nikos plan serve`) and the story map (`nikos serve`).
 
 It works with Claude Code, Codex and Cursor, and brings spec-driven
 development, behaviour-driven development (BDD) with Gherkin and Cucumber,
 user story mapping and acceptance criteria to agentic coding.
 
 > Early work in progress. Open source, MIT licensed.
+
+## How it works
+
+1. **Plan the company.** Make one planning repo. The company sets key results
+   for the year, and each department for the quarter. Every level, down to a
+   team, makes bets: what it will try, and the key result it should move.
+2. **Map the work in the code repo.** A repo that builds a bet gets a story map
+   that names the bet. The map has activities, steps and releases, and each
+   story has acceptance criteria written as Gherkin scenarios.
+3. **Build and prove it.** Your agent builds one story at a time. Its scenarios
+   run as Cucumber tests, and a story can't be marked done until they pass.
+   You sign off each done story.
+4. **See delivery in the plan.** Each map writes a small `delivery.yaml`. The
+   planning repo lists its code repos and reads those files, so the dashboard
+   shows how far each bet has got, next to the key results it aims at.
+
+Both pages run on your computer from a private link. Changes you make on a
+page are saved to the repo's files on a branch (`nikos/plan-…` or
+`nikos/map-…`). A bar on the page lists them, with Commit and Push buttons.
+Nothing is pushed until you press Push. `--export <file>` writes either page as one read-only file you
+can share.
+
+On the **plan dashboard** you can:
+
+- add and edit key results and bets, and record check-ins and reviews;
+- link a bet to the key results it aims at;
+- move between the company, departments, groups and teams;
+- see the ladder from a team's bet up to the company's key results, and a
+  timeline.
+
+On the **story map** you can:
+
+- add activities, steps, stories and releases;
+- edit a story's narrative, type, personas and acceptance criteria;
+- drag a story to another release, and reorder or rename releases;
+- see progress and the next story to build.
 
 ## Try it in 10 minutes
 
@@ -51,10 +92,39 @@ the `nikos-spec` skill sets up a code repo's story map. The skills run the
 `nikos` command through `npx -y nikos@latest`, so there's nothing else to
 install. More in [docs/install.md](docs/install.md).
 
-Without an agent, run `npx -y nikos@latest start` in a terminal: it asks whether
-you're setting up the company's plan or a story map for this code, and then a
-few questions. Then `npx -y nikos@latest serve` opens the story map, and
-`npx -y nikos@latest plan serve` opens the plan.
+## Use it from a terminal
+
+You can also run nikOS without an agent. Install the `nikos` command once:
+
+```bash
+npm install -g nikos@latest
+```
+
+Or put `npx -y nikos@latest` in place of `nikos` in any command below. That
+always runs the newest version, with nothing to install.
+
+In an empty folder, run:
+
+```bash
+nikos start
+```
+
+It asks whether you're setting up the company's plan or a story map for this
+code. It also asks where the repo should live: GitHub, GitLab or only this
+computer. To set up a plan in one line instead:
+
+```bash
+nikos plan init --name "Acme" --year 2027
+```
+
+`--name` is the company's name, and `--year` is the year it plans for. Then
+open the page:
+
+```bash
+nikos plan serve
+```
+
+In a code repo, `nikos serve` opens the story map instead.
 
 ## Talk to it
 
@@ -115,7 +185,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | Command | What it does |
 | --- | --- |
 | `nikos start` | Set this folder up: `--plan` makes the company's planning repo, `--map` (with `--name` and `--key`, and `--join <planning repo>`) makes a story map for this code with a scenario runner for its stack and CI for its host. `--github <owner/name>` or `--gitlab <group/name>` also makes its repo there (private unless `--public`; nothing is pushed). In a terminal with no flags, it asks which, and where the repo should live |
-| `nikos plan init` | Make the company's planning repo: `planning/company/`, with a folder for each department, group and team under `planning/`. `--github` or `--gitlab` also makes its hosted repo |
+| `nikos plan init --name <company> --year <year>` | Make the company's planning repo: `planning/company/`, with a folder for each department, group and team under `planning/`. `--github` or `--gitlab` also makes its hosted repo |
 | `nikos plan add department\|group\|team <id>` | Add an area to the company's plan |
 | `nikos plan kr new`, `plan kr step`, `plan checkin`, `plan bet new`, `plan bet review`, `plan ladder` | Key results (figures that go up or down, or milestones of steps), check-ins, bets, and links for what has only text so far, in the area named with `--in` (`nikos plan help` lists them all) |
 | `nikos serve` | Open this repo's story map in the browser, with a private link. You can add and edit stories there, drag a story to another release, and add, rename, reorder or remove releases: saves go on a `nikos/map-…` branch, and you commit or push them from the page. `--export <file>` writes it as one offline page with no forms. In a planning repo, use `nikos plan serve` |
@@ -130,7 +200,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos clear <id>` | Check a story is ready to build |
 | `nikos plan status [--in <area>] [--json]` | The plan's key results and bets, each bet's delivery from the code repos listed in `planning/repos.yaml`, and how old each copy is ([docs/plan.md](docs/plan.md)) |
 | `nikos plan refresh` | Read each code repo listed in `planning/repos.yaml`, read-only, and keep a copy of its story maps' status files under `.nikos/delivery/` on this machine (git ignores it, so run it on each machine that reads the plan) |
-| `nikos plan serve [--in <area>] [--export <file>]` | Run the planning dashboard and print its link: one area at a time, with its key results, bets, ladder and each bet's delivery. `--export <file>` writes it as one offline page, for one area with `--in` or for every area without ([docs/plan.md](docs/plan.md)) |
+| `nikos plan serve [--in <area>] [--export <file>]` | Open the planning dashboard and print its private link. It shows one area at a time: its key results, its bets, the ladder and each bet's delivery. You can add and edit key results and bets there. Saves go on a `nikos/plan-…` branch, and you commit or push them from the page. `--export <file>` writes it as one offline page with no forms: for one area with `--in`, or for every area without ([docs/plan.md](docs/plan.md)) |
 | `nikos map status [--map <id>] [--json]` | How each story in this repo's maps is doing: its status, whether it was proved against the current feature, and its approval. Saves each map's `delivery.yaml` to commit (`--json` saves nothing) |
 | `nikos verify setup` | Add a Cucumber runner for this repo's stack |
 | `nikos ci setup` | Run validate and every story's scenarios on each PR (GitHub Actions) or merge request (GitLab CI), plus a release check you run by hand before shipping |
@@ -154,6 +224,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 - Home: https://nikos.tools
 - Quickstart: [docs/quickstart.md](docs/quickstart.md)
 - Install: [docs/install.md](docs/install.md)
+- The company's plan: [docs/plan.md](docs/plan.md)
 - Format: [docs/format.md](docs/format.md)
 - Writing stories as features: [docs/gherkin.md](docs/gherkin.md)
 
