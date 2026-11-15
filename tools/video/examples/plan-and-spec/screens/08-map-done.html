@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="nikos-token" content="example">
+<title>chk · Story map</title>
+<style>:root{--bg:#f5f4f8;--surface:#ffffff;--surface-2:#eeecf4;--line:#dcd9e6;--line-strong:#c4c0d4;--fg:#1a1922;--muted:#5f5c6d;--accent:#5b3fb0;--accent-weak:#ebe6fa;--accent-fg:#ffffff;--good:#1d6a42;--good-bg:#def1e6;--warn:#875700;--warn-bg:#fcefd1;--bad:#b02e29;--bad-bg:#fbe3e1;--idle:#5b5966;--idle-bg:#e9e8ee;--notice:#fff6dc;--notice-fg:#4a3700;--wire:#b9b0dc;--shadow:0 1px 2px rgb(26 25 34 / .06),0 4px 16px rgb(26 25 34 / .06);--r:10px;--f-display:"Avenir Next","Segoe UI Variable Display","Segoe UI",ui-sans-serif,system-ui,sans-serif;--f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--f-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#121118;--surface:#1b1a23;--surface-2:#24222e;--line:#33303f;--line-strong:#4a465a;--fg:#ecebf2;--muted:#a4a1b2;--accent:#b8a5ff;--accent-weak:#2b2447;--accent-fg:#150e2c;--good:#8ed6ac;--good-bg:#17321f;--warn:#f0c46e;--warn-bg:#382a0e;--bad:#ff9c94;--bad-bg:#3c1a19;--idle:#b5b3bf;--idle-bg:#2a2833;--notice:#352b10;--notice-fg:#ffe6a3;--wire:#4f4677;--shadow:0 1px 2px rgb(0 0 0 / .3),0 4px 16px rgb(0 0 0 / .25)}}:root[data-theme="dark"]{--bg:#121118;--surface:#1b1a23;--surface-2:#24222e;--line:#33303f;--line-strong:#4a465a;--fg:#ecebf2;--muted:#a4a1b2;--accent:#b8a5ff;--accent-weak:#2b2447;--accent-fg:#150e2c;--good:#8ed6ac;--good-bg:#17321f;--warn:#f0c46e;--warn-bg:#382a0e;--bad:#ff9c94;--bad-bg:#3c1a19;--idle:#b5b3bf;--idle-bg:#2a2833;--notice:#352b10;--notice-fg:#ffe6a3;--wire:#4f4677;--shadow:0 1px 2px rgb(0 0 0 / .3),0 4px 16px rgb(0 0 0 / .25)}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;font-weight:700;letter-spacing:-.01em}
+.mono,code{font-family:var(--f-mono);font-size:.85em}
+.muted{color:var(--muted)}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:var(--accent-fg);padding:8px 12px;border-radius:6px;z-index:50}
+.skip:focus{left:16px}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:6px 14px;cursor:pointer;font-weight:600;font-size:.9rem;color:var(--fg)}
+.btn:hover{border-color:var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;font-weight:600;border-radius:99px;padding:1px 9px;line-height:1.7;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.s-good{background:var(--good-bg);color:var(--good)}.s-warn{background:var(--warn-bg);color:var(--warn)}.s-bad{background:var(--bad-bg);color:var(--bad)}.s-idle{background:var(--idle-bg);color:var(--idle)}.s-accent{background:var(--accent-weak);color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:1px 8px;color:var(--fg);text-decoration:none;max-width:100%}
+.host{display:inline-flex;align-items:center;font-size:.78rem;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);max-width:100%}
+.host-k{background:var(--surface-2);padding:5px 8px;font-weight:600;white-space:nowrap}
+.host-v{padding:5px 8px;font-family:var(--f-mono);font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.theme-toggle{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:.85rem}
+dialog.sheet-dialog{border:0;padding:0;background:var(--bg);color:var(--fg);border-radius:14px;box-shadow:0 20px 60px rgb(0 0 0 / .3);max-width:min(600px,calc(100% - 32px));width:100%}
+dialog.sheet-dialog::backdrop{background:rgb(10 8 20 / .35)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+:root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}.theme-toggle{font:inherit;font-size:.85em;padding:.2rem .6rem;border:1px solid currentColor;border-radius:999px;background:transparent;color:inherit;cursor:pointer}.theme-toggle .to-light{display:none}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .theme-toggle .to-dark{display:none}:root:not([data-theme="light"]) .theme-toggle .to-light{display:inline}}:root[data-theme="dark"] .theme-toggle .to-dark{display:none}:root[data-theme="dark"] .theme-toggle .to-light{display:inline}
+:root { --col: 230px; --gap: 14px; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+.title { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.blank { margin: 32px 0; max-width: 560px; padding: 24px; border: 1.5px dashed var(--line-strong); border-radius: var(--r); background: var(--surface); }
+.blank h2 { margin: 0 0 6px; font-size: 18px; }
+.blank p { margin: 0; color: var(--muted); }
+.sid, .rnum, .rcode, .count, .facts { font-family: var(--f-mono); }
+.warn { color: var(--warn); font-weight: 600; }
+.top { padding: 12px 24px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.top .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.spacer { flex: 1; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-display); font-weight: 700; font-size: 16px; }
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
+.brand-mark svg { width: 18px; height: 18px; }
+.brand-t small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: 12px; color: var(--muted); line-height: 1.2; }
+h1 { font-size: 24px; margin: 0; line-height: 1.2; }
+.meta { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; color: var(--muted); }
+.meta b { color: var(--fg); }
+.back { display: block; flex-basis: 100%; font-size: 14px; font-weight: 500; text-decoration: none; }
+.jumps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+.jump { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--fg); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.jump:hover { border-color: var(--line-strong); }
+.rcode { font-size: 12px; color: var(--accent); font-weight: 600; }
+.count { font-size: 12px; color: var(--muted); }
+.overview { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line); }
+.overview > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.ov-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.ov-next { font-size: 14px; }
+.ov-next a { font-weight: 600; color: var(--fg); }
+.stack { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); }
+.stack i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.where { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+main { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+.board { width: max-content; min-width: 100%; padding: 0 24px 48px; }
+.spine { position: sticky; top: 0; z-index: 3; padding: 20px 0 6px; background: var(--bg); }
+.activities, .steps { display: flex; gap: var(--gap); }
+.steps { margin-top: 8px; }
+.step { width: var(--col); min-height: 32px; border-radius: 8px; background: var(--accent-weak); padding: 7px 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.step.none { background: none; }
+.activity { width: calc(var(--span, 1) * var(--col) + (var(--span, 1) - 1) * var(--gap)); display: grid; gap: 0; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 8px 12px; }
+.activity .eyebrow { color: inherit; opacity: .8; font-size: 11px; }
+.activity strong { font-size: 14px; }
+.band { scroll-margin-top: 110px; border-top: 2px dashed var(--line-strong); margin-top: 14px; padding-top: 10px; }
+.divider, .band .goal, .band .bets { position: sticky; left: 24px; width: max-content; max-width: min(100%, calc(100vw - 72px)); }
+.divider { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 0 0 6px; }
+.rnum { color: var(--accent); font-size: 13px; font-weight: 600; }
+.divider h2 { margin: 0; font-size: 17px; }
+.tally { font-size: 12px; color: var(--muted); }
+.rule { display: none; }
+.stamp { display: inline-block; transform: rotate(-3deg); color: var(--good); border: 2px solid var(--good); border-radius: 5px; padding: 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+.goal { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.bets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; }
+.bet { font-size: 12px; padding: 1px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font-family: var(--f-mono); }
+.lane { display: flex; gap: var(--gap); }
+.cell { width: var(--col); min-height: 48px; display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--muted); margin: 0 0 8px; }
+.card { --edge: var(--line-strong); --word: var(--muted); display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-left: 4px solid var(--edge); border-radius: 7px; background: var(--surface); color: var(--fg); text-decoration: none; box-shadow: var(--shadow); }
+.card:hover { border-color: var(--line-strong); border-left-color: var(--edge); }
+.card[data-next] { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.crow { display: flex; align-items: baseline; gap: 6px; }
+.card .sid { font-size: 11px; color: var(--muted); }
+.sword { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--word); }
+.sword::first-letter { text-transform: uppercase; }
+.stitle { font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cfoot { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 12px; color: var(--muted); }
+.next-tag { color: var(--accent); font-weight: 600; }
+.todo { --edge: var(--line-strong); --word: var(--muted); }
+.doing { --edge: var(--accent); --word: var(--accent); }
+.rework { --edge: var(--bad); --word: var(--bad); }
+.done { --edge: color-mix(in srgb, var(--good) 55%, var(--line)); --word: var(--good); }
+.approved { --edge: var(--good); --word: var(--good); }
+.card.done .stitle, .card.approved .stitle { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--fg) 35%, transparent); }
+.changed { --edge: var(--warn); --word: var(--warn); }
+.blocked { --edge: var(--bad); --word: var(--bad); }
+.cancelled { --edge: var(--line); --word: var(--muted); }
+.card.cancelled { border-style: dashed; box-shadow: none; opacity: .75; }
+.card.cancelled .stitle { text-decoration: line-through; }
+.stype { font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--surface-2); color: var(--fg); }
+.wait { color: var(--warn); font-weight: 600; }
+.notes { margin: 10px 0 0; padding-left: 18px; color: var(--fg); }
+[hidden] { display: none !important; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 24px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.filters input[type=search], .filters select { min-height: 34px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg); color: var(--fg); padding: 0 10px; }
+.filters input[type=search] { width: 220px; max-width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; border: 0; margin: 0; padding: 0; }
+.chips legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.chips .chip { min-height: 28px; padding: 0 10px; border-radius: 99px; font-size: 13px; cursor: pointer; }
+.chips .chip::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--edge); }
+.chips .chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chips .chip:has(input:checked) { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+.chips .chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.switch input { accent-color: var(--accent); width: 16px; height: 16px; }
+#f-count { margin-left: auto; font-size: 13px; color: var(--muted); }
+.sheet-wrap { display: none; }
+.sheet-wrap:target { display: block; position: fixed; inset: 0; z-index: 10; }
+.scrim { position: absolute; inset: 0; background: rgb(10 8 20 / .35); }
+.sheet { position: absolute; top: 0; right: 0; bottom: 0; width: 620px; max-width: 100%; overflow-y: auto; background: var(--bg); box-shadow: -8px 0 32px rgb(0 0 0 / .18); padding: 16px 20px 32px; display: grid; gap: 14px; align-content: start; animation: slide .24s cubic-bezier(.2,.8,.3,1); }
+@keyframes slide { from { transform: translateX(40px); opacity: 0; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.close { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 20px; line-height: 1; color: var(--fg); text-decoration: none; cursor: pointer; }
+.status-card { border: 1px solid var(--line); border-left: 5px solid var(--edge, var(--line)); background: var(--surface); border-radius: var(--r); padding: 14px 16px; }
+.status-card .sword { display: block; margin: 0 0 4px; }
+.sc-title { font-family: var(--f-display); font-size: 20px; font-weight: 700; line-height: 1.25; margin-bottom: 6px; }
+.facts { font-size: 12px; color: var(--muted); }
+.narrative { margin: 10px 0 0; color: var(--muted); font-style: italic; }
+.alert { margin: 0; border-radius: 8px; padding: 9px 12px; font-size: 14px; }
+.alert.warn { background: var(--warn-bg); color: var(--warn); }
+.alert.bad { background: var(--bad-bg); color: var(--bad); }
+.criteria { margin: 0; padding: 0; list-style: none; display: grid; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.criteria li { padding: 9px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.criteria li:first-child { border-top: 0; }
+.criteria .sid { font-size: 11px; color: var(--muted); margin-right: 8px; }
+.prio { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.code { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); border-radius: 6px; padding: 7px 10px; overflow-wrap: anywhere; }
+.copy { flex: none; font-family: var(--f-body); font-size: 12px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.opt { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 12px 14px; display: grid; gap: 6px; }
+.opt h3 { margin: 0; font-family: var(--f-body); font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+@media (max-width: 767px) {
+  body { height: auto; display: block; }
+  .top, .overview, .filters { padding-left: 16px; padding-right: 16px; }
+  .overview { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 21px; }
+  .filters input[type=search] { width: 100%; }
+  #f-count { margin-left: 0; }
+  .board { width: auto; padding: 0 16px 32px; }
+  .spine { display: none; }
+  .divider, .band .goal, .band .bets { position: static; width: auto; max-width: none; }
+  .lane { display: block; }
+  .cell { width: auto; min-height: 0; }
+  .cell:empty { display: none; }
+  .cell::before { content: attr(data-activity); display: block; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--accent); }
+  .band { scroll-margin-top: 12px; }
+}
+.pending{background:var(--accent);color:var(--accent-fg);padding:10px 12px 10px 16px;border-radius:var(--r,10px);margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:.92rem}
+.pending button{font:inherit;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid color-mix(in srgb,currentColor 50%,transparent);background:transparent;color:inherit;cursor:pointer}
+.pending button:first-of-type{background:var(--accent-fg);color:var(--accent);border-color:transparent}
+.pending button:disabled{opacity:.6;cursor:progress}
+.pending[hidden]{display:none}
+
+.add { position: relative; display: block; }
+.add > summary { list-style: none; display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border: 1.5px dashed var(--line-strong); border-radius: 7px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.add > summary::-webkit-details-marker { display: none; }
+.add:hover > summary, .add[open] > summary { color: var(--accent); border-color: var(--accent); }
+.add > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.add .pop { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; width: min(320px, 80vw); padding: 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); }
+.cell .add { margin-top: 4px; }
+.activity .add { margin-top: 6px; }
+.activity .add > summary { color: var(--accent-fg); border-color: color-mix(in srgb, var(--accent-fg) 60%, transparent); }
+.slot { align-self: flex-start; }
+.slot > summary { min-height: 40px; padding: 0 14px; }
+.add-row { margin-top: 14px; }
+form.op { display: grid; gap: 10px; margin: 0; }
+.op-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start; }
+.op-fields .wide { grid-column: 1 / -1; }
+.fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--fg); }
+.fld input, .fld select, .fld textarea { font: inherit; font-weight: 400; font-size: 14px; width: 100%; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); color: var(--fg); }
+.fld select[multiple] { min-height: 96px; }
+.fld textarea { resize: vertical; min-height: 64px; }
+.fld .hint { color: var(--muted); font-weight: 400; }
+.op .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.op button { font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+.op button:disabled { opacity: .6; cursor: default; }
+.op button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+.op .save-msg { color: var(--muted); font-size: 12px; }
+.op .save-msg.error { color: var(--bad); }
+.op.tool { display: inline-flex; }
+.op.tool .op-fields { display: none; }
+.op.tool .actions { gap: 4px; }
+.tool, .op.tool button, .tool-pop > summary { font: inherit; font-size: 12px; font-weight: 500; min-height: 26px; padding: 0 9px; border: 1px solid var(--line); border-style: solid; border-radius: 6px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.op.tool button.danger { color: var(--bad); border-color: var(--line); background: var(--surface); }
+.tool:disabled { opacity: .5; cursor: not-allowed; }
+.band-tools { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tool-pop { display: inline-block; }
+.tool-pop > summary { display: inline-flex; align-items: center; }
+.edit-area { display: grid; gap: 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+.edit-area h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fg); }
+.edit-area .sub { min-width: 0; }
+.where { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); }
+.edit-ac { margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.edit-ac > summary { cursor: pointer; }
+.edit-ac[open] { padding-bottom: 10px; }
+.edit-ac .op { margin-top: 10px; }
+.gwt { margin: 8px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.gwt div { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; }
+.gwt dt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding-top: 2px; }
+.gwt dd { margin: 0; color: var(--fg); }
+.sheet .add { display: block; margin-top: 8px; }
+.sheet .add .pop { position: static; width: auto; box-shadow: none; margin-top: 8px; }
+.sheet .add-row .pop { position: static; }
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: .4; }
+.band.drop-ok .lane { background: var(--accent-weak); outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 8px; }
+.band.drop-ok .divider h2 { color: var(--accent); }
+.drag-msg { position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 30; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); }
+.dialog-body { padding: 20px; display: grid; gap: 12px; }
+.dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.dialog-head h2 { margin: 0; font-size: 20px; }
+.cmd { margin: 0; font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
+@media (max-width: 767px) {
+  .editing .spine { display: block; position: static; padding-top: 12px; }
+  .editing .activities { flex-direction: column; align-items: stretch; }
+  .editing .activity { width: auto; }
+  .editing .steps { display: none; }
+  .editing .slot { align-self: stretch; }
+  .op-fields { grid-template-columns: minmax(0, 1fr); }
+  .add .pop { width: min(320px, calc(100vw - 48px)); }
+  .divider { position: relative; left: 0; }
+  .tool-pop { position: static; }
+  .tool-pop .pop { left: 0; right: 0; width: auto; }
+}
+</style>
+<script>(function(){var k="nikos-theme",d=document.documentElement;try{var t=localStorage.getItem(k);if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}document.addEventListener("click",function(e){var b=e.target&&e.target.closest&&e.target.closest("[data-theme-toggle]");if(!b)return;var a=d.getAttribute("data-theme"),dark=a?a==="dark":matchMedia("(prefers-color-scheme: dark)").matches,n=dark?"light":"dark";d.setAttribute("data-theme",n);try{localStorage.setItem(k,n)}catch(e){}})})();</script>
+</head>
+<body class="editing" data-map="chk" data-storymap="45924790cf38e0ea">
+<a class="skip" href="#board">Skip to the story map</a>
+<header class="top"><div class="bar"><span class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="170 245 340 245" fill="currentColor" aria-hidden="true"><path d="M287 252 L324 331 L312.1 356.7 L275.1 277.7 Z M269.1 290.5 L306.1 369.6 L253 484 L179 484 Z"/><path d="M431 251 L504 251 L450.2 366.6 L413.6 288.5 Z M407.6 301.3 L444.2 379.4 L432.3 405 L395.7 327 Z M389.8 339.8 L426.3 417.9 L414.4 443.5 L377.9 365.5 Z M371.9 378.3 L408.4 456.3 L396.5 481.9 L360 404 Z"/></svg></span><span class="brand-t">nikOS Spec<small>shop</small></span></span><span class="spacer"></span><span class="host"><span class="host-k">On this computer</span><span class="host-v" data-host>127.0.0.1</span></span><button type="button" class="btn" data-open-dialog="share">Share…</button><button type="button" class="theme-toggle" data-theme-toggle><span class="to-dark">Dark mode</span><span class="to-light">Light mode</span></button></div><div class="title"><h1>chk · Story map</h1><span class="meta">Owned by <b>WEB</b>Delivers <span class="bet">one-page-checkout</span></span><button type="button" class="btn primary" data-open-dialog="add-story">Add a story</button></div><nav class="jumps" aria-label="Releases"><a class="jump" href="#release-1"><span class="rcode">R1</span>One page<span class="count">6</span></a><a class="jump" href="#release-2"><span class="rcode">R2</span>Faster repeat buys<span class="count">2</span></a></nav></header>
+<div id="pending" class="pending" role="status" hidden></div>
+<section class="overview" aria-label="Progress"><div class="ov-progress"><div class="ov-head"><span class="eyebrow">Progress</span><span class="num"><b>4</b> of 8 stories done</span></div><div class="stack" role="img" aria-label="4 done, 1 in progress, 3 to do"><i style="width:50.0%;background:color-mix(in srgb, var(--good) 45%, var(--surface-2))"></i><i style="width:12.5%;background:var(--accent)"></i><i style="width:37.5%;background:var(--line-strong)"></i></div><div class="legend"><span><span class="sw" style="background:color-mix(in srgb, var(--good) 45%, var(--surface-2))"></span>4 done</span><span><span class="sw" style="background:var(--accent)"></span>1 in progress</span><span><span class="sw" style="background:var(--line-strong)"></span>3 to do</span></div></div><div class="ov-next"><span class="eyebrow">Next to build</span><a href="#story-WEB-CHK-6"><span class="sid">WEB-CHK-6</span> Show a clear error when a card is declined</a><span class="muted">Finish first: <a href="#story-WEB-CHK-4">WEB-CHK-4</a></span><span class="where">As nikos next picks it.</span></div></section><div class="filters" role="search">
+<input type="search" id="f-q" placeholder="Search stories" aria-label="Search stories">
+<select id="f-release" aria-label="Release"><option value="">All releases</option><option value="release-1">R1 · One page</option><option value="release-2">R2 · Faster repeat buys</option></select>
+
+
+<fieldset class="chips"><legend>Status</legend><label class="chip done"><input type="checkbox" name="status" value="done">done</label><label class="chip doing"><input type="checkbox" name="status" value="doing">in progress</label><label class="chip todo"><input type="checkbox" name="status" value="todo">to do</label></fieldset>
+<label class="switch"><input type="checkbox" id="f-rows" checked>Release rows</label>
+<span id="f-count" class="count" aria-live="polite"></span>
+</div>
+<main id="board" tabindex="-1">
+<div class="board" style="--cols:3">
+<div class="spine"><div class="activities"><div class="activity" style="--span:3"><span class="eyebrow">Activity</span><strong>Pay for an order</strong><details class="add"><summary aria-label="Add a step to Pay for an order">+ Step</summary><div class="pop"><form class="op" data-op="step.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><input type="hidden" name="activity" value="pay"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Focus on today"></label></div><div class="actions"><button type="submit">Add step</button><span class="save-msg" role="status"></span></div></form></div></details></div><details class="add slot"><summary aria-label="Add an activity">+ Activity</summary><div class="pop"><form class="op" data-op="activity.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Plan the week"></label></div><div class="actions"><button type="submit">Add activity</button><span class="save-msg" role="status"></span></div></form></div></details></div><div class="steps"><div class="step">Review the basket</div><div class="step">Enter delivery</div><div class="step">Pay</div></div></div>
+<section class="band" id="release-1" data-release="release-1" data-number="1"><div class="divider"><span class="rnum">01</span><h2>Release 1 · One page</h2><span class="band-tools"><form class="op tool" data-op="release.reorder" data-target="{&#34;release&#34;:&#34;1&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><input type="hidden" name="to" value="2"></div><div class="actions"><button type="submit" aria-label="Move release 1 later">↓</button><span class="save-msg" role="status"></span></div></form><details class="add tool-pop"><summary aria-label="Rename release 1">Rename</summary><div class="pop"><form class="op" data-op="release.rename" data-target="{&#34;release&#34;:&#34;1&#34;}" data-expect="45924790cf38e0ea" data-edit><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="One page" required></label><label class="fld wide"><span>Goal</span><input name="goal" value="Buy in one page"><small class="hint">What will be true when it ships. Optional.</small></label></div><div class="actions"><button type="submit">Save</button><span class="save-msg" role="status"></span></div></form></div></details><button type="button" class="tool" disabled title="Move its stories to another release first" aria-label="Remove release 1. Move its stories to another release first">Remove</button></span><span class="tally">4 of 6 done · 1 in progress · 1 to do</span><span class="rule"></span></div><p class="goal">Buy in one page</p><div class="bets"><span class="eyebrow">Delivers</span><span class="bet">one-page-checkout</span></div><div class="lane"><div class="cell" data-activity="Pay for an order · Review the basket" data-activity-id="pay" data-step-id="review-the-basket"><a class="card done" data-story="WEB-CHK-1" data-status="done" data-type="user_story" data-personas="" data-search="web-chk-1 see the whole basket on one page as a shopper, i want to see everything i&#39;m buying on the checkout page, so that i don&#39;t have to go back to the basket to check" draggable="true" href="#story-WEB-CHK-1"><span class="crow"><span class="sid">WEB-CHK-1</span><span class="sword">done</span></span><span class="stitle">See the whole basket on one page</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><a class="card done" data-story="WEB-CHK-2" data-status="done" data-type="user_story" data-personas="" data-search="web-chk-2 change a quantity without leaving the page as a shopper, i want to change how many i&#39;m buying on the checkout page, so that a small change doesn&#39;t send me back a step" draggable="true" href="#story-WEB-CHK-2"><span class="crow"><span class="sid">WEB-CHK-2</span><span class="sword">done</span></span><span class="stitle">Change a quantity without leaving the page</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><details class="add"><summary aria-label="Add a story to Pay for an order · Review the basket, release 1">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="1"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="review-the-basket"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div><div class="cell" data-activity="Pay for an order · Enter delivery" data-activity-id="pay" data-step-id="enter-delivery"><a class="card done" data-story="WEB-CHK-3" data-status="done" data-type="user_story" data-personas="" data-search="web-chk-3 enter a delivery address with lookup as a shopper, i want to find my address from my postcode, so that i don&#39;t type it all out" draggable="true" href="#story-WEB-CHK-3"><span class="crow"><span class="sid">WEB-CHK-3</span><span class="sword">done</span></span><span class="stitle">Enter a delivery address with lookup</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><a class="card doing" data-story="WEB-CHK-4" data-status="doing" data-type="user_story" data-personas="" data-search="web-chk-4 pick a delivery slot as a shopper, i want to pick when my order arrives, so that i&#39;m in when it comes" draggable="true" href="#story-WEB-CHK-4"><span class="crow"><span class="sid">WEB-CHK-4</span><span class="sword">in progress</span></span><span class="stitle">Pick a delivery slot</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><details class="add"><summary aria-label="Add a story to Pay for an order · Enter delivery, release 1">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="1"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="enter-delivery"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div><div class="cell" data-activity="Pay for an order · Pay" data-activity-id="pay" data-step-id="pay"><a class="card done" data-story="WEB-CHK-5" data-status="done" data-type="user_story" data-personas="" data-search="web-chk-5 pay by card on the same page as a shopper, i want to pay without going to another page, so that buying takes one step, not four" draggable="true" href="#story-WEB-CHK-5"><span class="crow"><span class="sid">WEB-CHK-5</span><span class="sword">done</span></span><span class="stitle">Pay by card on the same page</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><a class="card todo" data-story="WEB-CHK-6" data-status="todo" data-type="user_story" data-personas="" data-search="web-chk-6 show a clear error when a card is declined as a shopper, i want to know straight away when my card is declined, so that i can try another card without starting again" data-next draggable="true" href="#story-WEB-CHK-6"><span class="crow"><span class="sid">WEB-CHK-6</span><span class="sword">to do</span></span><span class="stitle">Show a clear error when a card is declined</span><span class="cfoot"><span>1 criterion · 1 must</span><span class="next-tag">Next to build</span></span></a><details class="add"><summary aria-label="Add a story to Pay for an order · Pay, release 1">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="1"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="pay"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></section><section class="band" id="release-2" data-release="release-2" data-number="2"><div class="divider"><span class="rnum">02</span><h2>Release 2 · Faster repeat buys</h2><span class="band-tools"><form class="op tool" data-op="release.reorder" data-target="{&#34;release&#34;:&#34;2&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><input type="hidden" name="to" value="1"></div><div class="actions"><button type="submit" aria-label="Move release 2 earlier">↑</button><span class="save-msg" role="status"></span></div></form><details class="add tool-pop"><summary aria-label="Rename release 2">Rename</summary><div class="pop"><form class="op" data-op="release.rename" data-target="{&#34;release&#34;:&#34;2&#34;}" data-expect="45924790cf38e0ea" data-edit><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="Faster repeat buys" required></label><label class="fld wide"><span>Goal</span><input name="goal" value="Returning buyers pay in one tap"><small class="hint">What will be true when it ships. Optional.</small></label></div><div class="actions"><button type="submit">Save</button><span class="save-msg" role="status"></span></div></form></div></details><button type="button" class="tool" disabled title="Move its stories to another release first" aria-label="Remove release 2. Move its stories to another release first">Remove</button></span><span class="tally">0 of 2 done · 0 in progress · 2 to do</span><span class="rule"></span></div><p class="goal">Returning buyers pay in one tap</p><div class="bets"><span class="eyebrow">Delivers</span><span class="bet">one-page-checkout</span></div><div class="lane"><div class="cell" data-activity="Pay for an order · Review the basket" data-activity-id="pay" data-step-id="review-the-basket"><details class="add"><summary aria-label="Add a story to Pay for an order · Review the basket, release 2">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="2"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="review-the-basket"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div><div class="cell" data-activity="Pay for an order · Enter delivery" data-activity-id="pay" data-step-id="enter-delivery"><details class="add"><summary aria-label="Add a story to Pay for an order · Enter delivery, release 2">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="2"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="enter-delivery"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div><div class="cell" data-activity="Pay for an order · Pay" data-activity-id="pay" data-step-id="pay"><a class="card todo" data-story="WEB-CHK-7" data-status="todo" data-type="user_story" data-personas="" data-search="web-chk-7 save a card for next time as a returning shopper, i want to save my card when i pay, so that i don&#39;t type it in again" draggable="true" href="#story-WEB-CHK-7"><span class="crow"><span class="sid">WEB-CHK-7</span><span class="sword">to do</span></span><span class="stitle">Save a card for next time</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><a class="card todo" data-story="WEB-CHK-8" data-status="todo" data-type="user_story" data-personas="" data-search="web-chk-8 pay in one tap as a returning buyer as a returning shopper, i want to pay with my saved card and address in one tap, so that buying again takes seconds" draggable="true" href="#story-WEB-CHK-8"><span class="crow"><span class="sid">WEB-CHK-8</span><span class="sword">to do</span></span><span class="stitle">Pay in one tap as a returning buyer</span><span class="cfoot"><span>1 criterion · 1 must</span></span></a><details class="add"><summary aria-label="Add a story to Pay for an order · Pay, release 2">+ Story</summary><div class="pop"><form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Save a draft"></label><input type="hidden" name="release" value="2"><input type="hidden" name="activity" value="pay"><input type="hidden" name="step" value="pay"><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></section>
+<div class="add-row"><details class="add release-add"><summary aria-label="Add a release">+ Release</summary><div class="pop"><form class="op" data-op="release.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Title</span><input name="title" value="" required placeholder="e.g. Sharing"></label><label class="fld wide"><span>Goal</span><input name="goal" value=""><small class="hint">What the release is for. Optional.</small></label></div><div class="actions"><button type="submit">Add release</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+
+</div>
+</main>
+<div class="sheet-wrap" id="story-WEB-CHK-1"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-1"><div class="sheet-head"><span class="sid">WEB-CHK-1</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card done"><span class="sword">done</span><div class="sc-title">See the whole basket on one page</div><div class="facts">WEB-CHK-1 · must · R1 One page</div><p class="narrative">As a shopper, I want to see everything I&#39;m buying on the checkout page, so that I don&#39;t have to go back to the basket to check</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>Every line and the total are on the page <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos approve WEB-CHK-1</span><button type="button" class="copy" data-copy="nikos approve WEB-CHK-1" aria-label="Copy: nikos approve WEB-CHK-1">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3><p class="note">Changing the title, the story or its criteria marks the spec as changed, and it needs signing off again.</p>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="6d8d4421d0cf1431" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="See the whole basket on one page" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to see everything I&#39;m buying on the checkout page" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="I don&#39;t have to go back to the basket to check" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="6d8d4421d0cf1431" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" selected data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>Every line and the total are on the page <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>a basket with 2 mugs at £9 and 1 plate at £12</dd></div><div><dt>When</dt><dd>I open the checkout</dd></div><div><dt>Then</dt><dd>I see 2 lines and a total of £30</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="6d8d4421d0cf1431" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="Every line and the total are on the page" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">a basket with 2 mugs at £9 and 1 plate at £12</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I open the checkout</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>I see 2 lines and a total of £30</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="6d8d4421d0cf1431" data-confirm="Remove AC1 from WEB-CHK-1? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-1&#34;}" data-expect="6d8d4421d0cf1431"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-2"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-2"><div class="sheet-head"><span class="sid">WEB-CHK-2</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card done"><span class="sword">done</span><div class="sc-title">Change a quantity without leaving the page</div><div class="facts">WEB-CHK-2 · should · R1 One page</div><p class="narrative">As a shopper, I want to change how many I&#39;m buying on the checkout page, so that a small change doesn&#39;t send me back a step</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>The total updates in place <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos approve WEB-CHK-2</span><button type="button" class="copy" data-copy="nikos approve WEB-CHK-2" aria-label="Copy: nikos approve WEB-CHK-2">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3><p class="note">Changing the title, the story or its criteria marks the spec as changed, and it needs signing off again.</p>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="cbc5ed73f7e811e8" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Change a quantity without leaving the page" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to change how many I&#39;m buying on the checkout page" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="a small change doesn&#39;t send me back a step" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must">Must</option><option value="should" selected>Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="cbc5ed73f7e811e8" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" selected data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>The total updates in place <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>a basket with 2 mugs at £9 and 1 plate at £12</dd></div><div><dt>When</dt><dd>I change the mugs to 3</dd></div><div><dt>Then</dt><dd>the total is £39 without leaving the page</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="cbc5ed73f7e811e8" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="The total updates in place" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">a basket with 2 mugs at £9 and 1 plate at £12</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I change the mugs to 3</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>the total is £39 without leaving the page</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="cbc5ed73f7e811e8" data-confirm="Remove AC1 from WEB-CHK-2? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-2&#34;}" data-expect="cbc5ed73f7e811e8"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-3"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-3"><div class="sheet-head"><span class="sid">WEB-CHK-3</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card done"><span class="sword">done</span><div class="sc-title">Enter a delivery address with lookup</div><div class="facts">WEB-CHK-3 · must · R1 One page</div><p class="narrative">As a shopper, I want to find my address from my postcode, so that I don&#39;t type it all out</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>A postcode finds its addresses <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos approve WEB-CHK-3</span><button type="button" class="copy" data-copy="nikos approve WEB-CHK-3" aria-label="Copy: nikos approve WEB-CHK-3">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3><p class="note">Changing the title, the story or its criteria marks the spec as changed, and it needs signing off again.</p>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="810e87fad46d513f" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Enter a delivery address with lookup" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to find my address from my postcode" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="I don&#39;t type it all out" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="810e87fad46d513f" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" selected data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>A postcode finds its addresses <span class="prio">must</span></summary><dl class="gwt"><div><dt>When</dt><dd>I enter the postcode &#34;N1 9GU&#34;</dd></div><div><dt>Then</dt><dd>I can pick from 2 addresses</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="810e87fad46d513f" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="A postcode finds its addresses" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I enter the postcode &#34;N1 9GU&#34;</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>I can pick from 2 addresses</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="810e87fad46d513f" data-confirm="Remove AC1 from WEB-CHK-3? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-3&#34;}" data-expect="810e87fad46d513f"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-4"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-4"><div class="sheet-head"><span class="sid">WEB-CHK-4</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card doing"><span class="sword">in progress</span><div class="sc-title">Pick a delivery slot</div><div class="facts">WEB-CHK-4 · should · R1 One page</div><p class="narrative">As a shopper, I want to pick when my order arrives, so that I&#39;m in when it comes</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>The next slots are offered <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos clear WEB-CHK-4</span><button type="button" class="copy" data-copy="nikos clear WEB-CHK-4" aria-label="Copy: nikos clear WEB-CHK-4">Copy</button></div><div class="code"><span>nikos verify WEB-CHK-4</span><button type="button" class="copy" data-copy="nikos verify WEB-CHK-4" aria-label="Copy: nikos verify WEB-CHK-4">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="343a3015934b51d0" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Pick a delivery slot" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to pick when my order arrives" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="I&#39;m in when it comes" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must">Must</option><option value="should" selected>Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="343a3015934b51d0" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" selected data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>The next slots are offered <span class="prio">must</span></summary><dl class="gwt"><div><dt>When</dt><dd>I choose delivery</dd></div><div><dt>Then</dt><dd>I see 2 slots to pick from</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="343a3015934b51d0" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="The next slots are offered" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I choose delivery</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>I see 2 slots to pick from</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="343a3015934b51d0" data-confirm="Remove AC1 from WEB-CHK-4? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-4&#34;}" data-expect="343a3015934b51d0"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-5"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-5"><div class="sheet-head"><span class="sid">WEB-CHK-5</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card done"><span class="sword">done</span><div class="sc-title">Pay by card on the same page</div><div class="facts">WEB-CHK-5 · must · R1 One page</div><p class="narrative">As a shopper, I want to pay without going to another page, so that buying takes one step, not four</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>Paying charges the basket and delivery <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos approve WEB-CHK-5</span><button type="button" class="copy" data-copy="nikos approve WEB-CHK-5" aria-label="Copy: nikos approve WEB-CHK-5">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3><p class="note">Changing the title, the story or its criteria marks the spec as changed, and it needs signing off again.</p>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="48c7aacd5ddb9e27" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Pay by card on the same page" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to pay without going to another page" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="buying takes one step, not four" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="48c7aacd5ddb9e27" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" selected data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>Paying charges the basket and delivery <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>a basket with 2 mugs at £9 and 1 plate at £12</dd></div><div><dt>When</dt><dd>I pay by card</dd></div><div><dt>Then</dt><dd>I am charged £34, with delivery<br>I see an order number</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="48c7aacd5ddb9e27" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="Paying charges the basket and delivery" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">a basket with 2 mugs at £9 and 1 plate at £12</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I pay by card</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>I am charged £34, with delivery
+I see an order number</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="48c7aacd5ddb9e27" data-confirm="Remove AC1 from WEB-CHK-5? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-5&#34;}" data-expect="48c7aacd5ddb9e27"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-6"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-6"><div class="sheet-head"><span class="sid">WEB-CHK-6</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card todo"><span class="sword">to do</span><div class="sc-title">Show a clear error when a card is declined</div><div class="facts">WEB-CHK-6 · must · R1 One page</div><p class="narrative">As a shopper, I want to know straight away when my card is declined, so that I can try another card without starting again</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>A declined card says what to do <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos clear WEB-CHK-6</span><button type="button" class="copy" data-copy="nikos clear WEB-CHK-6" aria-label="Copy: nikos clear WEB-CHK-6">Copy</button></div><div class="code"><span>nikos verify WEB-CHK-6</span><button type="button" class="copy" data-copy="nikos verify WEB-CHK-6" aria-label="Copy: nikos verify WEB-CHK-6">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R1 · One page.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="2">R2 · Faster repeat buys</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="eee5957cfa62e6e4" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Show a clear error when a card is declined" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to know straight away when my card is declined" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="I can try another card without starting again" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="eee5957cfa62e6e4" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1" selected>R1 · One page</option><option value="2">R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" selected data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>A declined card says what to do <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>a basket with 2 mugs at £9 and 1 plate at £12</dd></div><div><dt>When</dt><dd>I pay with a card that is declined</dd></div><div><dt>Then</dt><dd>I see &#34;Your card was declined. Try another card.&#34;<br>my basket is still there</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="eee5957cfa62e6e4" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="A declined card says what to do" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">a basket with 2 mugs at £9 and 1 plate at £12</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I pay with a card that is declined</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>I see &#34;Your card was declined. Try another card.&#34;
+my basket is still there</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="eee5957cfa62e6e4" data-confirm="Remove AC1 from WEB-CHK-6? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-6&#34;}" data-expect="eee5957cfa62e6e4"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-7"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-7"><div class="sheet-head"><span class="sid">WEB-CHK-7</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card todo"><span class="sword">to do</span><div class="sc-title">Save a card for next time</div><div class="facts">WEB-CHK-7 · should · R2 Faster repeat buys</div><p class="narrative">As a returning shopper, I want to save my card when I pay, so that I don&#39;t type it in again</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>A saved card is offered next time <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos clear WEB-CHK-7</span><button type="button" class="copy" data-copy="nikos clear WEB-CHK-7" aria-label="Copy: nikos clear WEB-CHK-7">Copy</button></div><div class="code"><span>nikos verify WEB-CHK-7</span><button type="button" class="copy" data-copy="nikos verify WEB-CHK-7" aria-label="Copy: nikos verify WEB-CHK-7">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R2 · Faster repeat buys.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="1">R1 · One page</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="50ae694d4441e441" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Save a card for next time" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a returning shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to save my card when I pay" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="I don&#39;t type it in again" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must">Must</option><option value="should" selected>Should</option><option value="could">Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="50ae694d4441e441" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1">R1 · One page</option><option value="2" selected>R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" selected data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>A saved card is offered next time <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>I saved my card on my last order</dd></div><div><dt>When</dt><dd>I open the checkout</dd></div><div><dt>Then</dt><dd>my saved card is offered first</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="50ae694d4441e441" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="A saved card is offered next time" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">I saved my card on my last order</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I open the checkout</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>my saved card is offered first</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="50ae694d4441e441" data-confirm="Remove AC1 from WEB-CHK-7? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-7&#34;}" data-expect="50ae694d4441e441"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<div class="sheet-wrap" id="story-WEB-CHK-8"><a class="scrim" href="#" aria-label="Close"></a><aside class="sheet" aria-label="WEB-CHK-8"><div class="sheet-head"><span class="sid">WEB-CHK-8</span><a class="close" href="#" aria-label="Close">×</a></div><div class="status-card todo"><span class="sword">to do</span><div class="sc-title">Pay in one tap as a returning buyer</div><div class="facts">WEB-CHK-8 · could · R2 Faster repeat buys</div><p class="narrative">As a returning shopper, I want to pay with my saved card and address in one tap, so that buying again takes seconds</p></div><div class="eyebrow">Acceptance criteria</div><ol class="criteria"><li><span class="sid">AC1</span>One tap pays with saved details <span class="prio">must</span></li></ol><div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p><div class="code"><span>nikos clear WEB-CHK-8</span><button type="button" class="copy" data-copy="nikos clear WEB-CHK-8" aria-label="Copy: nikos clear WEB-CHK-8">Copy</button></div><div class="code"><span>nikos verify WEB-CHK-8</span><button type="button" class="copy" data-copy="nikos verify WEB-CHK-8" aria-label="Copy: nikos verify WEB-CHK-8">Copy</button></div><div class="edit-area"><h3 class="eyebrow">Edit this story</h3>
+<div class="sub move"><h4>Release</h4><p class="where">Now in R2 · Faster repeat buys.</p><form class="op" data-op="story.move" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Move to</span><select name="to"><option value="1">R1 · One page</option></select></label></div><div class="actions"><button type="submit">Move</button><span class="save-msg" role="status"></span></div></form><p class="where">It goes to the end of that release's build order. Only its release tag changes, so any approval still holds.</p></div>
+<div class="sub"><h4>Details</h4><form class="op" data-op="story.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="3af483102e10bfad" data-edit><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="Pay in one tap as a returning buyer" required data-changed></label><label class="fld"><span>As a</span><input name="as_a" value="a returning shopper" placeholder="a first user" data-changed></label><label class="fld"><span>I want</span><input name="i_want" value="to pay with my saved card and address in one tap" data-changed></label><label class="fld"><span>So that</span><input name="so_that" value="buying again takes seconds" data-changed></label><label class="fld"><span>Type</span><select name="type" data-changed><option value="user_story" selected>User story</option><option value="technical">Technical</option><option value="bug_risk">Bug risk</option></select></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must">Must</option><option value="should">Should</option><option value="could" selected>Could</option></select></label><label class="fld wide"><span>Personas</span><select name="personas" multiple data-changed></select><small class="hint">No personas yet: add one below.</small></label></div><div class="actions"><button type="submit">Save details</button><span class="save-msg" role="status"></span></div></form><details class="add"><summary aria-label="Add a persona">+ New persona</summary><div class="pop"><form class="op" data-op="persona.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld"><span>Name</span><input name="title" value="" required placeholder="e.g. Weekly planner"></label><label class="fld wide"><span>Description</span><input name="description" value=""><small class="hint">Who they are and what they need.</small></label></div><div class="actions"><button type="submit">Add persona</button><span class="save-msg" role="status"></span></div></form></div></details></div>
+<div class="sub"><h4>Placement</h4><form class="op" data-op="story.place" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="3af483102e10bfad" data-edit><div class="op-fields"><label class="fld"><span>Release</span><select name="release"><option value="1">R1 · One page</option><option value="2" selected>R2 · Faster repeat buys</option></select></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="">Choose an activity</option><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" selected data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label></div><div class="actions"><button type="submit">Save placement</button><span class="save-msg" role="status"></span></div></form></div>
+<div class="sub"><h4>Acceptance criteria</h4><details class="edit-ac"><summary><span class="sid">AC1</span>One tap pays with saved details <span class="prio">must</span></summary><dl class="gwt"><div><dt>Given</dt><dd>I have a saved card and address</dd></div><div><dt>When</dt><dd>I tap &#34;Pay now&#34;</dd></div><div><dt>Then</dt><dd>the order is paid with them</dd></div></dl><form class="op" data-op="scenario.edit" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="3af483102e10bfad" data-edit><div class="op-fields"><input type="hidden" name="ac" value="AC1"><label class="fld wide"><span>Title</span><input name="title" value="One tap pays with saved details" required></label><label class="fld"><span>Priority</span><select name="priority" data-changed><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3">I have a saved card and address</textarea><small class="hint">One step per line.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required>I tap &#34;Pay now&#34;</textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required>the order is paid with them</textarea></label></div><div class="actions"><button type="submit">Save criterion</button><span class="save-msg" role="status"></span></div></form><form class="op" data-op="scenario.remove" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="3af483102e10bfad" data-confirm="Remove AC1 from WEB-CHK-8? Its steps go with it."><div class="op-fields"><input type="hidden" name="ac" value="AC1"></div><div class="actions"><button type="submit" class="danger">Remove</button><span class="save-msg" role="status"></span></div></form></details><details class="add"><summary>Add a criterion</summary><div class="pop"><form class="op" data-op="scenario.add" data-target="{&#34;story&#34;:&#34;WEB-CHK-8&#34;}" data-expect="3af483102e10bfad"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required></label><label class="fld"><span>Priority</span><select name="priority"><option value="" selected>Same as the story</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option></select></label><label class="fld"><span>Given</span><textarea name="given" data-list="lines" rows="3"></textarea><small class="hint">One step per line. Optional.</small></label><label class="fld"><span>When</span><textarea name="when" data-list="lines" rows="3" required></textarea></label><label class="fld"><span>Then</span><textarea name="then" data-list="lines" rows="3" required></textarea></label></div><div class="actions"><button type="submit">Add criterion</button><span class="save-msg" role="status"></span></div></form></div></details></div></div></aside></div>
+<dialog id="share" class="sheet-dialog" aria-labelledby="share-title"><div class="dialog-body"><div class="dialog-head"><h2 id="share-title">Share the story map</h2><button type="button" class="close" data-close-dialog aria-label="Close">×</button></div>
+<p>This page runs on your computer, so its link only works here while nikos serve runs. Because the page can save to the repo, its link has a private key in it. Don't send it to anyone.</p>
+<div class="opt"><h3>Send the map as one page</h3><p class="where">One read-only file that works offline.</p><div class="code"><span>nikos serve --export storymap.html</span><button type="button" class="copy" data-copy="nikos serve --export storymap.html" aria-label="Copy: nikos serve --export storymap.html">Copy</button></div></div>
+<div class="opt"><h3>Publish it on your internal site</h3><p class="where">Export the page in CI on each merge to main, and copy the file to an internal web host your company already uses.</p></div>
+<div class="opt"><h3>Anyone with the repo</h3><p class="where">They see the same map by running this in their copy.</p><div class="code"><span>nikos serve</span><button type="button" class="copy" data-copy="nikos serve" aria-label="Copy: nikos serve">Copy</button></div></div></div></dialog><dialog id="add-story" class="sheet-dialog" aria-labelledby="add-story-title"><div class="dialog-body"><div class="dialog-head"><h2 id="add-story-title">Add a story</h2><button type="button" class="close" data-close-dialog aria-label="Close">×</button></div>
+<form class="op" data-op="story.new" data-target="{}" data-expect="45924790cf38e0ea"><div class="op-fields"><label class="fld wide"><span>Title</span><input name="title" value="" required placeholder="What someone can do once it&#39;s built"></label><label class="fld"><span>Activity</span><select name="activity" data-pick="activity"><option value="pay" selected>Pay for an order</option></select></label><label class="fld"><span>Step</span><select name="step"><option value="">No step</option><option value="review-the-basket" data-activity="pay">Pay for an order · Review the basket</option><option value="enter-delivery" data-activity="pay">Pay for an order · Enter delivery</option><option value="pay" data-activity="pay">Pay for an order · Pay</option></select><small class="hint">The steps of the chosen activity.</small></label><label class="fld"><span>Release</span><select name="release"><option value="1">R1 · One page</option><option value="2" selected>R2 · Faster repeat buys</option></select></label><label class="fld"><span>Priority</span><select name="priority"><option value="must" selected>Must</option><option value="should">Should</option><option value="could">Could</option></select></label></div><div class="actions"><button type="submit">Add story</button><span class="save-msg" role="status"></span></div></form>
+<p class="where">It adds the story to storymap.yaml and writes a starter feature file with no scenarios yet. Your agent writes those next.</p></div></dialog>
+<script>
+(function () {
+  var board = document.querySelector('.board');
+  var bands = Array.prototype.slice.call(board.querySelectorAll('.band'));
+  var $ = function (id) { return document.getElementById(id); };
+  var merged = document.createElement('section');
+  merged.className = 'band';
+  merged.hidden = true;
+  merged.setAttribute('data-release', 'all');
+  var lane = document.createElement('div');
+  lane.className = 'lane';
+  var first = board.querySelector('.lane');
+  if (first) {
+    Array.prototype.forEach.call(first.children, function (cell, i) {
+      var c = document.createElement('div');
+      c.className = 'cell';
+      c.setAttribute('data-activity', cell.getAttribute('data-activity'));
+      bands.forEach(function (b) {
+        var cells = b.querySelectorAll('.lane > .cell');
+        // Only the cards: the add forms of a cell stay in their own band.
+        if (cells[i]) Array.prototype.forEach.call(cells[i].children, function (card) { if (card.classList.contains('card')) c.appendChild(card.cloneNode(true)); });
+      });
+      lane.appendChild(c);
+    });
+  }
+  merged.appendChild(lane);
+  board.appendChild(merged);
+
+  function value(id) { var el = $(id); return el ? el.value : ''; }
+  function apply() {
+    var q = value('f-q').trim().toLowerCase();
+    var release = value('f-release');
+    var type = value('f-type');
+    var persona = value('f-persona');
+    var rows = $('f-rows').checked;
+    var statuses = Array.prototype.map.call(document.querySelectorAll('input[name=status]:checked'), function (i) { return i.value; });
+    var filtering = q || type || persona || statuses.length;
+    var shown = 0, total = 0;
+    var match = function (card) {
+      return (!release || rows ? true : card.getAttribute('data-release-of') === release) &&
+        (!q || card.getAttribute('data-search').indexOf(q) >= 0) &&
+        (!type || card.getAttribute('data-type') === type) &&
+        (!persona || (' ' + card.getAttribute('data-personas') + ' ').indexOf(' ' + persona + ' ') >= 0) &&
+        (!statuses.length || statuses.indexOf(card.getAttribute('data-status')) >= 0);
+    };
+    bands.forEach(function (b) {
+      b.hidden = !rows || (release && b.getAttribute('data-release') !== release);
+    });
+    merged.hidden = rows;
+    var active = rows ? bands.filter(function (b) { return !b.hidden; }) : [merged];
+    active.forEach(function (b) {
+      var visible = 0;
+      Array.prototype.forEach.call(b.querySelectorAll('.card'), function (card) {
+        var ok = match(card);
+        card.hidden = !ok;
+        total++;
+        if (ok) { shown++; visible++; }
+      });
+      if (rows && filtering && !visible) b.hidden = true;
+    });
+    $('f-count').textContent = filtering || release ? shown + ' of ' + total + ' stories' : '';
+  }
+  // Remember which release each card came from, so the release filter works with rows off.
+  bands.forEach(function (b) {
+    Array.prototype.forEach.call(b.querySelectorAll('.card'), function (card) {
+      Array.prototype.forEach.call(merged.querySelectorAll('.card[data-story="' + card.getAttribute('data-story') + '"]'), function (copy) {
+        copy.setAttribute('data-release-of', b.getAttribute('data-release'));
+      });
+    });
+  });
+  document.querySelector('.filters').addEventListener('input', apply);
+  document.querySelector('.filters').addEventListener('change', apply);
+  apply();
+})();
+
+
+(function () {
+  var hosts = document.querySelectorAll('[data-host]');
+  for (var i = 0; i < hosts.length; i++) hosts[i].textContent = location.host;
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-open-dialog],[data-close-dialog],[data-copy]') : null;
+    if (!t) return;
+    if (t.hasAttribute('data-open-dialog')) {
+      var d = document.getElementById(t.getAttribute('data-open-dialog'));
+      if (d && d.showModal) { d.showModal(); var first = d.querySelector('input:not([type=hidden]), select'); if (first) first.focus(); }
+    } else if (t.hasAttribute('data-close-dialog')) {
+      var open = t.closest('dialog');
+      if (open) open.close();
+    } else {
+      var text = t.getAttribute('data-copy');
+      var done = function (word) { t.textContent = word; setTimeout(function () { t.textContent = 'Copy'; }, 1600); };
+      try {
+        navigator.clipboard.writeText(text).then(function () { done('Copied'); }, function () { done('Select and copy'); });
+      } catch (err) { done('Select and copy'); }
+    }
+  });
+})();
+</script><script>(function () {
+var meta = document.querySelector('meta[name="nikos-token"]');
+var token = meta ? meta.getAttribute("content") : "";
+var bar = document.getElementById("pending");
+function call(method, path, body) {
+  var init = { method: method, headers: { "content-type": "application/json", "x-nikos-token": token }, credentials: "same-origin" };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  return fetch(path, init).then(function (r) {
+    return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }, function () { return { ok: r.ok, status: r.status, body: {} }; });
+  });
+}
+function errorOf(res) { return res.body && res.body.error ? res.body.error : "Something went wrong."; }
+function gone() { return "Couldn't reach the story map. Is nikos serve still running?"; }
+function pendingBar() {
+  call("GET", "/api/pending").then(function (res) {
+    if (!bar) return;
+    bar.textContent = "";
+    if (!res.ok) { bar.hidden = false; bar.textContent = errorOf(res); return; }
+    var files = res.body.files || [];
+    if (!files.length) { bar.hidden = true; return; }
+    bar.hidden = false;
+    var text = document.createElement("span");
+    text.textContent = files.length + (files.length === 1 ? " saved change" : " saved changes") + (res.body.branch ? " on " + res.body.branch : "") + ". Nothing is pushed until you press Push. ";
+    bar.appendChild(text);
+    var msg = document.createElement("span");
+    msg.className = "save-msg";
+    bar.appendChild(button("Commit", "/api/git/commit", msg));
+    if (res.body.branch && res.body.hasOrigin) bar.appendChild(button("Push", "/api/git/push", msg));
+    bar.appendChild(msg);
+  }, function () { if (bar) { bar.hidden = false; bar.textContent = gone(); } });
+}
+function button(label, path, msg) {
+  var b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.addEventListener("click", function () {
+    b.disabled = true;
+    msg.textContent = "Working…";
+    call("POST", path, {}).then(function (res) {
+      if (!res.ok) { msg.textContent = errorOf(res); b.disabled = false; return; }
+      msg.textContent = res.body.committed ? "Committed " + String(res.body.committed).slice(0, 7) : res.body.pushed ? "Pushed " + res.body.pushed : "Done";
+      pendingBar();
+    }, function () { msg.textContent = gone(); b.disabled = false; });
+  });
+  return b;
+}
+
+var NL = String.fromCharCode(10);
+function showing(el) { return !el.closest("[hidden]"); }
+// The activity picker of a placement form filters the step list to that activity's steps. Without a script
+// every step shows, and the server refuses a step that isn't the activity's.
+function pickSteps(select) {
+  var steps = select.form ? select.form.elements.namedItem("step") : null;
+  if (!steps || !steps.options) return;
+  for (var i = 0; i < steps.options.length; i++) {
+    var opt = steps.options[i];
+    var mine = opt.value === "" || opt.getAttribute("data-activity") === select.value;
+    opt.hidden = !mine;
+    opt.disabled = !mine;
+    if (!mine && opt.selected) steps.value = "";
+  }
+}
+// A field marked data-changed is sent only when the person changed it, so a save keeps what it doesn't touch.
+function changed(f) {
+  if (f.tagName === "SELECT") {
+    for (var k = 0; k < f.options.length; k++) if (f.options[k].selected !== f.options[k].defaultSelected) return true;
+    return false;
+  }
+  return f.value !== f.defaultValue;
+}
+// What a field sends. An edit sends a cleared field as blank, so the op can clear it; a new thing sends only what has a value.
+function readField(f, editing) {
+  if (f.tagName === "SELECT" && f.multiple) {
+    var picked = [];
+    for (var j = 0; j < f.options.length; j++) if (f.options[j].selected && f.options[j].value !== "") picked.push(f.options[j].value);
+    return picked.length || editing ? picked : undefined;
+  }
+  if (f.tagName === "TEXTAREA") {
+    var items = f.value.split(NL).map(function (s) { return s.trim(); }).filter(function (s) { return s !== ""; });
+    return items.length || editing ? items : undefined;
+  }
+  var value = f.value.trim();
+  if (value === "") return editing ? "" : undefined;
+  return value;
+}
+document.addEventListener("change", function (e) {
+  var t = e.target;
+  if (t && t.getAttribute && t.getAttribute("data-pick") === "activity") pickSteps(t);
+});
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form || !form.getAttribute || form.getAttribute("data-op") === null) return;
+  e.preventDefault();
+  var question = form.getAttribute("data-confirm");
+  if (question && !window.confirm(question)) return;
+  var out = form.querySelector(".save-msg");
+  var sendBtn = form.querySelector('button[type="submit"]');
+  var editing = form.hasAttribute("data-edit");
+  var target = JSON.parse(form.getAttribute("data-target") || "{}");
+  var args = {};
+  var fields = form.querySelectorAll("input[name], select[name], textarea[name]");
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    if (!showing(f)) continue;
+    if (f.hasAttribute("data-changed") && !changed(f)) continue;
+    var value = readField(f, editing);
+    if (value !== undefined) args[f.name] = value;
+  }
+  if (out) { out.className = "save-msg"; out.textContent = "Saving…"; }
+  if (sendBtn) sendBtn.disabled = true;
+  call("POST", "/api/op", { op: form.getAttribute("data-op"), map: document.body.getAttribute("data-map"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
+    if (res.ok) {
+      if (out) out.textContent = res.body.message;
+      // A new story opens in its panel after the reload, so its scenarios can be asked for next.
+      var made = form.getAttribute("data-op") === "story.new" && /^Added (\S+) to release/.exec(res.body.message || "");
+      if (made) location.hash = "story-" + made[1];
+      // Saved: load the page again. The story panel's hash stays in the address, so it opens where it was.
+      setTimeout(function () { location.reload(); }, 800);
+      return;
+    }
+    if (sendBtn) sendBtn.disabled = false;
+    if (!out) return;
+    out.className = "save-msg error";
+    out.textContent = res.status === 409 ? "This changed since the page loaded. Reload to see the latest, then try again." : errorOf(res);
+    if (res.status === 409) {
+      var reload = document.createElement("button");
+      reload.type = "button";
+      reload.textContent = "Reload";
+      reload.addEventListener("click", function () { location.reload(); });
+      out.appendChild(document.createTextNode(" "));
+      out.appendChild(reload);
+    }
+  }, function () {
+    if (sendBtn) sendBtn.disabled = false;
+    if (out) { out.className = "save-msg error"; out.textContent = gone(); }
+  });
+});
+// The command a story.new form matches, under the form, as the person types.
+function quote(v) { return '"' + String(v).replace(/(["\\])/g, "\\$1") + '"'; }
+function storyCommand(form) {
+  var el = function (n) { var f = form.elements.namedItem(n); return f && showing(f) ? String(f.value || "").trim() : ""; };
+  var parts = ["nikos story add", quote(el("title") || "<title>"), "--activity", el("activity")];
+  if (el("step")) parts.push("--step", el("step"));
+  if (el("release")) parts.push("--release", el("release"));
+  if (el("priority")) parts.push("--priority", el("priority"));
+  if (document.body.hasAttribute("data-several")) parts.push("--map", document.body.getAttribute("data-map"));
+  return parts.join(" ");
+}
+var adds = document.querySelectorAll('form[data-op="story.new"]');
+for (var a = 0; a < adds.length; a++) {
+  (function (form) {
+    var pre = document.createElement("pre");
+    pre.className = "cmd";
+    pre.setAttribute("aria-label", "The command this matches");
+    form.insertBefore(pre, form.querySelector(".actions"));
+    var update = function () { pre.textContent = storyCommand(form); };
+    form.addEventListener("input", update);
+    form.addEventListener("change", update);
+    update();
+  })(adds[a]);
+}
+// Drag a story's card into another release's band to move it there. It keeps its activity and step.
+var dragId = "", dragFrom = "";
+var msg = document.createElement("div");
+msg.className = "drag-msg";
+msg.setAttribute("role", "status");
+msg.hidden = true;
+document.body.appendChild(msg);
+function say(text) { msg.textContent = text; msg.hidden = false; }
+function bandOf(e) {
+  if (!dragId) return null;
+  var band = e.target && e.target.closest ? e.target.closest(".band[data-number]") : null;
+  if (!band || band.hidden || band.getAttribute("data-number") === dragFrom) return null;
+  return band;
+}
+function clearDrop() { var on = document.querySelectorAll(".drop-ok, .dragging"); for (var i = 0; i < on.length; i++) on[i].classList.remove("drop-ok", "dragging"); }
+document.addEventListener("dragstart", function (e) {
+  var card = e.target && e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
+  if (!card) return;
+  var band = card.closest(".band[data-number]");
+  if (!band) return;
+  dragId = card.getAttribute("data-story");
+  dragFrom = band.getAttribute("data-number");
+  card.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", dragId);
+});
+document.addEventListener("dragend", function () { dragId = ""; dragFrom = ""; clearDrop(); });
+document.addEventListener("dragover", function (e) {
+  var band = bandOf(e);
+  var on = document.querySelectorAll(".band.drop-ok");
+  for (var i = 0; i < on.length; i++) if (on[i] !== band) on[i].classList.remove("drop-ok");
+  if (!band) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  band.classList.add("drop-ok");
+});
+document.addEventListener("drop", function (e) {
+  var band = bandOf(e);
+  if (!band) return;
+  e.preventDefault();
+  var id = dragId, to = band.getAttribute("data-number");
+  clearDrop();
+  say("Moving " + id + " to release " + to + "…");
+  call("POST", "/api/op", { op: "story.move", map: document.body.getAttribute("data-map"), target: { story: id }, args: { to: Number(to) }, expect: document.body.getAttribute("data-storymap") || "" }).then(function (res) {
+    if (res.ok) { say(res.body.message + ". It goes to the end of that release's build order."); setTimeout(function () { location.reload(); }, 900); return; }
+    say(res.status === 409 ? "The map changed since the page loaded. Reload to see the latest, then try again." : errorOf(res));
+  }, function () { say(gone()); });
+});
+var picks = document.querySelectorAll("select[data-pick=activity]");
+for (var k = 0; k < picks.length; k++) pickSteps(picks[k]);
+pendingBar();
+})();</script>
+</body>
+</html>

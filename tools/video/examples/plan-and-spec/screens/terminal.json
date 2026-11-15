@@ -1,0 +1,47 @@
+{
+  "refused": {
+    "command": "nikos state set WEB-CHK-5 done",
+    "output": "✗ WEB-CHK-5 stays in_progress: its scenarios don't all pass:\n  ✗ AC1 — Paying charges the basket and delivery",
+    "ok": false
+  },
+  "verify": {
+    "command": "nikos verify WEB-CHK-5",
+    "output": "....\n\n1 scenario (1 passed)\n4 steps (4 passed)\n0m00.005s (executing steps: 0m00.000s)",
+    "ok": true
+  },
+  "done": {
+    "command": "nikos state set WEB-CHK-5 done",
+    "output": "WEB-CHK-5: in_progress → done",
+    "ok": true
+  },
+  "commit": "31d8305",
+  "approve": {
+    "command": "nikos approve WEB-CHK-5 --via chat",
+    "output": "WEB-CHK-5: approved by Sam in chat (maps/chk/approvals/WEB-CHK-5.yaml)",
+    "ok": true
+  },
+  "pending": {
+    "git": true,
+    "branch": "nikos/plan-departments-commerce-2026-11-15-2",
+    "base": "main",
+    "onBase": false,
+    "hasOrigin": true,
+    "detached": false,
+    "ops": 1,
+    "files": [
+      " M planning/departments/commerce/krs/checkout-conversion-reaches-3.yaml"
+    ],
+    "paths": [
+      "planning/departments/commerce/krs/checkout-conversion-reaches-3.yaml"
+    ],
+    "unrelated": [],
+    "forge": {
+      "host": null,
+      "tool": null,
+      "pushCommand": "git push -u origin nikos/plan-departments-commerce-2026-11-15-2",
+      "prCommand": null,
+      "pushed": false,
+      "requestLabel": "Open pull request"
+    }
+  }
+}

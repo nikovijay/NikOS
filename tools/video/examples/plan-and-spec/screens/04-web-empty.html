@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="nikos-token" content="example">
+<title>Web · nikOS plan</title><style>:root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}.theme-toggle{font:inherit;font-size:.85em;padding:.2rem .6rem;border:1px solid currentColor;border-radius:999px;background:transparent;color:inherit;cursor:pointer}.theme-toggle .to-light{display:none}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .theme-toggle .to-dark{display:none}:root:not([data-theme="light"]) .theme-toggle .to-light{display:inline}}:root[data-theme="dark"] .theme-toggle .to-dark{display:none}:root[data-theme="dark"] .theme-toggle .to-light{display:inline}
+:root{--bg:#f5f4f8;--surface:#ffffff;--surface-2:#eeecf4;--line:#dcd9e6;--line-strong:#c4c0d4;--fg:#1a1922;--muted:#5f5c6d;--accent:#5b3fb0;--accent-weak:#ebe6fa;--accent-fg:#ffffff;--good:#1d6a42;--good-bg:#def1e6;--warn:#875700;--warn-bg:#fcefd1;--bad:#b02e29;--bad-bg:#fbe3e1;--idle:#5b5966;--idle-bg:#e9e8ee;--notice:#fff6dc;--notice-fg:#4a3700;--wire:#b9b0dc;--shadow:0 1px 2px rgb(26 25 34 / .06),0 4px 16px rgb(26 25 34 / .06);--r:10px;--f-display:"Avenir Next","Segoe UI Variable Display","Segoe UI",ui-sans-serif,system-ui,sans-serif;--f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--f-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#121118;--surface:#1b1a23;--surface-2:#24222e;--line:#33303f;--line-strong:#4a465a;--fg:#ecebf2;--muted:#a4a1b2;--accent:#b8a5ff;--accent-weak:#2b2447;--accent-fg:#150e2c;--good:#8ed6ac;--good-bg:#17321f;--warn:#f0c46e;--warn-bg:#382a0e;--bad:#ff9c94;--bad-bg:#3c1a19;--idle:#b5b3bf;--idle-bg:#2a2833;--notice:#352b10;--notice-fg:#ffe6a3;--wire:#4f4677;--shadow:0 1px 2px rgb(0 0 0 / .3),0 4px 16px rgb(0 0 0 / .25)}}:root[data-theme="dark"]{--bg:#121118;--surface:#1b1a23;--surface-2:#24222e;--line:#33303f;--line-strong:#4a465a;--fg:#ecebf2;--muted:#a4a1b2;--accent:#b8a5ff;--accent-weak:#2b2447;--accent-fg:#150e2c;--good:#8ed6ac;--good-bg:#17321f;--warn:#f0c46e;--warn-bg:#382a0e;--bad:#ff9c94;--bad-bg:#3c1a19;--idle:#b5b3bf;--idle-bg:#2a2833;--notice:#352b10;--notice-fg:#ffe6a3;--wire:#4f4677;--shadow:0 1px 2px rgb(0 0 0 / .3),0 4px 16px rgb(0 0 0 / .25)}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;font-weight:700;letter-spacing:-.01em}
+.mono,code{font-family:var(--f-mono);font-size:.85em}
+.muted{color:var(--muted)}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.skip{position:absolute;left:-999px;top:8px;background:var(--accent);color:var(--accent-fg);padding:8px 12px;border-radius:6px;z-index:50}
+.skip:focus{left:16px}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:6px 14px;cursor:pointer;font-weight:600;font-size:.9rem;color:var(--fg)}
+.btn:hover{border-color:var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;font-weight:600;border-radius:99px;padding:1px 9px;line-height:1.7;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.s-good{background:var(--good-bg);color:var(--good)}.s-warn{background:var(--warn-bg);color:var(--warn)}.s-bad{background:var(--bad-bg);color:var(--bad)}.s-idle{background:var(--idle-bg);color:var(--idle)}.s-accent{background:var(--accent-weak);color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:1px 8px;color:var(--fg);text-decoration:none;max-width:100%}
+.host{display:inline-flex;align-items:center;font-size:.78rem;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);max-width:100%}
+.host-k{background:var(--surface-2);padding:5px 8px;font-weight:600;white-space:nowrap}
+.host-v{padding:5px 8px;font-family:var(--f-mono);font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.theme-toggle{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:.85rem}
+dialog.sheet-dialog{border:0;padding:0;background:var(--bg);color:var(--fg);border-radius:14px;box-shadow:0 20px 60px rgb(0 0 0 / .3);max-width:min(600px,calc(100% - 32px));width:100%}
+dialog.sheet-dialog::backdrop{background:rgb(10 8 20 / .35)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+.pending{background:var(--accent);color:var(--accent-fg);padding:10px 12px 10px 16px;border-radius:var(--r,10px);margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:.92rem}
+.pending button{font:inherit;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid color-mix(in srgb,currentColor 50%,transparent);background:transparent;color:inherit;cursor:pointer}
+.pending button:first-of-type{background:var(--accent-fg);color:var(--accent);border-color:transparent}
+.pending button:disabled{opacity:.6;cursor:progress}
+.pending[hidden]{display:none}
+[hidden]{display:none!important}
+body{margin:0}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;max-width:1440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.side{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:18px;padding-block:22px 18px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:1.1rem;color:var(--fg);text-decoration:none}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;flex:none}
+.brand-mark svg{width:18px;height:18px}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:.75rem;color:var(--muted);line-height:1.2}
+.views{display:flex;flex-direction:column;gap:2px}
+.views a{display:block;padding:7px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font-weight:500;font-size:.93rem}
+.views a:hover{background:var(--surface-2)}
+.views a[aria-current="page"]{background:var(--accent-weak);color:var(--accent)}
+.side-areas{display:grid;gap:2px;border-top:1px solid var(--line);padding-top:12px}
+.side-areas a{font-size:.88rem;color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:6px}
+.side-areas a:hover{color:var(--fg);background:var(--surface-2)}
+.main{min-width:0;padding-top:16px}
+.top{display:grid;gap:10px;padding-block:4px 12px;border-bottom:1px solid var(--line)}
+.top-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.top-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+.altitudes{display:inline-flex;flex-wrap:wrap;background:var(--surface-2);border-radius:10px;padding:3px;gap:2px}
+.altitudes a,.altitudes span{padding:6px 12px;border-radius:8px;font-weight:500;font-size:.9rem;color:var(--muted);text-decoration:none}
+.altitudes a:hover{color:var(--fg)}
+.altitudes a.on{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.altitudes span{font-size:.82rem}
+.picker label{display:flex;align-items:center;gap:8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.picker select{text-transform:none;letter-spacing:0;font-size:.92rem;color:var(--fg);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:6px 10px;font-weight:500;max-width:100%}
+.share-btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:.85rem;cursor:pointer}
+.share-btn:hover,.theme-toggle:hover{border-color:var(--line-strong)}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;font-size:.88rem;color:var(--muted)}
+.crumbs a{color:var(--muted);text-decoration:none;padding:1px 4px;border-radius:4px}
+.crumbs a:hover{color:var(--fg);background:var(--surface-2)}
+.crumbs a:last-child{color:var(--fg);font-weight:600}
+.page-head{display:grid;gap:6px;padding-top:22px;max-width:72ch}
+h1{font-size:1.9rem;line-height:1.15;margin:0}
+h1 .id{font-family:var(--f-body);font-size:.5em;font-weight:500;letter-spacing:0;vertical-align:middle}
+h2{font-size:1.2rem;line-height:1.3;margin:28px 0 12px}
+h3{font-size:1rem;margin:18px 0 8px}
+h4{font-size:.8rem;margin:4px 0 8px;font-family:var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.quarters{margin:4px 0 0;color:var(--muted);font-size:.9rem}
+.quarters .on{color:var(--fg);font-weight:600}
+.notice{background:var(--notice);color:var(--notice-fg);padding:10px 14px;border-radius:var(--r);font-size:.9rem;margin:12px 0 0}
+.id{color:var(--muted);font-family:var(--f-mono);font-size:.8em}
+.where{display:inline-block;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--surface-2);border-radius:4px;padding:0 6px;line-height:1.7}
+.meta{color:var(--muted);margin:4px 0;font-size:.9rem}
+ul{padding-left:1.2rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:12px 0}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:18px 0}
+.strip>div{background:var(--surface);padding:12px 16px;display:grid;gap:4px}
+.strip .big{font-family:var(--f-display);font-size:1.5rem;font-weight:700;line-height:1}
+.strip .parts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.82rem;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.kr-card{display:grid;gap:10px;align-content:start;margin:0;min-width:0}
+.kr-card .head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.kr-card .head a{font-weight:600;color:var(--fg);text-decoration:none}
+.kr-card .head a:hover{text-decoration:underline}
+.figure{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.figure .now{font-family:var(--f-display);font-size:1.6rem;font-weight:700;line-height:1}
+.figure .of{color:var(--muted);font-size:.85rem}
+.bar{position:relative;height:8px;border-radius:99px;background:var(--surface-2)}
+.bar>i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--accent)}
+.bar.good>i{background:var(--good)}.bar.warn>i{background:var(--warn)}.bar.bad>i{background:var(--bad)}
+.bar .pace{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--fg);opacity:.55;border-radius:2px}
+.card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.spark{display:block;width:96px;height:28px}
+.okr{padding:0;overflow:hidden}
+.okr-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.okr-head>div{min-width:0}
+.okr-head a{font-weight:600}
+.okr-body{padding:6px 16px 12px}
+.okr-body>ul,.rows{list-style:none;padding:0;margin:6px 0;display:grid;gap:2px}
+.rows>li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border-radius:8px}
+.rows>li:hover{background:var(--surface-2)}
+.rows .said{flex-basis:100%;font-size:.84rem;color:var(--muted)}
+.o-pill{display:inline-flex;align-items:center;font-size:.75rem;font-weight:600;border-radius:99px;padding:0 9px;line-height:1.7;border:1.5px solid currentColor;white-space:nowrap}
+.o-open{color:var(--muted)}.o-won{color:var(--good)}.o-lost{color:var(--bad)}.o-stopped{color:var(--idle);border-style:dashed}.o-other{color:var(--warn)}
+.bet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.bet-card{margin:0;display:grid;gap:10px;align-content:start;min-width:0}
+.bet-card h3{margin:0;font-size:1.02rem}
+.bet-card .belief{border-left:3px solid var(--accent);padding:2px 0 2px 12px;color:var(--muted);font-size:.92rem;margin:0}
+.bet-card .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;font-size:.86rem;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0}
+.stack{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2)}
+.stack i{display:block;height:100%}
+.stack .d{background:var(--good)}.stack .b{background:var(--accent)}
+.ladder-scroll{overflow-x:auto;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.ladder{position:relative}
+.ladder svg{position:absolute;left:0;top:0;pointer-events:none;color:var(--wire)}
+.ladder path{fill:none;stroke:currentColor;stroke-width:1.6}
+.colhead{position:absolute;top:0;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grouphead{position:absolute;font-size:.78rem;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell{position:absolute;border-radius:8px;padding:7px 10px;overflow:hidden;border:1px solid var(--line);background:var(--surface)}
+.cell .t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:.86rem;color:var(--fg);text-decoration:none}
+.cell .t:hover{text-decoration:underline}
+.cell .m{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.75rem;color:var(--muted)}
+.cell.kr,.cell.bet{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.cell.above-kr,.cell.above-bet{background:var(--surface-2)}
+.more{position:absolute;font-size:.85rem;color:var(--muted)}
+.widen{display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0 12px}
+.tl{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+.tl-row{display:grid;grid-template-columns:minmax(160px,250px) minmax(0,1fr);border-top:1px solid var(--line);align-items:center}
+.tl-row:first-child{border-top:0}
+.tl-label{padding:8px 14px;display:grid;gap:2px;min-width:0;font-size:.86rem}
+.tl-label a{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-label .meta{margin:0;font-size:.76rem}
+.tl-track{position:relative;height:40px;border-left:1px solid var(--line)}
+.tl-head .tl-track{height:28px}
+.tl-month{position:absolute;top:0;bottom:0;border-left:1px dashed var(--line);font-size:.7rem;color:var(--muted);padding:5px 0 0 4px;white-space:nowrap}
+.tl-bar{position:absolute;top:13px;height:14px;border-radius:5px;background:var(--accent-weak);border:1.5px solid var(--accent)}
+.tl-mark{position:absolute;top:13px;width:12px;height:12px;transform:translateX(-50%) rotate(45deg);background:var(--surface);border:2px solid var(--fg);border-radius:2px}
+.tl-mark.due{border-color:var(--good)}
+.tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--bad);opacity:.7}
+.tl-group{padding:7px 14px;background:var(--surface-2);font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;border-top:1px solid var(--line)}
+.tl-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:.8rem;color:var(--muted);margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;border-top:1px solid var(--line);padding:9px 12px;vertical-align:top}
+thead th{border-top:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);background:var(--surface-2)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.empty{border:1.5px dashed var(--line-strong);border-radius:var(--r);padding:22px;margin:12px 0;display:grid;gap:8px;max-width:640px}
+.empty p{margin:0}
+.unlinked{border:1.5px dashed var(--line-strong);border-radius:var(--r);padding:14px 16px}
+.unlinked ul{margin:8px 0 0}
+.drill{display:grid;gap:4px}
+.drill>h2:first-child{font-size:1.5rem;margin-top:22px}
+.serve-hint{font-size:.84rem;color:var(--muted)}
+.primary{font:inherit;font-weight:600;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer}
+details.add{padding:0}
+details.add>summary{padding:12px 16px;cursor:pointer;color:var(--accent);font-weight:600}
+details.add[open]>summary{border-bottom:1px solid var(--line)}
+details.add>form{padding:4px 16px 14px}
+details.edit{margin:10px 0 0;border-top:1px dashed var(--line);padding-top:8px}
+details.edit>summary,details.form-more>summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:.9rem}
+.sub{margin:10px 0;background:var(--surface-2);border-radius:var(--r);padding:12px 14px}
+form.form{margin:8px 0}
+form.form .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;align-items:start}
+form.form .form-more{grid-column:1/-1}
+form.form .form-more .fields{margin-top:8px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:.84rem;font-weight:600;min-width:0}
+.field.wide{grid-column:1/-1}
+.field .hint{color:var(--muted);font-size:.8rem;font-weight:400}
+.field input,.field select,.field textarea,.save input,.save select{font:inherit;font-weight:400;width:100%;padding:7px 9px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);color:var(--fg)}
+.field textarea{resize:vertical;min-height:4.5rem}
+.field select[multiple]{min-height:7rem}
+form.form .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+form.form .actions button,.save:not(.form) button{font:inherit;font-weight:600;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer}
+.save:not(.form){display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:4px 0}
+.save:not(.form) label{display:grid;gap:3px;font-size:.78rem;font-weight:600;color:var(--muted)}
+.save:not(.form) input,.save:not(.form) select{width:auto;max-width:11rem;padding:5px 8px}
+.save-msg{color:var(--muted);font-size:.85rem}
+.save-msg.error{color:var(--bad)}
+button:disabled{opacity:.55;cursor:default}
+dialog.sheet-dialog .box{padding:20px;display:grid;gap:12px}
+dialog.sheet-dialog h2{margin:0}
+.opt{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px 14px;display:grid;gap:6px}
+.opt h3{margin:0;font-family:var(--f-body);font-size:.95rem}
+.opt p{margin:0;font-size:.88rem;color:var(--muted)}
+.opt code{display:block;background:var(--surface-2);border-radius:6px;padding:7px 10px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+@media (max-width:860px){
+.app{grid-template-columns:minmax(0,1fr);gap:0}
+.side{position:static;max-height:none;padding-block:14px 0;gap:10px}
+.views{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:6px;scrollbar-width:none}
+.views a{white-space:nowrap;flex:none}
+.side-areas{display:none}
+.top-right{margin-left:0}
+.altitudes{flex-wrap:nowrap}
+.altitudes a,.altitudes span{padding:6px 8px;font-size:.84rem}
+h1{font-size:1.55rem}
+form.form .fields{grid-template-columns:minmax(0,1fr)}
+.tl-row{grid-template-columns:minmax(0,1fr)}
+.tl-track{border-left:0;border-top:1px dashed var(--line)}
+.tl-head .tl-label{display:none}
+}</style><script>(function(){var k="nikos-theme",d=document.documentElement;try{var t=localStorage.getItem(k);if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}document.addEventListener("click",function(e){var b=e.target&&e.target.closest&&e.target.closest("[data-theme-toggle]");if(!b)return;var a=d.getAttribute("data-theme"),dark=a?a==="dark":matchMedia("(prefers-color-scheme: dark)").matches,n=dark?"light":"dark";d.setAttribute("data-theme",n);try{localStorage.setItem(k,n)}catch(e){}})})();</script></head>
+<body>
+<a class="skip" href="#main">Skip to the page</a>
+<div class="app">
+<aside class="side">
+<a class="brand" href="?at=company"><span class="brand-mark" aria-hidden="true"><svg viewBox="170 245 340 245" fill="currentColor" aria-hidden="true"><path d="M287 252 L324 331 L312.1 356.7 L275.1 277.7 Z M269.1 290.5 L306.1 369.6 L253 484 L179 484 Z"/><path d="M431 251 L504 251 L450.2 366.6 L413.6 288.5 Z M407.6 301.3 L444.2 379.4 L432.3 405 L395.7 327 Z M389.8 339.8 L426.3 417.9 L414.4 443.5 L377.9 365.5 Z M371.9 378.3 L408.4 456.3 L396.5 481.9 L360 404 Z"/></svg></span><span>nikOS Plan<small>Acme</small></span></a>
+<nav class="views" aria-label="Views"><a href="?at=teams%2FWEB&amp;view=okrs&amp;period=2026-Q4">OKRs and bets</a><a href="?at=teams%2FWEB&amp;view=ladder&amp;period=2026-Q4">Ladder</a><a href="?at=teams%2FWEB&amp;view=bets&amp;period=2026-Q4" class="on" aria-current="page">Bets</a><a href="?at=teams%2FWEB&amp;view=timeline&amp;period=2026-Q4">Timeline</a></nav>
+
+</aside>
+<div class="main">
+<header class="top">
+<div class="top-row"><nav class="altitudes" aria-label="Altitude"><a href="?at=company">Company</a><a href="?at=departments%2Fcommerce&amp;period=2026-Q4">Departments</a><span>Groups: none yet</span><a href="?at=teams%2FWEB&amp;period=2026-Q4" class="on" aria-current="page">Teams</a></nav><div class="picker"><label>Team <select onchange="location.href=this.value"><option value="?at=teams%2FWEB&amp;period=2026-Q4" selected>Web (WEB)</option></select></label></div>
+<div class="top-right"><span class="host" title="Only you can open this, while nikos plan serve runs"><span class="host-k">On this computer</span><span class="host-v" data-host>127.0.0.1</span></span><button type="button" class="share-btn" data-share aria-haspopup="dialog">Share…</button><button type="button" class="theme-toggle" data-theme-toggle><span class="to-dark">Dark mode</span><span class="to-light">Light mode</span></button></div></div>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="?at=company">Company</a> › <a href="?at=departments%2Fcommerce&amp;period=2026-Q4">Commerce</a> › <a href="?at=teams%2FWEB&amp;period=2026-Q4">WEB</a></nav>
+</header>
+<div id="pending" class="pending" role="status" hidden></div>
+
+<main id="main" tabindex="-1">
+<div class="page-head"><span class="eyebrow">Bets</span><h1>Web <span class="id">Team · 2026-Q4</span></h1></div>
+
+<details class="card add" id="add-bet"><summary>Add a bet</summary><form class="save form" data-op="bet.new" data-area="teams/WEB" data-target="{}"><div class="fields"><label class="field"><span>What are you betting on?</span><input name="title" required placeholder="e.g. Faster checkout" type="text" value=""></label><label class="field wide"><span>Hypothesis</span><textarea name="hypothesis" required placeholder="We think … because …" rows="3"></textarea><small class="hint">What you believe, and why.</small></label><label class="field"><span>Owner</span><input name="owner" required type="text" value=""></label><label class="field"><span>Review on</span><input name="review_on" required type="date" value=""><small class="hint">When to look at the bet again. A bet has a review date, not a deadline.</small></label><label class="field"><span>Aims at</span><select name="primary"><option value="">Not yet</option><option value="online-revenue-reaches-12m">Online revenue reaches £12m · Acme</option><option value="checkout-conversion-reaches-3">Checkout conversion reaches 3% · Commerce</option></select><small class="hint">The key result it is meant to move.</small></label><label class="field wide"><span>Also aims at</span><select name="also" multiple><option value="online-revenue-reaches-12m">Online revenue reaches £12m · Acme</option><option value="checkout-conversion-reaches-3">Checkout conversion reaches 3% · Commerce</option></select></label><details class="form-more"><summary>More</summary><div class="fields"><label class="field"><span>Id</span><input name="bet" data-to="target" data-id-from="title" type="text" value=""><small class="hint">Made from the title. Change it only when you need another.</small></label><label class="field"><span>Team</span><input name="team" type="text" value=""></label><label class="field"><span>Starts</span><input name="starts" type="date" value=""></label><label class="field"><span>Deadline</span><input name="deadline" type="date" value=""></label></div></details></div><div class="actions"><button type="submit">Add bet</button><span class="save-msg" role="status"></span></div></form></details><div class="empty"><p><strong>No bets in Web yet.</strong></p><p class="meta">A bet says what you believe will move a key result, and why. It has a review date, not a deadline.</p><p><button type="button" class="primary" data-open="add-bet">Add a bet</button></p></div>
+
+<h2>Code repos read</h2>
+<p>None yet.</p>
+
+
+</main>
+</div>
+</div>
+<dialog class="sheet-dialog" id="share" aria-labelledby="share-title"><div class="box"><h2 id="share-title">Share the plan</h2><p>This dashboard runs on your computer. Its link has a private key in it and only works here while <code>nikos plan serve</code> is running, so don't send it to anyone. To share the plan, use one of these.</p><div class="opt"><h3>Send a read-only page</h3><p>One file that opens in any browser and works offline. It names the code repos it reads, so send it only to people who may see them.</p><code>nikos plan serve --export WEB.html --in WEB</code></div><div class="opt"><h3>Publish it on your internal site</h3><p>Export the page for every area and put the file on an internal web host. A CI job can export it each time the planning repo's main branch changes, so the page always shows the merged plan.</p><code>nikos plan serve --export plan.html</code></div><div><button class="btn" type="button" data-share-close>Close</button></div></div></dialog>
+<script>
+(function () {
+var NL = String.fromCharCode(10);
+function idFromTitle(title) {
+    const slug = String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!slug)
+        return undefined;
+    let cut = slug.slice(0, 40);
+    if (slug.length > 40 && slug.charAt(40) !== "-" && cut.indexOf("-") > 0)
+        cut = cut.slice(0, cut.lastIndexOf("-"));
+    return cut;
+}
+var meta = document.querySelector('meta[name="nikos-token"]');
+var token = meta ? meta.getAttribute("content") : "";
+var bar = document.getElementById("pending");
+function call(method, path, body) {
+  var init = { method: method, headers: { "content-type": "application/json", "x-nikos-token": token }, credentials: "same-origin" };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  return fetch(path, init).then(function (r) {
+    return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }, function () { return { ok: r.ok, status: r.status, body: {} }; });
+  });
+}
+function errorOf(res) { return res.body && res.body.error ? res.body.error : "Something went wrong."; }
+function gone() { return "Couldn't reach the dashboard. Is nikos plan serve still running?"; }
+function pendingBar() {
+  call("GET", "/api/pending").then(function (res) {
+    if (!bar) return;
+    bar.textContent = "";
+    if (!res.ok) { bar.hidden = false; bar.textContent = errorOf(res); return; }
+    var files = res.body.files || [];
+    if (!files.length) { bar.hidden = true; return; }
+    bar.hidden = false;
+    var text = document.createElement("span");
+    text.textContent = files.length + (files.length === 1 ? " saved change" : " saved changes") + (res.body.branch ? " on " + res.body.branch : "") + ". Nothing is pushed until you press Push. ";
+    bar.appendChild(text);
+    var msg = document.createElement("span");
+    msg.className = "save-msg";
+    bar.appendChild(button("Commit", "/api/git/commit", msg));
+    if (res.body.branch && res.body.hasOrigin) bar.appendChild(button("Push", "/api/git/push", msg));
+    bar.appendChild(msg);
+  }, function () { if (bar) { bar.hidden = false; bar.textContent = gone(); } });
+}
+function button(label, path, msg) {
+  var b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.addEventListener("click", function () {
+    b.disabled = true;
+    msg.textContent = "Working…";
+    call("POST", path, {}).then(function (res) {
+      if (!res.ok) { msg.textContent = errorOf(res); b.disabled = false; return; }
+      msg.textContent = res.body.committed ? "Committed " + String(res.body.committed).slice(0, 7) : res.body.pushed ? "Pushed " + res.body.pushed : "Done";
+      pendingBar();
+    }, function () { msg.textContent = gone(); b.disabled = false; });
+  });
+  return b;
+}
+
+function showing(el) { return !el.closest("[hidden]"); }
+// A field marked data-when shows while the named field of its form has the value given.
+function syncKinds(form) {
+  var parts = form.querySelectorAll("[data-when]");
+  for (var i = 0; i < parts.length; i++) {
+    var rule = parts[i].getAttribute("data-when").split("=");
+    var field = form.elements.namedItem(rule[0]);
+    var show = !!(field && field.value === rule[1]);
+    parts[i].hidden = !show;
+    var needs = parts[i].querySelectorAll("[data-required]");
+    for (var j = 0; j < needs.length; j++) {
+      if (show) needs[j].setAttribute("required", ""); else needs[j].removeAttribute("required");
+    }
+  }
+}
+// An id box nobody typed in follows its title, so the server makes the id: it skips an id already taken, where a sent id is refused.
+function sends(f) { return !(f.hasAttribute("data-id-from") && !f.hasAttribute("data-typed")); }
+// What a field sends. An edit sends a cleared field as blank, so the op drops it; a new thing sends only what has a value.
+function readField(f, editing) {
+  if (f.tagName === "SELECT" && f.multiple) {
+    var picked = [];
+    for (var j = 0; j < f.options.length; j++) if (f.options[j].selected && f.options[j].value !== "") picked.push(f.options[j].value);
+    return picked.length || editing ? picked : undefined;
+  }
+  if (f.tagName === "TEXTAREA" && f.getAttribute("data-list") === "lines") {
+    var lines = f.value.split(NL).map(function (s) { return s.trim(); }).filter(function (s) { return s !== ""; });
+    return lines.length || editing ? lines : undefined;
+  }
+  var text = f.value.trim();
+  if (text === "") return editing ? "" : undefined;
+  return f.type === "number" ? Number(text) : text;
+}
+document.addEventListener("change", function (e) {
+  var form = e.target && e.target.form;
+  if (form && form.getAttribute("data-op") !== null) syncKinds(form);
+});
+document.addEventListener("click", function (e) {
+  var opener = e.target && e.target.closest ? e.target.closest("[data-open]") : null;
+  if (!opener) return;
+  var box = document.getElementById(opener.getAttribute("data-open"));
+  if (!box) return;
+  box.open = true;
+  var fields = box.querySelectorAll("input, select, textarea");
+  for (var i = 0; i < fields.length; i++) {
+    if (!showing(fields[i]) || fields[i].type === "hidden") continue;
+    fields[i].focus();
+    break;
+  }
+  if (box.scrollIntoView) box.scrollIntoView({ block: "start" });
+});
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form || !form.getAttribute || form.getAttribute("data-op") === null) return;
+  e.preventDefault();
+  var out = form.querySelector(".save-msg");
+  var sendBtn = form.querySelector('button[type="submit"]');
+  var editing = form.hasAttribute("data-expect");
+  var target = JSON.parse(form.getAttribute("data-target") || "{}");
+  var args = {};
+  var fields = form.querySelectorAll("input[name], select[name], textarea[name]");
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    if (!showing(f) || !sends(f)) continue;
+    var value = readField(f, editing);
+    if (value === undefined) continue;
+    if (f.getAttribute("data-to") === "target") target[f.name] = value;
+    else args[f.name] = value;
+  }
+  if (out) { out.className = "save-msg"; out.textContent = "Saving…"; }
+  if (sendBtn) sendBtn.disabled = true;
+  call("POST", "/api/op", { op: form.getAttribute("data-op"), area: form.getAttribute("data-area"), target: target, args: args, expect: form.getAttribute("data-expect") || "" }).then(function (res) {
+    if (res.ok) {
+      if (out) out.textContent = res.body.message + (res.body.branch ? " on " + res.body.branch : "");
+      // Saved: show the message for a moment, then load the page again so its figures and versions are the new ones.
+      setTimeout(function () { location.reload(); }, 800);
+      return;
+    }
+    if (sendBtn) sendBtn.disabled = false;
+    if (!out) return;
+    out.className = "save-msg error";
+    out.textContent = res.status === 409 ? "This changed since the page loaded. Reload to see the latest, then try again." : errorOf(res);
+    if (res.status === 409) {
+      var reload = document.createElement("button");
+      reload.type = "button";
+      reload.textContent = "Reload";
+      reload.addEventListener("click", function () { location.reload(); });
+      out.appendChild(document.createTextNode(" "));
+      out.appendChild(reload);
+    }
+  }, function () {
+    if (sendBtn) sendBtn.disabled = false;
+    if (out) { out.className = "save-msg error"; out.textContent = gone(); }
+  });
+});
+var boxes = document.querySelectorAll("input[data-id-from]");
+for (var b = 0; b < boxes.length; b++) (function (box) {
+  var source = box.form ? box.form.elements.namedItem(box.getAttribute("data-id-from")) : null;
+  if (!source) return;
+  box.addEventListener("input", function () { box.setAttribute("data-typed", "yes"); });
+  source.addEventListener("input", function () {
+    if (box.hasAttribute("data-typed")) return;
+    box.value = idFromTitle(source.value) || "";
+  });
+})(boxes[b]);
+var forms = document.querySelectorAll("form[data-op]");
+for (var k = 0; k < forms.length; k++) syncKinds(forms[k]);
+pendingBar();
+})();
+document.addEventListener("click",function(e){var t=e.target&&e.target.closest?e.target:null;if(!t)return;var d=document.getElementById("share");if(!d)return;if(t.closest("[data-share]")&&d.showModal)d.showModal();else if(t.closest("[data-share-close]")||t===d)d.close();});
+var hostEl = document.querySelector("[data-host]");
+if (hostEl) hostEl.textContent = location.host;
+</script></body></html>

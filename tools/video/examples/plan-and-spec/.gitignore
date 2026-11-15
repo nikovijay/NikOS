@@ -1,0 +1,16 @@
+# Outputs and the copied render scripts: only the sources are committed.
+/music/
+/video.mp4
+/final.mp4
+/style-test.mp4
+/still_*.jpg
+/*.png
+/check.jpg
+/node_modules/
+/package.json
+/contact.mjs
+/mix.mjs
+/music.mjs
+/render.mjs
+/sheet.py
+/tour.html
