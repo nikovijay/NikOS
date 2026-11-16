@@ -275,6 +275,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
   } catch {
     // A map next can't read shows no "Next to build".
   }
+  const personaName = (id: string) => m.personas.find((p) => p.id === id)?.title ?? id;
   const card = (s: MapStory, release?: number) => {
     const st = statusOf(s);
     const musts = s.criteria.filter((c) => c.priority === "must").length;
@@ -288,7 +289,9 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     // data- attributes let the live dashboard filter cards; the exported page ignores them.
     const data = `data-story="${esc(s.id)}" data-status="${esc(st.cls)}" data-type="${esc(s.type)}" data-personas="${esc(s.personas.join(" "))}" data-search="${esc(`${s.id} ${s.title} ${s.narrative}`.toLowerCase())}"`;
     const drag = edit && release !== undefined ? ' draggable="true"' : "";
-    return `<a class="card ${st.cls}" ${data}${upNext.story === s.id ? " data-next" : ""}${drag} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span><span class="cfoot">${foot}${nextTag}</span></a>`;
+    // Hidden until the viewer turns on "Personas on cards".
+    const who = s.personas.length ? `<span class="cpersonas">For ${esc(s.personas.map(personaName).join(", "))}</span>` : "";
+    return `<a class="card ${st.cls}" ${data}${upNext.story === s.id ? " data-next" : ""}${drag} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span>${who}<span class="cfoot">${foot}${nextTag}</span></a>`;
   };
   const tally = (stories: MapStory[]) => {
     const live = stories.filter((s) => s.status !== "cancelled");
@@ -339,10 +342,9 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
   const panel = (s: MapStory) => {
     const st = statusOf(s);
     const facts = [s.id, TYPE_WORD[s.type], s.priority, s.effort && `effort ${s.effort}`].filter(Boolean).map((f) => esc(f)).join(" · ");
-    const persona = (id: string) => m.personas.find((p) => p.id === id)?.title ?? id;
     const release = m.releases.find((r) => r.stories.some((x) => x.id === s.id));
     const notes = [
-      s.personas.length && `For ${s.personas.map(persona).join(", ")}`,
+      s.personas.length && `For ${s.personas.map(personaName).join(", ")}`,
       s.dependsOn.length && `Depends on ${s.dependsOn.map((d) => (s.waitingOn.includes(d) ? `${d} (not done)` : d)).join(", ")}`,
       s.status === "approved" && `Approved by ${s.approvedBy || "someone"}`,
     ].filter(Boolean).map((n) => `<li>${esc(n)}</li>`).join("");
@@ -378,12 +380,13 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     : `<span class="host"><span class="host-k">Exported page</span><span class="host-v">read-only file</span></span>`;
   const meta = [m.owner && `Owned by <b>${esc(m.owner)}</b>`, m.bet && `Delivers <span class="bet">${esc(m.bet)}</span>`].filter(Boolean).join("");
   const nextStory = upNext.story ? everything.find((s) => s.id === upNext.story) : undefined;
+  const counted = everything.filter((s) => s.status !== "cancelled");
   const overview = everything.length
-    ? `<section class="overview" aria-label="Progress"><div class="ov-progress"><div class="ov-head"><span class="eyebrow">Progress</span><span class="num"><b>${everything.filter((s) => s.status !== "cancelled" && isDone(s.status)).length}</b> of ${everything.filter((s) => s.status !== "cancelled").length} stories done</span></div>${progressBar(everything)}</div>${
+    ? `<section class="overview" aria-label="Progress"><span class="ov-num"><b>${counted.filter((s) => isDone(s.status)).length}</b> of ${counted.length} stories done</span>${progressBar(everything, false)}${
         nextStory || upNext.open.length
-          ? `<div class="ov-next"><span class="eyebrow">Next to build</span>${nextStory ? `<a href="#story-${esc(nextStory.id)}"><span class="sid">${esc(nextStory.id)}</span> ${esc(nextStory.title)}</a>` : `<span class="muted">Nothing new is ready.</span>`}${
+          ? `<span class="ov-next" title="As nikos next picks it"><span class="eyebrow">Next</span>${nextStory ? `<a href="#story-${esc(nextStory.id)}"><span class="sid">${esc(nextStory.id)}</span> ${esc(nextStory.title)}</a>` : `<span class="muted">Nothing new is ready.</span>`}${
               upNext.open.length ? `<span class="muted">Finish first: ${upNext.open.map((o) => `<a href="#story-${esc(o.id)}">${esc(o.id)}</a>`).join(", ")}</span>` : ""
-            }<span class="where">As nikos next picks it.</span></div>`
+            }</span>`
           : ""
       }</section>`
     : "";
@@ -404,8 +407,11 @@ ${edit ? `<meta name="nikos-token" content="${esc(opts.token)}">\n` : ""}<title>
 <style>${DESIGN_CSS}\n${CSS}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}` : ""}</style>
 ${opts.live ? `${THEME_HEAD}\n` : ""}</head>
 <body${edit ? ` class="editing" data-map="${esc(ref!.id)}" data-storymap="${esc(edit.storymap)}"${several ? " data-several" : ""}` : ""}>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<span class="spacer"></span>${host}${opts.live ? `<button type="button" class="btn" data-open-dialog="share">Share…</button>${THEME_BUTTON}` : ""}</div><div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}${actions}</div><nav class="jumps" aria-label="Releases">${jumps}</nav></header>
-${edit ? `<div id="pending" class="pending" role="status" hidden></div>\n` : ""}${overview}${filters}<main id="board" tabindex="-1">
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}</div><span class="spacer"></span>${actions}${host}${
+  opts.live ? `<button type="button" class="btn" data-open-dialog="share">Share…</button><button type="button" class="btn" data-collapse aria-controls="above" aria-expanded="true">Collapse</button>${THEME_BUTTON}` : ""
+}</div></header>
+<div class="above" id="above"><div class="strip"><nav class="jumps" aria-label="Releases">${jumps}</nav>${overview}</div>${filters}</div>
+${edit ? `<div id="pending" class="pending" role="status" hidden></div>\n` : ""}<main id="board" tabindex="-1">
 ${everything.length || edit ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
 ${bands}
@@ -424,6 +430,19 @@ ${opts.live ? `<script>${FILTER_JS}\n${LIVE_JS}</script>` : ""}${edit ? `<script
 // The live page's own small script: the host it runs on, the dialogs, and the copy buttons.
 const LIVE_JS = `
 (function () {
+  var above = document.getElementById('above'), fold = document.querySelector('[data-collapse]');
+  if (above && fold) {
+    var setOpen = function (open) {
+      above.hidden = !open;
+      fold.setAttribute('aria-expanded', String(open));
+      fold.textContent = open ? 'Collapse' : 'Expand';
+      try { localStorage.setItem('nikos-map-top', open ? 'open' : 'closed'); } catch (e) {}
+    };
+    var saved;
+    try { saved = localStorage.getItem('nikos-map-top'); } catch (e) {}
+    if (saved === 'closed') setOpen(false);
+    fold.addEventListener('click', function () { setOpen(above.hidden); });
+  }
   var hosts = document.querySelectorAll('[data-host]');
   for (var i = 0; i < hosts.length; i++) hosts[i].textContent = location.host;
   document.addEventListener('click', function (e) {
@@ -464,6 +483,7 @@ ${types.length ? `<select id="f-type" aria-label="Story type">${option("", "All 
 ${m.personas.length ? `<select id="f-persona" aria-label="Persona">${option("", "Everyone")}${m.personas.map((p) => option(p.id, p.title)).join("")}</select>` : ""}
 <fieldset class="chips"><legend>Status</legend>${chips}</fieldset>
 <label class="switch"><input type="checkbox" id="f-rows" checked>Release rows</label>
+${m.personas.length ? `<label class="switch"><input type="checkbox" id="f-personas">Personas on cards</label>` : ""}
 <span id="f-count" class="count" aria-live="polite"></span>
 </div>
 `;
@@ -532,7 +552,15 @@ const FILTER_JS = `
       if (rows && filtering && !visible) b.hidden = true;
     });
     $('f-count').textContent = filtering || release ? shown + ' of ' + total + ' stories' : '';
+    // Collapsed, the filters are out of sight: the Expand button says some are on.
+    if (filtering || release) document.body.setAttribute('data-filtered', ''); else document.body.removeAttribute('data-filtered');
+    var who = $('f-personas');
+    if (who) {
+      document.body.classList.toggle('show-personas', who.checked);
+      try { localStorage.setItem('nikos-map-personas', who.checked ? 'on' : 'off'); } catch (e) {}
+    }
   }
+  try { if ($('f-personas') && localStorage.getItem('nikos-map-personas') === 'on') $('f-personas').checked = true; } catch (e) {}
   // Remember which release each card came from, so the release filter works with rows off.
   bands.forEach(function (b) {
     Array.prototype.forEach.call(b.querySelectorAll('.card'), function (card) {
@@ -559,27 +587,32 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
 .blank p { margin: 0; color: var(--muted); }
 .sid, .rnum, .rcode, .count, .facts { font-family: var(--f-mono); }
 .warn { color: var(--warn); font-weight: 600; }
-.top { padding: 12px 24px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.top { padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.top .title { gap: 4px 12px; min-width: 0; }
+[data-collapse][aria-expanded=false] { color: var(--accent); }
+body[data-filtered] [data-collapse][aria-expanded=false]::after { content: " · filtered"; }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 24px; border-bottom: 1px solid var(--line); }
 .top .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .spacer { flex: 1; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-display); font-weight: 700; font-size: 16px; }
 .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
 .brand-mark svg { width: 18px; height: 18px; }
 .brand-t small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: 12px; color: var(--muted); line-height: 1.2; }
-h1 { font-size: 24px; margin: 0; line-height: 1.2; }
+h1 { font-size: 18px; margin: 0; line-height: 1.2; }
 .meta { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; color: var(--muted); }
 .meta b { color: var(--fg); }
-.back { display: block; flex-basis: 100%; font-size: 14px; font-weight: 500; text-decoration: none; }
-.jumps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+.back { font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.jumps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; min-width: 0; }
 .jump { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--fg); text-decoration: none; font-size: 13px; white-space: nowrap; }
 .jump:hover { border-color: var(--line-strong); }
 .rcode { font-size: 12px; color: var(--accent); font-weight: 600; }
 .count { font-size: 12px; color: var(--muted); }
-.overview { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line); }
-.overview > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
-.ov-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; }
-.ov-next { font-size: 14px; }
+.overview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-left: auto; font-size: 13px; min-width: 0; }
+.overview .stack { width: 120px; height: 6px; }
+.ov-next { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-left: 14px; border-left: 1px solid var(--line); }
 .ov-next a { font-weight: 600; color: var(--fg); }
+.cpersonas { display: none; font-size: 12px; color: var(--accent); }
+.show-personas .cpersonas { display: block; }
 .stack { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); }
 .stack i { display: block; height: 100%; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
@@ -675,8 +708,9 @@ main { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
 @media (max-width: 767px) {
   body { height: auto; display: block; }
-  .top, .overview, .filters { padding-left: 16px; padding-right: 16px; }
-  .overview { grid-template-columns: minmax(0, 1fr); }
+  .top, .strip, .filters { padding-left: 16px; padding-right: 16px; }
+  .overview { margin-left: 0; }
+  .ov-next { padding-left: 0; border-left: 0; }
   h1 { font-size: 21px; }
   .filters input[type=search] { width: 100%; }
   #f-count { margin-left: 0; }

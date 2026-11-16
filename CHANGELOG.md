@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Personas on the story map's cards.** A "Personas on cards" switch in the filters shows each card's personas under its title. It shows only when the map has personas, and the page remembers it.
+- **Collapse the top of the story map.** A Collapse button in the top bar hides the release links, the progress line and the filters, so the map takes the whole page. The page remembers it, and while filters are on the button says "Expand · filtered".
+
+### Changed
+
+- **A smaller top on the story map.** The map's title is in the top bar now. Progress and the story to build next fit on one line beside the release links, instead of two cards.
+
 ## 0.7.0 (2026-11-15)
 
 The plan dashboard is redesigned. Each area opens on an Overview of what needs attention. Forms open in drawers from the side, not in sections that fold open on the page, and each key result and bet opens in a drawer with Overview, History and Edit tabs. Check-ins can be done one key result after another, with a preview of what each value means. Key results can be filtered, Bets is a board, and two new views show the Alignment tree and the Activity. The save bar moves to the bottom of the page and lists what your saves changed. The saves and the files they write are the same as in 0.6, so nothing in this release breaks a 0.6 setup. 0.6.1 was not published to npm, so its changes are listed here.
