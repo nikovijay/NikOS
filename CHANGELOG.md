@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 (2026-11-16)
+
+The story map from `nikos serve` gives more of the page to the map. Its top is smaller and can collapse, and its cards can show their personas. Nothing else changes, so nothing in this release breaks a 0.7.0 setup.
 
 ### Added
 
