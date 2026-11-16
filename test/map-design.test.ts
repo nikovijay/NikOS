@@ -39,7 +39,7 @@ describe("the story map page's design", () => {
     expect(exported).not.toContain('<dialog id="share"');
   });
 
-  test("the overview shows progress and the story nikos next picks", () => {
+  test("the overview is one line: progress, and the story nikos next picks", () => {
     const html = renderMap(sample());
     expect(html).toContain('<section class="overview"');
     expect(html).toMatch(/<b>1<\/b> of 3 stories done/);
@@ -47,6 +47,33 @@ describe("the story map page's design", () => {
     expect(html).toContain('<a href="#story-HT-3"><span class="sid">HT-3</span>');
     expect(html).toContain('Finish first: <a href="#story-HT-2">HT-2</a>');
     expect(html).toMatch(/class="card todo" data-story="HT-3"[^>]*data-next/);
+  });
+
+  test("the title sits in the top bar, and the live page can collapse everything between it and the map", () => {
+    const root = sample();
+    const live = renderMap(root, { live: true, token: TOKEN });
+    const bar = live.slice(live.indexOf('<header class="top">'), live.indexOf("</header>"));
+    expect(bar).toContain("<h1>hello-todo · Story map</h1>");
+    expect(bar).toContain('<button type="button" class="btn" data-collapse aria-controls="above" aria-expanded="true">Collapse</button>');
+    // The release links, the progress line and the filters are all in the part that collapses.
+    const above = live.slice(live.indexOf('<div class="above" id="above">'), live.indexOf('<main id="board"'));
+    expect(above).toContain('<nav class="jumps"');
+    expect(above).toContain('<section class="overview"');
+    expect(above).toContain('<div class="filters"');
+    expect(live).toContain("localStorage.setItem('nikos-map-top'");
+    // The exported page has nothing to collapse with.
+    expect(renderMap(root)).not.toContain("<button type=\"button\" class=\"btn\" data-collapse");
+  });
+
+  test("a story's personas show on its card when the viewer turns them on", () => {
+    const root = sample();
+    expect(renderMap(root, { live: true, token: TOKEN })).not.toContain('id="f-personas"');
+    edit(join(root, STORYMAP), (s) => s.replace("activities:", "personas:\n  - id: busy\n    title: Busy parent\nactivities:"));
+    edit(join(root, "maps/ht/features/tasks/add-a-task.feature"), (s) => s.replace("@HT-1 ", "@HT-1 @persona-busy "));
+    const html = renderMap(root, { live: true, token: TOKEN });
+    expect(html).toContain('<label class="switch"><input type="checkbox" id="f-personas">Personas on cards</label>');
+    expect(html).toMatch(/data-story="HT-1"[^>]*>.*?<span class="cpersonas">For Busy parent<\/span>/);
+    expect(html).toContain(".show-personas .cpersonas { display: block; }");
   });
 
   test("each release has reorder, rename and remove tools; remove says why it can't run", () => {
