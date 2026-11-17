@@ -128,6 +128,22 @@ export function moveStory(input: { map?: string; id: string; to: number }, dir: 
   return { id: input.id, from: fromNumber, to: input.to, validation: save(o) };
 }
 
+/**
+ * Move a story to another place in its release's build order. Only storymap.yaml changes: the story keeps its
+ * release, so its feature file and any approval stay as they are.
+ */
+export function reorderStory(input: { map?: string; id: string; to: number }, dir: string) {
+  const o = open(dir, input.map, input.id);
+  const r = o.releases.items.find((x) => storiesOf(x).includes(input.id));
+  if (!r) throw new Error(`${input.id} is not in any release in storymap.yaml`);
+  const seq = r.get("stories", true) as unknown as YAMLSeq;
+  const count = seq.items.length;
+  if (!Number.isInteger(input.to) || input.to < 1 || input.to > count) throw new Error(`Position must be from 1 to ${count}`);
+  const [item] = seq.items.splice(storiesOf(r).indexOf(input.id), 1);
+  seq.items.splice(input.to - 1, 0, item);
+  return { release: numberOf(r), order: storiesOf(r), validation: save(o) };
+}
+
 /** Put a story that is in no release into one: its id goes on the release's list and its feature gets the release tag. */
 export function placeInRelease(input: { map?: string; id: string; to: number }, dir: string) {
   const o = open(dir, input.map, input.id);

@@ -2,8 +2,8 @@
 // the op's name, the level of the plan, and the ids, then calls the command the CLI uses. Dry runs (runOps) do the same work on an in-memory copy of the repo's
 // planning and story map files, so nothing is written until a person says so.
 import { join, relative, resolve, sep } from "node:path";
-import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease } from "../commands/release.js";
-import { newActivity, newStep, renameActivity, renameStep } from "../commands/step.js";
+import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease, reorderStory } from "../commands/release.js";
+import { newActivity, newStep, renameActivity, renameStep, reorderActivity, reorderStep } from "../commands/step.js";
 import { addPersona, addScenario, editScenario, editStory, newStory, placeStory, removeScenario, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
 import { resolveStoryMap, mapDirs } from "../lib/maps.js";
@@ -33,6 +33,7 @@ export type OpName =
   | "story.new"
   | "story.rename"
   | "story.move"
+  | "story.reorder"
   | "story.remove"
   | "story.edit"
   | "story.place"
@@ -42,8 +43,10 @@ export type OpName =
   | "persona.new"
   | "activity.new"
   | "activity.rename"
+  | "activity.reorder"
   | "step.new"
   | "step.rename"
+  | "step.reorder"
   | "release.new"
   | "release.rename"
   | "release.remove"
@@ -70,6 +73,7 @@ const GROUP: OpName[] = [
   "story.new",
   "story.rename",
   "story.move",
+  "story.reorder",
   "story.remove",
   "story.edit",
   "story.place",
@@ -79,8 +83,10 @@ const GROUP: OpName[] = [
   "persona.new",
   "activity.new",
   "activity.rename",
+  "activity.reorder",
   "step.new",
   "step.rename",
+  "step.reorder",
   "release.new",
   "release.rename",
   "release.remove",
@@ -93,7 +99,7 @@ const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
 
 /** Ops that edit a story map or the settings of a code repo. A planning area never makes them: maps stay in the code repos. */
-const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.remove", "story.edit", "story.place", "scenario.add", "scenario.edit", "scenario.remove", "persona.new", "activity.new", "activity.rename", "step.new", "step.rename", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
+const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.reorder", "story.remove", "story.edit", "story.place", "scenario.add", "scenario.edit", "scenario.remove", "persona.new", "activity.new", "activity.rename", "activity.reorder", "step.new", "step.rename", "step.reorder", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
 const NAMES: Record<OpName, true> = {
@@ -111,6 +117,7 @@ const NAMES: Record<OpName, true> = {
   "story.new": true,
   "story.rename": true,
   "story.move": true,
+  "story.reorder": true,
   "story.remove": true,
   "story.edit": true,
   "story.place": true,
@@ -120,8 +127,10 @@ const NAMES: Record<OpName, true> = {
   "persona.new": true,
   "activity.new": true,
   "activity.rename": true,
+  "activity.reorder": true,
   "step.new": true,
   "step.rename": true,
+  "step.reorder": true,
   "release.new": true,
   "release.rename": true,
   "release.remove": true,
@@ -161,6 +170,7 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "story.new": ["title", "activity", "step", "release", "priority", "map"],
   "story.rename": ["title", "confirm", "map"],
   "story.move": ["to", "map"],
+  "story.reorder": ["to", "map"],
   "story.remove": ["map"],
   "story.edit": ["title", "as_a", "i_want", "so_that", "type", "personas", "priority", "map"],
   "story.place": ["release", "activity", "step", "map"],
@@ -170,8 +180,10 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "persona.new": ["title", "description", "map"],
   "activity.new": ["title", "id", "map"],
   "activity.rename": ["title", "map"],
+  "activity.reorder": ["to", "map"],
   "step.new": ["title", "activity", "id", "map"],
   "step.rename": ["title", "activity", "map"],
+  "step.reorder": ["to", "activity", "map"],
   "release.new": ["title", "goal", "map"],
   "release.rename": ["title", "goal", "map"],
   "release.remove": ["map"],
@@ -197,6 +209,7 @@ export const EDITS = new Set<OpName>([
   "bet.krs",
   "story.rename",
   "story.move",
+  "story.reorder",
   "story.remove",
   "story.edit",
   "story.place",
@@ -204,7 +217,9 @@ export const EDITS = new Set<OpName>([
   "scenario.edit",
   "scenario.remove",
   "activity.rename",
+  "activity.reorder",
   "step.rename",
+  "step.reorder",
   "release.rename",
   "release.remove",
   "release.reorder",
@@ -393,6 +408,11 @@ function apply(root: string, op: Op): string {
       checkStoryMap(root, map, expect);
       moveStory({ map, id: t.story, to: num(a.to) }, root);
       return `Moved ${t.story} to release ${a.to}`;
+    case "story.reorder": {
+      checkStoryMap(root, map, expect);
+      const r = reorderStory({ map, id: t.story, to: num(a.to) }, root);
+      return `Moved ${t.story} to place ${a.to} in release ${r.release}`;
+    }
     case "story.remove":
       removeStory(root, { map, id: t.story }, expect);
       return `Removed ${t.story}`;
@@ -409,6 +429,9 @@ function apply(root: string, op: Op): string {
     case "activity.rename":
       renameActivity(root, { map, id: t.activity, title: String(a.title ?? "") }, expect);
       return `Renamed activity ${t.activity}`;
+    case "activity.reorder":
+      reorderActivity(root, { map, id: t.activity, to: num(a.to) }, expect);
+      return `Moved activity ${t.activity} to place ${a.to}`;
     case "step.new": {
       checkStoryMap(root, map, expect);
       const problem = titleProblem("step", a.title);
@@ -421,6 +444,9 @@ function apply(root: string, op: Op): string {
     case "step.rename":
       renameStep(root, { map, id: t.step, title: String(a.title ?? ""), activity: str(a.activity) }, expect);
       return `Renamed step ${t.step}`;
+    case "step.reorder":
+      reorderStep(root, { map, id: t.step, activity: str(a.activity), to: num(a.to) }, expect);
+      return `Moved step ${t.step} to place ${a.to}`;
     case "release.new": {
       checkStoryMap(root, map, expect);
       const r = addRelease({ map, title: String(a.title ?? ""), goal: str(a.goal) }, root);
