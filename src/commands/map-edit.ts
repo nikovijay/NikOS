@@ -180,6 +180,31 @@ export function releaseTools(r: MapRelease, count: number, storymap: string): st
   return `<span class="band-tools">${r.number > 1 ? move(r.number - 1, "↑", "earlier") : ""}${r.number < count ? move(r.number + 1, "↓", "later") : ""}${rename}${remove}</span>`;
 }
 
+/** ← and → on an activity's box or a step, to move it one place along the row. */
+export function sideTools(o: { op: "activity.reorder" | "step.reorder"; target: Record<string, string>; place: number; count: number; name: string; storymap: string; activity?: string }): string {
+  const fields = o.activity ? hidden("activity", o.activity) : "";
+  const move = (to: number, symbol: string, word: string) =>
+    opForm({ op: o.op, expect: o.storymap, target: o.target, cls: "tool", fields: fields + hidden("to", String(to)), submit: symbol, label: `Move ${o.name} ${word}` });
+  return `<span class="side-tools">${o.place > 1 ? move(o.place - 1, "←", "left") : ""}${o.place < o.count ? move(o.place + 1, "→", "right") : ""}</span>`;
+}
+
+/** Where a story sits in its release's build order, and the places of the stories above and below it in its cell. */
+export interface StoryOrder {
+  release: number;
+  title: string;
+  place: number;
+  count: number;
+  up?: number;
+  down?: number;
+}
+
+/** The "Build order" of a story's panel: move it above or below the next story in its cell. */
+export function orderBox(s: MapStory, o: StoryOrder | undefined, storymap: string): string {
+  if (!o || (!o.up && !o.down)) return "";
+  const move = (to: number, text: string) => opForm({ op: "story.reorder", expect: storymap, target: { story: s.id }, cls: "tool", fields: hidden("to", String(to)), submit: text });
+  return `<div class="sub order"><h4>Build order</h4><p class="where">Place ${o.place} of ${o.count} in R${o.release} · ${esc(o.title)}.</p><span class="band-tools">${o.up ? move(o.up, "↑ Move up") : ""}${o.down ? move(o.down, "↓ Move down") : ""}</span><p class="where">It swaps with the story above or below it in this cell. Only storymap.yaml changes, and nikos next builds in this order. You can also drag a card up or down in its cell.</p></div>`;
+}
+
 /**
  * The "Add a story" dialog: its title, activity and step, release and priority, with the command it matches.
  * It opens from the button at the top of the page; each cell's "+ Story" still adds one in place.
@@ -264,7 +289,7 @@ function criterionBox(c: Criterion, s: MapStory, expect: string): string {
  * The edit area under a story's read view: its details, its placement and its criteria. A story with no
  * feature file, or one that doesn't parse, says so instead.
  */
-export function storyEditArea(s: MapStory, edit: EditData, m: StoryMap): string {
+export function storyEditArea(s: MapStory, edit: EditData, m: StoryMap, order?: StoryOrder): string {
   const f = edit.stories.get(s.id);
   if (!f) return `<div class="edit-area"><p class="warn">This story has no feature file yet, so it can't be edited here.</p></div>`;
   if (f.broken) return `<div class="edit-area"><p class="warn">Its feature file has a Gherkin error, so it can't be edited here until that's fixed.</p></div>`;
@@ -324,7 +349,7 @@ export function storyEditArea(s: MapStory, edit: EditData, m: StoryMap): string 
     }),
   );
   return `<div class="edit-area"><h3 class="eyebrow">Edit this story</h3>${note}
-${moveBox(s, m, edit.storymap)}
+${orderBox(s, order, edit.storymap)}${moveBox(s, m, edit.storymap)}
 <div class="sub"><h4>Details</h4>${details}${personaBox(edit.storymap)}</div>
 <div class="sub"><h4>Placement</h4>${placement}</div>
 <div class="sub"><h4>Acceptance criteria</h4>${criteria}${addCriterion}</div></div>`;
@@ -365,6 +390,15 @@ form.op { display: grid; gap: 10px; margin: 0; }
 .op.tool button.danger { color: var(--bad); border-color: var(--line); background: var(--surface); }
 .tool:disabled { opacity: .5; cursor: not-allowed; }
 .band-tools { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.side-tools { display: inline-flex; gap: 2px; margin-left: auto; opacity: .75; }
+.side-tools:hover, .side-tools:focus-within { opacity: 1; }
+.side-tools .op.tool button { min-height: 22px; padding: 0 6px; }
+.side-tools .op.tool .save-msg:empty { display: none; }
+.activity .side-tools .op.tool button { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent); }
+.act-head { display: flex; align-items: center; gap: 6px; }
+.step { display: flex; align-items: center; gap: 4px; }
+.card.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.card.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .tool-pop { display: inline-block; }
 .tool-pop > summary { display: inline-flex; align-items: center; }
 .edit-area { display: grid; gap: 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
@@ -524,7 +558,8 @@ for (var a = 0; a < adds.length; a++) {
   })(adds[a]);
 }
 // Drag a story's card into another release's band to move it there. It keeps its activity and step.
-var dragId = "", dragFrom = "";
+// Dropped on another card in its own cell, it goes above or below that card in the release's build order.
+var dragId = "", dragFrom = "", dragCell = null, dragPos = 0;
 var msg = document.createElement("div");
 msg.className = "drag-msg";
 msg.setAttribute("role", "status");
@@ -537,7 +572,15 @@ function bandOf(e) {
   if (!band || band.hidden || band.getAttribute("data-number") === dragFrom) return null;
   return band;
 }
-function clearDrop() { var on = document.querySelectorAll(".drop-ok, .dragging"); for (var i = 0; i < on.length; i++) on[i].classList.remove("drop-ok", "dragging"); }
+function clearDrop() { var on = document.querySelectorAll(".drop-ok, .dragging, .drop-before, .drop-after"); for (var i = 0; i < on.length; i++) on[i].classList.remove("drop-ok", "dragging", "drop-before", "drop-after"); }
+// The card under the pointer in the dragged card's own cell, and whether the drop goes above it.
+function cardOf(e) {
+  if (!dragId || !dragCell) return null;
+  var card = e.target && e.target.closest ? e.target.closest(".card[data-pos]") : null;
+  if (!card || card.parentElement !== dragCell || card.getAttribute("data-story") === dragId) return null;
+  var box = card.getBoundingClientRect();
+  return { card: card, above: e.clientY < box.top + box.height / 2 };
+}
 document.addEventListener("dragstart", function (e) {
   var card = e.target && e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
   if (!card) return;
@@ -545,12 +588,24 @@ document.addEventListener("dragstart", function (e) {
   if (!band) return;
   dragId = card.getAttribute("data-story");
   dragFrom = band.getAttribute("data-number");
+  dragCell = card.parentElement;
+  dragPos = Number(card.getAttribute("data-pos")) || 0;
   card.classList.add("dragging");
   e.dataTransfer.effectAllowed = "move";
   e.dataTransfer.setData("text/plain", dragId);
 });
-document.addEventListener("dragend", function () { dragId = ""; dragFrom = ""; clearDrop(); });
+document.addEventListener("dragend", function () { dragId = ""; dragFrom = ""; dragCell = null; dragPos = 0; clearDrop(); });
 document.addEventListener("dragover", function (e) {
+  var spot = cardOf(e);
+  var marked = document.querySelectorAll(".drop-before, .drop-after");
+  for (var m = 0; m < marked.length; m++) if (!spot || marked[m] !== spot.card) marked[m].classList.remove("drop-before", "drop-after");
+  if (spot) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    spot.card.classList.toggle("drop-before", spot.above);
+    spot.card.classList.toggle("drop-after", !spot.above);
+    return;
+  }
   var band = bandOf(e);
   var on = document.querySelectorAll(".band.drop-ok");
   for (var i = 0; i < on.length; i++) if (on[i] !== band) on[i].classList.remove("drop-ok");
@@ -560,6 +615,22 @@ document.addEventListener("dragover", function (e) {
   band.classList.add("drop-ok");
 });
 document.addEventListener("drop", function (e) {
+  var spot = cardOf(e);
+  if (spot && dragPos) {
+    e.preventDefault();
+    var at = Number(spot.card.getAttribute("data-pos"));
+    // Its place once it's taken out of the list and put back above or below that card.
+    var to = spot.above ? (at < dragPos ? at : at - 1) : (at > dragPos ? at : at + 1);
+    var sid = dragId;
+    clearDrop();
+    if (to === dragPos) return;
+    say("Moving " + sid + "…");
+    call("POST", "/api/op", { op: "story.reorder", map: document.body.getAttribute("data-map"), target: { story: sid }, args: { to: to }, expect: document.body.getAttribute("data-storymap") || "" }).then(function (res) {
+      if (res.ok) { say(res.body.message); setTimeout(function () { location.reload(); }, 700); return; }
+      say(res.status === 409 ? "The map changed since the page loaded. Reload to see the latest, then try again." : errorOf(res));
+    }, function () { say(gone()); });
+    return;
+  }
   var band = bandOf(e);
   if (!band) return;
   e.preventDefault();

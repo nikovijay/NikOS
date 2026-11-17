@@ -4,10 +4,13 @@
 
 ### Added
 
+- **Rearrange the story map.** Activities and steps have ← and → to move them along the row, and their stories go with them. A story moves up or down in its cell: drag its card, or use Move up and Move down in its panel's Build order. That order is the release's build order in storymap.yaml, which `nikos next` follows. Only storymap.yaml changes, so feature files and approvals stay as they are. The dashboard sends these as three new edits: `activity.reorder`, `step.reorder` and `story.reorder`.
+- **The constitution and decisions on the story map.** Constitution and Decisions open beside the map's title. The constitution shows constitution.md. Decisions shows decisions.md newest first, with each entry's category, and a link to the story it names. Both are read-only on the page: decisions are still added with `nikos decide`.
 - **Story maps as Jira issues and epics.** A new, optional `maps/<key>/tickets.yaml` says how a story map becomes tracker issues and epics. By default each story is an issue and each activity an epic. You can make one issue per step in each release instead, epics per release or none, combine stories into one issue, give an issue its own summary or epic, and set the issue and epic types, a label, a component, and whether story ids go in labels or a custom field. `nikos tickets` lists the result, `nikos tickets export` writes the file your agent turns into issues with the tracker's MCP, and `nikos tickets keys` records the keys they got. An issue's key is linked to each of its stories as their ticket, so a later export updates it and only creates what's new. The MCP server has `tickets_export` and `tickets_keys` for the same round trip. `nikos validate` checks the file.
 
 ### Changed
 
+- **The title in the top bar stands apart from the brand.** A rule separates them, and the title is centred on the mark.
 - **`nikos tracker sync` lists a shared ticket once.** When several stories share one ticket, it moves with the least advanced of them.
 
 ## 0.7.1 (2026-11-16)

@@ -137,3 +137,50 @@ export function renameStep(dir: string, input: { map?: string; id: string; title
   store().write(mapPath, map.toString(yamlOpts));
   return { validation: validate(ref.dir) };
 }
+
+/** Check a 1-based position against a list's length. */
+function position(to: number, count: number): number {
+  if (!Number.isInteger(to) || to < 1 || to > count) throw new Error(`Position must be from 1 to ${count}`);
+  return to;
+}
+
+/** Move an activity to another place in the activities row. Its steps and stories go with it. */
+export function reorderActivity(dir: string, input: { map?: string; id: string; to: number }, expect?: string): { order: string[]; validation: ValidationResult } {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const text = read(mapPath);
+  checkHash("storymap.yaml", text, expect);
+  const map = parseDocument(text);
+  const activities = map.get("activities", true);
+  if (!isSeq(activities)) throw new Error("storymap.yaml has no activities list");
+  const found = activities.items.find((a) => isMap(a) && a.get("id") === input.id);
+  if (!found) throw new Error(`${input.id} is not an activity in maps/${ref.id}`);
+  const to = position(input.to, activities.items.length);
+  activities.items.splice(activities.items.indexOf(found), 1);
+  activities.items.splice(to - 1, 0, found);
+  store().write(mapPath, map.toString(yamlOpts));
+  return { order: activities.items.filter(isMap).map((a) => String(a.get("id"))), validation: validate(ref.dir) };
+}
+
+/** Move a step to another place among its activity's steps. Its stories go with it. */
+export function reorderStep(dir: string, input: { map?: string; id: string; activity?: string; to: number }, expect?: string): { order: string[]; validation: ValidationResult } {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const mapPath = join(ref.dir, "storymap.yaml");
+  const text = read(mapPath);
+  checkHash("storymap.yaml", text, expect);
+  const map = parseDocument(text);
+  const activities = map.get("activities", true);
+  const list = isSeq(activities) ? activities.items.filter(isMap) : [];
+  for (const a of list.filter((x) => !input.activity || x.get("id") === input.activity)) {
+    const steps = a.get("steps", true);
+    if (!isSeq(steps)) continue;
+    const found = steps.items.find((st) => isMap(st) && st.get("id") === input.id);
+    if (!found) continue;
+    const to = position(input.to, steps.items.length);
+    steps.items.splice(steps.items.indexOf(found), 1);
+    steps.items.splice(to - 1, 0, found);
+    store().write(mapPath, map.toString(yamlOpts));
+    return { order: steps.items.filter(isMap).map((st) => String(st.get("id"))), validation: validate(ref.dir) };
+  }
+  throw new Error(`${input.id} is not a step${input.activity ? ` of ${input.activity}` : ""} in maps/${ref.id}`);
+}

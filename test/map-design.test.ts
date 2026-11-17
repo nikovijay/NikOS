@@ -5,6 +5,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { renderMap } from "../src/commands/map.js";
+import { decisionsOf, markdown } from "../src/commands/map-docs.js";
 import { copyExample, edit, rootOf } from "./helpers.js";
 
 const TOKEN = "tok3n-for-tests";
@@ -74,6 +75,68 @@ describe("the story map page's design", () => {
     expect(html).toContain('<label class="switch"><input type="checkbox" id="f-personas">Personas on cards</label>');
     expect(html).toMatch(/data-story="HT-1"[^>]*>.*?<span class="cpersonas">For Busy parent<\/span>/);
     expect(html).toContain(".show-personas .cpersonas { display: block; }");
+  });
+
+  test("activities and steps move left and right; a story moves up or down in its cell", () => {
+    const root = sample();
+    // One activity, so it has no arrows; its three steps do, except where they'd run off the row.
+    let html = renderMap(root, { live: true, token: TOKEN });
+    expect(html).not.toContain('data-op="activity.reorder"');
+    expect(html).not.toContain('aria-label="Move step Capture a task left"');
+    expect(html).toContain('aria-label="Move step Capture a task right"');
+    expect(html).toContain('data-op="step.reorder" data-target="{&#34;step&#34;:&#34;focus&#34;}"');
+    edit(join(root, STORYMAP), (s) => s.replace("releases:", "  - id: share\n    title: Share tasks\nreleases:"));
+    html = renderMap(root, { live: true, token: TOKEN });
+    expect(html).toContain('aria-label="Move activity Manage tasks right"');
+    expect(html).toContain('aria-label="Move activity Share tasks left"');
+
+    // Each released card carries its place in the release, for dragging it up or down.
+    expect(html).toMatch(/data-story="HT-2"[^>]*draggable="true" data-pos="2"/);
+    // HT-1 and HT-2 are in different cells, so neither has a Build order box.
+    expect(html.slice(html.indexOf('id="story-HT-1"'), html.indexOf('id="story-HT-2"'))).not.toContain("Build order");
+    edit(join(root, "maps/ht/features/tasks/see-todays-top-three.feature"), (s) => s.replace("@step-focus", "@step-capture"));
+    html = renderMap(root, { live: true, token: TOKEN });
+    const panel = html.slice(html.indexOf('id="story-HT-2"'), html.indexOf('id="story-HT-3"'));
+    expect(panel).toContain("Place 2 of 2 in R1 · MVP.");
+    expect(panel).toContain('data-op="story.reorder"');
+    expect(panel).toContain('<input type="hidden" name="to" value="1">');
+    expect(panel).toContain("↑ Move up");
+    expect(panel).not.toContain("↓ Move down");
+    // The exported page has no arrows.
+    expect(renderMap(root)).not.toContain('data-op="step.reorder"');
+  });
+
+  test("the live page opens the constitution and the decisions, newest first; the export has neither", () => {
+    const root = sample();
+    const html = renderMap(root, { live: true, token: TOKEN });
+    expect(html).toContain('<button type="button" class="doc-link" data-open-dialog="constitution">Constitution</button>');
+    expect(html).toContain('data-open-dialog="decisions">Decisions<span class="count">2</span>');
+    const c = html.slice(html.indexOf('<dialog id="constitution"'), html.indexOf('<dialog id="decisions"'));
+    expect(c).toContain("<strong>Hello Todo</strong><span>A todo list that only shows today&#39;s three most important tasks.</span>".replace("&#39;", "'"));
+    expect(c).toContain("<h4>Users</h4><p>Busy people who keep long todo lists");
+    const d = html.slice(html.indexOf('<dialog id="decisions"'));
+    // Newest last in the file, so the later entry comes first; the one that names HT-1 links to its panel.
+    expect(d.indexOf("Cap today")).toBeLessThan(d.indexOf("Store tasks in localStorage"));
+    expect(d).toContain('<a class="sid" href="#story-HT-1" data-close-dialog>HT-1</a>');
+    expect(d).toContain('<span class="d-cat">architecture</span>');
+    expect(renderMap(root)).not.toContain('<dialog id="constitution"');
+  });
+
+  test("the documents are read safely, and say so when a file is missing", () => {
+    expect(markdown("## Why\nIt's **fast** and uses `x`.\n\n- one\n- <b>two</b>\n<!-- hidden -->\n<script>alert(1)</script>")).toBe(
+      "<h4>Why</h4><p>It&#39;s <b>fast</b> and uses <code>x</code>.</p><ul><li>one</li><li>&lt;b&gt;two&lt;/b&gt;</li></ul><p>&lt;script&gt;alert(1)&lt;/script&gt;</p>".replace("&#39;", "'"),
+    );
+    const root = sample();
+    expect(decisionsOf(root).map((x) => [x.date, x.story ?? "", x.category])).toEqual([
+      ["2026-11-03", "", "product"],
+      ["2026-11-03", "HT-1", "architecture"],
+    ]);
+    rmSync(join(root, "constitution.md"));
+    rmSync(join(root, "decisions.md"));
+    const html = renderMap(root, { live: true, token: TOKEN });
+    expect(html).toContain("This repo has no constitution.md yet.");
+    expect(html).toContain("No decisions yet.");
+    expect(html).toContain('Decisions<span class="count">0</span>');
   });
 
   test("each release has reorder, rename and remove tools; remove says why it can't run", () => {
