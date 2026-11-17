@@ -18,6 +18,7 @@ import { approvalsDir, storyFiles } from "../lib/state-files.js";
 import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, walk } from "../lib/project.js";
 import { loadMapData } from "../lib/map-data.js";
 import { contractVersion, schemaProblems } from "../lib/schema.js";
+import { TICKETS_FILE, ticketProblems } from "./tickets.js";
 import { codeChangedSince } from "../lib/git.js";
 
 export interface Issue {
@@ -395,6 +396,9 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
   }
 
   checkDeliverySummary(ref, errors);
+  const tickets = ticketProblems(ref);
+  errors.push(...tickets.errors.map((message) => ({ file: TICKETS_FILE, message })));
+  warnings.push(...tickets.warnings.map((message) => ({ file: TICKETS_FILE, message })));
 
   return { dir, errors, warnings, stories: mapStories.size, releases: storymap?.releases?.length ?? 0 };
 }

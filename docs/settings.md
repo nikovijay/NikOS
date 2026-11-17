@@ -193,6 +193,16 @@ walks through it: connect, map the statuses, import or link, keep in step.
 | `nikos tracker sync [--json]` | For each linked story, the status its ticket should be in. Your agent moves the tickets |
 | `nikos tracker import <tickets.json>` | Bring a backlog in: `[{ "key", "title", "group" }]` become linked todo stories, each group an activity |
 
+To map a story map onto Jira issues and epics, with several stories in one
+issue if you like, use `nikos tickets` (see `tickets.yaml` in the
+[format](format.md)):
+
+| Command | What it does |
+| --- | --- |
+| `nikos tickets` | The issues and epics the map becomes, with their keys |
+| `nikos tickets export [--out <file>]` | The file your agent reads: epics, then issues, each to create or update |
+| `nikos tickets keys <file>` | Record the keys the tracker gave, `{ "<ref>": "<key>" }` or the export with keys filled in |
+
 A ticket can never move a story to done. Done means the story's scenarios
 pass, so when a ticket says Done and nikOS doesn't agree, nikOS keeps its own
 status and lists the ticket to move back.
