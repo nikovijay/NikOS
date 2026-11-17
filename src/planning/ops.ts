@@ -3,6 +3,7 @@
 // planning and story map files, so nothing is written until a person says so.
 import { join, relative, resolve, sep } from "node:path";
 import { addRelease, moveStory, removeRelease, renameRelease, reorderRelease, reorderStory } from "../commands/release.js";
+import { combineIssue, keysFrom, newEpic, recordKeys, renameIssue, setIssueEpic, setTicketFields, setTicketRules, splitIssue } from "../commands/tickets.js";
 import { newActivity, newStep, renameActivity, renameStep, reorderActivity, reorderStep } from "../commands/step.js";
 import { addPersona, addScenario, editScenario, editStory, newStory, placeStory, removeScenario, renameStory, removeStory } from "../commands/story.js";
 import { newMap } from "../commands/map.js";
@@ -51,6 +52,14 @@ export type OpName =
   | "release.rename"
   | "release.remove"
   | "release.reorder"
+  | "tickets.rules"
+  | "tickets.fields"
+  | "tickets.combine"
+  | "tickets.split"
+  | "tickets.rename"
+  | "tickets.epic"
+  | "tickets.epic_new"
+  | "tickets.keys"
   | "map.new"
   | "setting.set";
 
@@ -91,6 +100,14 @@ const GROUP: OpName[] = [
   "release.rename",
   "release.remove",
   "release.reorder",
+  "tickets.rules",
+  "tickets.fields",
+  "tickets.combine",
+  "tickets.split",
+  "tickets.rename",
+  "tickets.epic",
+  "tickets.epic_new",
+  "tickets.keys",
   "map.new",
 ];
 // A group makes bets that aim at key results above it (bet.krs), so it is listed here.
@@ -99,7 +116,7 @@ const AREA_GROUP: OpName[] = [...GROUP, "bet.krs"];
 const TEAM: OpName[] = ["bet.new", "bet.edit", "bet.review", "bet.align", "bet.krs"];
 
 /** Ops that edit a story map or the settings of a code repo. A planning area never makes them: maps stay in the code repos. */
-const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.reorder", "story.remove", "story.edit", "story.place", "scenario.add", "scenario.edit", "scenario.remove", "persona.new", "activity.new", "activity.rename", "activity.reorder", "step.new", "step.rename", "step.reorder", "release.new", "release.rename", "release.remove", "release.reorder", "map.new", "setting.set"]);
+const AREA_REFUSED = new Set<OpName>(["story.new", "story.rename", "story.move", "story.reorder", "story.remove", "story.edit", "story.place", "scenario.add", "scenario.edit", "scenario.remove", "persona.new", "activity.new", "activity.rename", "activity.reorder", "step.new", "step.rename", "step.reorder", "release.new", "release.rename", "release.remove", "release.reorder", "tickets.rules", "tickets.fields", "tickets.combine", "tickets.split", "tickets.rename", "tickets.epic", "tickets.epic_new", "tickets.keys", "map.new", "setting.set"]);
 
 /** Every op name. Typed as a record of OpName, so a name missing here (or extra) fails to compile. */
 const NAMES: Record<OpName, true> = {
@@ -135,6 +152,14 @@ const NAMES: Record<OpName, true> = {
   "release.rename": true,
   "release.remove": true,
   "release.reorder": true,
+  "tickets.rules": true,
+  "tickets.fields": true,
+  "tickets.combine": true,
+  "tickets.split": true,
+  "tickets.rename": true,
+  "tickets.epic": true,
+  "tickets.epic_new": true,
+  "tickets.keys": true,
   "map.new": true,
   "setting.set": true,
 };
@@ -188,6 +213,14 @@ const ARGS: Partial<Record<OpName, string[]>> = {
   "release.rename": ["title", "goal", "map"],
   "release.remove": ["map"],
   "release.reorder": ["to", "map"],
+  "tickets.rules": ["issues", "epics", "map"],
+  "tickets.fields": ["issue_type", "epic_type", "label", "component", "story_ids", "map"],
+  "tickets.combine": ["stories", "summary", "map"],
+  "tickets.split": ["map"],
+  "tickets.rename": ["summary", "map"],
+  "tickets.epic": ["epic", "map"],
+  "tickets.epic_new": ["title", "map"],
+  "tickets.keys": ["keys", "map"],
   "map.new": ["bet", "key", "map"],
   "setting.set": ["key", "value"],
 };
@@ -223,6 +256,13 @@ export const EDITS = new Set<OpName>([
   "release.rename",
   "release.remove",
   "release.reorder",
+  "tickets.rules",
+  "tickets.fields",
+  "tickets.combine",
+  "tickets.split",
+  "tickets.rename",
+  "tickets.epic",
+  "tickets.epic_new",
 ]);
 
 
@@ -464,6 +504,45 @@ function apply(root: string, op: Op): string {
       checkStoryMap(root, map, expect);
       reorderRelease({ map, number: num(t.release), to: num(a.to) }, root);
       return `Moved release ${t.release} to position ${a.to}`;
+    case "tickets.rules":
+      setTicketRules(root, { map, issues: str(a.issues), epics: str(a.epics) }, expect);
+      return "Changed how the map becomes issues";
+    case "tickets.fields":
+      setTicketFields(root, { map, issue_type: given(a.issue_type), epic_type: given(a.epic_type), label: given(a.label), component: given(a.component), story_ids: given(a.story_ids) }, expect);
+      return "Changed the tracker fields";
+    case "tickets.combine": {
+      const r = combineIssue(root, { map, stories: refs(a.stories), summary: str(a.summary) }, expect);
+      return `Made ${r.stories.join(", ")} one issue`;
+    }
+    case "tickets.split": {
+      const r = splitIssue(root, { map, ref: t.story }, expect);
+      return `Split ${r.stories.join(", ")} into an issue each`;
+    }
+    case "tickets.rename":
+      renameIssue(root, { map, ref: t.story, summary: String(a.summary ?? "") }, expect);
+      return `Renamed the issue for ${t.story}`;
+    case "tickets.epic": {
+      const r = setIssueEpic(root, { map, ref: t.story, epic: String(a.epic ?? "") }, expect);
+      return `Moved the issue for ${t.story} to ${r.epic === "none" ? "no epic" : r.epic ? `epic ${r.epic}` : "its rules' epic"}`;
+    }
+    case "tickets.epic_new": {
+      const r = newEpic(root, { map, title: String(a.title ?? "") }, expect);
+      return `Added epic ${r.title}`;
+    }
+    case "tickets.keys": {
+      // From the page the keys come as the lines of a text box; from a script, as an object.
+      const raw = Array.isArray(a.keys) ? a.keys.join("\n") : a.keys;
+      let keys: unknown = raw;
+      if (typeof raw === "string") {
+        try {
+          keys = JSON.parse(raw);
+        } catch {
+          throw new Error('Paste the keys as JSON: { "<ref>": "<key>" }, or the exported file with keys filled in');
+        }
+      }
+      const r = recordKeys(root, keysFrom(keys), map);
+      return `Recorded ${r.issues.length + r.epics.length} ${r.issues.length + r.epics.length === 1 ? "key" : "keys"}`;
+    }
     case "map.new": {
       const r = newMap({ bet: str(a.bet), key: str(a.key) }, root);
       return `Created maps/${r.id} for bet ${a.bet}`;

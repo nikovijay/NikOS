@@ -22,6 +22,7 @@ import { EDIT_CSS, EDIT_JS, addActivityBox, addReleaseBox, addStepBox, addStoryB
 import { BRAND_MARK, DESIGN_CSS } from "../lib/design.js";
 import { next } from "./next.js";
 import { DOCS_CSS, docDialogs, docLinks } from "./map-docs.js";
+import { TICKETS_CSS, TICKETS_JS, cardTicket, modeSwitch, ticketBar, ticketPanel, ticketViewOf } from "./map-tickets.js";
 
 export interface MapCriterion {
   id: string;
@@ -250,6 +251,8 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
   const m = storyMapOf(dir, opts.map);
   const ref = opts.token === undefined ? undefined : resolveStoryMap(dir, { map: opts.map });
   const edit: EditData | undefined = ref && editDataOf(ref);
+  // Ticketing mode comes with editing: its changes are edits too.
+  const tk = edit ? ticketViewOf(ref!) : undefined;
   const repo = basename(resolve(dir));
   const several = mapDirs(dir).length > 1;
   // One column per step; an activity with no steps (or the "Other" bucket) gets one column.
@@ -304,7 +307,8 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     const drag = edit && release !== undefined ? ` draggable="true" data-pos="${order.get(s.id)?.place ?? 0}"` : "";
     // Hidden until the viewer turns on "Personas on cards".
     const who = s.personas.length ? `<span class="cpersonas">For ${esc(s.personas.map(personaName).join(", "))}</span>` : "";
-    return `<a class="card ${st.cls}" ${data}${upNext.story === s.id ? " data-next" : ""}${drag} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span>${who}<span class="cfoot">${foot}${nextTag}</span></a>`;
+    const ticket = tk ? cardTicket(tk, s.id) : { attrs: "", badge: "" };
+    return `<a class="card ${st.cls}" ${data}${upNext.story === s.id ? " data-next" : ""}${drag}${ticket.attrs} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}${ticket.badge}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span>${who}<span class="cfoot">${foot}${nextTag}</span></a>`;
   };
   const tally = (stories: MapStory[]) => {
     const live = stories.filter((s) => s.status !== "cancelled");
@@ -423,24 +427,24 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 ${edit ? `<meta name="nikos-token" content="${esc(opts.token)}">\n` : ""}<title>${esc(title)}</title>
-<style>${DESIGN_CSS}\n${CSS}${opts.live ? DOCS_CSS : ""}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}` : ""}</style>
+<style>${DESIGN_CSS}\n${CSS}${opts.live ? DOCS_CSS : ""}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}\n${TICKETS_CSS}` : ""}</style>
 ${opts.live ? `${THEME_HEAD}\n` : ""}</head>
-<body${edit ? ` class="editing" data-map="${esc(ref!.id)}" data-storymap="${esc(edit.storymap)}"${several ? " data-several" : ""}` : ""}>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}${opts.live ? docLinks(dir) : ""}</div><span class="spacer"></span>${actions}${host}${
+<body${edit ? ` class="editing" data-map="${esc(ref!.id)}" data-storymap="${esc(edit.storymap)}" data-tickets="${esc(tk!.hash)}"${several ? " data-several" : ""}` : ""}>
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}${opts.live ? docLinks(dir) : ""}</div><span class="spacer"></span>${edit ? modeSwitch() : ""}${actions}${host}${
   opts.live ? `<button type="button" class="btn" data-open-dialog="share">Share…</button><button type="button" class="btn" data-collapse aria-controls="above" aria-expanded="true">Collapse</button>${THEME_BUTTON}` : ""
 }</div></header>
 <div class="above" id="above"><div class="strip"><nav class="jumps" aria-label="Releases">${jumps}</nav>${overview}</div>${filters}</div>
-${edit ? `<div id="pending" class="pending" role="status" hidden></div>\n` : ""}<main id="board" tabindex="-1">
+${edit ? `${ticketBar(tk!)}\n<div id="pending" class="pending" role="status" hidden></div>\n<div class="work">` : ""}<main id="board" tabindex="-1">
 ${everything.length || edit ? `<div class="board" style="--cols:${Math.max(1, columns.length)}">
 ${spine}
 ${bands}
 ${releaseAdd}
 ${unreleased}
 </div>` : `<div class="board"><div class="blank"><h2>No stories yet</h2><p>A story map lists what people do with the product, step by step, and the stories that deliver each step. Add the first one with <code>nikos story add "&lt;title&gt;" --activity &lt;id&gt;</code>, or ask your coding agent to plan the product with you.</p></div></div>`}
-</main>
+</main>${edit ? `\n${ticketPanel(tk!, m)}</div>` : ""}
 ${everything.map(panel).join("\n")}
 ${share}${opts.live ? docDialogs(dir, new Set(everything.map((s) => s.id))) : ""}${edit ? addStoryDialog(m, edit.storymap) : ""}
-${opts.live ? `<script>${FILTER_JS}\n${LIVE_JS}</script>` : ""}${edit ? `<script>${EDIT_JS}</script>` : ""}
+${opts.live ? `<script>${FILTER_JS}\n${LIVE_JS}</script>` : ""}${edit ? `<script>${EDIT_JS}\n${TICKETS_JS}</script>` : ""}
 </body>
 </html>
 `;

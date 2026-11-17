@@ -4,7 +4,7 @@
 // changes made by hand, and the epics' keys. A story's issue key is its ticket in state.yaml, the same link
 // `nikos tracker` uses, so sync and record keep working when several stories share one issue.
 import { join } from "node:path";
-import { isMap, isSeq, parse, parseDocument, YAMLMap, YAMLSeq } from "yaml";
+import { isMap, isSeq, parse, parseDocument, YAMLMap, YAMLSeq, type Document } from "yaml";
 import { resolveStoryMap, type StoryMapRef } from "../lib/maps.js";
 import { read } from "../lib/project.js";
 import { contractVersion, schemaProblems } from "../lib/schema.js";
@@ -13,6 +13,8 @@ import { loadStates } from "../lib/state-files.js";
 import { store } from "../lib/store.js";
 import { storyMapOfRef, type MapStory, type StoryMap } from "./map.js";
 import { linkTicket } from "./tracker.js";
+import { slugify } from "./init.js";
+import { checkHash, hash } from "../planning/model.js";
 
 export const TICKETS_FILE = "tickets.yaml";
 const yamlOpts = { lineWidth: 0, flowCollectionPadding: false };
@@ -304,6 +306,184 @@ function writeEpicKeys(ref: StoryMapRef, keys: { ref: string; key: string }[]): 
     else seq.add(doc.createNode({ id, key }));
   }
   store().write(path, doc.toString(yamlOpts));
+}
+
+/** The hash a page sends with an edit to tickets.yaml: the file's, or an empty file's when there is none yet. */
+export function ticketsHash(ref: StoryMapRef): string {
+  const path = pathOf(ref);
+  return hash(store().exists(path) ? read(path) : "");
+}
+
+/**
+ * Change tickets.yaml: check it is as the page read it, change it, and write it if it still fits the schema.
+ * A map with no file gets one. Comments and the order of what isn't touched are kept.
+ */
+function editTickets(ref: StoryMapRef, expect: string | undefined, fn: (doc: Document) => void): void {
+  const path = pathOf(ref);
+  const exists = store().exists(path);
+  if (expect) checkHash(`maps/${ref.id}/${TICKETS_FILE}`, exists ? read(path) : "", expect);
+  const doc = parseDocument(exists ? read(path) : "format_version: 1\n");
+  fn(doc);
+  const problems = schemaProblems("tickets.schema.json", doc.toJS());
+  if (problems.length) throw new Error(`That would leave ${TICKETS_FILE} with: ${problems.join("; ")}`);
+  store().write(path, doc.toString(yamlOpts));
+}
+
+/** A list in tickets.yaml (issues or epics), made when it has none yet. */
+function listOf(doc: Document, name: "issues" | "epics"): YAMLSeq<YAMLMap> {
+  if (!isSeq(doc.get(name, true))) doc.set(name, doc.createNode([]));
+  return doc.get(name, true) as YAMLSeq<YAMLMap>;
+}
+const storiesIn = (entry: YAMLMap): string[] => {
+  const v = entry.get("stories", true);
+  return isSeq(v) ? v.items.map((i: any) => String(i?.value ?? i)) : [];
+};
+const flowList = (doc: Document, ids: string[]) => {
+  const node = doc.createNode(ids) as YAMLSeq;
+  node.flow = true;
+  return node;
+};
+
+/** The issue a ref names, as the map and tickets.yaml make it now. */
+function issueAt(t: Tickets, ref: string): TicketIssue {
+  const issue = t.issues.find((i) => i.ref === ref) ?? t.issues.find((i) => i.stories.some((s) => s.id === ref));
+  if (!issue) throw new Error(`${ref} isn't on any issue in maps/${t.ref.id}: it is cancelled, or in no release`);
+  return issue;
+}
+
+/** The hand entry an issue has, made from its stories when it has none, so a summary or epic can be set on it. */
+function entryFor(doc: Document, issue: TicketIssue): YAMLMap {
+  const list = listOf(doc, "issues");
+  const found = list.items.find((e) => isMap(e) && storiesIn(e).includes(issue.ref));
+  if (found) return found;
+  const entry = doc.createNode({}) as YAMLMap;
+  entry.set("stories", flowList(doc, issue.stories.map((s) => s.id)));
+  list.add(entry);
+  return entry;
+}
+
+/** Take stories out of the hand entries they are in, dropping entries left with none. */
+function takeOut(doc: Document, ids: string[]): void {
+  const list = listOf(doc, "issues");
+  for (const entry of [...list.items]) {
+    if (!isMap(entry)) continue;
+    const left = storiesIn(entry).filter((id) => !ids.includes(id));
+    if (left.length === storiesIn(entry).length) continue;
+    if (left.length) entry.set("stories", flowList(doc, left));
+    else list.items.splice(list.items.indexOf(entry), 1);
+  }
+}
+
+/** Check an epic id against the map: an activity, a release, one made by hand, or none. */
+function epicProblem(t: Tickets, file: TicketsFile, epic: string): string | undefined {
+  const m = storyMapOfRef(t.ref);
+  if (epic === "none") return undefined;
+  if (epic.startsWith("activity:")) return m.activities.some((a) => a.id === epic.slice(9)) ? undefined : `The map has no activity ${epic.slice(9)}`;
+  if (epic.startsWith("release:")) return m.releases.some((r) => String(r.number) === epic.slice(8)) ? undefined : `The map has no release ${epic.slice(8)}`;
+  return (file.epics ?? []).some((e) => e.id === epic && e.title) ? undefined : `There is no epic ${epic}: make it first`;
+}
+
+/** Make stories one issue. They leave any issue they were in; an optional summary names it. */
+export function combineIssue(dir: string, input: { map?: string; stories: string[]; summary?: string }, expect?: string) {
+  const t = ticketsOf(dir, input.map);
+  const ids = [...new Set(input.stories.map((x) => x.trim()).filter(Boolean))];
+  if (ids.length < 2) throw new Error("Pick at least two stories to make one issue");
+  const on = new Set(t.issues.flatMap((i) => i.stories.map((s) => s.id)));
+  const off = ids.filter((id) => !on.has(id));
+  if (off.length) throw new Error(`${off.join(", ")} ${off.length === 1 ? "isn't" : "aren't"} on any issue: cancelled, or in no release`);
+  editTickets(t.ref, expect, (doc) => {
+    takeOut(doc, ids);
+    const entry = doc.createNode({}) as YAMLMap;
+    entry.set("stories", flowList(doc, ids));
+    if (input.summary?.trim()) entry.set("summary", input.summary.trim());
+    listOf(doc, "issues").add(entry);
+  });
+  return { ref: ids[0], stories: ids };
+}
+
+/** Split an issue into one issue per story. Its summary and epic go with it; each story's issue follows the rules. */
+export function splitIssue(dir: string, input: { map?: string; ref: string }, expect?: string) {
+  const t = ticketsOf(dir, input.map);
+  const issue = issueAt(t, input.ref);
+  const ids = issue.stories.map((s) => s.id);
+  if (ids.length < 2) throw new Error(`${issue.ref} is already one story's issue`);
+  editTickets(t.ref, expect, (doc) => {
+    takeOut(doc, ids);
+    // The step rule would put them back together, so each gets an entry of its own.
+    if (t.rules.issues === "step") for (const id of ids) listOf(doc, "issues").add(doc.createNode({ stories: flowList(doc, [id]) }));
+  });
+  return { stories: ids };
+}
+
+/** Give an issue its own summary; a blank one goes back to the summary the rules give it. */
+export function renameIssue(dir: string, input: { map?: string; ref: string; summary: string }, expect?: string) {
+  const t = ticketsOf(dir, input.map);
+  const issue = issueAt(t, input.ref);
+  const summary = input.summary.trim();
+  editTickets(t.ref, expect, (doc) => {
+    const entry = entryFor(doc, issue);
+    if (summary) entry.set("summary", summary);
+    else entry.delete("summary");
+  });
+  return { ref: issue.ref, summary };
+}
+
+/** Put an issue under another epic: an activity:, release: or hand-made epic's id, none, or blank for the rules' one. */
+export function setIssueEpic(dir: string, input: { map?: string; ref: string; epic: string }, expect?: string) {
+  const t = ticketsOf(dir, input.map);
+  const issue = issueAt(t, input.ref);
+  const epic = input.epic.trim();
+  const problem = epic ? epicProblem(t, readTicketsFile(t.ref), epic) : undefined;
+  if (problem) throw new Error(problem);
+  editTickets(t.ref, expect, (doc) => {
+    const entry = entryFor(doc, issue);
+    if (epic) entry.set("epic", epic);
+    else entry.delete("epic");
+  });
+  return { ref: issue.ref, epic: epic || undefined };
+}
+
+/** Make an epic by hand. Its id comes from its title. */
+export function newEpic(dir: string, input: { map?: string; title: string }, expect?: string) {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const title = input.title?.trim();
+  if (!title) throw new Error("An epic needs a title");
+  const taken = new Set((readTicketsFile(ref).epics ?? []).map((e) => e.id));
+  const base = slugify(title) || "epic";
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  editTickets(ref, expect, (doc) => listOf(doc, "epics").add(doc.createNode({ id, title })));
+  return { id, title };
+}
+
+/** Change the rules: how stories become issues, and what the epics are. Hand changes stay as they are. */
+export function setTicketRules(dir: string, input: { map?: string; issues?: string; epics?: string }, expect?: string) {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  if (input.issues !== undefined && !["story", "step"].includes(input.issues)) throw new Error("issues is story or step");
+  if (input.epics !== undefined && !["activity", "release", "none"].includes(input.epics)) throw new Error("epics is activity, release or none");
+  if (input.issues === undefined && input.epics === undefined) throw new Error("Give issues, epics, or both");
+  editTickets(ref, expect, (doc) => {
+    if (input.issues !== undefined) doc.setIn(["rules", "issues"], input.issues);
+    if (input.epics !== undefined) doc.setIn(["rules", "epics"], input.epics);
+  });
+}
+
+const FIELD_KEYS = { issue_type: "issueType", epic_type: "epicType", label: "label", component: "component", story_ids: "storyIds" } as const;
+
+/** Change the fields the tracker gets. A blank component or label leaves it out; types can't be blank. */
+export function setTicketFields(dir: string, input: { map?: string } & Partial<Record<keyof typeof FIELD_KEYS, string>>, expect?: string) {
+  const ref = resolveStoryMap(dir, { map: input.map });
+  const given = (Object.keys(FIELD_KEYS) as (keyof typeof FIELD_KEYS)[]).filter((k) => input[k] !== undefined);
+  if (!given.length) throw new Error("Give at least one field to change");
+  editTickets(ref, expect, (doc) => {
+    for (const k of given) {
+      const v = String(input[k]).trim();
+      if ((k === "issue_type" || k === "epic_type") && !v) throw new Error(`${k === "issue_type" ? "The issue type" : "The epic type"} can't be blank`);
+      if (k === "story_ids" && !/^(labels|customfield_[0-9]+)$/.test(v)) throw new Error("Story ids go in labels, or a custom field's id like customfield_10042");
+      if (k === "component" && !v) doc.deleteIn(["fields", k]);
+      else doc.setIn(["fields", k], v);
+    }
+  });
 }
 
 /** The problems with a map's tickets.yaml, for nikos validate: errors stop a save, warnings don't. */

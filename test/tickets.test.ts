@@ -1,17 +1,21 @@
 // nikos tickets: how a story map becomes tracker issues and epics, the export the agent reads, and the keys it
 // records. The fixture map has PAY-CHK-1 and -2 (activity pay, release 1) and PAY-CHK-3 (confirm, release 2).
 import { afterEach, describe, expect, it } from "vitest";
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { exportTickets, keysFrom, recordKeys, ticketsOf } from "../src/commands/tickets";
 import { linkTicket, ticketMoves } from "../src/commands/tracker";
 import { setState } from "../src/commands/state";
 import { validate } from "../src/commands/validate";
+import { hash } from "../src/planning/model";
 import { groupRepo, readText, write } from "./planning-fixture";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/mcp/server";
+import { runOp } from "../src/planning/ops";
+import { renderMap } from "../src/commands/map";
+import { saveMapIn } from "../src/commands/serve";
 
 const made: string[] = [];
 afterEach(() => {
@@ -178,5 +182,91 @@ describe("the MCP tools", () => {
     expect(again.structuredContent.issues[1]).toMatchObject({ ref: "PAY-CHK-2", action: "update", key: "PAY-12" });
     const bad = await call("tickets_keys", { keys: { "PAY-CHK-7": "PAY-1" } });
     expect(bad.isError).toBe(true);
+  });
+});
+
+describe("the edits Ticketing mode sends", () => {
+  /** The hash an edit to tickets.yaml expects: of the file, or of nothing before there is one. */
+  const th = (g: string) => hash(existsSync(join(g, TICKETS)) ? readText(g, TICKETS) : "");
+  const op = (g: string, name: string, args: Record<string, unknown>, target?: Record<string, string>) => runOp(g, { op: name, args: { map: "chk", ...args }, ...(target ? { target } : {}), expect: th(g) } as any);
+
+  it("combine, rename, move, split: each writes tickets.yaml, and the map's own files stay as they were", () => {
+    const g = repo();
+    const map = readText(g, "maps/chk/storymap.yaml");
+    op(g, "tickets.combine", { stories: ["PAY-CHK-1", "PAY-CHK-3"] });
+    expect(shape(g)).toEqual(["PAY-CHK-1+PAY-CHK-3→activity:pay", "PAY-CHK-2→activity:pay"]);
+    op(g, "tickets.rename", { summary: "Pay and see it" }, { story: "PAY-CHK-1" });
+    op(g, "tickets.epic_new", { title: "Launch" });
+    op(g, "tickets.epic", { epic: "launch" }, { story: "PAY-CHK-1" });
+    const t = ticketsOf(g);
+    expect(t.issues[0]).toMatchObject({ summary: "Pay and see it", epic: "launch" });
+    expect(readText(g, TICKETS)).toBe("format_version: 1\nissues:\n  - stories: [PAY-CHK-1, PAY-CHK-3]\n    summary: Pay and see it\n    epic: launch\nepics:\n  - id: launch\n    title: Launch\n");
+    op(g, "tickets.split", {}, { story: "PAY-CHK-1" });
+    expect(shape(g)).toEqual(["PAY-CHK-1→activity:pay", "PAY-CHK-2→activity:pay", "PAY-CHK-3→activity:confirm"]);
+    expect(readText(g, "maps/chk/storymap.yaml")).toBe(map);
+    expect(validate(g, "chk").errors).toEqual([]);
+  });
+
+  it("rules, fields and keys", () => {
+    const g = repo();
+    op(g, "tickets.rules", { issues: "step", epics: "release" });
+    expect(shape(g)).toEqual(["PAY-CHK-1+PAY-CHK-2→release:1", "PAY-CHK-3→release:2"]);
+    op(g, "tickets.fields", { issue_type: "Task", component: "Web", story_ids: "customfield_10042" });
+    expect(ticketsOf(g).fields).toMatchObject({ issueType: "Task", component: "Web", storyIds: "customfield_10042" });
+    op(g, "tickets.fields", { component: "" });
+    expect(readText(g, TICKETS)).not.toContain("component");
+    // The page sends the keys as the lines of its text box.
+    runOp(g, { op: "tickets.keys", args: { map: "chk", keys: ["{", '"PAY-CHK-1": "PAY-110",', '"release:1": "PAY-100" }'] } } as any);
+    expect(exportTickets(g).issues[0]).toMatchObject({ action: "update", key: "PAY-110", epic: "release:1" });
+    expect(exportTickets(g).epics[0]).toMatchObject({ ref: "release:1", key: "PAY-100" });
+  });
+
+  it("refuses what doesn't make sense, and a page that loaded before the file changed", () => {
+    const g = repo();
+    expect(() => op(g, "tickets.combine", { stories: ["PAY-CHK-1"] })).toThrow("Pick at least two stories");
+    expect(() => op(g, "tickets.split", {}, { story: "PAY-CHK-1" })).toThrow("PAY-CHK-1 is already one story's issue");
+    expect(() => op(g, "tickets.epic", { epic: "later" }, { story: "PAY-CHK-1" })).toThrow("There is no epic later: make it first");
+    expect(() => op(g, "tickets.fields", { issue_type: "" })).toThrow("The issue type can't be blank");
+    expect(() => op(g, "tickets.fields", { story_ids: "story" })).toThrow("customfield_10042");
+    const stale = th(g);
+    op(g, "tickets.rules", { epics: "none" });
+    expect(() => runOp(g, { op: "tickets.rules", args: { map: "chk", epics: "release" }, expect: stale } as any)).toThrow();
+  });
+
+  it("the story map page may send them", () => {
+    const g = repo();
+    expect(saveMapIn(g, { op: "tickets.combine", map: "chk" }).area).toBe("chk");
+    expect(() => saveMapIn(g, { op: "plan.okr", map: "chk" })).toThrow("isn't a change the story map makes");
+  });
+});
+
+describe("Ticketing mode on the page", () => {
+  const TOKEN = "t0ken";
+  it("comes with editing: the switch, each card's issue, and the panel's Issues, Export and Fields", () => {
+    const g = repo("format_version: 1\nissues:\n  - stories: [PAY-CHK-1, PAY-CHK-2]\n    summary: Pay\n");
+    linkTicket({ id: "PAY-CHK-3", ticket: "PAY-77" }, g);
+    const html = renderMap(g, { live: true, token: TOKEN });
+    expect(html).toContain('data-mode="tickets"');
+    expect(html).toMatch(/data-story="PAY-CHK-1"[^>]*data-issue="PAY-CHK-1"[^>]*data-shared/);
+    expect(html).toContain('<span class="tk-badge" title="Issue 1, not in the tracker yet, with 1 more story">#1 · 2</span><span class="tk-new">New</span>');
+    expect(html).toContain('title="Issue 2, PAY-77">#2</span>');
+    expect(html).toContain('data-tk-tab="export"');
+    expect(html).toContain("&#34;format&#34;: &#34;nikos-tickets/1&#34;");
+    expect(html).toContain("Using the Jira MCP, in project PAY: create the 3 marked create");
+    expect(html).toContain('data-op="tickets.fields"');
+    expect(html).toContain(`data-tickets="${hash("format_version: 1\nissues:\n  - stories: [PAY-CHK-1, PAY-CHK-2]\n    summary: Pay\n")}"`);
+    // The exported page and the read-only one have none of it.
+    expect(renderMap(g)).not.toContain("tk-badge");
+    expect(renderMap(g, { live: true })).not.toContain('data-mode="tickets"');
+  });
+
+  it("says how to name the tracker project when there's none, and shows a tickets.yaml that doesn't read", () => {
+    const g = repo();
+    write(join(g, "nikos.settings.yaml"), "format_version: 1\n");
+    expect(renderMap(g, { live: true, token: TOKEN })).toContain("No tracker project yet: <code>nikos settings set tracker.project PAY</code>");
+    write(join(g, TICKETS), "format_version: 1\nrules: { issues: everything }\n");
+    const html = renderMap(g, { live: true, token: TOKEN });
+    expect(html).toContain("maps/chk/tickets.yaml: rules.issues must be equal to one of the allowed values. Fix the file, then reload the page.");
+    expect(html).toContain('data-story="PAY-CHK-1"');
   });
 });
