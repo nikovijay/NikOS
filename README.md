@@ -223,6 +223,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 | `nikos decisions "<q>"` | Quote the decisions about a topic or story |
 | `nikos map` | Write a read-only story map page |
 | `nikos export --format prd\|linear\|jira` | Write the story map as a PRD or a Linear or Jira import |
+| `nikos tickets [export\|keys]` | Map the story map onto Jira issues and epics (several stories to one issue, if you like) in `maps/<key>/tickets.yaml`, export them for your agent to create with the Atlassian MCP, and record the keys they got |
 
 ## Links
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Story maps as Jira issues and epics.** A new, optional `maps/<key>/tickets.yaml` says how a story map becomes tracker issues and epics. By default each story is an issue and each activity an epic. You can make one issue per step in each release instead, epics per release or none, combine stories into one issue, give an issue its own summary or epic, and set the issue and epic types, a label, a component, and whether story ids go in labels or a custom field. `nikos tickets` lists the result, `nikos tickets export` writes the file your agent turns into issues with the tracker's MCP, and `nikos tickets keys` records the keys they got. An issue's key is linked to each of its stories as their ticket, so a later export updates it and only creates what's new. The MCP server has `tickets_export` and `tickets_keys` for the same round trip. `nikos validate` checks the file.
+
+### Changed
+
+- **`nikos tracker sync` lists a shared ticket once.** When several stories share one ticket, it moves with the least advanced of them.
+
 ## 0.7.1 (2026-11-16)
 
 The story map from `nikos serve` gives more of the page to the map. Its top is smaller and can collapse, and its cards can show their personas. Nothing else changes, so nothing in this release breaks a 0.7.0 setup.

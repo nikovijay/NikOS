@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/tickets.schema.json",
+  "title": "nikOS tickets",
+  "description": "How a story map becomes tracker issues and epics: the rules, the changes made by hand, and the epics' keys. A story's own issue key is its ticket in state.yaml.",
+  "type": "object",
+  "required": ["format_version"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": { "const": 1 },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "issues": { "enum": ["story", "step"], "description": "story: one issue per story. step: one issue per step in each release." },
+        "epics": { "enum": ["activity", "release", "none"] }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "issue_type": { "type": "string", "minLength": 1 },
+        "epic_type": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "component": { "type": "string" },
+        "story_ids": { "type": "string", "pattern": "^(labels|customfield_[0-9]+)$", "description": "labels, or the id of a custom field that gets the story ids." }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "description": "Issues changed by hand: stories combined into one, a summary, or another epic.",
+      "items": {
+        "type": "object",
+        "required": ["stories"],
+        "additionalProperties": false,
+        "properties": {
+          "stories": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$" } },
+          "summary": { "type": "string", "minLength": 1 },
+          "epic": { "type": "string", "pattern": "^(none|activity:[a-z0-9][a-z0-9-]*|release:[0-9]+|[a-z0-9][a-z0-9-]*)$" }
+        }
+      }
+    },
+    "epics": {
+      "type": "array",
+      "description": "Epics made by hand (an id and a title), and any epic's tracker key once it exists.",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^(activity:[a-z0-9][a-z0-9-]*|release:[0-9]+|[a-z0-9][a-z0-9-]*)$" },
+          "title": { "type": "string", "minLength": 1 },
+          "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*-[0-9]+$" }
+        }
+      }
+    }
+  }
+}

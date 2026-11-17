@@ -10,7 +10,7 @@ import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { approve } from "./approve.js";
-import { storyMapOfRef } from "./map.js";
+import { storyMapOfRef, type MapStory } from "./map.js";
 import { setState, StateError } from "./state.js";
 import { newStory } from "./story.js";
 import { newActivity } from "./step.js";
@@ -116,11 +116,20 @@ export function ticketMoves(dir: string, mapId?: string): TicketMove[] {
   const t = trackerOf(ref.root, ref.dir);
   const stories = storyMapOfRef(ref).releases.flatMap((r) => r.stories);
   const statusFor = (s: NikosStatus) => Object.entries(t.statuses).find(([, v]) => v === s)?.[0] ?? (s === "approved" ? Object.entries(t.statuses).find(([, v]) => v === "done")?.[0] : undefined);
-  const out: TicketMove[] = [];
+  // Several stories can share one ticket (nikos tickets combines them): the ticket moves with the least
+  // advanced of them, and a cancelled story doesn't hold it back unless they all are.
+  const RANK: Record<string, number> = { todo: 0, needs_rework: 1, in_progress: 2, done: 3, approved: 4, cancelled: 5 };
+  const byTicket = new Map<string, MapStory>();
   for (const s of stories) {
     const ticket = storyTicket(ref, s.id);
+    if (!ticket) continue;
+    const held = byTicket.get(ticket);
+    if (!held || (RANK[s.status] ?? 0) < (RANK[held.status] ?? 0)) byTicket.set(ticket, s);
+  }
+  const out: TicketMove[] = [];
+  for (const [ticket, s] of byTicket) {
     const status = statusFor(s.status as NikosStatus);
-    if (ticket && status) out.push({ id: s.id, ticket, nikos: s.status as NikosStatus, status });
+    if (status) out.push({ id: s.id, ticket, nikos: s.status as NikosStatus, status });
   }
   return out;
 }

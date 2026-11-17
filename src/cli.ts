@@ -14,6 +14,7 @@ import { runMcp } from "./mcp/server.js";
 import { runJoin, runSettings } from "./commands/join.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runTracker } from "./commands/tracker.js";
+import { runTickets } from "./commands/tickets.js";
 import { runStart } from "./commands/start.js";
 import { runDecide } from "./commands/decide.js";
 import { runShow } from "./commands/show.js";
@@ -45,6 +46,7 @@ const commands: Record<string, (args: string[]) => number | Promise<number>> = {
   settings: runSettings,
   doctor: runDoctor,
   tracker: runTracker,
+  tickets: runTickets,
   start: runStart,
   decide: runDecide,
   show: runShow,
@@ -130,6 +132,9 @@ Decisions, exports and tools
                    to import into a tracker (--release, --out, --project-key)
   tracker link|record|sync|import  Keep the story map in step with Jira, Linear, GitHub or
                    GitLab issues
+  tickets [export|keys]  How the story map becomes Jira issues and epics, set in
+                   maps/<key>/tickets.yaml. export writes the file your agent turns into issues
+                   with the tracker's MCP (--out); keys <file> records the keys they got
   mcp              Let Claude Desktop, Cursor, Codex and other apps use nikOS (--dir <repo>)
   video            Draft a video brief and storyboard from the done stories
                    (--out, default marketing/storymap-video)

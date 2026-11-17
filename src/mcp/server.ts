@@ -34,6 +34,7 @@ import { formatSettings, resolveSettingsDetailed, setSetting } from "../lib/sett
 import { doctor } from "../commands/doctor.js";
 import { describeRepoJoin, joinPlanRepo } from "../commands/join.js";
 import { importTickets, linkTicket, recordTicket, ticketMoves } from "../commands/tracker.js";
+import { exportTickets, keysFrom, recordKeys } from "../commands/tickets.js";
 import { formatMapStatus, mapStatus, statusJson } from "../commands/map-status.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -161,6 +162,14 @@ export function createServer(repo: string): McpServer {
   }, (a) => {
     const r = importTickets(a.tickets, root, { release: a.release, map: a.map });
     return text(`${r.added.map((x) => `+ ${x.id} ↔ ${x.ticket}`).join("\n")}${r.skipped.length ? `\nAlready linked: ${r.skipped.join(", ")}` : ""}`, r as unknown as Record<string, unknown>);
+  });
+  tool("tickets_export", "The story map as tracker issues and epics, following maps/<key>/tickets.yaml: epics first, then issues, each with action create (no key yet) or update (has one). Create or update them with the tracker's MCP (epics first, each issue under its epic), after the person agrees, then record the new keys with tickets_keys.", { map: z.string().optional() }, (a) => {
+    const out = exportTickets(root, a.map);
+    return text(JSON.stringify(out, null, 2), out as unknown as Record<string, unknown>);
+  }, true);
+  tool("tickets_keys", "Record the keys the tracker gave the issues and epics you created, by their refs from tickets_export: { \"<ref>\": \"<key>\" }. Each story in an issue is linked to its key.", { keys: z.record(z.string()), map: z.string().optional() }, (a) => {
+    const r = recordKeys(root, keysFrom(a.keys), a.map);
+    return text([...r.issues.map((i) => `${i.key} ↔ ${i.stories.join(", ")}`), ...r.epics.map((e) => `${e.key} ↔ epic ${e.ref}`)].join("\n"), r as unknown as Record<string, unknown>);
   });
   tool("start", "Set this repo up in one go as a product's repo: its first story map in maps/<key>/, a scenario runner for its stack and CI for its host, each only if missing. Says what it couldn't tell. A repo with maps/ already isn't set up this way: its story maps are added with nikos map new in the terminal. A company's planning repo is made with plan_init.", { name: z.string().optional(), key: z.string().optional() }, (a) => {
     const r = startRepo(root, a);

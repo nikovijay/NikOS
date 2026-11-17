@@ -22,6 +22,7 @@ maps/
     approvals/
       <story-id>.yaml    optional: each person's sign-off, one file per story
     delivery.yaml        the map's status, as of its last write
+    tickets.yaml         optional: how the map becomes tracker issues and epics
     outreach/            optional, drafts from the validate playbook
       <date>-<channel>.md
 ```
@@ -395,6 +396,40 @@ until the founder signs it off, then `Status: signed off <date>, for the
 person to send`. Then who it's for, the message, the questions to ask and,
 optionally, a demo or reel script. Written by the validate playbook; the
 founder sends it, never the agent.
+
+---
+
+## tickets.yaml (optional)
+
+**Purpose:** how the story map becomes tracker issues and epics, for teams that plan in Jira as well. The story map stays the source; this file only says how it is grouped.
+
+**Path:** `maps/<key>/tickets.yaml`, one per map. With no file, each story is one issue and each activity one epic.
+
+```yaml
+format_version: 1
+rules:
+  issues: story          # story: one issue per story; step: one per step in each release
+  epics: activity        # activity | release | none
+fields:
+  issue_type: Story
+  epic_type: Epic
+  label: nikos           # on every issue and epic; story ids become labels too
+  component: Web         # optional
+  story_ids: labels      # or a custom field's id, e.g. customfield_10042
+issues:                  # only the issues changed by hand
+  - stories: [PAY-CHK-6, PAY-CHK-7]
+    summary: Faster ways to pay
+    epic: payments-v2    # activity:<id>, release:<n>, an epic below, or none
+epics:
+  - id: payments-v2      # an epic made by hand needs a title
+    title: Payments v2
+  - id: activity:pay     # an epic's key, once the tracker has it
+    key: PAY-104
+```
+
+A story's own issue key is its `ticket` in `state.yaml`, the same link `nikos tracker link` makes. Several stories in one issue share the key, and `nikos tracker sync` moves their ticket with the least advanced of them. The tracker project comes from the `tracker.project` setting.
+
+`nikos tickets` lists the issues and epics. `nikos tickets export` writes the file your agent reads: epics first, then issues, each marked `create` or `update`, with the stories it holds, their sentences and criteria as its description, and labels. The agent creates or updates them with the tracker's MCP, and `nikos tickets keys <file>` records the keys they got, by their refs (an epic's id, an issue's first story id). A story added later has no key, so the next export creates its issue and updates the rest. `nikos validate` checks the file: a story in two issues or an unknown epic is an error, and a story the map no longer has is a warning.
 
 ---
 
