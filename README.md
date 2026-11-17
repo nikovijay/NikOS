@@ -232,6 +232,7 @@ shell can use nikOS as a library: [docs/library.md](docs/library.md). A worked e
 - Install: [docs/install.md](docs/install.md)
 - The company's plan: [docs/plan.md](docs/plan.md)
 - Format: [docs/format.md](docs/format.md)
+- Story maps in Jira: [docs/tickets.md](docs/tickets.md)
 - Writing stories as features: [docs/gherkin.md](docs/gherkin.md)
 
 MIT licensed.

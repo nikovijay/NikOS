@@ -11,4 +11,5 @@ through the tracker's own MCP, and hand what you read to `nikos tracker`.
 5. To bring a backlog in: fetch the tickets with the MCP, write them to a JSON file as `[{ "key", "title", "group" }]` (group: the epic, project or label), and run `nikos tracker import <file>`. Stories start as todo; offer to write the first ones' scenarios.
 6. To link stories that already exist: match each to its ticket with the person, and run `nikos tracker link <story-id> <ticket>`.
 7. To keep them in step: for each linked ticket, read its status (and, for an approved status, who moved it there from the ticket's history), and run `nikos tracker record <story-id> --status "<status>" --by "<who>"`. Then run `nikos tracker sync --json` and move each ticket it lists to the status it gives, with the MCP. Never move a story to done because a ticket says so: done comes from its scenarios.
-8. Report every step with its evidence or its skip reason.
+8. To create Jira issues and epics from the story map, use the `tickets` playbook instead.
+9. Report every step with its evidence or its skip reason.

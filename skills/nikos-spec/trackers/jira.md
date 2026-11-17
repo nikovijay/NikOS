@@ -17,3 +17,9 @@ Atlassian account; you never handle a token.
 - **Moving a ticket:** Jira moves issues by transition, not by setting a
   status. List the issue's transitions and pick the one that leads to the
   status `nikos tracker sync` gives.
+- **Issues from the story map:** the `tickets` playbook creates them from
+  `nikos tickets export`. Find the project's issue types with the MCP before
+  creating anything. Put an issue under its epic by setting its parent to the
+  epic's key; that works in both team-managed and company-managed projects.
+  A `customfield_…` in an issue's `fields` is a field id in this site: check
+  the project has it on the issue type's create screen.

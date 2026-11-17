@@ -540,7 +540,8 @@ export function runTickets(args: string[]): number {
     if (sub === undefined || sub === "show") {
       const t = ticketsOf(dir, map);
       const stories = t.issues.reduce((n, i) => n + i.stories.length, 0);
-      console.log(`maps/${t.ref.id}: ${stories} stories → ${t.issues.length} issues in ${t.epics.length} epics${t.project ? ` (${t.system} ${t.project})` : ""}`);
+      const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+      console.log(`maps/${t.ref.id}: ${n(stories, "story", "stories")} → ${n(t.issues.length, "issue", "issues")} in ${n(t.epics.length, "epic", "epics")}${t.project ? ` (${t.system} ${t.project})` : ""}`);
       for (const e of [...t.epics.map((x) => x.id), undefined]) {
         const own = t.issues.filter((i) => i.epic === e);
         if (!own.length) continue;
