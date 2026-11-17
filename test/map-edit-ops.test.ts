@@ -310,3 +310,34 @@ describe("planning areas", () => {
     commitAll(co, "noop");
   });
 });
+
+describe("reordering activities, steps and stories", () => {
+  it("activity.reorder moves an activity along the row, and refuses a place out of range or a stale expect", () => {
+    const g = group("PAY");
+    runOp(g, { op: "activity.reorder", target: { activity: "confirm" }, args: { map: "chk", to: 1 }, expect: fh(g, MAP) });
+    expect(storyMapOf(g).activities.map((a) => a.id)).toEqual(["confirm", "pay"]);
+    expect(() => runOp(g, { op: "activity.reorder", target: { activity: "pay" }, args: { map: "chk", to: 3 }, expect: fh(g, MAP) })).toThrow("Position must be from 1 to 2");
+    expect(() => runOp(g, { op: "activity.reorder", target: { activity: "nope" }, args: { map: "chk", to: 1 }, expect: fh(g, MAP) })).toThrow("nope is not an activity in maps/chk");
+    expect(() => runOp(g, { op: "activity.reorder", target: { activity: "pay" }, args: { map: "chk", to: 1 }, expect: "0000000000000000" })).toThrow(/storymap\.yaml changed on disk/);
+    expect(validate(g, "chk").errors).toEqual([]);
+  });
+
+  it("step.reorder moves a step among its activity's steps", () => {
+    const g = group("PAY");
+    runOp(g, { op: "step.new", args: { map: "chk", activity: "pay", title: "Enter card" }, expect: fh(g, MAP) });
+    runOp(g, { op: "step.new", args: { map: "chk", activity: "pay", title: "Check total" }, expect: fh(g, MAP) });
+    runOp(g, { op: "step.reorder", target: { step: "check-total" }, args: { map: "chk", activity: "pay", to: 1 }, expect: fh(g, MAP) });
+    expect(storyMapOf(g).activities.find((a) => a.id === "pay")!.steps.map((s) => s.id)).toEqual(["check-total", "enter-card"]);
+    expect(() => runOp(g, { op: "step.reorder", target: { step: "check-total" }, args: { map: "chk", activity: "confirm", to: 1 }, expect: fh(g, MAP) })).toThrow("check-total is not a step of confirm in maps/chk");
+  });
+
+  it("story.reorder moves a story in its release's build order, and leaves its feature file alone", () => {
+    const g = group("PAY");
+    const feature = readText(g, PAY1);
+    const r = runOp(g, { op: "story.reorder", target: { story: "PAY-CHK-2" }, args: { map: "chk", to: 1 }, expect: fh(g, MAP) });
+    expect(r.message).toBe("Moved PAY-CHK-2 to place 1 in release 1");
+    expect(readText(g, MAP)).toContain("stories: [PAY-CHK-2, PAY-CHK-1]");
+    expect(readText(g, PAY1)).toBe(feature);
+    expect(() => runOp(g, { op: "story.reorder", target: { story: "PAY-CHK-2" }, args: { map: "chk", to: 0 }, expect: fh(g, MAP) })).toThrow("Position must be from 1 to 2");
+  });
+});

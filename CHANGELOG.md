@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Rearrange the story map.** Activities and steps have ← and → to move them along the row, and their stories go with them. A story moves up or down in its cell: drag its card, or use Move up and Move down in its panel's Build order. That order is the release's build order in storymap.yaml, which `nikos next` follows. Only storymap.yaml changes, so feature files and approvals stay as they are. The dashboard sends these as three new edits: `activity.reorder`, `step.reorder` and `story.reorder`.
+- **The constitution and decisions on the story map.** Constitution and Decisions open beside the map's title. The constitution shows constitution.md. Decisions shows decisions.md newest first, with each entry's category, and a link to the story it names. Both are read-only on the page: decisions are still added with `nikos decide`.
+
+### Changed
+
+- **The title in the top bar stands apart from the brand.** A rule separates them, and the title is centred on the mark.
+
 ## 0.7.1 (2026-11-16)
 
 The story map from `nikos serve` gives more of the page to the map. Its top is smaller and can collapse, and its cards can show their personas. Nothing else changes, so nothing in this release breaks a 0.7.0 setup.
