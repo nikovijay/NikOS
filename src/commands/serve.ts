@@ -80,8 +80,8 @@ function mapList(root: string, keys: string[]): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Story maps · ${esc(basename(root))}</title><style>${DESIGN_CSS}\n${css}</style>${THEME_HEAD}</head><body><div class="wrap"><header class="bar">${brand(basename(root))}<span class="spacer"></span>${THEME_BUTTON}</header><main><h1>Story maps</h1><p class="muted">This repo has ${keys.length} story maps. Pick one.</p><ul class="maps">${cards}</ul></main></div></body></html>`;
 }
 
-/** The operations a story map's page can make: its stories, their activities, steps and releases, and their criteria and personas. */
-const MAP_OPS = /^(story|scenario|persona|activity|step|release)\./;
+/** The operations a story map's page can make: its stories, their activities, steps and releases, their criteria and personas, and its tickets. */
+const MAP_OPS = /^(story|scenario|persona|activity|step|release|tickets)\./;
 
 /**
  * The folder and map a save is for. The map is the one body.map names (or args.map), or the only map when there's

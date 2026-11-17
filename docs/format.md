@@ -431,6 +431,8 @@ A story's own issue key is its `ticket` in `state.yaml`, the same link `nikos tr
 
 `nikos tickets` lists the issues and epics. `nikos tickets export` writes the file your agent reads: epics first, then issues, each marked `create` or `update`, with the stories it holds, their sentences and criteria as its description, and labels. The agent creates or updates them with the tracker's MCP, and `nikos tickets keys <file>` records the keys they got, by their refs (an epic's id, an issue's first story id). A story added later has no key, so the next export creates its issue and updates the rest. `nikos validate` checks the file: a story in two issues or an unknown epic is an error, and a story the map no longer has is a warning.
 
+On the story map from `nikos serve`, the **Ticketing** switch in the top bar edits the same file. Each card shows its issue's number, coloured by issue, and New until it has a key. A click picks a card instead of opening it; pick two or more and Combine makes them one issue. The bar over the map sets the two rules, and the panel beside it lists the issues under their epics, where you rename one, move it to another epic, split it, or add an epic. Its Export tab shows the file with a prompt to copy for your agent, and takes the keys back; its Fields tab sets the fields. The page sends these as the edits `tickets.rules`, `tickets.fields`, `tickets.combine`, `tickets.split`, `tickets.rename`, `tickets.epic`, `tickets.epic_new` and `tickets.keys`.
+
 ---
 
 ## delivery.yaml

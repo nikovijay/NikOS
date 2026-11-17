@@ -51,7 +51,7 @@ const TYPE_LABEL: Record<string, string> = { user_story: "User story", technical
 const PRIORITY_LABEL: Record<string, string> = { must: "Must", should: "Should", could: "Could" };
 const KEYWORD: [keyof Pick<Criterion, "given" | "when" | "then">, string][] = [["given", "Given"], ["when", "When"], ["then", "Then"]];
 
-interface Opt {
+export interface Opt {
   value: string;
   label: string;
   selected?: boolean;
@@ -62,7 +62,7 @@ interface Opt {
 function field(label: string, control: string, o: { wide?: boolean; hint?: string } = {}): string {
   return `<label class="fld${o.wide ? " wide" : ""}"><span>${esc(label)}</span>${control}${o.hint ? `<small class="hint">${esc(o.hint)}</small>` : ""}</label>`;
 }
-function text(name: string, label: string, value: string, o: { required?: boolean; placeholder?: string; wide?: boolean; hint?: string; changed?: boolean } = {}): string {
+export function text(name: string, label: string, value: string, o: { required?: boolean; placeholder?: string; wide?: boolean; hint?: string; changed?: boolean } = {}): string {
   const attrs = `${o.required ? " required" : ""}${o.placeholder ? ` placeholder="${esc(o.placeholder)}"` : ""}${o.changed ? " data-changed" : ""}`;
   return field(label, `<input name="${esc(name)}" value="${esc(value)}"${attrs}>`, o);
 }
@@ -71,12 +71,12 @@ function lines(name: string, label: string, items: string[], o: { required?: boo
   const body = String.fromCharCode(10);
   return field(label, `<textarea name="${esc(name)}" data-list="lines" rows="3"${o.required ? " required" : ""}>${esc(items.join(body))}</textarea>`, o);
 }
-function select(name: string, label: string, options: Opt[], o: { multiple?: boolean; wide?: boolean; hint?: string; pick?: string; changed?: boolean } = {}): string {
+export function select(name: string, label: string, options: Opt[], o: { multiple?: boolean; wide?: boolean; hint?: string; pick?: string; changed?: boolean } = {}): string {
   const attrs = `${o.multiple ? " multiple" : ""}${o.pick ? ` data-pick="${esc(o.pick)}"` : ""}${o.changed ? " data-changed" : ""}`;
   const opts = options.map((x) => `<option value="${esc(x.value)}"${x.selected ? " selected" : ""}${x.attrs ?? ""}>${esc(x.label)}</option>`).join("");
   return field(label, `<select name="${esc(name)}"${attrs}>${opts}</select>`, o);
 }
-const hidden = (name: string, value: string) => `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
+export const hidden = (name: string, value: string) => `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
 
 interface OpForm {
   op: string;
@@ -95,7 +95,7 @@ interface OpForm {
 }
 
 /** A form that posts one op. Its fields are read on submit, and the page's script posts them. */
-function opForm(f: OpForm): string {
+export function opForm(f: OpForm): string {
   const attrs = [
     `data-op="${esc(f.op)}"`,
     `data-target="${esc(JSON.stringify(f.target ?? {}))}"`,
@@ -108,7 +108,7 @@ function opForm(f: OpForm): string {
 }
 
 /** A small "+" that opens its form. Quiet until hovered or focused; in the story panel it sits in the flow. label names it for a screen reader, with its place. */
-function pop(summary: string, body: string, cls = "", label?: string): string {
+export function pop(summary: string, body: string, cls = "", label?: string): string {
   const aria = label ? ` aria-label="${esc(label)}"` : "";
   return `<details class="add${cls ? ` ${cls}` : ""}"><summary${aria}>${esc(summary)}</summary><div class="pop">${body}</div></details>`;
 }
@@ -582,6 +582,8 @@ function cardOf(e) {
   return { card: card, above: e.clientY < box.top + box.height / 2 };
 }
 document.addEventListener("dragstart", function (e) {
+  // In Ticketing mode a click picks a card, and nothing on the map moves.
+  if (document.body.classList.contains("ticketing")) return;
   var card = e.target && e.target.closest ? e.target.closest('.card[draggable="true"]') : null;
   if (!card) return;
   var band = card.closest(".band[data-number]");
