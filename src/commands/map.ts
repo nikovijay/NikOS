@@ -18,9 +18,10 @@ import { writeMapSummary } from "../lib/map-summary.js";
 import { KEY } from "../lib/keys.js";
 import { runMapStatus } from "./map-status.js";
 import { SAVE_BAR_CSS } from "../lib/save-bar.js";
-import { EDIT_CSS, EDIT_JS, addActivityBox, addReleaseBox, addStepBox, addStoryBox, addStoryDialog, editDataOf, releaseTools, storyEditArea, type EditData } from "./map-edit.js";
+import { EDIT_CSS, EDIT_JS, addActivityBox, addReleaseBox, addStepBox, addStoryBox, addStoryDialog, editDataOf, releaseTools, sideTools, storyEditArea, type EditData, type StoryOrder } from "./map-edit.js";
 import { BRAND_MARK, DESIGN_CSS } from "../lib/design.js";
 import { next } from "./next.js";
+import { DOCS_CSS, docDialogs, docLinks } from "./map-docs.js";
 
 export interface MapCriterion {
   id: string;
@@ -269,6 +270,18 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     return g.columns.find((c) => c.key === `${g.id}/${s.step}`)?.key ?? g.columns[0].key;
   };
   const hasSteps = m.activities.some((a) => a.steps.length);
+  // Each released story's place in its release, and the places of its neighbours in its cell, for moving it up or down.
+  const order = new Map<string, StoryOrder>();
+  for (const r of m.releases) {
+    const ids = r.stories.map((s) => s.id);
+    const place = (id: string) => ids.indexOf(id) + 1;
+    for (const c of columns) {
+      const cell = r.stories.filter((s) => columnOf(s) === c.key);
+      cell.forEach((s, i) =>
+        order.set(s.id, { release: r.number, title: r.title, place: place(s.id), count: ids.length, up: i > 0 ? place(cell[i - 1].id) : undefined, down: i < cell.length - 1 ? place(cell[i + 1].id) : undefined }),
+      );
+    }
+  }
   let upNext: { story?: string; open: { id: string; status: string }[] } = { open: [] };
   try {
     if (m.releases.length) upNext = next(dir, opts.map);
@@ -288,7 +301,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
     const nextTag = upNext.story === s.id ? `<span class="next-tag">Next to build</span>` : "";
     // data- attributes let the live dashboard filter cards; the exported page ignores them.
     const data = `data-story="${esc(s.id)}" data-status="${esc(st.cls)}" data-type="${esc(s.type)}" data-personas="${esc(s.personas.join(" "))}" data-search="${esc(`${s.id} ${s.title} ${s.narrative}`.toLowerCase())}"`;
-    const drag = edit && release !== undefined ? ' draggable="true"' : "";
+    const drag = edit && release !== undefined ? ` draggable="true" data-pos="${order.get(s.id)?.place ?? 0}"` : "";
     // Hidden until the viewer turns on "Personas on cards".
     const who = s.personas.length ? `<span class="cpersonas">For ${esc(s.personas.map(personaName).join(", "))}</span>` : "";
     return `<a class="card ${st.cls}" ${data}${upNext.story === s.id ? " data-next" : ""}${drag} href="#story-${esc(s.id)}"><span class="crow"><span class="sid">${esc(s.id)}</span>${type}<span class="sword">${esc(st.word)}</span></span><span class="stitle">${esc(s.title)}</span>${who}<span class="cfoot">${foot}${nextTag}</span></a>`;
@@ -330,9 +343,15 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
   const unreleased = m.unreleased.length ? band("unreleased", "--", "Not in a release", "", [], m.unreleased) : "";
   // The activities row ends with "+ Activity"; each activity's box has its "+ Step".
   const spine = `<div class="spine"><div class="activities">${groups
-    .map((g) => `<div class="activity" style="--span:${g.columns.length}"><span class="eyebrow">Activity</span><strong>${esc(g.title)}</strong>${edit && g.id ? addStepBox({ id: g.id, title: g.title }, edit.storymap) : ""}</div>`)
+    .map((g) => `<div class="activity" style="--span:${g.columns.length}"><span class="act-head"><span class="eyebrow">Activity</span>${
+      edit && g.id && m.activities.length > 1
+        ? sideTools({ op: "activity.reorder", target: { activity: g.id }, place: m.activities.findIndex((a) => a.id === g.id) + 1, count: m.activities.length, name: `activity ${g.title}`, storymap: edit.storymap })
+        : ""
+    }</span><strong>${esc(g.title)}</strong>${edit && g.id ? addStepBox({ id: g.id, title: g.title }, edit.storymap) : ""}</div>`)
     .join("")}${edit ? addActivityBox(edit.storymap) : ""}</div>${
-    hasSteps ? `<div class="steps">${groups.map((g) => (g.steps.length ? g.steps.map((st) => `<div class="step">${esc(st.title)}</div>`).join("") : `<div class="step none"></div>`)).join("")}</div>` : ""
+    hasSteps ? `<div class="steps">${groups.map((g) => (g.steps.length ? g.steps.map((st, i) => `<div class="step">${esc(st.title)}${
+      edit && g.steps.length > 1 ? sideTools({ op: "step.reorder", target: { step: st.id }, activity: g.id, place: i + 1, count: g.steps.length, name: `step ${st.title}`, storymap: edit.storymap }) : ""
+    }</div>`).join("") : `<div class="step none"></div>`)).join("")}</div>` : ""
   }</div>`;
   const jumps = [
     ...m.releases.map((r) => `<a class="jump" href="#release-${r.number}"><span class="rcode">R${r.number}</span>${esc(r.title)}<span class="count">${r.stories.length}</span></a>`),
@@ -368,7 +387,7 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
       // The starter sentence of a new feature file, with its <placeholders>, isn't shown as the story.
       s.narrative && !/<[^>]+>/.test(s.narrative) ? `<p class="narrative">${esc(s.narrative)}</p>` : ""
     }${notes ? `<ul class="notes">${notes}</ul>` : ""}</div>${alerts}<div class="eyebrow">Acceptance criteria</div>${criteria}<div class="eyebrow">To move it on</div><p class="where">Status changes come from running its scenarios, not from this page. In this repo, run:</p>${moveOn}${
-      edit ? storyEditArea(s, edit, m) : ""
+      edit ? storyEditArea(s, edit, m, order.get(s.id)) : ""
     }</aside></div>`;
   };
   const title = m.project ? `${m.project} · Story map` : "Story map";
@@ -404,10 +423,10 @@ export function renderMap(dir: string, opts: { live?: boolean; map?: string; bac
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 ${edit ? `<meta name="nikos-token" content="${esc(opts.token)}">\n` : ""}<title>${esc(title)}</title>
-<style>${DESIGN_CSS}\n${CSS}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}` : ""}</style>
+<style>${DESIGN_CSS}\n${CSS}${opts.live ? DOCS_CSS : ""}${edit ? `${SAVE_BAR_CSS}\n${EDIT_CSS}` : ""}</style>
 ${opts.live ? `${THEME_HEAD}\n` : ""}</head>
 <body${edit ? ` class="editing" data-map="${esc(ref!.id)}" data-storymap="${esc(edit.storymap)}"${several ? " data-several" : ""}` : ""}>
-${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}</div><span class="spacer"></span>${actions}${host}${
+${opts.live ? `<a class="skip" href="#board">Skip to the story map</a>\n` : ""}<header class="top"><div class="bar">${brand(repo)}<div class="title">${opts.back ? `<a class="back" href="${esc(opts.back)}">← All story maps</a>` : ""}<h1>${esc(title)}</h1>${meta ? `<span class="meta">${meta}</span>` : ""}${opts.live ? docLinks(dir) : ""}</div><span class="spacer"></span>${actions}${host}${
   opts.live ? `<button type="button" class="btn" data-open-dialog="share">Share…</button><button type="button" class="btn" data-collapse aria-controls="above" aria-expanded="true">Collapse</button>${THEME_BUTTON}` : ""
 }</div></header>
 <div class="above" id="above"><div class="strip"><nav class="jumps" aria-label="Releases">${jumps}</nav>${overview}</div>${filters}</div>
@@ -420,7 +439,7 @@ ${unreleased}
 </div>` : `<div class="board"><div class="blank"><h2>No stories yet</h2><p>A story map lists what people do with the product, step by step, and the stories that deliver each step. Add the first one with <code>nikos story add "&lt;title&gt;" --activity &lt;id&gt;</code>, or ask your coding agent to plan the product with you.</p></div></div>`}
 </main>
 ${everything.map(panel).join("\n")}
-${share}${edit ? addStoryDialog(m, edit.storymap) : ""}
+${share}${opts.live ? docDialogs(dir, new Set(everything.map((s) => s.id))) : ""}${edit ? addStoryDialog(m, edit.storymap) : ""}
 ${opts.live ? `<script>${FILTER_JS}\n${LIVE_JS}</script>` : ""}${edit ? `<script>${EDIT_JS}</script>` : ""}
 </body>
 </html>
@@ -588,7 +607,9 @@ body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
 .sid, .rnum, .rcode, .count, .facts { font-family: var(--f-mono); }
 .warn { color: var(--warn); font-weight: 600; }
 .top { padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--bg); }
-.top .title { gap: 4px 12px; min-width: 0; }
+/* The map's title sits after the brand, set apart by a rule, and centred on the mark. */
+.top .title { gap: 4px 12px; min-width: 0; align-self: stretch; align-items: center; margin-left: 6px; padding-left: 18px; border-left: 1px solid var(--line-strong); }
+.top .title h1 { font-weight: 600; }
 [data-collapse][aria-expanded=false] { color: var(--accent); }
 body[data-filtered] [data-collapse][aria-expanded=false]::after { content: " · filtered"; }
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 8px 24px; border-bottom: 1px solid var(--line); }
