@@ -6,7 +6,7 @@ import { approvalLapse, loadApprovals } from "../lib/approvals.js";
 import { STORY_ID, decisionsPath, featureTags, isDone, read, rel, specHash } from "../lib/project.js";
 import { resolveStoryMap, mapFlag } from "../lib/maps.js";
 import { parseFeature, scenariosOf } from "../lint/gherkin.js";
-import { codeChangedSince } from "../lib/git.js";
+import { codeChangedSince, headOf } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { planVersions } from "./plan.js";
 import { parseFrontMatter } from "../lib/frontmatter.js";
@@ -44,6 +44,10 @@ export function show(story: string, dir: string, mapId?: string): string {
     if (approval) {
       const lapse = approvalLapse(approval, entry, specHash(text));
       out.push(lapse ? `! Approved by ${approval.by} on ${approval.on}, but that no longer holds: ${lapse}` : `Approved by ${approval.by} on ${approval.on}`);
+      // Approved before the repo had a commit: the file names none, so say to record it once a commit exists.
+      if (!lapse && approval.tested_commit === undefined && headOf(ref.root)) {
+        out.push(`! This approval names no commit. Run nikos approve ${story} again: it re-runs the scenarios and records that commit.`);
+      }
       // An approval names the commit it was tested at: code committed since is what approve refuses, so say so here too.
       if (!lapse && approval.tested_commit && codeChangedSince(ref.root, approval.tested_commit)) {
         out.push(`! The code has changed since it was tested: run its scenarios again (nikos state set ${story} needs_rework, then in_progress, then done), then approve`);

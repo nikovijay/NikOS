@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { approvalLapse, loadApprovals, type Approval } from "../lib/approvals.js";
-import { codeChangedSince } from "../lib/git.js";
+import { codeChangedSince, headOf } from "../lib/git.js";
 import { readLink } from "../plan/settings-link.js";
 import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
@@ -53,7 +53,7 @@ export interface MapStory {
   /** The feature changed after the story was done or approved. */
   specChanged: boolean;
   approvedBy: string;
-  /** An approval is on file, but the code has changed since the commit it was tested at. */
+  /** An approval is on file, but it doesn't cover the code: it names no commit, or the code has changed since the one it was tested at. */
   approvalStale: boolean;
   cancelledReason: string;
 }
@@ -147,10 +147,13 @@ export function storyMapOfRef(ref: StoryMapRef): StoryMap {
     return changed;
   };
   // Approved is shown as a status: done, plus an approval that still holds, including the commit it was tested at.
+  // A repo with commits and an approval that names none is not Approved: the sign-off doesn't cover the code.
+  const hasCommit = headOf(ref.root) !== undefined;
   const signOff = (id: string, hash?: string): { by: string; stale: boolean } => {
     const a: Approval | undefined = approvals[id];
     if (!a || approvalLapse(a, states[id], hash)) return { by: "", stale: false };
     if (a.tested_commit && codeMoved(a.tested_commit)) return { by: "", stale: true };
+    if (a.tested_commit === undefined && hasCommit) return { by: "", stale: true };
     return { by: a.by, stale: false };
   };
   const stateOf = (id: string, deps: string[], hash?: string) => {

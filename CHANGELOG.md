@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **An approval from before the first commit can be recorded again.** Approving a story before the repo has a commit, then running `nikos approve` again after the first commit, records `tested_commit` instead of saying it is already approved. `nikos show` and `nikos validate` warn when an approval names no commit and the repo has commits, and a PRD does not call that story Approved.
 - **The serve key gates the page.** `nikos serve` and `nikos plan serve` answer `/` and `/api/data` only with the key from the printed link (or the cookie that first visit sets). A request without it gets a refusal that does not contain the key.
 - **Unfilled story placeholders fail validate and CLEAR.** A starter such as `As a <who it's for>` or `Given <the starting situation>` is an error, and `nikos clear` no longer marks it Lean or Executable.
 - **An unknown `@activity-` tag fails validate.** `@activity-nowhere` is named, the same way an unknown step or persona is.

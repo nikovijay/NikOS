@@ -10,7 +10,7 @@ import { runOp, runOps } from "../src/planning/ops";
 import { hash } from "../src/planning/model";
 import { specHash } from "../src/lib/project";
 import { narrativeOf } from "../src/lib/feature-edit";
-import { commitAll, companyRepo, groupRepo, readText, write } from "./planning-fixture";
+import { commitAll, companyRepo, git, groupRepo, readText, write } from "./planning-fixture";
 
 const PAY1 = "maps/chk/features/pay/pay-by-card.feature";
 const PAY3 = "maps/chk/features/confirm/see-receipt.feature";
@@ -113,8 +113,9 @@ describe("story.edit", () => {
 function approvePay1(g: string): void {
   const doneAt = "2026-11-06T10:00:00Z";
   const spec = specHash(readText(g, PAY1));
-  write(join(g, "maps/chk/state.yaml"), `format_version: 1\nstories:\n  PAY-CHK-1: { status: done, done_at: "${doneAt}", spec_hash: ${spec} }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n`);
-  write(join(g, "maps/chk/approvals/PAY-CHK-1.yaml"), `by: Niko\non: 2026-11-06\nvia: terminal\nspec_hash: ${spec}\ndone_at: "${doneAt}"\n`);
+  const tested = git(g, "rev-parse", "HEAD");
+  write(join(g, "maps/chk/state.yaml"), `format_version: 1\nstories:\n  PAY-CHK-1: { status: done, done_at: "${doneAt}", spec_hash: ${spec}, tested_commit: "${tested}", evidence: { commit: "${tested}" } }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n`);
+  write(join(g, "maps/chk/approvals/PAY-CHK-1.yaml"), `by: Niko\non: 2026-11-06\nvia: terminal\nspec_hash: ${spec}\ndone_at: "${doneAt}"\ntested_commit: "${tested}"\n`);
   expect(storyOf(g, "PAY-CHK-1")).toMatchObject({ status: "approved", approvedBy: "Niko", specChanged: false });
 }
 

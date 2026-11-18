@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { approve, approver } from "../commands/approve.js";
+import { approvalSaid, approve, approver, type ApproveResult } from "../commands/approve.js";
 import { clear, featureFor, formatClear } from "../commands/clear.js";
 import { decide } from "../commands/decide.js";
 import { findDecisions, formatDecisions } from "../commands/decisions.js";
@@ -299,8 +299,12 @@ export function createServer(repo: string): McpServer {
         lines.push(`${id}: not approved`);
         continue;
       }
-      const r = run(() => (approve(id, { dir: root, map: a.map, by, via: "app" }), text("")));
-      lines.push(r.isError ? `${id}: ${r.content[0].text}` : `${id}: approved by ${by}`);
+      let result: ApproveResult | undefined;
+      const r = run(() => {
+        result = approve(id, { dir: root, map: a.map, by, via: "app" });
+        return text("");
+      });
+      lines.push(r.isError ? `${id}: ${r.content[0].text}` : approvalSaid(`${id}: approved by ${by}`, result?.recordedCommit));
     }
     return text(lines.join("\n"));
   });
