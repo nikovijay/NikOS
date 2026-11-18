@@ -1,12 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-11-18)
+
+Story maps can go into Jira. A new `tickets.yaml` says how a map becomes issues and epics, Ticketing mode on the story map shapes them, and the agent creates them with the Atlassian MCP and records their keys. The story map can be rearranged, and shows the map's constitution and decisions. Plans gain squads, objectives and pillars as commands, and planning tools on the MCP server. Two fixes may need a change: `nikos serve` and `nikos plan serve` now answer only with the key from the printed link, and a story still holding a starter placeholder such as `As a <who it's for>` fails `nikos validate`.
 
 ### Added
 
+- **Rearrange the story map.** Activities and steps have ← and → to move them along the row, and their stories go with them. A story moves up or down in its cell: drag its card, or use Move up and Move down in its panel's Build order. That order is the release's build order in storymap.yaml, which `nikos next` follows. Only storymap.yaml changes, so feature files and approvals stay as they are. The dashboard sends these as three new edits: `activity.reorder`, `step.reorder` and `story.reorder`.
+- **The constitution and decisions on the story map.** Constitution and Decisions open beside the map's title. The constitution shows constitution.md. Decisions shows decisions.md newest first, with each entry's category, and a link to the story it names. Both are read-only on the page: decisions are still added with `nikos decide`.
+- **Story maps as Jira issues and epics.** A new, optional `maps/<key>/tickets.yaml` says how a story map becomes tracker issues and epics. By default each story is an issue and each activity an epic. You can make one issue per step in each release instead, epics per release or none, combine stories into one issue, give an issue its own summary or epic, and set the issue and epic types, a label, a component, and whether story ids go in labels or a custom field. `nikos tickets` lists the result, `nikos tickets export` writes the file your agent turns into issues with the tracker's MCP, and `nikos tickets keys` records the keys they got. An issue's key is linked to each of its stories as their ticket, so a later export updates it and only creates what's new. The MCP server has `tickets_export` and `tickets_keys` for the same round trip. `nikos validate` checks the file.
+- **Ticketing mode on the story map.** A Story map | Ticketing switch in the top bar of `nikos serve`. In Ticketing mode each card shows its issue, combined stories share a colour, and a click picks cards to combine into one issue. The bar over the map sets the rules, and a panel lists the issues under their epics, where you rename, move, split, and add epics. It also shows the export with a prompt to copy for your agent, takes the keys back, and sets the fields. Saves go on the `nikos/map-…` branch like the page's other edits, as eight new `tickets.*` edits.
+- **The `tickets` playbook, and a guide to Jira.** Ask your agent to put the story map in Jira and it follows a new `tickets` playbook in the nikos-spec skill: check the export with you, ask before changing anything, create the epics and then the issues under them with the Atlassian MCP, and record the keys. [docs/tickets.md](docs/tickets.md) walks through it from settings to Ticketing mode to issues in Jira.
 - **Squads.** A squad is a small unit of one or more people inside a team. `nikos plan add squad <id> --name "<name>" --home <TEAM>` writes `planning/squads/<id>/squad.yaml`. Squads have bets, not key results. The dashboard's altitude switcher includes Squads, and the plan's MCP tools can add one.
 - **Objectives and pillars as commands.** `nikos plan objective add <id> --title "<title>" --in <area>` writes an objective on the company or a department. `nikos plan pillar add "<name>"` adds a company pillar. A key result's `objective` is that id. Validate refuses an unknown id, and an id used twice in one area or across the company and its departments.
 - **Planning writes on the MCP server.** `plan_add_area`, `plan_pillar_add`, `plan_objective_add`, `plan_kr_new`, `plan_bet_new`, `plan_checkin` and `plan_status` do what the matching `nikos plan` commands do.
+
+### Changed
+
+- **The title in the top bar stands apart from the brand.** A rule separates them, and the title is centred on the mark.
+- **`nikos tracker sync` lists a shared ticket once.** When several stories share one ticket, it moves with the least advanced of them.
 
 ### Fixed
 
@@ -25,19 +37,6 @@
 - **`nikos map new --bet` refuses a bet the plan doesn't list.**
 - **`nikos plan status --in <area>` includes bets aimed at that area's key results,** including bets that live in another area.
 - **`nikos plan refresh` with no repos says so,** and how to list one.
-
-### Added
-
-- **Rearrange the story map.** Activities and steps have ← and → to move them along the row, and their stories go with them. A story moves up or down in its cell: drag its card, or use Move up and Move down in its panel's Build order. That order is the release's build order in storymap.yaml, which `nikos next` follows. Only storymap.yaml changes, so feature files and approvals stay as they are. The dashboard sends these as three new edits: `activity.reorder`, `step.reorder` and `story.reorder`.
-- **The constitution and decisions on the story map.** Constitution and Decisions open beside the map's title. The constitution shows constitution.md. Decisions shows decisions.md newest first, with each entry's category, and a link to the story it names. Both are read-only on the page: decisions are still added with `nikos decide`.
-- **Story maps as Jira issues and epics.** A new, optional `maps/<key>/tickets.yaml` says how a story map becomes tracker issues and epics. By default each story is an issue and each activity an epic. You can make one issue per step in each release instead, epics per release or none, combine stories into one issue, give an issue its own summary or epic, and set the issue and epic types, a label, a component, and whether story ids go in labels or a custom field. `nikos tickets` lists the result, `nikos tickets export` writes the file your agent turns into issues with the tracker's MCP, and `nikos tickets keys` records the keys they got. An issue's key is linked to each of its stories as their ticket, so a later export updates it and only creates what's new. The MCP server has `tickets_export` and `tickets_keys` for the same round trip. `nikos validate` checks the file.
-- **Ticketing mode on the story map.** A Story map | Ticketing switch in the top bar of `nikos serve`. In Ticketing mode each card shows its issue, combined stories share a colour, and a click picks cards to combine into one issue. The bar over the map sets the rules, and a panel lists the issues under their epics, where you rename, move, split, and add epics. It also shows the export with a prompt to copy for your agent, takes the keys back, and sets the fields. Saves go on the `nikos/map-…` branch like the page's other edits, as eight new `tickets.*` edits.
-- **The `tickets` playbook, and a guide to Jira.** Ask your agent to put the story map in Jira and it follows a new `tickets` playbook in the nikos-spec skill: check the export with you, ask before changing anything, create the epics and then the issues under them with the Atlassian MCP, and record the keys. [docs/tickets.md](docs/tickets.md) walks through it from settings to Ticketing mode to issues in Jira.
-
-### Changed
-
-- **The title in the top bar stands apart from the brand.** A rule separates them, and the title is centred on the mark.
-- **`nikos tracker sync` lists a shared ticket once.** When several stories share one ticket, it moves with the least advanced of them.
 
 ## 0.7.1 (2026-11-16)
 
