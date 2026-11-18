@@ -72,7 +72,7 @@ describe("tracker", () => {
     const map = storyMapOf(intent);
     expect(map.activities.map((a) => a.id)).toEqual(["tasks", "checkout", "backlog"]);
     expect(map.releases[1].stories.map((s) => [s.id, s.activity, s.status])).toEqual([["HT-3", "tasks", "todo"], ["HT-4", "checkout", "todo"], ["HT-5", "checkout", "todo"], ["HT-6", "backlog", "todo"]]);
-    expect(validate(intent).errors).toEqual([]);
+    expect(validate(intent).errors.every((e) => e.message.includes("unfilled placeholders"))).toBe(true);
     expect(importTickets(tickets, intent)).toEqual({ added: [], skipped: ["PAY-10", "PAY-11", "PAY-12"] });
   });
 

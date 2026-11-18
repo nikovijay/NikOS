@@ -70,7 +70,8 @@ describe("a key result that should go down", () => {
     await run(repo, "checkin", "close-days", "9", "--in", "finance");
     const status = (await run(repo, "status", "--in", "finance")).out;
     expect(status).toContain("close-days — Median days to close: 9 on 2026-11-10 (baseline 11, target 7 by 2027-03-31) · 2027-Q1 · should go down");
-    expect(status).toContain("revenue — Revenue: no check-ins (baseline 0, target 9 by 2027-03-31) · 2027-Q1 · stale");
+    expect(status).toContain("revenue — Revenue: no check-ins (baseline 0, target 9 by 2027-03-31) · 2027-Q1");
+    expect(status).not.toContain("revenue — Revenue: no check-ins (baseline 0, target 9 by 2027-03-31) · 2027-Q1 · stale");
     expect(status).not.toContain("revenue — Revenue: no check-ins (baseline 0, target 9 by 2027-03-31) · 2027-Q1 · should go down");
   });
 

@@ -185,7 +185,7 @@ describe("pending and the page", () => {
 
   it("the page saves through /api/op with the token, and shows the pending bar", async () => {
     const srv = await start(plainCompany());
-    const html = (await raw(srv, "GET", "/", { host: `127.0.0.1:${srv.port}` })).body as string;
+    const html = (await raw(srv, "GET", `/?token=${srv.token}`, { host: `127.0.0.1:${srv.port}` })).body as string;
     expect(html).toContain("/api/op");
     expect(html).toContain('id="pending"');
     expect(html).toContain(srv.token);

@@ -6,9 +6,9 @@ import { request } from "node:http";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { exportPlanPage, startPlanServe, type PlanServe } from "../src/plan/serve";
-import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
+import { addArea, addObjective, findArea, initPlanRepo } from "../src/plan/repo";
 import { newBet, reviewBet } from "../src/planning/bets";
 import { checkIn, newKr, reviseTarget } from "../src/planning/krs";
 import { setAligns } from "../src/planning/aligns";
@@ -19,6 +19,7 @@ import { acmePlan } from "./plan-serve-fixture";
 let open: PlanServe[] = [];
 let made: string[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(open.map((p) => p.srv.close()));
   open = [];
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -38,8 +39,10 @@ async function start(repo: string): Promise<PlanServe> {
 }
 
 function get(port: number, path: string): Promise<string> {
+  const token = open.find((p) => p.srv.port === port)?.srv.token;
+  const authed = token ? `${path}${path.includes("?") ? "&" : "?"}token=${token}` : path;
   return new Promise((ok, fail) => {
-    const req = request({ host: "127.0.0.1", port, path, method: "GET" }, (res) => {
+    const req = request({ host: "127.0.0.1", port, path: authed, method: "GET" }, (res) => {
       let text = "";
       res.setEncoding("utf8");
       res.on("data", (c: string) => (text += c));
@@ -230,11 +233,12 @@ describe("the forms on the live page", () => {
 
   it("the page offers its objectives as suggestions, once, from the area's key results", async () => {
     const repo = acmePlan();
-    newKr({ id: "close-faster", title: "Close faster", owner: "Mira", baseline: 11, target: 7, by: "2027-03-31", period: "2027-Q1", objective: "Close the books faster" }, findArea(repo, "finance").dir);
+    addObjective(repo, findArea(repo, "finance"), { id: "close-faster", title: "Close the books faster" });
+    newKr({ id: "close-faster-kr", title: "Close faster", owner: "Mira", baseline: 11, target: 7, by: "2027-03-31", period: "2027-Q1", objective: "close-faster" }, findArea(repo, "finance").dir);
     const { srv } = await start(repo);
     const html = await get(srv.port, `/?${FINANCE}&view=okrs`);
     expect(html.match(/<datalist id="objectives">/g)).toHaveLength(1);
-    expect(html).toContain('<option value="Close the books faster">');
+    expect(html).toContain('<option value="close-faster">');
     expect(saveForms(html).find((f) => f.op === "kr.edit")!.body).toContain('list="objectives"');
   });
 });
@@ -498,6 +502,8 @@ describe("the offline export", () => {
 
 describe("the overview", () => {
   it("opens an area with three tiles and what needs attention: a late check-in, a review due, a bet with no map, a key result nothing aims at", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-02-01T12:00:00Z"));
     const repo = acmePlan();
     const fin = findArea(repo, "finance").dir;
     newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
@@ -513,6 +519,7 @@ describe("the overview", () => {
     expect(kinds).toContain("Nothing aims at it");
     expect(list).toContain(`<a href="?${FINANCE}&amp;kr=aimless&amp;period=2027-Q1">Aimless</a>`);
     expect(list).toContain("No check-ins yet");
+    vi.useRealTimers();
   });
 
   it("a team's overview has no key results of its own to check in on", async () => {
@@ -528,9 +535,11 @@ describe("the key results' filters", () => {
   /** A department with three key results, owned by two people, one of them on track. */
   function threeKrs(): string {
     const repo = acmePlan();
-    const fin = findArea(repo, "finance").dir;
-    newKr({ id: "aimless", title: "Aimless", owner: "Ola", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
-    newKr({ id: "invoices", title: "Invoices matched", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "Grow" }, fin);
+    const finArea = findArea(repo, "finance");
+    addObjective(repo, finArea, { id: "grow", title: "Grow" });
+    const fin = finArea.dir;
+    newKr({ id: "aimless", title: "Aimless", owner: "Ola", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "grow" }, fin);
+    newKr({ id: "invoices", title: "Invoices matched", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1", objective: "grow" }, fin);
     return repo;
   }
   const shownCards = (html: string) => [...html.matchAll(/<article class="card kr-card" data-kr data-text="[^"]*" data-status="[^"]*" data-owner="[^"]*"( hidden)?>[\s\S]*?<a href="[^"]*">([^<]+)<\/a>/g)].filter((m) => !m[1]).map((m) => m[2]);
@@ -661,6 +670,8 @@ describe("the activity feed", () => {
 
 describe("the check-in session", () => {
   it("Check in counts the late key results, and the session takes them one at a time, the late ones first", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-02-01T12:00:00Z"));
     const repo = acmePlan();
     const fin = findArea(repo, "finance").dir;
     newKr({ id: "aimless", title: "Aimless", owner: "Mira", baseline: 0, target: 10, by: "2027-03-31", period: "2027-Q1" }, fin);
@@ -675,6 +686,7 @@ describe("the check-in session", () => {
     expect(forms.map((f) => [f.op, f.target.kr])).toEqual([["checkin", "aimless"], ["checkin", "close-days"]]);
     expect(session).toContain("data-session");
     expect(session).toContain('<input name="note" placeholder="What moved it, or what&#39;s in the way" type="text" value="">');
+    vi.useRealTimers();
   });
 
   it("previews a value before it is saved: the change, the way to the target, and the status against the pace", async () => {

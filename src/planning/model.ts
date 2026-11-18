@@ -22,7 +22,7 @@ export const checkKr = schema("kr.schema.json");
 export const today = () => new Date().toISOString().slice(0, 10);
 
 /** The levels of a planning repo, by the folder under planning/ that holds them. */
-export const AREA_FOLDERS = { departments: "department", groups: "group", teams: "team" } as const;
+export const AREA_FOLDERS = { departments: "department", groups: "group", teams: "team", squads: "squad" } as const;
 export type AreaLevel = "company" | (typeof AREA_FOLDERS)[keyof typeof AREA_FOLDERS];
 
 export interface Area {
@@ -79,8 +79,11 @@ export function describeErrors(errors: ErrorObject[] | null | undefined): string
     if (e.keyword === "additionalProperties") return `${at === "(root)" ? "" : at + ": "}unknown field '${(e.params as any).additionalProperty}'`;
     if (e.keyword === "required") return `${at === "(root)" ? "" : at + ": "}missing required field '${(e.params as any).missingProperty}'`;
     if (e.keyword === "enum") return `${at} must be one of ${(e.params as any).allowedValues.join(", ")}`;
+    // "must match else schema" names the branch of an if/then, not what's wrong. The required-field lines say that.
+    if (e.keyword === "if" || e.keyword === "then" || e.keyword === "else") return "";
+    if (e.keyword === "not") return `${at === "(root)" ? "It" : at} doesn't fit: a milestone has steps and no baseline, target or direction, and a number has a baseline and target and no steps`;
     return `${at} ${e.message}`;
-  });
+  }).filter(Boolean);
 }
 
 /** A file inside planning/, refusing anything that would land outside it. */

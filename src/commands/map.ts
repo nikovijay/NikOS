@@ -7,7 +7,9 @@ import { THEME_BUTTON, THEME_CSS, THEME_HEAD } from "../lib/theme.js";
 import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { approvalLapse, loadApprovals } from "../lib/approvals.js";
+import { approvalLapse, loadApprovals, type Approval } from "../lib/approvals.js";
+import { codeChangedSince } from "../lib/git.js";
+import { readLink } from "../plan/settings-link.js";
 import { store } from "../lib/store.js";
 import { oldLayoutProblem } from "../plan/repo.js";
 import { isPlanRepo } from "../planning/model.js";
@@ -51,6 +53,8 @@ export interface MapStory {
   /** The feature changed after the story was done or approved. */
   specChanged: boolean;
   approvedBy: string;
+  /** An approval is on file, but the code has changed since the commit it was tested at. */
+  approvalStale: boolean;
   cancelledReason: string;
 }
 export interface MapRelease {
@@ -80,7 +84,7 @@ export const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&
 const yamlAt = (path: string) => (store().exists(path) ? parse(read(path)) : undefined);
 const PRIORITY = /@(must|should|could|wont)\b/;
 
-type StateFields = "status" | "blocked" | "waitingOn" | "specChanged" | "approvedBy" | "cancelledReason";
+type StateFields = "status" | "blocked" | "waitingOn" | "specChanged" | "approvedBy" | "approvalStale" | "cancelledReason";
 
 /** One story's details from its feature file: title, tags, narrative and criteria. */
 function featureStory(text: string, id: string): Omit<MapStory, StateFields> {
@@ -134,20 +138,31 @@ export function storyMapOfRef(ref: StoryMapRef): StoryMap {
   const states: Record<string, { status?: string; blockers?: string[]; spec_hash?: string; done_at?: string; updated?: string; cancelled_reason?: string }> =
     loadStates(ref.dir);
   const approvals = loadApprovals(ref.dir);
-  // Approved is shown as a status: done, plus an approval that still holds.
-  const approvedBy = (id: string, hash?: string) => {
-    const a = approvals[id];
-    return a && !approvalLapse(a, states[id], hash) ? a.by : "";
+  const moved = new Map<string, boolean>();
+  const codeMoved = (commit: string) => {
+    const known = moved.get(commit);
+    if (known !== undefined) return known;
+    const changed = codeChangedSince(ref.root, commit);
+    moved.set(commit, changed);
+    return changed;
+  };
+  // Approved is shown as a status: done, plus an approval that still holds, including the commit it was tested at.
+  const signOff = (id: string, hash?: string): { by: string; stale: boolean } => {
+    const a: Approval | undefined = approvals[id];
+    if (!a || approvalLapse(a, states[id], hash)) return { by: "", stale: false };
+    if (a.tested_commit && codeMoved(a.tested_commit)) return { by: "", stale: true };
+    return { by: a.by, stale: false };
   };
   const stateOf = (id: string, deps: string[], hash?: string) => {
     const st = states[id] ?? {};
-    const by = approvedBy(id, hash);
-    const status = by ? "approved" : st.status ?? "todo";
+    const signed = signOff(id, hash);
+    const status = signed.by ? "approved" : st.status ?? "todo";
     return {
       status,
       blocked: (st.blockers ?? []).length > 0,
       waitingOn: isDone(status) || status === "cancelled" ? [] : deps.filter((d) => !isDone(states[d]?.status)),
-      approvedBy: by,
+      approvedBy: signed.by,
+      approvalStale: signed.stale,
       specChanged: isDone(status) && !!st.spec_hash && !!hash && st.spec_hash !== hash,
       cancelledReason: String(st.cancelled_reason ?? ""),
     };
@@ -754,6 +769,17 @@ main { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
 const MAP_KEY = KEY;
 
 /**
+ * The bet ids the plan snapshot lists, when this repo is linked. Undefined when it isn't linked, so a
+ * repo with no plan can still name a bet. An old snapshot with no list says so, rather than accepting any id.
+ */
+function knownBets(dir: string): string[] | undefined {
+  const link = readLink(dir);
+  if (!link) return undefined;
+  if (!link.bets) throw new Error(`This repo's plan snapshot doesn't list bets yet, so a bet can't be checked. Run nikos settings pull, then try again.`);
+  return link.bets;
+}
+
+/**
  * A story map, as maps/<key lowercased>/: its storymap, state, approvals and features. Its story ids
  * take the owner (--owner, e.g. WEB), else just the key. A bet (--bet) is optional and must be a bet
  * id: its card isn't looked up, since a code repo can't read a planning repo.
@@ -772,6 +798,10 @@ export function newMap(input: { bet?: string; key?: string; owner?: string }, di
     if (!BET_ID.test(bet)) {
       if (CROSS_REF.test(bet)) throw new Error("a map names one bet by its id, not another repo's bet");
       throw new Error(`'${bet}' is not a bet id`);
+    }
+    const known = knownBets(dir);
+    if (known && !known.includes(bet)) {
+      throw new Error(known.length ? `'${bet}' isn't a bet in this repo's plan. The plan lists: ${known.join(", ")}. If it was added since, run nikos settings pull.` : `'${bet}' isn't a bet in this repo's plan, and the plan lists none. Run nikos settings pull if the plan has changed.`);
     }
   }
   if (!MAP_KEY.test(key)) throw new Error("map key must be uppercase letters and digits, up to 10 (e.g. CHK)");

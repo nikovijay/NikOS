@@ -1,7 +1,7 @@
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
 import { mapDirs, resolveStoryMap } from "../lib/maps.js";
-import { codeIsDirty, headOf } from "../lib/git.js";
+import { codeIsDirty, headOf, isGit } from "../lib/git.js";
 import { featureFor } from "./clear.js";
 import { writeMapSummary } from "../lib/map-summary.js";
 import { validate, validateGroup } from "./validate.js";
@@ -31,6 +31,8 @@ export interface StateResult {
   output?: string;
   /** A repo with changes not yet committed: the proof is for the commit, not these changes. */
   dirty?: boolean;
+  /** A git repo that has no commit yet, so the proof isn't tied to one. */
+  noCommit?: boolean;
 }
 
 /** Scenario names from a cucumber-js or behave run that didn't pass. */
@@ -116,6 +118,7 @@ export function setState(story: string, to: Status, opts: StateOptions = {}): St
     // git or no commit yet there is no commit to point at, and the git checks are skipped.
     commit = headOf(ref.root);
     if (commit) result.dirty = codeIsDirty(ref.root);
+    else if (isGit(ref.root)) result.noCommit = true;
   }
 
   const feature = featureFor(story, ref.root, ref.id);
@@ -160,6 +163,7 @@ export function runState(args: string[]): number {
     console.log(`${r.story}: ${r.from} → ${r.to}`);
     lapsedFor = r.story;
     if (r.dirty) console.log("! The code has uncommitted changes. The proof is for the last commit, not for them: commit the code, then run its scenarios again.");
+    if (r.noCommit) console.log(`! ${r.story} is done, and this repo has no commits yet, so the proof isn't tied to one. You can approve it now. After the first commit, run nikos approve ${r.story} again: it re-runs the scenarios and records that commit.`);
   } catch (err) {
     const e = err as StateError;
     if (e.result?.output && !e.result.failing.length) console.error(e.result.output);

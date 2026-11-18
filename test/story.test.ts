@@ -12,7 +12,7 @@ describe("story add", () => {
     const dir = copyExample();
     const r = newStory({ title: "Mark a task done", activity: "tasks" }, dir);
     expect(r).toMatchObject({ id: "HT-4", release: 2, feature: join(dir, "features/tasks/mark-a-task-done.feature") });
-    expect(r.validation.errors).toEqual([]);
+    expect(r.validation.errors.map((e) => e.message).join("\n")).toContain("unfilled placeholders");
 
     const map = parse(readFileSync(join(dir, "storymap.yaml"), "utf8"));
     expect(map.releases[1].stories).toEqual(["HT-3", "HT-4"]);
@@ -23,7 +23,7 @@ describe("story add", () => {
     // A chosen release and priority, numbered after the last story.
     const next = newStory({ title: "Undo a delete", activity: "tasks", release: 1, priority: "could" }, dir);
     expect(next).toMatchObject({ id: "HT-5", release: 1 });
-    expect(next.validation.errors).toEqual([]);
+    expect(next.validation.errors.map((e) => e.message).join("\n")).toContain("unfilled placeholders");
   });
 
   it("refuses an unknown activity and names the existing ones", () => {

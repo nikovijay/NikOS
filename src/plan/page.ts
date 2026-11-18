@@ -47,9 +47,9 @@ export interface PlanRenderOptions {
 }
 
 const VIEW_LABEL: Record<ViewName, string> = { overview: "Overview", keys: "Key results", okrs: "OKRs and bets", alignment: "Alignment", ladder: "Ladder", bets: "Bets", timeline: "Timeline", activity: "Activity" };
-const LEVEL_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team" };
-const ALTITUDE_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Departments", group: "Groups", team: "Teams" };
-const ALTITUDES: AreaLevel[] = ["company", "department", "group", "team"];
+const LEVEL_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Department", group: "Group", team: "Team", squad: "Squad" };
+const ALTITUDE_LABEL: Record<AreaLevel, string> = { company: "Company", department: "Departments", group: "Groups", team: "Teams", squad: "Squads" };
+const ALTITUDES: AreaLevel[] = ["company", "department", "group", "team", "squad"];
 
 /** The views an area has: the overview first, and key results only for the company and departments, which own the key results. */
 export function viewsFor(level: AreaLevel): ViewName[] {
@@ -526,7 +526,7 @@ function altitudes(page: AreaPage): string {
 function picker(page: AreaPage, offline: boolean): string {
   const options = page.tree
     .filter((n) => n.level === page.plan.level)
-    .map((n) => `<option value="${esc(hrefOf({ at: n.rel, period: periodFor(n.rel, page.period) }))}"${n.rel === page.plan.rel ? " selected" : ""}>${esc(n.level === "team" ? `${n.name} (${n.id})` : n.name)}</option>`)
+    .map((n) => `<option value="${esc(hrefOf({ at: n.rel, period: periodFor(n.rel, page.period) }))}"${n.rel === page.plan.rel ? " selected" : ""}>${esc(n.level === "team" || n.level === "squad" ? `${n.name} (${n.id})` : n.name)}</option>`)
     .join("");
   const onchange = offline ? "" : ' onchange="location.href=this.value"';
   return `<label>${esc(LEVEL_LABEL[page.plan.level])} <select${onchange}>${options}</select></label>`;
@@ -754,7 +754,7 @@ function addKrForm(page: AreaPage, live: boolean): string {
   const fields: Field[] = [
     { name: "title", label: "Title", required: true, placeholder: "e.g. Close days" },
     { name: "owner", label: "Owner", required: true },
-    { name: "objective", label: "Objective", list: "objectives", hint: "The goal it serves. Pick one already in use, or write a new one." },
+    { name: "objective", label: "Objective", list: "objectives", hint: "The id of an objective in this area. Add one with nikos plan objective add." },
     { name: "kind", label: "Kind", kind: "choice", options: KIND, value: "number", wide: true },
     { name: "baseline", label: "Starts at", kind: "number", when: number, required: true },
     { name: "target", label: "Target", kind: "number", when: number, required: true },

@@ -177,7 +177,7 @@ describe("a save from the story map", () => {
   it("serves the page with its token, and a save with that token is taken", async () => {
     const root = gitMap();
     const srv = await start(root);
-    const html = await fetch(`http://127.0.0.1:${srv.port}/`).then((r) => r.text());
+    const html = await fetch(`http://127.0.0.1:${srv.port}/?token=${srv.token}`).then((r) => r.text());
     expect(html).toContain(`<meta name="nikos-token" content="${srv.token}">`);
     expect(html).toContain('data-op="story.edit"');
     // The page reads its token from that meta tag, and sends it with each save.

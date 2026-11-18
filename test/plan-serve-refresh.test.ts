@@ -20,7 +20,7 @@ async function start(repo: string, offline: boolean): Promise<PlanServe> {
   return plan;
 }
 
-const pageText = async (plan: PlanServe, path: string) => (await fetch(`http://127.0.0.1:${plan.srv.port}${path}`)).text();
+const pageText = async (plan: PlanServe, path: string) => (await fetch(`http://127.0.0.1:${plan.srv.port}${path}${path.includes("?") ? "&" : "?"}token=${plan.srv.token}`)).text();
 const indexOf = (repo: string) => join(repo, ".nikos", "delivery", "index.json");
 
 describe("the refresh on start", () => {

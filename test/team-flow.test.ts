@@ -138,11 +138,13 @@ describe("a repo's flow: the review's edge cases", () => {
     expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("the code has uncommitted changes");
   });
 
-  it("approve refuses a done story whose status has no evidence of a commit", () => {
+  it("approve records the current commit when done has no test commit, and does not send you round the status cycle", () => {
     const { t } = setup();
     write(join(t, "maps/chk/state.yaml"), "format_version: 1\nstories:\n  PAY-CHK-1: { status: done, updated: 2027-01-05 }\n  PAY-CHK-2: { status: todo }\n  PAY-CHK-3: { status: todo }\n");
     commitAll(t, "status");
-    expect(() => approve("PAY-CHK-1", { dir: t, by: "Priya Shah" })).toThrow("was done with no recorded test commit");
+    approve("PAY-CHK-1", { dir: t, by: "Priya Shah", date: "2027-01-06" });
+    const approval = parse(readFileSync(join(t, "maps/chk/approvals/PAY-CHK-1.yaml"), "utf8"));
+    expect(approval.tested_commit).toBe(git(t, "rev-parse", "HEAD"));
   });
 
   it("show and validate say when the code has changed since an approval was tested", () => {

@@ -92,12 +92,14 @@ export function currentBranch(root: string, run: Runner = realRun): string | und
   return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : undefined;
 }
 
-/** The branch a repo's work is merged into: origin's default, else main, else master. */
+/** The branch a repo's work is merged into: origin's default, else main, else master, else the branch checked out now. */
 export function baseBranch(root: string, run: Runner = realRun): string | undefined {
   const origin = gitIn(root, ["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"], run);
   if (origin.status === 0 && origin.stdout.trim().startsWith("origin/")) return origin.stdout.trim().slice("origin/".length);
   for (const name of ["main", "master"]) if (branchExists(root, name, run)) return name;
-  return undefined;
+  const configured = gitIn(root, ["config", "--get", "init.defaultBranch"], run).stdout.trim();
+  if (configured && branchExists(root, configured, run)) return configured;
+  return currentBranch(root, run);
 }
 
 export function branchExists(root: string, name: string, run: Runner = realRun): boolean {

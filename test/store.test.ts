@@ -23,8 +23,8 @@ describe("memory store", () => {
       moveStory({ id: "TC-2", to: 2 }, repo.root);
       decide({ title: "Round to the cent", why: "People pay in cents", story: "TC-2" }, repo.root);
       newPlan("TC-2", { dir: repo.root, date: "2026-11-06" });
-      expect(validate(repo.root).errors).toEqual([]);
-      expect(suggest(repo.root).options[0].label).toBe("Build TC-1: First story");
+      expect(validate(repo.root).errors.map((e) => e.message).join("\n")).toContain("unfilled placeholders");
+      expect(suggest(repo.root).options[0].label).toBe("Fix the 1 problem in maps/tc/");
       return repo.changes();
     });
     expect(changes.map((c) => c.path)).toEqual([

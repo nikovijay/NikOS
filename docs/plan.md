@@ -27,6 +27,9 @@ planning/
   teams/<KEY>/
     team.yaml                     name, home (a department or group), owner, members
     bets/<id>.md                  no key results, and no plan.yaml
+  squads/<id>/
+    squad.yaml                    name, home (a team), owner, members
+    bets/<id>.md                  a squad is a small unit of people inside a team
 ```
 
 ## The rules
@@ -34,15 +37,17 @@ planning/
 - **The folder is the level.** There's no `level:` field and no `nikos join`
   between levels. A group names its department, or none when it plans
   straight against the company. A team names its home, a department or a
-  group.
+  group. A squad names its home, a team: it is a small unit of one or more
+  people inside that team.
 - **Key results stop at department level.** Only the company and departments
   have key results. Every level has bets.
 - **The company plans by year, departments by quarter.** The company's
   `period` is a year, such as `2027`, and its key results are annual: their
   `period` is the year and they're due on its last day unless you give
   `--by`. A department's key result needs a quarter inside that year
-  (`--period 2027-Q1`) and is due at the quarter's end. Groups and teams have
-  no period. Their bets have review dates.
+  (`--period 2027-Q1`) and is due at the quarter's end. Groups, teams and squads have
+  no period. Their bets have review dates. A key result with no check-ins is not
+  stale until its period has started and the first check-in is due.
 - **A key result can go down.** `--direction down` marks a figure that should
   fall, such as days to close (11 toward 7). Progress is worked out the same
   way both ways, so at 9 it is half way. Past the baseline the page says the
@@ -71,7 +76,12 @@ planning/
   a hand-written one, and clears the text. `nikos plan ladder clear <id>`
   drops the text when no link is wanted. Nothing is accepted without the
   person's choice.
-- **Ids are unique within the company.** No two areas, key results or bets
+- **Objectives are real.** A company or department lists them in `plan.yaml`,
+  each with an id and a title. `nikos plan objective add <id> --title "<title>"`
+  writes one. A key result's `objective` is that id. A duplicate id, in one
+  area or across the company and its departments, fails validate. Pillars are
+  added with `nikos plan pillar add "<name>"`.
+- **Ids are unique within the company.** No two areas, objectives, key results or bets
   share an id, ignoring case. So a link inside the repo is just the id:
   `--aligns-to one-inbox`, `--kr close-days`.
 - **Links go up.** A key result aligns to key results above it, and a bet to
@@ -91,6 +101,9 @@ nikos plan init --name "Acme" --year 2027 --github acme/company-plan   # also a 
 nikos plan add department finance --name "Finance" --owner Mira
 nikos plan add group payments --name "Payments" --department finance
 nikos plan add team WEB --name "Checkout web" --home payments
+nikos plan add squad checkout --name "Checkout" --home WEB
+nikos plan pillar add "Growth"
+nikos plan objective add revenue-growth --in company --title "Grow revenue"
 nikos plan kr new revenue --in company --title "Annual recurring revenue" --owner Niko --baseline 0 --target 60000 --unit USD
 nikos plan kr new close-days --in finance --title "Median days to close" --owner Mira --baseline 11 --target 7 --unit days --period 2027-Q1 --direction down --aligns-to revenue
 nikos plan bet new faster-checkout --in payments --owner Sam --hypothesis "…" --review 2027-02-15 --kr close-days
@@ -175,7 +188,8 @@ origin, so nikOS can tell whose bet it is.
 ## The dashboard
 
 `nikos plan serve` runs the plan's dashboard on 127.0.0.1, one area at a time,
-and prints the link to open in your browser. It starts on the company. The link it prints has a private key in it, so
+and prints the link to open in your browser. It starts on the company. The link it prints has a private key in it.
+The page and its data answer only with that key, and the key is not in a response that didn't already have it, so
 keep the link to yourself.
 
 ```bash
@@ -187,7 +201,7 @@ nikos plan serve --export finance.html --in departments/finance   # one offline 
 ```
 
 - **Altitude, then area.** The switcher at the top chooses the level: Company,
-  Departments, Groups or Teams. The picker beside it chooses the area at that
+  Departments, Groups, Teams or Squads. The picker beside it chooses the area at that
   level. The breadcrumb shows the way up, for example Company › Finance ›
   Payments › WEB, and each part is a link.
 - **One page per area.** The views are Overview, Key results (the company and

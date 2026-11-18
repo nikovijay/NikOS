@@ -45,6 +45,19 @@ describe("gherkin lint", () => {
     expect(errors(example.replace('    Then my list is still empty\n', ""))).toContain('scenario "AC2 — Blank tasks are ignored" has no Then step');
   });
 
+  it("reports Scenario without a colon as a syntax error, not as no scenarios", () => {
+    const text = example.replace("  Scenario: AC1 — Adding a task shows it at the top", "  Scenario AC1 — Adding a task shows it at the top");
+    const issues = lintFeature(text);
+    expect(issues.some((i) => i.message === "Scenario needs a colon")).toBe(true);
+    expect(issues.some((i) => i.message === "has no scenarios yet")).toBe(false);
+  });
+
+  it("fails a starter that still has template placeholders", () => {
+    const text = example.replace("As a busy person", "As a <who it's for>").replace("Given my list is empty", "Given <the starting situation>");
+    expect(errors(text).join("\n")).toContain("unfilled placeholders");
+    expect(errors(text).join("\n")).toContain("<who it's for>");
+  });
+
   it("warns, not fails, on a feature with no scenarios", () => {
     const text = example.slice(0, example.indexOf("  @AC1"));
     const issues = lintFeature(text);

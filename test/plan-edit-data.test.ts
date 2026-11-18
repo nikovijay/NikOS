@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runPlanRepo } from "../src/plan/cli";
 import { areaPage } from "../src/plan/dashboard";
 import { planDeliveries } from "../src/plan/delivery";
-import { addArea, findArea, initPlanRepo } from "../src/plan/repo";
+import { addArea, addObjective, findArea, initPlanRepo } from "../src/plan/repo";
 import { startPlanServe, type PlanServe } from "../src/plan/serve";
 import { newBet, editBet } from "../src/planning/bets";
 import { editKr, newKr } from "../src/planning/krs";
@@ -260,9 +260,10 @@ describe("the page model: names, choices and versions", () => {
 
   it("objectives are the ones already written in the area, once each", () => {
     const repo = acmePlan();
-    editKr(finance(repo), "close-days", { objective: "Close the books faster" });
+    addObjective(repo, findArea(repo, "finance"), { id: "close-faster", title: "Close the books faster" });
+    editKr(finance(repo), "close-days", { objective: "close-faster" });
     const page = areaPage(repo, findArea(repo, "finance"), { deliveries: planDeliveries(repo), now: NOW });
-    expect(page.choices.objectives).toEqual(["Close the books faster"]);
+    expect(page.choices.objectives).toEqual(["close-faster"]);
   });
 
   it("a bet carries its title, file version and confidence, and a key result its file version", () => {

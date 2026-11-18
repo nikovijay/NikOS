@@ -7,7 +7,7 @@ import { alignsList, laddersOf, linkedOf } from "../planning/levels.js";
 import { RANK } from "./repo.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type AreaLevel } from "../planning/model.js";
 import { below, readCache, type BetDelivery, type DeliveryWarning, type PlanDeliveries, type RepoRead, type StoryRow } from "./delivery.js";
-import { areaAlignmentProblems, areaFile, areaHolding, chainOf, companyIds, companyYear, findArea, listAreas, parentOf, type Entry } from "./repo.js";
+import { areaAlignmentProblems, areaFile, areaHolding, chainOf, companyIds, companyYear, findArea, listAreas, objectiveIds, parentOf, type Entry } from "./repo.js";
 
 /** One area in the tree, company first, then each area below it. */
 export interface AreaNode {
@@ -159,7 +159,7 @@ export interface Choices {
   alignBets: Choice[];
   /** The quarters a department's new key result may be for: the page's quarter, the next three in the year, and any with key results. Empty above a department. */
   periods: string[];
-  /** The objectives already written for key results in this area, for the form to suggest. */
+  /** The objective ids in this area's plan.yaml, for the form to suggest. */
   objectives: string[];
 }
 
@@ -293,7 +293,7 @@ export function breadcrumbOf(tree: AreaTree, rel: string): Crumb[] {
   return node.path.map((r) => {
     const n = tree.find((x) => x.rel === r)!;
     // A team is known by its key, as the plan writes it; a company is "Company".
-    const label = n.level === "company" ? "Company" : n.level === "team" ? n.id : n.name;
+    const label = n.level === "company" ? "Company" : n.level === "team" || n.level === "squad" ? n.id : n.name;
     return { label, rel: r, href: `?at=${r}` };
   });
 }
@@ -717,19 +717,7 @@ function choicesOf(repo: string, area: Area, records: Map<string, BetRec>, perio
     }
     quarters = [...out].filter((x) => !year || x.startsWith(`${year}-`)).sort();
   }
-  let objectives: string[] = [];
-  if (area.level === "company" || area.level === "department") {
-    const found = new Set<string>();
-    for (const id of krIds(area.dir)) {
-      try {
-        const text = loadKr(area.dir, id).data.objective;
-        if (typeof text === "string" && text.trim()) found.add(text);
-      } catch {
-        // reported with the area's own files
-      }
-    }
-    objectives = [...found].sort();
-  }
+  const objectives = objectiveIds(area);
   return {
     aimKrs: krs.map(krChoice),
     alignKrs: krs.filter((e) => above(e, "kr")).map(krChoice),

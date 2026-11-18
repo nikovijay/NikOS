@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Squads.** A squad is a small unit of one or more people inside a team. `nikos plan add squad <id> --name "<name>" --home <TEAM>` writes `planning/squads/<id>/squad.yaml`. Squads have bets, not key results. The dashboard's altitude switcher includes Squads, and the plan's MCP tools can add one.
+- **Objectives and pillars as commands.** `nikos plan objective add <id> --title "<title>" --in <area>` writes an objective on the company or a department. `nikos plan pillar add "<name>"` adds a company pillar. A key result's `objective` is that id. Validate refuses an unknown id, and an id used twice in one area or across the company and its departments.
+- **Planning writes on the MCP server.** `plan_add_area`, `plan_pillar_add`, `plan_objective_add`, `plan_kr_new`, `plan_bet_new`, `plan_checkin` and `plan_status` do what the matching `nikos plan` commands do.
+
+### Fixed
+
+- **The serve key gates the page.** `nikos serve` and `nikos plan serve` answer `/` and `/api/data` only with the key from the printed link (or the cookie that first visit sets). A request without it gets a refusal that does not contain the key.
+- **Unfilled story placeholders fail validate and CLEAR.** A starter such as `As a <who it's for>` or `Given <the starting situation>` is an error, and `nikos clear` no longer marks it Lean or Executable.
+- **An unknown `@activity-` tag fails validate.** `@activity-nowhere` is named, the same way an unknown step or persona is.
+- **`Scenario` without a colon is a syntax error.** It is no longer reported as "no scenarios yet".
+- **A story id in two files of one map is not "two maps".** The message names the duplicate file, and that duplicate no longer raises a false "changed after done" warning.
+- **Approving after a first commit no longer dead-ends.** If a story was marked done before the repo had a commit, `nikos approve` re-runs the scenarios and records the current commit. `nikos state set … done` in a repo with no commits says you can approve now.
+- **`nikos activity add` prints the real folder** (`maps/<key>/features/<id>/`) and refuses an activity id that is already there.
+- **A PRD no longer says Approved when the sign-off doesn't cover the code.** The status stays Done, and the line says the sign-off no longer covers this code.
+- **A new key result is not stale before its first check-in is due.** No check-ins, and the period hasn't started or the first check-in isn't due yet: status and `nikos suggest` don't call it stale.
+- **`nikos join` uses the repo's own branch.** A repo whose branch is `trunk` is no longer compared with `main`. A repo with no origin is listed as `local/<folder>` and read from this computer. The planning checkout is put back on the branch it was on.
+- **`nikos plan kr new` and `nikos plan bet new` name every missing field at once.** Validate no longer adds the line `(root) must match "else" schema`.
+- **`nikos map new --bet` refuses a bet the plan doesn't list.**
+- **`nikos plan status --in <area>` includes bets aimed at that area's key results,** including bets that live in another area.
+- **`nikos plan refresh` with no repos says so,** and how to list one.
+
+### Added
+
 - **Rearrange the story map.** Activities and steps have ← and → to move them along the row, and their stories go with them. A story moves up or down in its cell: drag its card, or use Move up and Move down in its panel's Build order. That order is the release's build order in storymap.yaml, which `nikos next` follows. Only storymap.yaml changes, so feature files and approvals stay as they are. The dashboard sends these as three new edits: `activity.reorder`, `step.reorder` and `story.reorder`.
 - **The constitution and decisions on the story map.** Constitution and Decisions open beside the map's title. The constitution shows constitution.md. Decisions shows decisions.md newest first, with each entry's category, and a link to the story it names. Both are read-only on the page: decisions are still added with `nikos decide`.
 - **Story maps as Jira issues and epics.** A new, optional `maps/<key>/tickets.yaml` says how a story map becomes tracker issues and epics. By default each story is an issue and each activity an epic. You can make one issue per step in each release instead, epics per release or none, combine stories into one issue, give an issue its own summary or epic, and set the issue and epic types, a label, a component, and whether story ids go in labels or a custom field. `nikos tickets` lists the result, `nikos tickets export` writes the file your agent turns into issues with the tracker's MCP, and `nikos tickets keys` records the keys they got. An issue's key is linked to each of its stories as their ticket, so a later export updates it and only creates what's new. The MCP server has `tickets_export` and `tickets_keys` for the same round trip. `nikos validate` checks the file.

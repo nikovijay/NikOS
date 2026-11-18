@@ -1,6 +1,6 @@
 // The server behind nikos plan serve and nikos serve: a server on 127.0.0.1 that answers with the pages
 // it is given (PageSource). A server that gives saveIn also saves, through the same checks as the command
-// line: every save needs the token printed at start, and the pages need none. On a git repo, saves go on
+// line: every page and every save needs the token printed at start. On a git repo, saves go on
 // a branch; nothing is pushed or opened as a request unless a person clicks for it. The plan dashboard and
 // the story map are both served here: a server's kind (PageSource.kind) says which saves it takes.
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -45,9 +45,9 @@ export interface SaveTarget {
   area?: string;
 }
 
-/** The pages a server answers with: / and, if given, /api/data. Given saveIn, it takes saves too. */
+/** The pages a server answers with: / and, if given, /api/data. Both need the token. Given saveIn, it takes saves too. */
 export interface PageSource {
-  /** The page for a query. The token is the server's, for the page's own saves. */
+  /** The page for a query. The token is the server's, for the page's own saves. Only called once the token matched. */
   page(query: URLSearchParams, token: string): string;
   /** The JSON for /api/data. Without it that path is not found. */
   data?(query: URLSearchParams): unknown;
@@ -119,6 +119,23 @@ const sameToken = (given: string, token: string) => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
+/** The token a request carries: the header, the `token` query (the printed link), or the cookie set after the first one. */
+function presentedToken(req: IncomingMessage, query: URLSearchParams): string | undefined {
+  const header = req.headers["x-nikos-token"];
+  if (typeof header === "string" && header) return header;
+  const fromQuery = query.get("token");
+  if (fromQuery) return fromQuery;
+  const cookie = req.headers.cookie;
+  if (!cookie) return undefined;
+  for (const part of cookie.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === "nikos-token") return decodeURIComponent(rest.join("="));
+  }
+  return undefined;
+}
+
+const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
   // Only this machine's own address: a page on another site can't reach the server by DNS rebinding.
   if (req.headers.host !== `127.0.0.1:${ctx.port}` && req.headers.host !== `localhost:${ctx.port}`) {
@@ -137,11 +154,23 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse) {
 function serveGet(ctx: Ctx, path: string, req: IncomingMessage, res: ServerResponse) {
   const { token, pages } = ctx;
   const query = new URL(req.url ?? "/", "http://127.0.0.1").searchParams;
-  if (path === "/") return send(res, 200, pages.page(query, token), HTML);
-  if (path === "/api/data" && pages.data) return send(res, 200, pages.data(query));
+  const gated = path === "/" || (path === "/api/data" && !!pages.data);
+  if (gated) {
+    const given = presentedToken(req, query);
+    if (!given || !sameToken(given, token)) {
+      const message = tokenError(ctx);
+      // The refusal names no token: an unauthenticated response must not carry the key.
+      if (path === "/") return send(res, 403, `<!doctype html><html lang="en"><body><p>${escHtml(message)}</p></body></html>`, HTML);
+      return send(res, 403, { error: message });
+    }
+    // Later clicks on this machine send the cookie, so the key doesn't have to stay in every link.
+    res.setHeader("set-cookie", `nikos-token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`);
+    if (path === "/") return send(res, 200, pages.page(query, token), HTML);
+    return send(res, 200, pages.data!(query));
+  }
   if (path === "/api/pending" && pages.saveIn) {
-    const given = req.headers["x-nikos-token"];
-    if (typeof given !== "string" || !sameToken(given, token)) return send(res, 403, { error: tokenError(ctx) });
+    const given = presentedToken(req, query);
+    if (!given || !sameToken(given, token)) return send(res, 403, { error: tokenError(ctx) });
     return send(res, 200, pendingOf(ctx));
   }
   return send(res, 404, { error: "Not found" });
@@ -177,8 +206,8 @@ async function postRequest(ctx: Ctx, path: string, req: IncomingMessage, res: Se
   }
   const site = req.headers["sec-fetch-site"];
   if (site !== undefined && site !== "same-origin" && site !== "none") return send(res, 403, { error: notThisSite(ctx) });
-  const given = req.headers["x-nikos-token"];
-  if (typeof given !== "string" || !sameToken(given, ctx.token)) return send(res, 403, { error: tokenError(ctx) });
+  const given = presentedToken(req, new URL(req.url ?? "/", "http://127.0.0.1").searchParams);
+  if (!given || !sameToken(given, ctx.token)) return send(res, 403, { error: tokenError(ctx) });
   if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
     return send(res, 415, { error: "Send the change as JSON (Content-Type: application/json)." });
   }

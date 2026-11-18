@@ -1,6 +1,6 @@
 ---
 name: nikos-plan
-description: Plan the company's objectives, key results and bets in its one planning repo, and see how the code repos linked to it are delivering them. Use to set up a company's plan, add a department, group or team, plan a period, set OKRs or key results, frame or review a bet, check in on key results, or open the plan dashboard.
+description: Plan the company's objectives, key results and bets in its one planning repo, and see how the code repos linked to it are delivering them. Use to set up a company's plan, add a department, group, team or squad, add a pillar or objective, plan a period, set OKRs or key results, frame or review a bet, check in on key results, or open the plan dashboard.
 ---
 
 # nikos-plan
@@ -23,6 +23,7 @@ planning/
   departments/<id>/           a department: plan.yaml, decisions.md, krs/, bets/ (per quarter)
   groups/<id>/                a group: plan.yaml, decisions.md, bets/
   teams/<KEY>/                a team: team.yaml (its home and members), decisions.md, bets/
+  squads/<id>/                a squad inside a team: squad.yaml (its home and members), bets/
 ```
 
 A bet never lists its stories. The story map says which bets it delivers: a
@@ -37,7 +38,9 @@ older, run them as `npx -y nikos@latest plan …` and tell the person once that
 `npm install -g nikos@latest` updates theirs. Every write goes through the
 commands or the dashboard, so the same checks always run. `--in <area>` picks
 the area to write in: `company`, `departments/finance`, `groups/payments`,
-`teams/WEB`, or just the id. Without it, the area is the folder you're in.
+`teams/WEB`, `squads/checkout`, or just the id. Without it, the area is the folder you're in.
+`nikos plan objective add <id> --title "<title>" --in <area>` writes an objective.
+`nikos plan pillar add "<name>"` adds a company pillar. A key result's `--objective` is an objective id.
 
 With no planning repo yet, make one first (`nikos plan init`, in a folder of
 its own; the setup playbook walks through it). Never put company goals in `constitution.md`: that's one product's vision, not the company's plan.

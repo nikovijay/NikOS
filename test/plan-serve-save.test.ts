@@ -71,7 +71,7 @@ describe("a save from the plan dashboard", () => {
   it("the check-in form carries the version the page read, so what the browser sends is accepted", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
-    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance`).then((r) => r.text());
+    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&token=${plan.srv.token}`).then((r) => r.text());
     const form = html.match(/<form class="save" data-op="checkin"[^>]*>/)?.[0] ?? "";
     const attr = (name: string) => (form.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "").replace(/&quot;/g, '"');
     expect(attr("data-expect")).toBe(versionOf(repo, CLOSE));
@@ -83,11 +83,11 @@ describe("a save from the plan dashboard", () => {
   it("the check-in form takes a date, and a back-dated check-in from it doesn't become the latest", async () => {
     const repo = gitPlan();
     const plan = await start(repo);
-    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys`).then((r) => r.text());
+    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys&token=${plan.srv.token}`).then((r) => r.text());
     expect(html).toMatch(/data-op="checkin"[^>]*>(?:(?!<\/form>)[\s\S])*<input name="date" type="date">/);
     const r = await post(plan, "/api/op", { op: "checkin", target: { kr: "close-days" }, args: { value: 10, date: "2026-11-01" }, expect: versionOf(repo, CLOSE) });
     expect(r.status).toBe(200);
-    const after = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys`).then((r) => r.text());
+    const after = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&view=keys&token=${plan.srv.token}`).then((r) => r.text());
     expect(after).toContain("9 on 2026-11-09");
   });
 

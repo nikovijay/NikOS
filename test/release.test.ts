@@ -122,7 +122,7 @@ describe("steps", () => {
 
     const s = newStory({ title: "Send a list link", activity: "tasks", step: "share-a-list" }, dir);
     expect(readFileSync(s.feature, "utf8").split("\n")[0]).toBe("@HT-4 @release-2 @must @activity-tasks @step-share-a-list");
-    expect(s.validation.errors).toEqual([]);
+    expect(s.validation.errors.map((e) => e.message).join("\n")).toContain("unfilled placeholders");
     expect(() => newStory({ title: "Elsewhere", activity: "tasks", step: "nope" }, dir)).toThrow("'nope' is not a step of activity 'tasks'");
   });
 

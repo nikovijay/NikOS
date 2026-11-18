@@ -12,7 +12,7 @@ import { alignsList, laddersOf, linkedOf, planningIssues } from "../planning/lev
 import { acceptLadder, clearLadder, findItem, ladderFor, unlinkedItems } from "../planning/ladder.js";
 import { betIds, krIds, loadBet, loadKr, type Area, type PlanningIssue } from "../planning/model.js";
 import { planDeliveries, type BetDelivery, type PlanDeliveries } from "./delivery.js";
-import { addArea, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, oldLayoutProblem, parentOf, repoIssues } from "./repo.js";
+import { addArea, addObjective, addPillar, areaFile, areaFor, areaHolding, companyYear, findPlanRepo, initPlanRepo, listAreas, oldLayoutProblem, parentOf, repoIssues } from "./repo.js";
 import { loadRepos, reposIssues, type RepoEntry } from "./repos.js";
 import { hostOfEntry, refreshDelivery } from "./refresh.js";
 import { exportPlanPage, runPlanServe } from "./serve.js";
@@ -21,9 +21,10 @@ import { hostingFromFlags, hostRepo, pushStep } from "../lib/hosting.js";
 
 export const help = `nikos plan: the company's plan, in one planning repo
 
-Every level has a folder under planning/: company/, departments/<id>/, groups/<id>/ and
-teams/<KEY>/. The company plans by year, and departments by quarter. Only the company and
-departments have key results. Every level has bets.
+Every level has a folder under planning/: company/, departments/<id>/, groups/<id>/,
+teams/<KEY>/ and squads/<id>/. A squad is a small unit of people inside a team. The company
+plans by year, and departments by quarter. Only the company and departments have key results
+and objectives. Every level has bets.
 
 Set it up
   plan init        Make this repo the company's planning repo (--name, --year, --pillars, --owner)
@@ -32,6 +33,9 @@ Set it up
   plan add department <id>   Add a department (--name, --owner, --member)
   plan add group <id>        Add a group (--name, --department <id>, --owner, --member)
   plan add team <KEY>        Add a team. It reports to a department or group (--name, --home <id>)
+  plan add squad <id>        Add a squad inside a team (--name, --home <TEAM>, --owner, --member)
+  plan pillar add "<name>"  Add a pillar to the company
+  plan objective add <id>   Add an objective (--in company or a department, --title, --owner, --aligns-to)
 
 Key results and bets
   plan kr new [<id>]   Add a key result (--in <area>, --title, --owner, --baseline, --target,
@@ -54,7 +58,8 @@ Key results and bets
   plan ladder clear <id>                Clear the text, when no link is wanted
 
 See and check it
-  plan status      Every area's key results and bets, or one area's (--in <area>). Each bet's
+  plan status      Every area's key results and bets, or one area's (--in <area>). A company or
+                   department also lists bets elsewhere that aim at its key results. Each bet's
                    delivery and how old its copy is. --json for a copy a script can read
   plan validate    Check the whole plan. A map that names an unknown bet, or a repo never read,
                    is a warning: validate still passes
@@ -65,7 +70,7 @@ See and check it
                    there is no --in
   plan settings [set <key> <value>]   The settings for an area, and where each comes from (--in)
 
---in takes company, departments/finance, groups/payments or teams/WEB, or just the id.
+--in takes company, departments/finance, groups/payments, teams/WEB or squads/checkout, or just the id.
 Without it, the area is the folder you're in.`;
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
@@ -155,13 +160,42 @@ function areaStatus(area: Area, ctx: DeliveryCtx): string {
     for (const id of krs) out.push(krLine(area, id));
   }
   const bets = betIds(area.dir);
-  out.push(bets.length ? "  Bets:" : "  Bets: none");
+  const aimed = betsAimedHere(area);
+  out.push(bets.length || aimed.length ? "  Bets:" : "  Bets: none");
   for (const id of bets) {
     out.push(betLine(area, id));
     const d = ctx.deliveries.bets.get(id);
     if (d) out.push(...deliveryLines(d, ctx));
   }
+  for (const other of aimed) {
+    out.push(`${betLine(other.area, other.id)} · in ${other.area.rel}`);
+    const d = ctx.deliveries.bets.get(other.id);
+    if (d) out.push(...deliveryLines(d, ctx));
+  }
   return out.join("\n");
+}
+
+/** Bets in other areas that aim at this area's key results. A group, team or squad has none of its own to aim at. */
+function betsAimedHere(area: Area): { area: Area; id: string }[] {
+  if (area.level !== "company" && area.level !== "department") return [];
+  const krs = new Set(krIds(area.dir));
+  if (!krs.size) return [];
+  const own = new Set(betIds(area.dir));
+  const out: { area: Area; id: string }[] = [];
+  for (const other of listAreas(area.repo)) {
+    if (other.rel === area.rel) continue;
+    for (const id of betIds(other.dir)) {
+      if (own.has(id)) continue;
+      try {
+        const meta = loadBet(other.dir, id).meta;
+        const aims = [meta.krs?.primary, ...(meta.krs?.also ?? [])].filter((k): k is string => typeof k === "string");
+        if (aims.some((k) => krs.has(k))) out.push({ area: other, id });
+      } catch {
+        // plan validate reports a bet that doesn't read
+      }
+    }
+  }
+  return out;
 }
 
 /** Delivery warnings for plan status and plan validate: bet links that name nothing here, and repos never read. */
@@ -217,6 +251,20 @@ function keyResultJson(area: Area, id: string) {
   };
 }
 
+function betJson(area: Area, id: string, deliveries: PlanDeliveries) {
+  const b = loadBet(area.dir, id).meta;
+  return {
+    id,
+    title: typeof b.title === "string" && b.title.trim() ? b.title : null,
+    outcome: b.outcome,
+    reviewOn: b.review_on,
+    aimsAt: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
+    alignsTo: alignsList(b.aligns_to),
+    ...ladderJson(b, "bet"),
+    delivery: deliveries.bets.get(id) ?? null,
+  };
+}
+
 /** The plan's status as data, for --json: each repo's copy, each area with its bets' delivery, and the warnings. */
 export function planStatusJson(repo: string, area?: Area, deliveries: PlanDeliveries = planDeliveries(repo)): string {
   const areas = (area ? [area] : listAreas(repo)).map((a) => {
@@ -228,19 +276,10 @@ export function planStatusJson(repo: string, area?: Area, deliveries: PlanDelive
       name: file.name ?? null,
       reportsTo: parentOf(a)?.rel ?? null,
       keyResults: krs.map((id) => keyResultJson(a, id)),
-      bets: betIds(a.dir).map((id) => {
-        const b = loadBet(a.dir, id).meta;
-        return {
-          id,
-          title: typeof b.title === "string" && b.title.trim() ? b.title : null,
-          outcome: b.outcome,
-          reviewOn: b.review_on,
-          aimsAt: [b.krs?.primary, ...(b.krs?.also ?? [])].filter(Boolean),
-          alignsTo: alignsList(b.aligns_to),
-          ...ladderJson(b, "bet"),
-          delivery: deliveries.bets.get(id) ?? null,
-        };
-      }),
+      bets: [
+        ...betIds(a.dir).map((id) => betJson(a, id, deliveries)),
+        ...betsAimedHere(a).map(({ area: from, id }) => ({ ...betJson(from, id, deliveries), from: from.rel })),
+      ],
     };
   });
   const warnings = deliveryIssues(repo, deliveries).map(({ file, message }) => ({ file, message }));
@@ -292,9 +331,21 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         return 0;
       }
       case "add":
-        if ((sub === "department" || sub === "group" || sub === "team") && id) {
+        if ((sub === "department" || sub === "group" || sub === "team" || sub === "squad") && id) {
           const path = addArea(need(), sub, id, { name: opt("name") ?? "", owner: opt("owner"), members: all("member"), department: opt("department"), home: opt("home") });
           console.log(`Added ${show(path)}`);
+          return 0;
+        }
+        break;
+      case "pillar":
+        if (sub === "add" && id) {
+          console.log(`Added ${show(addPillar(need(), id))}`);
+          return 0;
+        }
+        break;
+      case "objective":
+        if (sub === "add" && id) {
+          console.log(`Added ${show(addObjective(need(), area("objective"), { id, title: opt("title") ?? "", owner: opt("owner"), alignsTo: all("aligns-to") }))}`);
           return 0;
         }
         break;
@@ -419,7 +470,12 @@ export async function runPlanRepo(args: string[]): Promise<number> {
       }
       case "refresh": {
         const repo = need();
-        for (const r of refreshDelivery(repo).repos) {
+        const reads = refreshDelivery(repo).repos;
+        if (!reads.length) {
+          console.log("No code repos are listed yet. From a code repo, run nikos join <planning repo> to list it, or add it to planning/repos.yaml.");
+          return 0;
+        }
+        for (const r of reads) {
           if (r.state === "ok") console.log(`✓ ${r.repo}: ${summaryAge({ read_at: r.read_at! })} at ${r.commit!.slice(0, 7)}`);
           else if (r.kept) console.log(`! ${r.repo}: unreachable (${r.reason}); showing the copy ${summaryAge({ read_at: r.read_at! })}`);
           else console.log(`! ${r.repo}: unreachable (${r.reason}); no copy yet`);
@@ -478,7 +534,7 @@ export async function runPlanRepo(args: string[]): Promise<number> {
         return 0;
       }
     }
-    const known = ["init", "add", "kr", "checkin", "bet", "ladder", "status", "validate", "refresh", "serve", "settings", "help"];
+    const known = ["init", "add", "pillar", "objective", "kr", "checkin", "bet", "ladder", "status", "validate", "refresh", "serve", "settings", "help"];
     if (!known.includes(cmd)) {
       const near = closest(cmd, [...known, "new"]);
       console.error(`Unknown plan command '${cmd}'.${near ? ` Did you mean: nikos plan ${near}?` : ""}\nSee every plan command: nikos plan help`);
@@ -505,8 +561,13 @@ const FLAGS: [RegExp, string][] = [
   [/^A review needs a reason\b/, "--why"],
 ];
 
-/** A refusal with the flag that fixes it, when it names a missing field. */
+/** A refusal with the flag that fixes it, when it names a missing field. Each line is flagged on its own. */
 export function withFlag(message: string): string {
-  const hit = FLAGS.find(([re]) => re.test(message));
-  return hit ? `${message} (${hit[1]})` : message;
+  return message
+    .split("\n")
+    .map((line) => {
+      const hit = FLAGS.find(([re]) => re.test(line));
+      return hit ? `${line} (${hit[1]})` : line;
+    })
+    .join("\n");
 }

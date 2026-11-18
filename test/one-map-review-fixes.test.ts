@@ -49,7 +49,7 @@ describe("story ids after a plan key is added", () => {
     init(root, { name: "Hello Todo", key: "HT" });
     const added = newStory({ title: "Second", activity: "getting-started" }, join(root, "maps/ht"));
     expect(added.id).toBe("HT-2");
-    expect(messages(validate(root))).toEqual([]);
+    expect(messages(validate(root)).join("\n")).toContain("unfilled placeholders");
   });
 
   it("init refuses a repo whose plan is the old kind, and writes no story map", () => {

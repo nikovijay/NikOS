@@ -19,8 +19,10 @@ async function start(repo: string, opts: { at?: string; port?: number } = {}): P
 
 /** A request with the headers given as they are sent: fetch would not let a test set Host. */
 function get(port: number, path: string, opts: { headers?: Record<string, string>; method?: string; body?: string } = {}): Promise<{ status: number; text: string }> {
+  const token = open.find((p) => p.srv.port === port)?.srv.token;
+  const authed = token && (path === "/" || path.startsWith("/?") || path.startsWith("/api/data")) ? `${path}${path.includes("?") ? "&" : "?"}token=${token}` : path;
   return new Promise((ok, fail) => {
-    const req = request({ host: "127.0.0.1", port, path, method: opts.method ?? "GET", headers: opts.headers }, (res) => {
+    const req = request({ host: "127.0.0.1", port, path: authed, method: opts.method ?? "GET", headers: opts.headers }, (res) => {
       let text = "";
       res.setEncoding("utf8");
       res.on("data", (c: string) => (text += c));
@@ -40,6 +42,12 @@ describe("the plan dashboard's pages", () => {
     expect(r.text).toContain("Revenue");
     expect(r.text).toContain("one-inbox");
     // The live page saves through /api/op with this token; the offline export has no forms (plan-export.test.ts).
+    const bare = await fetch(`http://127.0.0.1:${srv.port}/`);
+    expect(bare.status).toBe(403);
+    expect(await bare.text()).not.toContain(srv.token);
+    const data = await fetch(`http://127.0.0.1:${srv.port}/api/data`);
+    expect(data.status).toBe(403);
+    expect(await data.text()).not.toContain(srv.token);
     expect(r.text).toContain(`<meta name="nikos-token" content="${srv.token}">`);
     expect(r.text).toContain('data-op="checkin"');
   });

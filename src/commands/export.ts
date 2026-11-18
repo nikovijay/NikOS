@@ -32,7 +32,7 @@ function facts(m: StoryMap, s: MapStory): string[] {
   const persona = (id: string) => m.personas.find((p) => p.id === id)?.title ?? id;
   const { activity, step } = activityOf(m, s);
   return [
-    `Status: ${STATUS_WORD[s.status] ?? s.status}${s.status === "approved" && s.approvedBy ? ` by ${s.approvedBy}` : ""}`,
+    `Status: ${STATUS_WORD[s.status] ?? s.status}${s.status === "approved" && s.approvedBy ? ` by ${s.approvedBy}` : ""}${s.approvalStale ? " · the sign-off no longer covers this code" : ""}`,
     TYPE_WORD[s.type] && s.type !== "user_story" ? `Type: ${TYPE_WORD[s.type]}` : "",
     s.priority && `Priority: ${s.priority}`,
     s.effort && `Effort: ${s.effort}`,

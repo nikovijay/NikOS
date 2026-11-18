@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { featureStoryIds, read, rel, walk } from "../lib/project.js";
 import { resolveStoryMap, mapFlag } from "../lib/maps.js";
-import { parseFeature, scenariosOf } from "../lint/gherkin.js";
+import { parseFeature, scenariosOf, unfilledPlaceholders } from "../lint/gherkin.js";
 
 export type CheckName = "Clear" | "Lean" | "Executable" | "Accurate" | "Responsible";
 
@@ -73,16 +73,32 @@ export function clear(text: string): CheckResult[] {
 
     // Only the prose: names, descriptions and steps. Tags are metadata.
     const prose = [feature.name, feature.description, ...scenarios.flatMap((s) => [s.name, s.description, ...s.steps.map((st) => st.text)])].join("\n");
+    const blanks = unfilledPlaceholders(prose);
     const found = LEAN_RULES.flatMap(({ what, re }) => {
       const m = re.exec(prose);
       return m ? [`${what} ("${m[0]}")`] : [];
     });
+    if (blanks.length) {
+      results.set("Executable", {
+        check: "Executable",
+        status: "fail",
+        message: `still has unfilled placeholders: ${blanks.join(", ")}`,
+        fix: "Replace each <placeholder> with the real words before the scenario can run",
+      });
+      results.set("Lean", {
+        check: "Lean",
+        status: "fail",
+        message: `still has unfilled placeholders: ${blanks.join(", ")}`,
+        fix: "Replace each <placeholder> with what the person actually does",
+      });
+    } else {
     results.set(
       "Lean",
       found.length
         ? { check: "Lean", status: "fail", message: `names ${found.join(", ")}`, fix: "Describe what the user sees and does; move implementation detail to the plan" }
         : { check: "Lean", status: "pass", message: "no implementation detail found" },
     );
+    }
   } else {
     results.set("Lean", { check: "Lean", status: "fail", message: "can't be checked until the feature parses", fix: "Fix the Gherkin syntax first" });
   }

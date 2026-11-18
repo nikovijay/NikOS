@@ -105,7 +105,7 @@ describe("the quarter a page shows", () => {
 describe("a key result held above", () => {
   it("is found by its bare id wherever it's held, and is undefined for a missing id or another repo's", () => {
     const repo = acme();
-    expect(aboveKr(repo, "revenue", "2026-11-10")).toMatchObject({ id: "revenue", rel: "company", title: "revenue title", owner: "Mira", progress: 0, stale: true });
+    expect(aboveKr(repo, "revenue", "2026-11-10")).toMatchObject({ id: "revenue", rel: "company", title: "revenue title", owner: "Mira", progress: 0, stale: false });
     expect(aboveKr(repo, "close-days", "2026-11-10")).toMatchObject({ rel: "departments/finance", period: "2027-Q1" });
     expect(aboveKr(repo, "nope", "2026-11-10")).toBeUndefined();
     expect(aboveKr(repo, "acme/plan#revenue", "2026-11-10")).toBeUndefined();

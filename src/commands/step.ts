@@ -67,9 +67,11 @@ export function runActivity(args: string[]): number {
     return 1;
   }
   try {
-    const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined, map: mapFlag(rest) }, d >= 0 ? rest[d + 1] : process.cwd());
-    const where = mapFlag(rest) ? `maps/${mapFlag(rest)}` : "the story map";
-    console.log(`Activity ${id}: its stories go in ${where}/features/${id}/`);
+    const dir = d >= 0 ? rest[d + 1] : process.cwd();
+    const map = mapFlag(rest);
+    const id = newActivity({ title, id: i >= 0 ? rest[i + 1] : undefined, map, strict: true }, dir);
+    const ref = resolveStoryMap(dir, { map });
+    console.log(`Activity ${id}: its stories go in maps/${ref.id}/features/${id}/`);
     return 0;
   } catch (err) {
     console.error(`✗ ${(err as Error).message}`);
