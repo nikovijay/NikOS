@@ -13,6 +13,7 @@ first match. Packs add rows here as they ship new playbooks.
 | video | `video.md` | The person asks for a video: an explainer, product tour, demo, launch or social clip, or to edit or re-render one. Needs the Video pack. |
 | ux-library | `ux-library.md` | The person wants a component library page, a design system reference, or a brief for agents made from their existing components, tokens or design language. Needs the UX pack. |
 | validate | `validate.md` | The person wants to test or validate an idea with real people, or draft outreach, a post or a demo script for it. |
+| tickets | `tickets.md` | The person wants the story map's stories as Jira issues and epics: to create them, export them, or bring Jira up to date with the map. |
 | tracker | `tracker.md` | The person wants to connect Jira, Linear, GitHub or GitLab issues, bring a tracker's backlog in, link stories to tickets, or bring the tracker and the story map back in step. |
 | build-a-story | `build-a-story.md` | The person asks to build, do or pick up the next story, or a story by its id. |
 | answer | `answer.md` | The person asks a question about the product, a story or a decision, and nothing in the repo needs to change. |
