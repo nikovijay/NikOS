@@ -9,7 +9,7 @@ import { STORY_ID } from "../lib/project.js";
 import { resolveSettings } from "../lib/settings.js";
 import { store } from "../lib/store.js";
 import { noEntry, storyState, updateStory } from "../lib/state-files.js";
-import { approve } from "./approve.js";
+import { approvalSaid, approve } from "./approve.js";
 import { storyMapOfRef, type MapStory } from "./map.js";
 import { setState, StateError } from "./state.js";
 import { newStory } from "./story.js";
@@ -80,8 +80,8 @@ export function recordTicket(input: { id: string; status: string; by?: string; o
     if (!t.approvals) return { ...base, outcome: "ignored", message: `${t.system} says approved, but tracker approvals don't count here (tracker.approvals is off)` };
     if (story.status === "approved") return { ...base, outcome: "in step", message: `${input.id} is already approved` };
     if (!input.by) throw new Error(`Say who moved the ticket to '${input.status}' (--by), as the tracker's history shows it`);
-    approve(input.id, { dir, map: input.map, by: input.by, date: input.on, via: "tracker" });
-    return { ...base, outcome: "approved", message: `${input.id} approved by ${input.by} in ${t.system}${ticket ? ` (${ticket})` : ""}` };
+    const approved = approve(input.id, { dir, map: input.map, by: input.by, date: input.on, via: "tracker" });
+    return { ...base, outcome: "approved", message: approvalSaid(`${input.id} approved by ${input.by} in ${t.system}${ticket ? ` (${ticket})` : ""}`, approved.recordedCommit) };
   }
   if (means === "cancelled") {
     if (story.status === "cancelled") return { ...base, outcome: "in step", message: `${input.id} is already cancelled` };

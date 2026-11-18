@@ -37,6 +37,13 @@ export interface ApproveResult {
   story: string;
   by: string;
   on: string;
+  /** Set when this sign-off recorded a commit the previous approval didn't name. */
+  recordedCommit?: string;
+}
+
+/** What a successful approve says. When it recorded a commit the previous sign-off didn't name, it says so. */
+export function approvalSaid(base: string, recordedCommit?: string): string {
+  return recordedCommit ? `${base}. Recorded the commit it was tested at (${recordedCommit.slice(0, 7)}).` : base;
 }
 
 /** Check a story can be approved, rerun its scenarios, then record the approval. The terminal check lives in runApprove. */
@@ -83,7 +90,10 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
     throw new StateError(`${story} was tested at ${tested!.slice(0, 7)}, and the code has changed since (HEAD is ${head.slice(0, 7)}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
   const existing = loadApprovals(home)[story];
-  if (existing && !approvalLapse(existing, entry, hash)) {
+  // Approved before this repo had a commit: the file names no tested_commit, so it must not block
+  // a later approve. That one re-runs the scenarios and records the commit, with who approved and when.
+  const fillingCommit = !!(existing && existing.tested_commit === undefined && head && tested);
+  if (existing && !fillingCommit && !approvalLapse(existing, entry, hash)) {
     throw new StateError(`${story} is already approved (by ${existing.by} on ${existing.on})`);
   }
 
@@ -109,7 +119,7 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(head && tested ? { tested_commit: tested } : {}) });
   // The map's delivery.yaml shows the approval, so it's written with it.
   writeMapSummary(ref.root, ref.dir);
-  return { story, by: opts.by, on };
+  return { story, by: opts.by, on, ...(fillingCommit && tested ? { recordedCommit: tested } : {}) };
 }
 
 export async function runApprove(args: string[]): Promise<number> {
@@ -148,11 +158,11 @@ export async function runApprove(args: string[]): Promise<number> {
   let failed = 0;
   for (const story of stories) {
     try {
-      approve(story, { dir, map, by, via });
+      const result = approve(story, { dir, map, by, via });
       // The file the approval went to, from the repo root: the map's approvals/<ID>.yaml.
       const ref = resolveStoryMap(dir, { story, map });
       const where = relative(ref.root, approvalFileOf(ref.dir, story));
-      console.log(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (${where})`);
+      console.log(approvalSaid(`${story}: approved by ${by}${via === "chat" ? " in chat" : ""} (${where})`, result.recordedCommit));
     } catch (err) {
       console.error(`✗ ${(err as Error).message}`);
       failed++;

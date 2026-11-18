@@ -5,10 +5,12 @@ import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { approve } from "../src/commands/approve";
+import { approvalSaid, approve, approver, runApprove } from "../src/commands/approve";
 import { setState } from "../src/commands/state";
-import { newMap } from "../src/commands/map";
+import { newMap, storyMapOf } from "../src/commands/map";
 import { newStory } from "../src/commands/story";
+import { show } from "../src/commands/show";
+import { toPrd } from "../src/commands/export";
 import { verify } from "../src/commands/verify";
 import { codeChangedSince, headOf } from "../src/lib/git";
 import { validate } from "../src/commands/validate";
@@ -67,6 +69,63 @@ describe("approve in a group's repo with git", () => {
     commitAll(g, "code after approval");
     expect(codeChangedSince(g, tested)).toBe(true);
     expect(codeWarnings().map((w) => w.message)).toEqual([expect.stringContaining("PAY-CHK-1")]);
+  });
+
+  it("an approval before the first commit does not block recording the commit afterwards", async () => {
+    const g = groupRepo("PAY");
+    // The fixture commits as it is built. Drop that commit so this is a repo with no commit yet.
+    git(g, "update-ref", "-d", "refs/heads/main");
+    expect(headOf(g)).toBeUndefined();
+    setState("PAY-CHK-1", "in_progress", { dir: g });
+    setState("PAY-CHK-1", "done", { dir: g });
+    approve("PAY-CHK-1", { dir: g, by: "Priya Shah", date: "2027-01-06", via: "chat" });
+    expect(approvalOf(g, "PAY-CHK-1")).toMatchObject({ by: "Priya Shah", on: "2027-01-06", via: "chat" });
+    expect(approvalOf(g, "PAY-CHK-1").tested_commit).toBeUndefined();
+    // Still no commit: the sign-off holds, and approving again is refused.
+    expect(show("PAY-CHK-1", g)).toContain("Approved by Priya Shah on 2027-01-06");
+    expect(show("PAY-CHK-1", g)).not.toContain("names no commit");
+    expect(validate(g, "chk").warnings.map((w) => w.message)).not.toContain("PAY-CHK-1 was approved, but the approval names no commit");
+    expect(() => approve("PAY-CHK-1", { dir: g, by: "Priya Shah" })).toThrow("PAY-CHK-1 is already approved (by Priya Shah on 2027-01-06)");
+
+    write(join(g, "src/checkout.js"), "export const pay = () => {};\n");
+    commitAll(g, "first");
+    const head = headOf(g)!;
+    expect(show("PAY-CHK-1", g)).toContain("! This approval names no commit. Run nikos approve PAY-CHK-1 again: it re-runs the scenarios and records that commit.");
+    expect(validate(g, "chk").warnings).toContainEqual(expect.objectContaining({
+      message: "PAY-CHK-1 was approved, but the approval names no commit",
+      hint: "run nikos approve PAY-CHK-1 again: it re-runs the scenarios and records that commit",
+    }));
+    const uncovered = toPrd(storyMapOf(g, "chk"));
+    expect(uncovered).toContain("Status: Done");
+    expect(uncovered).toContain("the sign-off no longer covers this code");
+    expect(uncovered).not.toContain("Status: Approved");
+
+    const by = approver(g);
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...a) => void logs.push(a.join(" ")));
+    try {
+      expect(await runApprove(["PAY-CHK-1", "--via", "chat", "--dir", g])).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logs.join("\n")).toBe(approvalSaid(`PAY-CHK-1: approved by ${by} in chat (maps/chk/approvals/PAY-CHK-1.yaml)`, head));
+    expect(approvalOf(g, "PAY-CHK-1")).toMatchObject({ by, on: new Date().toISOString().slice(0, 10), via: "chat", tested_commit: head });
+    const state = parse(readFileSync(join(g, "maps/chk/state.yaml"), "utf8")).stories["PAY-CHK-1"];
+    expect(state).toMatchObject({ tested_commit: head, evidence: { commit: head } });
+    const covered = toPrd(storyMapOf(g, "chk"));
+    expect(covered).toContain("Status: Approved");
+    expect(covered).not.toContain("the sign-off no longer covers this code");
+    expect(() => approve("PAY-CHK-1", { dir: g, by })).toThrow(`PAY-CHK-1 is already approved (by ${by} on ${new Date().toISOString().slice(0, 10)})`);
+
+    write(join(g, "src/checkout.js"), "export const pay = () => 1;\n");
+    commitAll(g, "code moved");
+    const moved = toPrd(storyMapOf(g, "chk"));
+    expect(moved).toContain("Status: Done");
+    expect(moved).toContain("the sign-off no longer covers this code");
+    expect(moved).not.toContain("Status: Approved");
+    expect(validate(g, "chk").warnings.map((w) => w.message)).toContain(
+      `PAY-CHK-1 was approved, but the code has changed since it was tested at ${head.slice(0, 7)}`,
+    );
   });
 
   it("refuses approval over uncommitted code", () => {

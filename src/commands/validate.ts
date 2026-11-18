@@ -19,7 +19,7 @@ import { featureStoryIds, featureTag, featureTags, isDone, read, rel, specHash, 
 import { loadMapData } from "../lib/map-data.js";
 import { contractVersion, schemaProblems } from "../lib/schema.js";
 import { TICKETS_FILE, ticketProblems } from "./tickets.js";
-import { codeChangedSince } from "../lib/git.js";
+import { codeChangedSince, headOf } from "../lib/git.js";
 
 export interface Issue {
   file: string;
@@ -367,6 +367,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     }
     signoffs.push({ id: f.id, a, file, key: f.id });
   }
+  const head = headOf(ref.root);
   for (const { id, a, file, key } of signoffs) {
     if (!mapStories.has(id) && !featureIds.has(id)) {
       errors.push({ file, message: `${key} is an unknown story id` });
@@ -374,6 +375,10 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
     }
     const lapse = approvalLapse(a, (stateStories as any)[id], hashes.get(id));
     if (lapse) warnings.push({ file, message: `${id}'s approval no longer holds: ${lapse}`, hint: `once it's done again, a person approves it again (nikos approve ${id}), or remove the entry`, lapse: true });
+    // Approved before the repo had a commit: the file names none, so say to record it once a commit exists.
+    if (!lapse && head && a.tested_commit === undefined) {
+      warnings.push({ file, message: `${id} was approved, but the approval names no commit`, hint: `run nikos approve ${id} again: it re-runs the scenarios and records that commit`, lapse: true });
+    }
     // An approval names the commit it was tested at: code committed since is what approve refuses, so say so here too.
     if (a.tested_commit && codeChangedSince(ref.root, a.tested_commit)) {
       warnings.push({ file, message: `${id} was approved, but the code has changed since it was tested at ${a.tested_commit.slice(0, 7)}`, hint: `run its scenarios again: nikos state set ${id} needs_rework, then in_progress, then done, then approve`, lapse: true });
