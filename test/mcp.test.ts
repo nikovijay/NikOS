@@ -65,7 +65,7 @@ describe("nikos mcp", () => {
       `Added HT-4 to release 2: ${join(root, "maps/ht/features/tasks/share-a-list.feature")}`,
     );
     expect((await call("set_status", { id: "HT-3", status: "cancelled", reason: "Later" })).text).toBe("HT-3: todo → cancelled");
-    expect((await call("validate")).text).toContain("✓ maps/ht/ is valid — 4 stories, 2 releases");
+    expect((await call("validate")).text).toContain("unfilled placeholders");
     expect((await call("check_release", { number: 1 })).text).toBe("Release 1 · MVP: not ready — 1 of 2 done\n  ✗ HT-2 is in progress");
     const bad = await call("set_status", { id: "HT-9", status: "done" });
     expect(bad).toMatchObject({ isError: true, text: "✗ no story map has HT-9" });

@@ -14,7 +14,7 @@ import { mapDirs, mapOwnerOf } from "../lib/maps.js";
 import { areaSettingsFile, checkSettingsText, SETTINGS_FILE } from "../lib/settings.js";
 import { contractVersion, NewerContractError, schemaProblems } from "../lib/schema.js";
 import { store } from "../lib/store.js";
-import { isPlanRepo, type Area } from "../planning/model.js";
+import { betIds, isPlanRepo, type Area } from "../planning/model.js";
 import { chainOf, listAreas, oldLayoutProblem } from "./repo.js";
 
 export const LINK_FILE = "nikos.plan.yaml";
@@ -44,6 +44,8 @@ export interface PlanLink {
   owners: Record<string, { levels: LinkLevel[] }>;
   /** Each story map's bound owner when the snapshot was taken, keyed by the map's folder. "" is no owner. */
   maps: Record<string, string>;
+  /** The bet ids in the plan when the snapshot was taken. Absent on an older snapshot. */
+  bets?: string[];
   sha256: string;
 }
 
@@ -52,8 +54,8 @@ const sorted = (v: unknown): unknown =>
   Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])])) : v;
 
 /** The hash of a snapshot's settings and the owners its maps are bound to. The link's time and plan details aren't in it. */
-export const snapshotHash = (s: Pick<PlanLink, "company" | "owners" | "maps">) =>
-  createHash("sha256").update(JSON.stringify(sorted({ company: s.company, owners: s.owners, maps: s.maps }))).digest("hex");
+export const snapshotHash = (s: Pick<PlanLink, "company" | "owners" | "maps" | "bets">) =>
+  createHash("sha256").update(JSON.stringify(sorted({ company: s.company, owners: s.owners, maps: s.maps, ...(s.bets ? { bets: [...s.bets].sort() } : {}) }))).digest("hex");
 
 /** The link, if this repo has one. A file that doesn't read throws, naming the problem. */
 export function readLink(root: string): PlanLink | undefined {
@@ -202,7 +204,8 @@ export interface PullResult {
  */
 export function linkFromCopy(copy: string, plan: PlanRef, read: PlanLink["read"], maps: Record<string, string>): PullResult {
   const snap = snapshotOf(copy, [...new Set(Object.values(maps).filter(Boolean))]);
-  const link: PlanLink = { format_version: 1, plan, read, company: snap.company, owners: snap.owners, maps, sha256: "" };
+  const bets = [...new Set(listAreas(copy).flatMap((a) => betIds(a.dir)))].sort();
+  const link: PlanLink = { format_version: 1, plan, read, company: snap.company, owners: snap.owners, maps, bets, sha256: "" };
   return { link: { ...link, sha256: snapshotHash(link) }, warnings: snap.warnings };
 }
 

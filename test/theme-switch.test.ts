@@ -21,7 +21,7 @@ describe("the light/dark switch", () => {
   it("is on the plan dashboard, with its script in the head", async () => {
     const plan = await startPlanServe(acmePlan(), { port: 0, offline: true });
     open.push(plan);
-    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance`).then((r) => r.text());
+    const html = await fetch(`http://127.0.0.1:${plan.srv.port}/?at=departments/finance&token=${plan.srv.token}`).then((r) => r.text());
     expect(headOf(html)).toContain(THEME_HEAD);
     expect(html).toContain(THEME_BUTTON);
     expect(html).toContain(':root[data-theme="dark"]');

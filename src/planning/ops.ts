@@ -63,7 +63,7 @@ export type OpName =
   | "map.new"
   | "setting.set";
 
-export type Level = "company" | "department" | "group" | "team";
+export type Level = "company" | "department" | "group" | "team" | "squad";
 
 export interface Op {
   op: OpName;
@@ -166,12 +166,12 @@ const NAMES: Record<OpName, true> = {
 
 export const OP_NAMES = Object.keys(NAMES) as OpName[];
 
-/** The levels each op is made at, from the four level lists. A group or team has no key results, so kr.* and checkin are refused there. */
+/** The levels each op is made at. A group, team or squad has no key results, so kr.* and checkin are refused there. A squad makes the same changes as a team. */
 const levelsOf = (group: OpName[], team: OpName[]): Record<OpName, Level[]> =>
   Object.fromEntries(
     OP_NAMES.map((name) => [
       name,
-      (["company", "department", "group", "team"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : lv === "group" ? group : team).includes(name)),
+      (["company", "department", "group", "team", "squad"] as Level[]).filter((lv) => (lv === "company" ? COMPANY : lv === "department" ? DEPARTMENT : lv === "group" ? group : team).includes(name)),
     ]),
   ) as Record<OpName, Level[]>;
 

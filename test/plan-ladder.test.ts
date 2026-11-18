@@ -390,7 +390,8 @@ describe("text on a key result or bet", () => {
     const repo = acme();
     await world(repo);
     const status = (await run(repo, "status", "--in", "finance")).out;
-    expect(status).toContain('pay-ledger — Ledger match rate: no check-ins (baseline 0, target 99 by 2027-03-31) · 2027-Q1 · not linked yet: "reconciliation revenue faster" · stale');
+    expect(status).toContain('pay-ledger — Ledger match rate: no check-ins (baseline 0, target 99 by 2027-03-31) · 2027-Q1 · not linked yet: "reconciliation revenue faster"');
+    expect(status).not.toContain("· stale");
     const json = JSON.parse((await run(repo, "status", "--json")).out);
     const finance = json.areas.find((a: any) => a.rel === "departments/finance");
     expect(finance.keyResults.find((k: any) => k.id === "pay-ledger")).toMatchObject({ aligns_to: [], laddersUp: "reconciliation revenue faster", linked: false });

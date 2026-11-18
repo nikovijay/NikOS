@@ -13,6 +13,29 @@ const STATUS_TAGS = /^@(todo|done|wip|in[-_]?progress|doing|blocked|needs[-_]?re
 const PRIORITY = /^@(must|should|could)$/;
 const AC_TAG = /^@AC\d+$/;
 const KNOWN_FEATURE_TAG = [STORY_ID, /^release-\d+$/, /^(must|should|could)$/, /^activity-[a-z0-9-]+$/, /^step-[a-z0-9-]+$/, /^effort-(XS|S|M|L|XL)$/, /^depends-[A-Z][A-Z0-9]{0,9}(-[A-Z][A-Z0-9]{0,9})?-[0-9]+$/, /^persona-[a-z0-9-]+$/, /^type-(technical|bug-risk)$/];
+/** A starter placeholder: angle brackets with a space in them, such as `<who it's for>`. A one-word `<bill>` is an outline variable. */
+const PLACEHOLDER = /<[^>\n]*\s[^>\n]*>/g;
+const KEYWORD = /^(Feature|Background|Scenario Outline|Scenario|Rule|Examples)\b(.*)$/;
+
+/** Unfilled template placeholders in a feature, each once, in the order they appear. */
+export function unfilledPlaceholders(text: string): string[] {
+  return [...new Set([...text.matchAll(PLACEHOLDER)].map((m) => m[0]))];
+}
+
+/**
+ * A Gherkin keyword written without its colon (`Scenario AC1` rather than `Scenario: AC1`). The parser
+ * treats that line as description, so the file looks like it has no scenarios. Undefined when every
+ * keyword has its colon.
+ */
+export function bareKeyword(text: string): string | undefined {
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#") || t.startsWith("|") || t.startsWith("@") || t.startsWith('"')) continue;
+    const m = KEYWORD.exec(t);
+    if (m && !/^\s*:/.test(m[2])) return m[1];
+  }
+  return undefined;
+}
 
 function parser() {
   return new Parser(new AstBuilder(IdGenerator.uuid()), new GherkinClassicTokenMatcher());
@@ -37,13 +60,21 @@ export function lintFeature(text: string): LintIssue[] {
     issues.push({ level: "error", message: `has ${featureLines} Features`, hint: "one Feature per file, one file per story" });
   }
 
+  const bare = bareKeyword(text);
   let doc;
   try {
     doc = parser().parse(text);
   } catch (err) {
-    issues.push({ level: "error", message: `isn't valid Gherkin: ${(err as Error).message.split("\n")[0]}` });
+    if (bare) {
+      issues.push({ level: "error", message: `${bare} needs a colon`, hint: `write \`${bare}:\` before the title` });
+    } else {
+      const lines = (err as Error).message.split("\n").map((s) => s.trim()).filter(Boolean);
+      const shown = lines[0] === "Parser errors:" && lines[1] ? lines[1] : lines[0];
+      issues.push({ level: "error", message: `isn't valid Gherkin: ${shown}` });
+    }
     return issues;
   }
+  if (bare) issues.push({ level: "error", message: `${bare} needs a colon`, hint: `write \`${bare}:\` before the title` });
   const feature = doc.feature;
   if (!feature) {
     issues.push({ level: "error", message: "has no Feature", hint: "start the file with a story id tag and `Feature: <title>`" });
@@ -78,7 +109,11 @@ export function lintFeature(text: string): LintIssue[] {
   }
 
   const scenarios = scenariosOf(feature);
-  if (scenarios.length === 0) {
+  const blanks = unfilledPlaceholders([feature.name, feature.description, ...scenarios.flatMap((s) => [s.name, s.description, ...s.steps.map((st) => st.text)])].join("\n"));
+  if (blanks.length) {
+    issues.push({ level: "error", message: `still has unfilled placeholders: ${blanks.join(", ")}`, hint: "replace each <placeholder> with the real words" });
+  }
+  if (scenarios.length === 0 && !bare) {
     issues.push({ level: "warning", message: "has no scenarios yet", hint: "add one Scenario per acceptance criterion" });
   }
   const labels = new Set<string>();

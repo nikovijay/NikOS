@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import { BET_ID } from "../lib/bets.js";
 import { areaOf, checkKr, describeErrors, krText, loadKr, paths, today, writePlanning } from "./model.js";
-import { companyYear, krAreaProblem, newIdFor, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
+import { companyYear, krAreaProblem, newIdFor, objectiveIds, periodEnd, periodProblem, takenProblem } from "../plan/repo.js";
 import { dateProblem, krFieldProblems } from "./rules.js";
 import { alignmentProblems, alignsValue } from "./levels.js";
 
@@ -43,38 +43,53 @@ function checked(data: any): any {
  * Write planning/krs/<id>.yaml. With no id, the id is made from the title, with -2 or -3 when another key result
  * or bet in the company has it. An id given is used as it is.
  */
+const report = (problems: string[]) => {
+  const unique = [...new Set(problems)];
+  if (unique.length) throw new Error(unique.join("\n"));
+};
+
 export function newKr(input: KrInput, root: string): string {
   const area = areaOf(root);
   const given = input.id?.trim() || undefined;
-  if (!given && !input.title?.trim()) throw new Error("A key result needs a title");
-  const id = given ?? newIdFor(area?.repo, input.title.trim());
-  if (!id) throw new Error(`'${input.title.trim()}' has no letters or numbers to make an id from: use a title with some letters or numbers, or give an id`);
-  if (!BET_ID.test(id)) throw new Error(`'${id}' is not a key result id (lowercase words joined by hyphens)`);
-  if (!input.title?.trim()) throw new Error("A key result needs a title");
-  if (!input.owner?.trim()) throw new Error("A key result needs an owner");
-  if (input.kind !== undefined && input.kind !== "number" && input.kind !== "milestone") throw new Error("kind is number or milestone");
+  const missing: string[] = [];
+  if (!input.title?.trim()) missing.push("A key result needs a title");
+  if (!input.owner?.trim()) missing.push("A key result needs an owner");
+  if (input.kind !== undefined && input.kind !== "number" && input.kind !== "milestone") missing.push("kind is number or milestone");
   // A milestone has steps instead of a baseline and a target. Its steps are fixed here: kr step marks them, and nothing adds one later.
   const milestone = input.kind === "milestone";
   const names = (input.steps ?? []).map((s) => s.trim());
   if (milestone) {
-    if (Number.isFinite(input.baseline) || Number.isFinite(input.target)) throw new Error("A milestone has no baseline or target: its steps are its progress");
-    if (input.direction) throw new Error("A milestone has no direction: each step is done or not");
-    if (!names.length || names.some((s) => !s)) throw new Error("A milestone needs at least one step");
-    if (new Set(names).size !== names.length) throw new Error("Each step of a milestone needs its own name");
+    if (Number.isFinite(input.baseline) || Number.isFinite(input.target)) missing.push("A milestone has no baseline or target: its steps are its progress");
+    if (input.direction) missing.push("A milestone has no direction: each step is done or not");
+    if (!names.length || names.some((s) => !s)) missing.push("A milestone needs at least one step");
+    if (new Set(names).size !== names.length) missing.push("Each step of a milestone needs its own name");
   } else {
-    if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) throw new Error("A key result needs a starting number and a target number");
-    if (names.length) throw new Error("Only a milestone has steps: set the kind to milestone");
+    if (!Number.isFinite(input.baseline) || !Number.isFinite(input.target)) missing.push("A key result needs a starting number and a target number");
+    if (names.length) missing.push("Only a milestone has steps: set the kind to milestone");
   }
   // In a planning repo a key result is for a period: the company's year, or a department's quarter. Its date defaults to the period's end.
   const period = input.period ?? (area?.level === "company" ? companyYear(area.repo) : undefined);
   if (area) {
+    const problem = periodProblem(area, period);
+    if (problem) missing.push(problem);
+  }
+  const by = input.by || (period ? periodEnd(period) ?? "" : "");
+  if (!by) missing.push("A key result needs a due date (YYYY-MM-DD)");
+  else if (dateProblem(by)) missing.push(`The due date ${dateProblem(by)}`);
+  const objective = input.objective?.trim();
+  if (objective && area && !objectiveIds(area).includes(objective)) {
+    const where = area.level === "company" ? "company" : area.id;
+    missing.push(`There's no objective '${objective}' in ${area.rel}. Add it with nikos plan objective add ${objective} --title "<title>" --in ${where}`);
+  }
+  report(missing);
+  const id = given ?? newIdFor(area?.repo, input.title.trim());
+  if (!id) throw new Error(`'${input.title.trim()}' has no letters or numbers to make an id from: use a title with some letters or numbers, or give an id`);
+  if (!BET_ID.test(id)) throw new Error(`'${id}' is not a key result id (lowercase words joined by hyphens)`);
+  if (area) {
     const refused = krAreaProblem(area) ?? takenProblem(area.repo, id);
     if (refused) throw new Error(refused);
-    const problem = periodProblem(area, period);
-    if (problem) throw new Error(problem);
-    if (!input.by && period) input = { ...input, by: periodEnd(period)! };
   }
-  if (dateProblem(input.by)) throw new Error(input.by ? `The due date ${dateProblem(input.by)}` : "A key result needs a due date (YYYY-MM-DD)");
+  input = { ...input, by };
   const direction = krFieldProblems({ direction: input.direction }, "edit")[0];
   if (direction) throw new Error(direction);
   const aligns = [...new Set([input.alignsTo ?? []].flat().filter(Boolean))];
@@ -152,6 +167,11 @@ export function editKr(root: string, id: string, fields: Record<string, unknown>
     if (v === "" || v === null || v === undefined || (k === "direction" && v === "up")) delete data[k];
     else data[k] = typeof v === "string" && (k === "title" || k === "owner" || k === "unit" || k === "objective") ? v.trim() : v;
   }
+  const area = areaOf(root);
+  if (typeof data.objective === "string" && data.objective && area && !objectiveIds(area).includes(data.objective)) {
+    const where = area.level === "company" ? "company" : area.id;
+    throw new Error(`There's no objective '${data.objective}' in ${area.rel}. Add it with nikos plan objective add ${data.objective} --title "<title>" --in ${where}`);
+  }
   return writePlanning(root, join(paths(root).krs, `${id}.yaml`), krText(checked(data)), { expect: expect ?? kr.hash });
 }
 
@@ -167,12 +187,28 @@ export const stepsDone = (kr: any): number => (kr.steps ?? []).filter((s: any) =
 
 const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 
+/** The first day of a period: 2027 is 2027-01-01, 2027-Q2 is 2027-04-01. */
+function periodStart(period: string): string | undefined {
+  if (/^\d{4}$/.test(period)) return `${period}-01-01`;
+  const q = /^(\d{4})-Q([1-4])$/.exec(period);
+  if (!q) return undefined;
+  return `${q[1]}-${String((Number(q[2]) - 1) * 3 + 1).padStart(2, "0")}-01`;
+}
+
+const plusDays = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
 /**
- * Stale. A number is stale when its last check-in (or, with none, nothing at all) is older than
- * stale_after_days (default 14). A milestone is stale when its latest step done is that old. With no
- * step done it isn't stale: nothing has started, so there is nothing to go stale.
+ * Stale. A number is stale when its last check-in is older than stale_after_days (default 14). With no
+ * check-in it isn't stale until the period has started and the first check-in is due (that many days
+ * after the period starts). A milestone is stale when its latest step done is that old. With no step
+ * done it isn't stale: nothing has started, so there is nothing to go stale.
  */
 export function isStale(kr: any, on = today()): boolean {
+  const start = typeof kr.period === "string" ? periodStart(kr.period) : undefined;
   if (kindOf(kr) === "milestone") {
     const done = (kr.steps ?? []).map((s: any) => s.done).filter(Boolean);
     // Every step done: nothing is waiting, so nothing is going stale.
@@ -181,8 +217,10 @@ export function isStale(kr: any, on = today()): boolean {
     return !!newest && days(newest, on) > (kr.stale_after_days ?? 14);
   }
   const last = latest(kr);
-  if (!last) return true;
-  return days(last.date, on) > (kr.stale_after_days ?? 14);
+  const window = kr.stale_after_days ?? 14;
+  // Nothing has been checked in. The first check-in is due `window` days after the period starts.
+  if (!last) return !(start && on < plusDays(start, window));
+  return days(last.date, on) > window;
 }
 
 /** Which way a key result should move. Up unless its file says down. */

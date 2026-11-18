@@ -172,8 +172,11 @@ export function validateGroup(root: string): ValidationResult {
       features = [];
     }
     for (const f of features) {
-      if (featureOwner.has(f.id)) errors.push({ file: `maps/${id}/features`, message: `${f.id} is in two maps (${featureOwner.get(f.id)} and maps/${id})`, hint: "keep each story in one map" });
-      else featureOwner.set(f.id, `maps/${id}`);
+      const here = `maps/${id}`;
+      const prev = featureOwner.get(f.id);
+      // A second file in the same map is reported by validateMap. This check is only for two maps.
+      if (prev && prev !== here) errors.push({ file: `maps/${id}/features`, message: `${f.id} is in two maps (${prev} and ${here})`, hint: "keep each story in one map" });
+      else if (!prev) featureOwner.set(f.id, here);
     }
   }
   lintRootConstitution(root, errors, warnings);
@@ -267,6 +270,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
 
   // Features
   const featureIds = new Map<string, string>();
+  const duplicatedIds = new Set<string>();
   const dependsOn = new Map<string, string[]>();
   const hashes = new Map<string, string>();
   for (const path of walk(join(dir, "features"), ".feature")) {
@@ -284,13 +288,20 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       errors.push({ file, message: `has more than one story id tag (${ids.join(", ")})`, hint: "one feature file per story" });
     }
     const id = ids[0];
-    if (featureIds.has(id)) {
+    const duplicate = featureIds.has(id);
+    if (duplicate) {
+      duplicatedIds.add(id);
       errors.push({ file, message: `${id} already has a feature file (${featureIds.get(id)})` });
+    } else {
+      featureIds.set(id, file);
     }
-    featureIds.set(id, file);
     const activity = basename(dirname(path));
     if (activityIds.size && !activityIds.has(activity)) {
       errors.push({ file, message: `is in folder '${activity}', which is not an activity in storymap.yaml` });
+    }
+    const taggedActivity = featureTag(text, "activity");
+    if (taggedActivity && storymap && !activityIds.has(taggedActivity)) {
+      errors.push({ file, message: `@activity-${taggedActivity} is not an activity in storymap.yaml`, hint: "add it under activities:, or fix the tag" });
     }
     if (storymap && !mapStories.has(id)) {
       errors.push({ file, message: `${id} is not in any release in storymap.yaml` });
@@ -305,7 +316,8 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       if (storymap && !personaIds.has(persona)) errors.push({ file, message: `@persona-${persona} is not a persona in storymap.yaml`, hint: "add it under personas:, or fix the tag" });
     }
     dependsOn.set(id, featureTags(text, "depends"));
-    hashes.set(id, specHash(text));
+    // A second file with the same id isn't a change to the story: the duplicate is already an error.
+    if (!duplicate) hashes.set(id, specHash(text));
     const release = featureTag(text, "release");
     if (release && mapStories.has(id) && Number(release) !== mapStories.get(id)) {
       warnings.push({ file, message: `is tagged @release-${release} but storymap.yaml puts ${id} in release ${mapStories.get(id)}`, hint: `move it with nikos release move ${id} <n>, which keeps both in step` });
@@ -329,6 +341,7 @@ export function validateMap(ref: StoryMapRef): ValidationResult {
       if (!mapStories.has(id)) errors.push({ file: "state.yaml", message: `run.queue has unknown story id ${id}` });
     }
     for (const [id, entry] of Object.entries(stateStories) as [string, any][]) {
+      if (duplicatedIds.has(id)) continue;
       if (!isDone(entry?.status) || !entry?.spec_hash || !hashes.has(id) || hashes.get(id) === entry.spec_hash) continue;
       warnings.push({
         file: featureIds.get(id)!,

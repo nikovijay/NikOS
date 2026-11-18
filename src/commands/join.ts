@@ -45,7 +45,7 @@ export interface RepoJoin {
   /** The command that opens the review from the checkout, when this forge has one. */
   request?: string;
   /** This code repo's link to the plan: the branch it is on, and whether this join committed it. */
-  link?: { branch: string; written: boolean; pushed: boolean; from?: string; stale?: boolean };
+  link?: { branch: string; written: boolean; pushed: boolean; from?: string; base?: string; stale?: boolean };
   /** Things to know about the snapshot: an owner with no team in the plan. */
   warnings?: string[];
 }
@@ -128,8 +128,11 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
     // branch an earlier join made, when that branch changes nothing in planning/ but planning/repos.yaml. Anything else
     // would read the plan's settings from work that isn't on the default branch, so it's refused.
     let readAt: string | undefined;
+    const planWas = currentBranch(copy);
+    const planBase = input.ref ?? baseBranch(copy) ?? planWas;
     if (!tmp) {
-      const want = input.ref ?? baseBranch(copy) ?? "main";
+      const want = planBase;
+      if (!want) throw new Error(`${copy} has no branch to read the plan from. Nothing was written.`);
       const on = currentBranch(copy);
       const listingOnly = !!on && branchExists(copy, want) && gitIn(copy, ["diff", "--name-only", want, "HEAD", "--", "planning"]).stdout.split("\n").filter(Boolean).every((f) => f === "planning/repos.yaml");
       if (on !== want && !listingOnly) throw new Error(`${copy} is on ${on ?? "no branch"}, and its planning/ settings differ from ${want} there. Check out ${want} in that checkout, then join again. Nothing was written.`);
@@ -138,13 +141,14 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
     const dirty = statusOf(copy, ["planning"]);
     if (dirty.length) throw new Error(`${copy} has changes in planning/ that aren't committed. Commit or stash them, then join again.`);
 
-    // Only a new-layout plan needs this repo's path, so the origin is checked here, after the layout is known.
+    // A hosted repo is listed by its origin path. A repo with no origin, or only a local one, is listed as local/<folder>
+    // and read from the path on this computer. plan refresh can still copy it.
     const origin0 = gitIn(codeRoot, ["remote", "get-url", "origin"]).stdout.trim();
-    if (!origin0) throw new Error("This repo has no origin, so there's no repo path to list it under. Set one with: git remote add origin <url>");
-    const code = ownRepo(codeRoot);
-    if (!code) throw new Error("This repo's origin is a local path, so there's no repo path to list it under. Set one with: git remote add origin <url>");
-    // A token in the origin's url stays out of the file that gets committed: only the host and the path are kept.
-    const origin = withoutPassword(origin0);
+    const hosted = origin0 ? ownRepo(codeRoot) : undefined;
+    const localName = basename(codeRoot).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
+    const code = hosted ?? `local/${localName}`;
+    const origin = hosted ? withoutPassword(origin0) : origin0 || codeRoot;
+    const localOnly = !hosted;
 
     // This repo's own changes stay where they are, and its link is made from main, so a feature branch's commits stay out of it.
     // A first join switches to the new link branch, so it must be clean and have a local main.
@@ -153,7 +157,7 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
       const mine = statusOf(codeRoot, undefined);
       if (mine.length) throw new Error("This repo has changes that aren't committed. Commit or stash them, then join again. Nothing was written.");
       base = baseBranch(codeRoot);
-      if (!base || !branchExists(codeRoot, base)) throw new Error("This repo has no local main branch to make the link from. Check out main, then join again. Nothing was written.");
+      if (!base || !branchExists(codeRoot, base)) throw new Error("This repo has no branch to make the link from. Check out the branch it should come from, then join again. Nothing was written.");
     }
 
     // The settings snapshot, read from this copy at the commit it is on. A settings file that doesn't read stops
@@ -177,9 +181,9 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
     // A join branch origin already has for this repo means it's proposed there: a second join adds nothing. A new
     // name avoids every branch origin has, not just the local ones (a fresh clone has none of the others).
     // The entry names this repo by its path. The url is written only when origin isn't the plain https one for it.
-    const host = hostNameOf(origin);
+    const host = localOnly ? "local" : hostNameOf(origin);
     const plain = `https://${host ?? "github.com"}/${code}`;
-    const normal = origin === `${plain}.git` || origin === plain;
+    const normal = !localOnly && (origin === `${plain}.git` || origin === plain);
     const entry: RepoEntry = { repo: code, ...(host && host !== "github.com" ? { host } : {}), ...(normal ? {} : { url: origin }) };
     const next = addRepo(loadRepos(copy), entry);
     const listed = !next.added;
@@ -188,8 +192,14 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
     let planPushed = false;
     if (!listed) {
       const prefix = `nikos/join-${code.replace(/\//g, "-")}-`;
+      const joinName = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\d{4}-\\d{2}-\\d{2}(-\\d+)?$`);
       const taken = remoteBranches(copy);
-      proposed = taken.find((b) => new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\d{4}-\\d{2}-\\d{2}(-\\d+)?$`).test(b));
+      const localHeads = gitIn(copy, ["for-each-ref", "--format=%(refname:short)", "refs/heads/"]).stdout.split("\n").filter(Boolean);
+      const listsThis = (branch: string) => {
+        const shown = gitIn(copy, ["show", `${branch}:planning/repos.yaml`]);
+        return shown.status === 0 && new RegExp(`repo:\\s*${code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(shown.stdout);
+      };
+      proposed = taken.find((b) => joinName.test(b)) ?? localHeads.find((b) => joinName.test(b) && listsThis(b));
       if (!proposed) {
         const name = nextBranchName(copy, `${prefix}${today()}`, undefined, taken);
         const made = switchNewBranchFrom(copy, name, readAt ?? "HEAD");
@@ -214,10 +224,12 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
       writeLink(codeRoot, built!.link);
       const committed = commitPaths(codeRoot, [LINK_FILE], `nikos: link this repo to ${input.plan} (${LINK_FILE})`);
       if (!committed.ok) throw new Error(`${name} is in this repo, but the commit didn't finish: ${committed.error}. ${LINK_FILE} is written but not committed: commit it, then join again.`);
-      link = { branch: name, written: true, pushed: false, from };
+      link = { branch: name, written: true, pushed: false, from, base };
     }
 
-    if (input.push) {
+    if (input.push && localOnly) {
+      // Nothing to push to: the branches stay on this computer.
+    } else if (input.push) {
       if (branch) {
         const pushed = pushBranch(copy, branch);
         if (!pushed.ok) throw new Error(`${branch} is committed in ${copy}, but the push didn't finish: ${pushed.error}`);
@@ -231,9 +243,12 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
     }
 
     let request: string | undefined;
-    if (branch) {
-      const planBase = baseBranch(copy) ?? "main";
+    if (branch && planBase && !localOnly) {
       request = asLine(requestArgv(hostOf(planRemote), planBase, branch));
+    }
+    if (planWas && currentBranch(copy) !== planWas) {
+      const back = gitIn(copy, ["switch", "--quiet", planWas]);
+      if (back.status !== 0) throw new Error(`${branch ?? "The join"} is committed in ${copy}, but it couldn't switch back to ${planWas}: ${firstLine(back.stderr) || "git switch failed"}`);
     }
     const warnings = built?.warnings.length ? built.warnings : undefined;
     return {
@@ -255,20 +270,22 @@ export function joinPlanRepo(codeRoot: string, input: RepoJoinInput): RepoJoin {
 export function describeRepoJoin(r: RepoJoin): string {
   const lines: string[] = [];
   if (r.alreadyListed) lines.push(`${r.repo} is already listed in ${r.plan}'s planning/repos.yaml.`);
-  else if (r.proposed) lines.push(`${r.repo} is already proposed to ${r.plan} on branch ${r.proposed}, on its origin.`);
+  else if (r.proposed) lines.push(`${r.repo} is already proposed to ${r.plan} on branch ${r.proposed}.`);
   else if (r.branch) {
-    lines.push(`✓ Listed ${r.repo} in ${r.plan}'s planning/repos.yaml, on branch ${r.branch}.`, `The branch is in ${r.where}.`);
+    lines.push(`✓ Listed ${r.repo} in ${r.plan}'s planning/repos.yaml, on branch ${r.branch}.`, `The branch is in ${r.where}. The checkout is back on the branch it was on.`);
     if (r.pushed) lines.push(`Pushed ${r.branch} to ${r.plan}.`);
+    else if (r.repo.startsWith("local/")) lines.push("Not pushed: this repo is only on this computer, so the branch stays here.");
     else lines.push(`Not pushed. To send it for review: git -C ${r.where} push -u origin ${r.branch}`);
     if (r.request) lines.push(`Open the review from ${r.where}: ${r.request}`);
-    else lines.push("Open the review in the forge's web interface.");
+    else if (!r.repo.startsWith("local/")) lines.push("Open the review in the forge's web interface.");
   }
   const link = r.link;
   if (link?.written) {
     lines.push(`✓ Linked this repo to ${r.plan}: ${LINK_FILE} is committed on branch ${link.branch}, with the settings its maps take from the plan.`);
     lines.push(link.pushed ? `Pushed ${link.branch} to this repo's origin.` : `Not pushed. To send it: git push -u origin ${link.branch}`);
     lines.push(link.from ? `This repo is now on ${link.branch}. To go back: git switch ${link.from}` : `This repo is now on ${link.branch}.`);
-    lines.push(`main takes the plan's settings only once ${link.branch} is merged to it. Until then, CI on main enforces none of them.`);
+    const onto = link.base ?? "its base branch";
+    lines.push(`${onto} takes the plan's settings only once ${link.branch} is merged to it. Until then, CI on ${onto} enforces none of them.`);
   } else if (link?.branch.startsWith("origin/")) {
     lines.push(`This repo is already linked to ${r.plan} (${LINK_FILE} on ${link.branch}). To use that link here: git switch -c ${LINK_BRANCH} ${link.branch}`);
     if (link.stale) lines.push(`The plan's settings have changed since. Run nikos settings pull to refresh ${LINK_FILE}, then commit it.`);

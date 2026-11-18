@@ -65,10 +65,10 @@ describe("nikos join to a planning repo", () => {
     expect(r.alreadyListed).toBe(false);
     expect(r.branch).toMatch(/^nikos\/join-acme-checkout-web-\d{4}-\d{2}-\d{2}$/);
     expect(r.pushed).toBe(false);
-    expect(git(r.where!, "branch", "--show-current")).toBe(r.branch);
-    expect(loadRepos(r.where!).repos).toEqual([{ repo: "acme/checkout-web" }]);
-    expect(git(r.where!, "log", "-1", "--format=%s")).toBe("nikos: list acme/checkout-web in planning/repos.yaml");
-    expect(git(r.where!, "show", "--name-only", "--format=", "HEAD")).toBe("planning/repos.yaml");
+    expect(git(r.where!, "branch", "--show-current")).toBe("main");
+    expect(git(r.where!, "show", `${r.branch}:planning/repos.yaml`)).toContain("repo: acme/checkout-web");
+    expect(git(r.where!, "log", "-1", "--format=%s", r.branch!)).toBe("nikos: list acme/checkout-web in planning/repos.yaml");
+    expect(git(r.where!, "show", "--name-only", "--format=", r.branch!)).toBe("planning/repos.yaml");
     // Nothing reached the plan's origin: no nikos branch there, and main has no list.
     expect(git(origin, "branch", "--list", "nikos/*")).toBe("");
     expect(() => git(origin, "cat-file", "-e", "main:planning/repos.yaml")).toThrow();
@@ -108,10 +108,11 @@ describe("nikos join to a planning repo", () => {
     const code = codeRepo();
     const first = joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout })!;
     expect(first.where).toBe(checkout);
-    expect(git(checkout, "branch", "--show-current")).toBe(first.branch);
+    expect(git(checkout, "branch", "--show-current")).toBe("main");
+    expect(git(checkout, "show", `${first.branch}:planning/repos.yaml`)).toContain("acme/checkout-web");
     const commits = git(code, "rev-list", "--count", "HEAD");
     const again = joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout })!;
-    expect(again).toMatchObject({ plan: "acme/company-plan", repo: "acme/checkout-web", alreadyListed: true, pushed: false, link: { branch: "nikos/link", written: false, pushed: false } });
+    expect(again).toMatchObject({ plan: "acme/company-plan", repo: "acme/checkout-web", alreadyListed: false, proposed: first.branch, pushed: false, link: { branch: "nikos/link", written: false, pushed: false } });
     expect(again.branch).toBeUndefined();
     expect(again.link?.stale).toBeFalsy();
     expect(git(checkout, "branch", "--list", "nikos/*").split("\n").filter(Boolean)).toHaveLength(1);
@@ -188,10 +189,15 @@ describe("nikos join to a planning repo", () => {
     expect(existsSync(join(code, "planning"))).toBe(false);
     expect(git(code, "status", "--porcelain")).toBe("");
   });
-  it("a code repo with no origin can't be listed in a new-layout plan", () => {
+  it("a code repo with no origin is listed as local/<folder>", () => {
     const code = mkdtempSync(join(tmpdir(), "nikos-noorigin-"));
     git(code, "init", "-q", "-b", "main");
-    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() })).toThrow("has no origin");
+    write(join(code, "README.md"), "local\n");
+    git(code, "add", ".");
+    git(code, "commit", "-q", "-m", "start");
+    const joined = joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() });
+    expect(joined.repo).toMatch(/^local\/nikos-noorigin-/);
+    expect(git(joined.where!, "branch", "--show-current")).not.toBe(joined.branch);
   });
 
   it("nikos join refuses a plan of the old kind, and writes nothing", () => {
@@ -226,7 +232,7 @@ describe("nikos join to a planning repo", () => {
     const before = tempJoins();
     const again = joinPlanRepo(code, { plan: "acme/company-plan", url: origin, push: true })!;
     expect(again).toMatchObject({ plan: "acme/company-plan", repo: "acme/checkout-web", alreadyListed: false, proposed: first.branch, pushed: false, link: { written: false } });
-    expect(describeRepoJoin(again)).toBe(`acme/checkout-web is already proposed to acme/company-plan on branch ${first.branch}, on its origin.\nThis repo is already linked to acme/company-plan (nikos.plan.yaml on nikos/link).\nNothing was written.`);
+    expect(describeRepoJoin(again)).toBe(`acme/checkout-web is already proposed to acme/company-plan on branch ${first.branch}.\nThis repo is already linked to acme/company-plan (nikos.plan.yaml on nikos/link).\nNothing was written.`);
     expect(tempJoins()).toEqual(before);
     expect(git(origin, "branch", "--list", "nikos/*").split("\n").filter(Boolean)).toHaveLength(1);
     expect(git(code, "status", "--porcelain")).toBe("");
@@ -246,10 +252,16 @@ describe("nikos join to a planning repo", () => {
     expect(nextBranchName(checkout, "nikos/join-x-2026-11-10", realRun, [])).toBe("nikos/join-x-2026-11-10");
   });
 
-  it("a code repo whose origin is a local path can't be listed, and says why", () => {
+  it("a code repo with no origin, or only a local one, is listed as local/<folder>", () => {
     const code = codeRepo();
-    git(code, "remote", "set-url", "origin", bareOrigin());
-    expect(() => joinPlanRepo(code, { plan: "acme/company-plan", url: planOnOrigin() })).toThrow("origin is a local path");
+    git(code, "remote", "remove", "origin");
+    const checkout = checkoutOf(planOnOrigin());
+    const joined = joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
+    expect(joined.repo).toMatch(/^local\//);
+    expect(loadRepos(checkout).repos).toEqual([]);
+    expect(git(checkout, "show", `${joined.branch}:planning/repos.yaml`)).toContain(`repo: ${joined.repo}`);
+    expect(git(checkout, "show", `${joined.branch}:planning/repos.yaml`)).toContain("host: local");
+    expect(git(checkout, "branch", "--show-current")).toBe("main");
     expect(hostNameOf("file:///x/acme/web.git")).toBeUndefined();
     expect(hostNameOf("git@gitlab.com:acme/checkout-api.git")).toBe("gitlab.com");
   });
@@ -258,17 +270,23 @@ describe("nikos join to a planning repo", () => {
     const code = codeRepo();
     git(code, "remote", "set-url", "origin", "git@gitlab.com:acme/checkout-api.git");
     const checkout = checkoutOf(planOnOrigin());
-    joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
-    expect(loadRepos(checkout).repos).toEqual([{ repo: "acme/checkout-api", host: "gitlab.com", url: "git@gitlab.com:acme/checkout-api.git" }]);
+    const joined = joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
+    const listed = git(checkout, "show", `${joined.branch}:planning/repos.yaml`);
+    expect(listed).toContain("repo: acme/checkout-api");
+    expect(listed).toContain("host: gitlab.com");
+    expect(listed).toContain("url: git@gitlab.com:acme/checkout-api.git");
   });
 
   it("keeps a token out of the entry: an origin with credentials is listed by its host and path only", () => {
     const code = codeRepo();
     git(code, "remote", "set-url", "origin", "https://oauth2:s3cret-token@gitlab.com/acme/checkout-api.git");
     const checkout = checkoutOf(planOnOrigin());
-    joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
-    expect(loadRepos(checkout).repos).toEqual([{ repo: "acme/checkout-api", host: "gitlab.com" }]);
-    expect(readFileSync(join(checkout, "planning/repos.yaml"), "utf8")).not.toContain("s3cret-token");
+    const joined = joinPlanRepo(code, { plan: "acme/company-plan", planDir: checkout });
+    const listed = git(checkout, "show", `${joined.branch}:planning/repos.yaml`);
+    expect(listed).toContain("repo: acme/checkout-api");
+    expect(listed).toContain("host: gitlab.com");
+    expect(listed).not.toContain("url:");
+    expect(listed).not.toContain("s3cret-token");
     expect(readFileSync(join(code, "nikos.plan.yaml"), "utf8")).not.toContain("s3cret-token");
   });
 

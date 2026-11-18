@@ -23,6 +23,14 @@ const good = story(`
 const byCheck = (text: string) => Object.fromEntries(clear(text).map((r) => [r.check, r]));
 
 describe("clear", () => {
+  it("fails Lean and Executable when the story still has template placeholders", () => {
+    const r = byCheck(good.replace("As a busy person", "As a <who it's for>").replace('Given I have the task "Call the bank"', "Given <the starting situation>"));
+    expect(r.Lean.status).toBe("fail");
+    expect(r.Executable.status).toBe("fail");
+    expect(r.Lean.message).toContain("<who it's for>");
+    expect(r.Executable.message).toContain("<the starting situation>");
+  });
+
   it("fails Executable with no scenarios", () => {
     const r = byCheck(story(""));
     expect(r.Executable.status).toBe("fail");

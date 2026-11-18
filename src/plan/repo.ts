@@ -8,7 +8,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020Module from "ajv/dist/2020.js";
 const Ajv2020 = (Ajv2020Module as any).default ?? Ajv2020Module;
-import { parse, stringify } from "yaml";
+import { isSeq, parse, parseDocument, stringify } from "yaml";
 import { BET_ID } from "../lib/bets.js";
 import { store } from "../lib/store.js";
 import { idFromTitle } from "../planning/rules.js";
@@ -19,10 +19,14 @@ const schemaDir = [join(here, "../../schemas/planning"), join(here, "../schemas/
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const checkArea = ajv.compile(JSON.parse(readFileSync(join(schemaDir, "area.schema.json"), "utf8")));
 const checkTeam = ajv.compile(JSON.parse(readFileSync(join(schemaDir, "team-area.schema.json"), "utf8")));
+const checkSquad = ajv.compile(JSON.parse(readFileSync(join(schemaDir, "squad-area.schema.json"), "utf8")));
 
 /** How high a level sits: a key result or bet aligns only to one ranked above it. */
-export const RANK: Record<AreaLevel, number> = { company: 0, department: 1, group: 2, team: 3 };
-const FOLDER: Record<Exclude<AreaLevel, "company">, keyof typeof AREA_FOLDERS> = { department: "departments", group: "groups", team: "teams" };
+export const RANK: Record<AreaLevel, number> = { company: 0, department: 1, group: 2, team: 3, squad: 4 };
+const FOLDER: Record<Exclude<AreaLevel, "company">, keyof typeof AREA_FOLDERS> = { department: "departments", group: "groups", team: "teams", squad: "squads" };
+
+/** The file an area keeps its name in. A team has team.yaml and a squad has squad.yaml; the others have plan.yaml. */
+export const areaFileName = (level: AreaLevel) => (level === "team" ? "team.yaml" : level === "squad" ? "squad.yaml" : "plan.yaml");
 export const TEAM_KEY = /^[A-Z][A-Z0-9]{0,9}$/;
 const YEAR = /^\d{4}$/;
 const QUARTER = /^(\d{4})-Q([1-4])$/;
@@ -48,7 +52,7 @@ export function oldLayoutProblem(dir: string): string | undefined {
   return "This repo has planning/plan.yaml, a plan of the old kind. This version doesn't read it. Make the company's planning repo in a new folder with nikos plan init --name <company> --year <year>, then move the story map by hand.";
 }
 
-/** Every area of a planning repo: the company first, then departments, groups and teams. */
+/** Every area of a planning repo: the company first, then departments, groups, teams and squads. */
 export function listAreas(repo: string): Area[] {
   const company = areaOf(join(repo, "planning", "company"));
   const out: Area[] = company ? [company] : [];
@@ -63,9 +67,9 @@ export function listAreas(repo: string): Area[] {
   return out;
 }
 
-/** An area's own file: plan.yaml, or team.yaml for a team. Undefined when it's missing or doesn't parse. */
+/** An area's own file: plan.yaml, team.yaml or squad.yaml. Undefined when it's missing or doesn't parse. */
 export function areaFile(area: Area): any {
-  const path = join(area.dir, area.level === "team" ? "team.yaml" : "plan.yaml");
+  const path = join(area.dir, areaFileName(area.level));
   if (!store().exists(path)) return undefined;
   try {
     return parse(store().read(path)) ?? {};
@@ -104,12 +108,12 @@ export function areaFor(repo: string, ref: string | undefined, cwd: string): Are
   return undefined;
 }
 
-/** The area directly above: a team's home, a group's department (or the company), a department's company. */
+/** The area directly above: a squad's team, a team's home, a group's department (or the company), a department's company. */
 export function parentOf(area: Area): Area | undefined {
   if (area.level === "company") return undefined;
   const company = listAreas(area.repo).find((a) => a.level === "company");
   const file = areaFile(area) ?? {};
-  const named = area.level === "team" ? file.home : area.level === "group" ? file.department : undefined;
+  const named = area.level === "team" || area.level === "squad" ? file.home : area.level === "group" ? file.department : undefined;
   if (typeof named === "string" && named) {
     const above = byId(area.repo, named);
     if (above && RANK[above.level] < RANK[area.level]) return above;
@@ -130,15 +134,24 @@ export function chainOf(area: Area): Area[] {
 
 export interface Entry {
   id: string;
-  kind: "key result" | "bet" | "department" | "group" | "team";
+  kind: "key result" | "bet" | "department" | "group" | "team" | "squad" | "objective";
   area: Area;
 }
 
-/** Every id in the company: each area's own, and its key results and bets. Ids are unique within the company. */
+/** The objective ids written in an area's plan.yaml. Empty when the area has none, or isn't company or department. */
+export function objectiveIds(area: Area | undefined): string[] {
+  if (!area || (area.level !== "company" && area.level !== "department")) return [];
+  const list = areaFile(area)?.objectives;
+  if (!Array.isArray(list)) return [];
+  return list.map((o: any) => (typeof o?.id === "string" ? o.id : "")).filter(Boolean);
+}
+
+/** Every id in the company: each area's own, its objectives, and its key results and bets. Ids are unique within the company. */
 export function companyIds(repo: string): Entry[] {
   const out: Entry[] = [];
   for (const area of listAreas(repo)) {
     if (area.level !== "company") out.push({ id: area.id, kind: area.level, area });
+    for (const id of objectiveIds(area)) out.push({ id, kind: "objective", area });
     for (const id of krIds(area.dir)) out.push({ id, kind: "key result", area });
     for (const id of betIds(area.dir)) out.push({ id, kind: "bet", area });
   }
@@ -175,7 +188,7 @@ const NO_OKRS = (level: AreaLevel) =>
   `Key results stop at department level, so a ${level} has none. Add it to a department or the company, or make it a bet aimed at their key results.`;
 
 /** Why a key result can't be written in this area, or nothing. */
-export const krAreaProblem = (area: Area) => (area.level === "group" || area.level === "team" ? NO_OKRS(area.level) : undefined);
+export const krAreaProblem = (area: Area) => (area.level === "group" || area.level === "team" || area.level === "squad" ? NO_OKRS(area.level) : undefined);
 
 /**
  * What's wrong with a key result's period. A company key result is for the company's year, a
@@ -269,7 +282,7 @@ export function initPlanRepo(dir: string, input: { name: string; year: string; p
   return files.map(([p]) => p);
 }
 
-/** Add a department, group or team folder. */
+/** Add a department, group, team or squad folder. */
 export function addArea(
   repo: string,
   level: Exclude<AreaLevel, "company">,
@@ -295,8 +308,13 @@ export function addArea(
     const home = findArea(repo, input.home);
     if (home.level !== "department" && home.level !== "group") throw new Error(`A team's home is a department or group, and ${input.home} is ${home.rel}`);
     data = { name: input.name.trim(), home: home.id, ...people };
+  } else if (level === "squad") {
+    if (!input.home) throw new Error("A squad sits inside a team: --home <TEAM>");
+    const home = findArea(repo, input.home);
+    if (home.level !== "team") throw new Error(`A squad's home is a team, and ${input.home} is ${home.rel}`);
+    data = { name: input.name.trim(), home: home.id, ...people };
   } else data = { name: input.name.trim(), ...people };
-  const path = join(repo, "planning", FOLDER[level], id, level === "team" ? "team.yaml" : "plan.yaml");
+  const path = join(repo, "planning", FOLDER[level], id, areaFileName(level));
   store().write(path, yaml(data), { create: true });
   return path;
 }
@@ -308,21 +326,21 @@ export function repoIssues(repo: string): PlanningIssue[] {
   const year = companyYear(repo);
   const rel = (a: Area, file: string) => `planning/${a.rel}/${file}`;
   for (const area of areas) {
-    const own = area.level === "team" ? "team.yaml" : "plan.yaml";
+    const own = areaFileName(area.level);
     const data = areaFile(area);
     if (data === undefined) {
       issues.push({ file: rel(area, own), message: store().exists(join(area.dir, own)) ? "doesn't read as YAML" : `is missing: every ${area.level} has one` });
       continue;
     }
-    const check = area.level === "team" ? checkTeam : checkArea;
+    const check = area.level === "team" ? checkTeam : area.level === "squad" ? checkSquad : checkArea;
     if (!check(data)) for (const m of describeErrors(check.errors)) issues.push({ file: rel(area, own), message: m });
-    if (area.level === "team" && store().exists(join(area.dir, "plan.yaml"))) issues.push({ file: rel(area, "plan.yaml"), message: "A team has no plan.yaml: its name, home and members are in team.yaml" });
+    if ((area.level === "team" || area.level === "squad") && store().exists(join(area.dir, "plan.yaml"))) issues.push({ file: rel(area, "plan.yaml"), message: `A ${area.level} has no plan.yaml: its name, home and members are in ${own}` });
     if (area.level === "team" && !TEAM_KEY.test(area.id)) issues.push({ file: `planning/${area.rel}`, message: `'${area.id}' isn't a team key: capital letters and digits, e.g. WEB` });
     if (area.level !== "team" && area.level !== "company" && !slug(area.id)) issues.push({ file: `planning/${area.rel}`, message: `'${area.id}' isn't an id: lowercase words joined by hyphens` });
     if (area.level === "company" && !YEAR.test(String(data.period ?? ""))) issues.push({ file: rel(area, own), message: `The company plans by year: period is a year, such as ${new Date().getUTCFullYear() + 1}` });
     if (area.level !== "company" && data.period !== undefined) issues.push({ file: rel(area, own), message: `Only the company has a period. Departments plan by quarter on their key results (period: ${year ?? "2027"}-Q1), and ${area.level === "department" ? "a department" : `a ${area.level}`}'s bets have review dates` });
     if (area.level !== "company" && data.pillars !== undefined) issues.push({ file: rel(area, own), message: "Only the company sets pillars" });
-    if ((area.level === "group" || area.level === "team") && data.objectives?.length) issues.push({ file: rel(area, own), message: `Objectives stop at department level, so a ${area.level} has none` });
+    if (area.level !== "company" && area.level !== "department" && data.objectives?.length) issues.push({ file: rel(area, own), message: `Objectives stop at department level, so a ${area.level} has none` });
     if (area.level === "group" && data.department) {
       const dept = byId(repo, String(data.department));
       if (dept?.level !== "department") issues.push({ file: rel(area, own), message: `department: there's no department called '${data.department}'` });
@@ -330,6 +348,10 @@ export function repoIssues(repo: string): PlanningIssue[] {
     if (area.level === "team" && data.home) {
       const home = byId(repo, String(data.home));
       if (!home || (home.level !== "department" && home.level !== "group")) issues.push({ file: rel(area, own), message: `home: there's no department or group called '${data.home}'` });
+    }
+    if (area.level === "squad" && data.home) {
+      const home = byId(repo, String(data.home));
+      if (!home || home.level !== "team") issues.push({ file: rel(area, own), message: `home: there's no team called '${data.home}'` });
     }
     for (const id of krIds(area.dir)) {
       const file = rel(area, `krs/${id}.yaml`);
@@ -346,6 +368,10 @@ export function repoIssues(repo: string): PlanningIssue[] {
       const period = kr?.period === undefined ? undefined : String(kr.period);
       const problem = periodProblem(area, period);
       if (problem) issues.push({ file, message: problem });
+      if (typeof kr?.objective === "string" && kr.objective && !objectiveIds(area).includes(kr.objective)) {
+        const where = area.level === "company" ? "company" : area.id;
+        issues.push({ file, message: `objective '${kr.objective}' isn't an objective in ${area.rel}. Add it with nikos plan objective add ${kr.objective} --title "<title>" --in ${where}` });
+      }
     }
   }
   // Ids are unique within the company: areas, key results and bets alike.
@@ -353,9 +379,67 @@ export function repoIssues(repo: string): PlanningIssue[] {
   for (const e of companyIds(repo)) {
     const key = e.id.toLowerCase();
     const first = seen.get(key);
-    const where = (x: Entry) => (x.kind === "key result" || x.kind === "bet" ? `a ${x.kind} in ${x.area.rel}` : x.area.rel);
+    const where = (x: Entry) => (x.kind === "objective" ? `an objective in ${x.area.rel}` : x.kind === "key result" || x.kind === "bet" ? `a ${x.kind} in ${x.area.rel}` : x.area.rel);
     if (first) issues.push({ file: `planning/${e.area.rel}`, message: `'${e.id}' is used twice: ${where(first)}, and ${where(e)}. Ids are unique within the company.` });
     else seen.set(key, e);
   }
+  for (const area of areas) {
+    if (area.level !== "company" && area.level !== "department") continue;
+    const data = areaFile(area);
+    for (const o of data?.objectives ?? []) {
+      const refs = Array.isArray(o?.aligns_to) ? o.aligns_to : typeof o?.aligns_to === "string" && o.aligns_to ? [o.aligns_to] : [];
+      for (const ref of refs) {
+        const hit = companyIds(repo).find((e) => e.kind === "objective" && e.id === ref);
+        const file = rel(area, areaFileName(area.level));
+        if (!hit) issues.push({ file, message: `objective '${o.id}' aligns to '${ref}', and there's no objective called '${ref}'` });
+        else if (RANK[hit.area.level] >= RANK[area.level]) issues.push({ file, message: `objective '${o.id}' aligns to '${ref}' in ${hit.area.rel}, which isn't above ${area.rel}` });
+      }
+    }
+  }
   return issues;
+}
+
+/** Add a pillar to the company's plan.yaml. A name already there is refused. */
+export function addPillar(repo: string, name: string): string {
+  const company = listAreas(repo).find((a) => a.level === "company");
+  if (!company) throw new Error("This isn't a planning repo. Make one with: nikos plan init --name \"<company>\" --year <year>");
+  const title = name.trim();
+  if (!title) throw new Error("A pillar needs a name");
+  const path = join(company.dir, "plan.yaml");
+  const doc = parseDocument(store().read(path));
+  const pillars = doc.get("pillars", true);
+  const have = isSeq(pillars) ? pillars.items.map((item) => String(item)) : [];
+  if (have.some((p) => p.toLowerCase() === title.toLowerCase())) throw new Error(`The company already has a pillar called '${title}'`);
+  if (isSeq(pillars)) pillars.add(doc.createNode(title));
+  else doc.set("pillars", doc.createNode([title]));
+  store().write(path, doc.toString({ lineWidth: 0 }));
+  return path;
+}
+
+/** Add an objective to a company or department plan.yaml. Its id is unique in the company, like every other id. */
+export function addObjective(repo: string, area: Area, input: { id: string; title: string; owner?: string; alignsTo?: string[] }): string {
+  if (area.level !== "company" && area.level !== "department") throw new Error(`Objectives stop at department level, so a ${area.level} has none`);
+  const id = input.id.trim();
+  if (!slug(id)) throw new Error(`'${id}' isn't an objective id: lowercase words joined by hyphens, e.g. growth`);
+  const title = input.title?.trim();
+  if (!title) throw new Error("An objective needs a title (--title)");
+  const taken = takenProblem(repo, id);
+  if (taken) throw new Error(taken);
+  const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];
+  for (const ref of aligns) {
+    const hit = companyIds(repo).find((e) => e.kind === "objective" && e.id === ref);
+    if (!hit) throw new Error(`There's no objective called '${ref}' to align to`);
+    if (RANK[hit.area.level] >= RANK[area.level]) throw new Error(`${ref} is in ${hit.area.rel}, which isn't above ${area.rel}: an objective aligns to one at a higher level`);
+  }
+  const path = join(area.dir, "plan.yaml");
+  const doc = parseDocument(store().read(path));
+  const fields: Record<string, unknown> = { id, title, ...(input.owner ? { owner: input.owner } : {}) };
+  if (aligns.length === 1) fields.aligns_to = aligns[0];
+  else if (aligns.length) fields.aligns_to = aligns;
+  const node = doc.createNode(fields);
+  const objectives = doc.get("objectives", true);
+  if (isSeq(objectives)) objectives.add(node);
+  else doc.set("objectives", doc.createNode([node]));
+  store().write(path, doc.toString({ lineWidth: 0 }));
+  return path;
 }

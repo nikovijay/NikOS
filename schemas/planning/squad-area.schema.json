@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nikos.tools/schemas/planning/squad-area.schema.json",
+  "title": "nikOS Plan squad: planning/squads/<id>/squad.yaml",
+  "description": "A squad in a planning repo: a small unit of one or more people inside a team. A squad has bets, never key results, and no plan.yaml.",
+  "type": "object",
+  "required": ["name", "home"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "home": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{0,9}$",
+      "description": "The team the squad sits inside."
+    },
+    "owner": { "type": "string", "minLength": 1 },
+    "members": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -18,8 +18,10 @@ afterEach(async () => {
 const NOW = new Date("2026-11-10T12:00:00Z");
 
 function get(port: number, path: string): Promise<string> {
+  const token = open.find((p) => p.srv.port === port)?.srv.token;
+  const authed = token ? `${path}${path.includes("?") ? "&" : "?"}token=${token}` : path;
   return new Promise((ok, fail) => {
-    const req = request({ host: "127.0.0.1", port, path, method: "GET" }, (res) => {
+    const req = request({ host: "127.0.0.1", port, path: authed, method: "GET" }, (res) => {
       let text = "";
       res.setEncoding("utf8");
       res.on("data", (c: string) => (text += c));

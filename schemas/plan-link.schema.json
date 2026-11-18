@@ -59,6 +59,11 @@
         "properties": { "levels": { "$ref": "#/$defs/levels" } }
       }
     },
+    "bets": {
+      "type": "array",
+      "description": "The bet ids in the plan when the snapshot was taken. nikos map new refuses a bet that isn't here. Absent on a snapshot from before bets were listed: run nikos settings pull.",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
     "maps": {
       "type": "object",
       "description": "Each story map's bound owner when the snapshot was taken, keyed by the map's folder (e.g. chk). An empty string is no owner. A map whose storymap.yaml names another owner fails validate until the snapshot is pulled again.",

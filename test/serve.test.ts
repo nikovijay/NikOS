@@ -24,6 +24,8 @@ async function start(root: string): Promise<RunningServer> {
   return srv;
 }
 
+const pageUrl = (srv: RunningServer, path = "/") => `http://127.0.0.1:${srv.port}${path}${path.includes("?") ? "&" : "?"}token=${srv.token}`;
+
 /** Run nikos serve with these arguments, capturing what it prints. */
 function serve(args: string[]): { code: number; out: string; err: string } {
   let out = "";
@@ -42,19 +44,19 @@ describe("nikos serve in a code repo", () => {
     mkdirSync(join(root, "maps", "pay"), { recursive: true });
     writeFileSync(join(root, "maps", "pay", "storymap.yaml"), first.replace(/^key: .*$/m, "key: PAY"));
     const srv = await start(root);
-    const list = await (await fetch(`http://127.0.0.1:${srv.port}/`)).text();
+    const list = await (await fetch(pageUrl(srv))).text();
     expect(list).toContain('href="/?map=ht"');
     expect(list).toContain('href="/?map=pay"');
-    const one = await (await fetch(`http://127.0.0.1:${srv.port}/?map=ht`)).text();
+    const one = await (await fetch(pageUrl(srv, "/?map=ht"))).text();
     expect(one).toContain("Story map");
     expect(one).not.toContain("No stories yet");
     // Each map links back to the list, even on a server started on one map.
     expect(one).toContain('<a class="back" href="/?map=">← All story maps</a>');
-    expect(await (await fetch(`http://127.0.0.1:${srv.port}/?map=`)).text()).toContain('href="/?map=pay"');
+    expect(await (await fetch(pageUrl(srv, "/?map="))).text()).toContain('href="/?map=pay"');
     const picked = await startMapServer(root, { map: "pay" });
     running.push(picked);
-    expect(await (await fetch(`http://127.0.0.1:${picked.port}/`)).text()).toContain("← All story maps");
-    expect(await (await fetch(`http://127.0.0.1:${picked.port}/?map=`)).text()).toContain('href="/?map=ht"');
+    expect(await (await fetch(pageUrl(picked))).text()).toContain("← All story maps");
+    expect(await (await fetch(pageUrl(picked, "/?map="))).text()).toContain('href="/?map=ht"');
     const r = serve(["--dir", root, "--export", join(root, "x.html")]);
     expect(r.code).toBe(1);
     expect(r.err).toContain("Say which one to save with --map");
@@ -63,7 +65,10 @@ describe("nikos serve in a code repo", () => {
 
   it("shows the story map at / and has no other page", async () => {
     const srv = await start(rootOf(copyExample()));
-    const page = await fetch(`http://127.0.0.1:${srv.port}/`);
+    const locked = await fetch(`http://127.0.0.1:${srv.port}/`);
+    expect(locked.status).toBe(403);
+    expect(await locked.text()).not.toContain(srv.token);
+    const page = await fetch(pageUrl(srv));
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain("Story map");

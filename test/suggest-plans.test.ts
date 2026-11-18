@@ -40,12 +40,11 @@ describe("suggest on plans and groups", () => {
     expect(s.summary).toBe("Acme (2027): 1 key result, 1 bet");
     const labels = s.options.map((o) => o.label);
     expect(labels).not.toContain("Set up nikOS here");
-    // Revenue has no check-in yet, so it's stale: the menu asks for one, then offers the plan.
-    expect(labels).toEqual(['Check in on "Revenue"', "Look at the plan"]);
-    expect(s.options[0].do).toContain("nikos plan checkin <kr-id> <value>");
-    expect(s.options[1].do).toContain("nikos plan status --in company");
+    // Revenue's year hasn't started, so a missing check-in isn't stale yet.
+    expect(labels).toEqual(["Look at the plan"]);
+    expect(s.options[0].do).toContain("nikos plan status --in company");
     // The session-start line shows for a plan too.
-    expect(brief(plan)).toContain('nikOS: Acme (2027): 1 key result, 1 bet. Suggested next: Check in on "Revenue" · Look at the plan.');
+    expect(brief(plan)).toContain("nikOS: Acme (2027): 1 key result, 1 bet. Suggested next: Look at the plan.");
   });
 
   it("a group with several maps gets each map's progress without --map, and one map's menu with it", () => {

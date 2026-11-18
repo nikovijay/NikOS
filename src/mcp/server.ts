@@ -22,7 +22,10 @@ import { show } from "../commands/show.js";
 import { setState, type Status } from "../commands/state.js";
 import { newActivity, newStep } from "../commands/step.js";
 import { start as startRepo } from "../commands/start.js";
-import { findPlanRepo, initPlanRepo } from "../plan/repo.js";
+import { addArea, addObjective, addPillar, areaFor, areaHolding, findPlanRepo, initPlanRepo } from "../plan/repo.js";
+import { planStatus } from "../plan/cli.js";
+import { newKr, checkIn } from "../planning/krs.js";
+import { newBet } from "../planning/bets.js";
 import { ladderFor, unlinkedItems } from "../planning/ladder.js";
 import { newStory } from "../commands/story.js";
 import { suggest } from "../commands/suggest.js";
@@ -175,12 +178,68 @@ export function createServer(repo: string): McpServer {
     const r = startRepo(root, a);
     return text([...r.done.map((d) => `✓ ${d}`), ...r.ask.map((q) => `? ${q}`), "", r.next.summary].join("\n"), r as unknown as Record<string, unknown>);
   });
-  tool("plan_init", "Make this folder the company's planning repo: planning/company/ with the company's plan.yaml and decisions.md. Departments, groups and teams are added to it with nikos plan add in the terminal.", {
+  tool("plan_init", "Make this folder the company's planning repo: planning/company/ with the company's plan.yaml and decisions.md. Areas, pillars, objectives, key results, bets and check-ins are the plan_* tools.", {
     name: z.string(), year: z.string(), pillars: z.array(z.string()).optional(), owner: z.string().optional(),
   }, (a) => {
     const files = initPlanRepo(root, { name: a.name, year: a.year, pillars: a.pillars, owner: a.owner });
     return text(`Made the company's planning repo: ${files.map((f) => f.slice(root.length + 1)).join(", ")}`);
   });
+  const planRoot = () => {
+    const repo = findPlanRepo(root);
+    if (!repo) throw new Error("This isn't a planning repo. Make one with plan_init.");
+    return repo;
+  };
+  const planArea = (area: string | undefined, what: string) => {
+    const repo = planRoot();
+    const found = areaFor(repo, area, root);
+    if (!found) throw new Error(`Say where the ${what} goes with area, for example company or departments/finance`);
+    return found;
+  };
+  tool("plan_status", "The company's plan as text: each area's key results and bets, or one area's. A company or department also lists bets elsewhere that aim at its key results.", { area: z.string().optional() }, (a) => {
+    const repo = planRoot();
+    const found = a.area ? planArea(a.area, "status") : undefined;
+    return text(planStatus(repo, found));
+  }, true);
+  tool("plan_add_area", "Add a department, group, team or squad to the company's plan. A squad is a small unit of people inside a team. A team reports to a department or group (--home). A squad's home is a team.", {
+    level: z.enum(["department", "group", "team", "squad"]), id: z.string(), name: z.string(),
+    owner: z.string().optional(), members: z.array(z.string()).optional(), department: z.string().optional(), home: z.string().optional(),
+  }, (a) => {
+    const path = addArea(planRoot(), a.level, a.id, { name: a.name, owner: a.owner, members: a.members, department: a.department, home: a.home });
+    return text(`Added ${path}`);
+  });
+  tool("plan_pillar_add", "Add a pillar to the company. A name the company already has is refused.", { name: z.string() }, (a) => text(`Added ${addPillar(planRoot(), a.name)}`));
+  tool("plan_objective_add", "Add an objective to the company or a department. Its id is unique in the company. A key result's objective is one of these ids.", {
+    id: z.string(), title: z.string(), area: z.string().optional(), owner: z.string().optional(), aligns_to: z.array(z.string()).optional(),
+  }, (a) => text(`Added ${addObjective(planRoot(), planArea(a.area, "objective"), { id: a.id, title: a.title, owner: a.owner, alignsTo: a.aligns_to })}`));
+  tool("plan_kr_new", "Add a key result to the company or a department. Reports every missing field at once. objective is an objective id in that area.", {
+    id: z.string().optional(), area: z.string().optional(), title: z.string().optional(), owner: z.string().optional(),
+    baseline: z.number().optional(), target: z.number().optional(), by: z.string().optional(), period: z.string().optional(),
+    unit: z.string().optional(), objective: z.string().optional(), direction: z.enum(["up", "down"]).optional(),
+    kind: z.enum(["number", "milestone"]).optional(), steps: z.array(z.string()).optional(), aligns_to: z.array(z.string()).optional(), ladders_up: z.string().optional(),
+  }, (a) => {
+    const where = planArea(a.area, "key result");
+    const path = newKr({
+      id: a.id, title: a.title ?? "", owner: a.owner ?? "", baseline: a.baseline ?? Number.NaN, target: a.target ?? Number.NaN,
+      by: a.by ?? "", period: a.period, unit: a.unit, objective: a.objective, direction: a.direction, kind: a.kind,
+      steps: a.steps, alignsTo: a.aligns_to, laddersUp: a.ladders_up,
+    }, where.dir);
+    return text(`Wrote ${path}`);
+  });
+  tool("plan_bet_new", "Add a bet. Reports every missing field at once. kr is the key result it aims at.", {
+    id: z.string().optional(), area: z.string().optional(), title: z.string().optional(), owner: z.string().optional(),
+    hypothesis: z.string().optional(), review: z.string().optional(), kr: z.string().optional(), also: z.array(z.string()).optional(),
+    aligns_to: z.array(z.string()).optional(), ladders_up: z.string().optional(),
+  }, (a) => {
+    const where = planArea(a.area, "bet");
+    const path = newBet({
+      id: a.id, title: a.title, owner: a.owner ?? "", hypothesis: a.hypothesis ?? "", reviewOn: a.review ?? "",
+      primary: a.kr, also: a.also, alignsTo: a.aligns_to, laddersUp: a.ladders_up,
+    }, where.dir);
+    return text(`Wrote ${path}`);
+  });
+  tool("plan_checkin", "Record where a key result is now. Not for a milestone.", {
+    id: z.string(), value: z.number(), note: z.string().optional(), date: z.string().optional(), evidence: z.string().optional(),
+  }, (a) => text(`Wrote ${checkIn(areaHolding(planRoot(), a.id, "key result").dir, a.id, { value: a.value, note: a.note, date: a.date, evidence: a.evidence })}`));
   tool("plan_ladder", "What a key result or bet in the company's plan ladders up to, while it has only text and no link. With no id: the items whose text is not linked yet. With an id: the items it could link to, ranked by the words they share with its text, each with its kind. Read only. A link is written with nikos plan ladder accept, and only after the person says which one.", { id: z.string().optional() }, (a) => {
     const repo = findPlanRepo(root);
     if (!repo) throw new Error("This isn't a planning repo, so there are no ladders to read");

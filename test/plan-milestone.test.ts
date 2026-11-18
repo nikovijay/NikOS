@@ -194,7 +194,7 @@ describe("a milestone in the planning dashboard", () => {
     open = [];
   });
 
-  const get = async (plan: PlanServe, path: string) => (await fetch(`http://127.0.0.1:${plan.srv.port}${path}`)).text();
+  const get = async (plan: PlanServe, path: string) => (await fetch(`http://127.0.0.1:${plan.srv.port}${path}${path.includes("?") ? "&" : "?"}token=${plan.srv.token}`)).text();
 
   it("shows the steps done, and the live page gives a step form that posts kr.step, with a select for the step", async () => {
     const repo = acme();

@@ -53,9 +53,12 @@ describe("nikos-plan skill", () => {
 
   it("wizard asks period, area and pillars", () => {
     const s = steps(playbook("wizard"));
-    expect(s[0].s).toMatch(/^Establish context\. Ask for the period/);
+    expect(s[0].s).toMatch(/^Establish context\. You need the period/);
+    expect(s[0].s).toContain("already said");
+    expect(s[0].s).toContain("not one question at a time");
     expect(s[0].s).toContain("pillars");
-    expect(s[0].s).toContain("Key results stop at department level");
+    expect(s[0].s).toContain("Key results and objectives stop at department level");
+    expect(playbook("wizard")).toContain("nikos plan objective add");
   });
 
   it("wizard writes only after approval", () => {

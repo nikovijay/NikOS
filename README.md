@@ -68,7 +68,7 @@ On the **plan dashboard** you can:
 - filter the key results, and see the bets on a board by how far each has got;
 - see how everything aligns, from the company's key results down to each team's
   bets, in a tree that folds, and what has happened in an Activity feed;
-- move between the company, departments, groups and teams.
+- move between the company, departments, groups, teams and squads.
 
 On the **story map** you can:
 

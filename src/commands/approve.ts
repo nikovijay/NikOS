@@ -21,6 +21,7 @@ import { resolveSettings, type ApprovalRoute } from "../lib/settings.js";
 import { STORY_ID, read, specHash } from "../lib/project.js";
 import { resolveStoryMap } from "../lib/maps.js";
 import { codeChangedSince, codeIsDirty, headOf } from "../lib/git.js";
+import { updateStory } from "../lib/state-files.js";
 import { featureFor } from "./clear.js";
 import { StateError, failingScenarios } from "./state.js";
 import { verify } from "./verify.js";
@@ -69,15 +70,15 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   // proof ran at. A commit that only moves nikOS's own state or approvals doesn't count. Without git
   // or a commit there is no commit to test against, so these checks are skipped.
   const head = headOf(ref.root);
-  const tested = entry.evidence?.commit ?? entry.tested_commit;
+  let tested = entry.evidence?.commit ?? entry.tested_commit;
   // Uncommitted code isn't any commit: the proof ran on it, so it can't be approved at a commit.
   if (head && codeIsDirty(ref.root)) {
     throw new StateError(`${story} can't be approved: the code has uncommitted changes. Commit them, then run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
-  // A story done before its folder had a commit (or migrated with no evidence) has no commit to test against.
-  if (head && !tested) {
-    throw new StateError(`${story} was done with no recorded test commit, so nikOS can't tell what its proof covers: run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
-  }
+  // Done before this repo had a commit recorded nothing. Approve re-runs the scenarios, so on a clean
+  // tree the proof covers HEAD. Record that commit instead of sending the person around the status cycle.
+  const adopted = !!(head && !tested);
+  if (adopted) tested = head;
   if (head && codeChangedSince(ref.root, tested!)) {
     throw new StateError(`${story} was tested at ${tested!.slice(0, 7)}, and the code has changed since (HEAD is ${head.slice(0, 7)}): run its scenarios again: nikos state set ${story} needs_rework, then in_progress, then done, then approve`);
   }
@@ -98,6 +99,13 @@ export function approve(story: string, opts: { dir?: string; map?: string; by: s
   }
 
   const on = opts.date ?? new Date().toISOString().slice(0, 10);
+  if (adopted && head && tested) {
+    const at = new Date().toISOString();
+    updateStory(home, story, (doc, path) => {
+      doc.setIn([...path, "tested_commit"], tested);
+      doc.setIn([...path, "evidence"], { run_at: at, runner: run.stack === "python" ? "behave" : "cucumber", commit: tested, ok: true });
+    });
+  }
   writeApproval(home, story, { by: opts.by, on, via, spec_hash: hash, done_at: doneMark(entry), ...(head && tested ? { tested_commit: tested } : {}) });
   // The map's delivery.yaml shows the approval, so it's written with it.
   writeMapSummary(ref.root, ref.dir);

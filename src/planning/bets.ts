@@ -41,19 +41,21 @@ function checked(meta: any): any {
 export function newBet(input: BetInput, root: string): string {
   const area = areaOf(root);
   const title = input.title?.trim() || undefined;
+  const given = input.id?.trim() || undefined;
+  const missing: string[] = [];
   if (title) {
     const titled = titleProblem("bet", title);
-    if (titled) throw new Error(titled);
+    if (titled) missing.push(titled);
   }
-  const given = input.id?.trim() || undefined;
-  if (!given && !title) throw new Error("A bet needs a title");
+  if (!given && !title) missing.push("A bet needs a title");
+  if (!input.owner?.trim()) missing.push("A bet needs an owner");
+  if (!input.hypothesis?.trim()) missing.push("A bet needs a hypothesis");
+  const reviewed = dateProblem(input.reviewOn);
+  if (reviewed) missing.push(input.reviewOn ? `The review date ${reviewed}` : "A bet needs a review date (YYYY-MM-DD)");
+  if (missing.length) throw new Error([...new Set(missing)].join("\n"));
   const id = given ?? newIdFor(area?.repo, title);
   if (!id) throw new Error(`'${title}' has no letters or numbers to make an id from: use a title with some letters or numbers, or give an id`);
   if (!BET_ID.test(id)) throw new Error(`'${id}' is not a bet id (lowercase words joined by hyphens, e.g. faster-checkout)`);
-  if (!input.owner?.trim()) throw new Error("A bet needs an owner");
-  if (!input.hypothesis?.trim()) throw new Error("A bet needs a hypothesis");
-  const reviewed = dateProblem(input.reviewOn);
-  if (reviewed) throw new Error(input.reviewOn ? `The review date ${reviewed}` : "A bet needs a review date (YYYY-MM-DD)");
   const taken = area && takenProblem(area.repo, id);
   if (taken) throw new Error(taken);
   const aligns = [...new Set((input.alignsTo ?? []).filter(Boolean))];

@@ -241,7 +241,7 @@ describe("group validation", () => {
     const root = oneMap();
     newStory({ title: "Add a task", activity: "tasks" }, root);
     const story = doctor(root, { offline: true }).find((c) => c.name === "story map");
-    expect(story?.found).toBe("1 story in 1 map");
+    expect(story?.found).toBe("1 problem in maps/");
   });
 });
 
